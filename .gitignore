@@ -1,0 +1,7 @@
+# Ignore Database and static warehouses
+/KG_backend/Database_warehouse/
+/KG_backend/static_warehouse/
+
+# Ignore Claude metadata and VS Code workspace settings
+/.claude
+/.vscode

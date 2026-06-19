@@ -30,6 +30,9 @@
 import re
 import sqlite3
 import hashlib
+import argparse
+import sys
+import os
 from collections import deque
 from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
@@ -503,13 +506,143 @@ def render_html(node: Optional[Dict[str, Any]]) -> str:
     return f"<ul>{li(node)}</ul>"
 
 
+def find_html_directories() -> List[str]:
+    """Find all directories in the current path that contain an index.html file."""
+    html_dirs = []
+    current_dir = Path.cwd()
+    
+    for item in current_dir.iterdir():
+        if item.is_dir():
+            # Check if this directory contains index.html
+            index_file = item / "index.html"
+            if index_file.exists() and index_file.is_file():
+                html_dirs.append(item.name)
+    
+    return sorted(html_dirs)
+
+
+def parse_arguments():
+    """Parse command line arguments - simplified."""
+    parser = argparse.ArgumentParser(
+        description="Parse HTML files and build a logical node tree from breadcrumb-driven navigation.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+USAGE:
+  # AUTO MODE - scan current directory for folders with index.html
+  python htmlparser_logical.py
+  
+  # AUTO MODE - specify a folder name
+  python htmlparser_logical.py "2025 Toyota Corolla Cross Hybrid S"
+  
+  # MANUAL MODE - full control
+  python htmlparser_logical.py --html_dir "2025 Toyota Corolla Cross Hybrid S" --db_path "custom.db"
+  python htmlparser_logical.py --html_dir "2025 Toyota Corolla Cross Hybrid S" --index_file "custom_index.html"
+
+EXAMPLES:
+  # Auto scan current directory
+  python htmlparser_logical.py
+  
+  # Process specific folder
+  python htmlparser_logical.py "2025 Toyota Corolla Cross Hybrid S"
+  
+  # Manual with custom database
+  python htmlparser_logical.py --html_dir "2025 Toyota Corolla Cross Hybrid S" --db_path "my_data.db"
+        """
+    )
+    
+    parser.add_argument(
+        "html_dir",
+        type=str,
+        nargs="?",  # Makes it optional
+        default=None,
+        help="Directory containing HTML files (optional: if not provided, auto-scans current directory)"
+    )
+    
+    parser.add_argument(
+        "--index_file",
+        type=str,
+        default=None,
+        help="Path to the index.html file (default: <html_dir>/index.html)"
+    )
+    
+    parser.add_argument(
+        "--db_path",
+        type=str,
+        default=None,
+        help="Path to the SQLite database file (default: <html_dir>.db)"
+    )
+    
+    return parser.parse_args()
+
+
 def main():
-    # html_dir  : a folder containing ALL the model's html (any layout).
-    # index_file: the single index.html for the specific car model to build from.
+    args = parse_arguments()
+    
+    # Determine html_dir
+    if args.html_dir is None:
+        # AUTO MODE: scan current directory
+        print("🔍 Auto mode: Scanning current directory for HTML folders...")
+        html_dirs = find_html_directories()
+        
+        if not html_dirs:
+            print("❌ Error: No directories containing index.html found in current directory.")
+            print(f"   Current directory: {os.getcwd()}")
+            print("   Please specify a directory: python htmlparser_logical.py 'Folder Name'")
+            sys.exit(1)
+        
+        print(f"📁 Found {len(html_dirs)} folder(s) with index.html:")
+        for i, dir_name in enumerate(html_dirs, 1):
+            print(f"   {i}. {dir_name}")
+        
+        # Use the first one found
+        selected_dir = html_dirs[0]
+        print(f"\n✅ Auto-selected: {selected_dir}")
+        args.html_dir = selected_dir
+    else:
+        # MANUAL MODE: user provided a directory name
+        print(f"📁 Manual mode: Using specified directory: {args.html_dir}")
+    
+    # Set default paths
+    if args.db_path is None:
+        dir_name = Path(args.html_dir).name
+        args.db_path = f"{dir_name}.db"
+    
+    if args.index_file is None:
+        args.index_file = str(Path(args.html_dir) / "index.html")
+    
+    # Validate that the files/directories exist
+    html_dir_path = Path(args.html_dir)
+    index_path = Path(args.index_file)
+    
+    if not html_dir_path.exists():
+        print(f"❌ Error: HTML directory '{args.html_dir}' does not exist.")
+        print(f"   Current working directory: {os.getcwd()}")
+        sys.exit(1)
+    
+    if not html_dir_path.is_dir():
+        print(f"❌ Error: '{args.html_dir}' is not a directory.")
+        sys.exit(1)
+    
+    if not index_path.exists():
+        print(f"❌ Error: Index file '{args.index_file}' does not exist.")
+        print(f"   Looking for index.html in: {html_dir_path}")
+        sys.exit(1)
+    
+    if not index_path.is_file():
+        print(f"❌ Error: '{args.index_file}' is not a file.")
+        sys.exit(1)
+    
+    print("=" * 70)
+    print("🚀 Starting HTML Parser")
+    print(f"📁 HTML directory: {args.html_dir}")
+    print(f"📄 Index file:     {args.index_file}")
+    print(f"💾 Database:       {args.db_path}")
+    print("=" * 70)
+    
     parser = LogicalHTMLParser(
-        html_dir="2025 Toyota Corolla Cross Hybrid S",
-        index_file="2025 Toyota Corolla Cross Hybrid S/index.html",
-        db_path="nodes.db",
+        html_dir=args.html_dir,
+        index_file=args.index_file,
+        db_path=args.db_path,
     )
     parser.crawl()
     print("\n✨ Done. Serve a page with: build_tree(fetch_subtree(db, root_id, depth), root_id)")
