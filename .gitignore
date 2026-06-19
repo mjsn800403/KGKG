@@ -5,3 +5,7 @@
 # Ignore Claude metadata and VS Code workspace settings
 /.claude
 /.vscode
+
+# Ignore compiled Python files and markdown
+*.pyc
+*.md
