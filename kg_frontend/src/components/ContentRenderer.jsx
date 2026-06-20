@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { resolveHref } from '@/utils/api';
+import { showModal } from '@/components/Modal';
 
 // The manual's HTML content cross-links to other sections using the
 // original static site's flat "pages/<id>.html" filenames (optionally with
@@ -18,11 +19,11 @@ export default function ContentRenderer({ content, brand, year, model }) {
 
   if (!content) return null;
 
-  function goToSegments(segments) {
-    const encodedBrand = encodeURIComponent(brand);
-    const encodedModel = encodeURIComponent(model);
+  function goToSegments(targetBrand, targetYear, targetModel, segments) {
+    const encodedBrand = encodeURIComponent(targetBrand);
+    const encodedModel = encodeURIComponent(targetModel);
     const encodedPath = segments.map(encodeURIComponent).join('/');
-    router.push(`/${encodedBrand}/${year}/${encodedModel}/${encodedPath}`);
+    router.push(`/${encodedBrand}/${targetYear}/${encodedModel}/${encodedPath}`);
   }
 
   async function handleClick(e) {
@@ -40,19 +41,35 @@ export default function ContentRenderer({ content, brand, year, model }) {
     // name and ignore the fragment, since we render one node at a time.
     const filename = href.split('#')[0].split('/').filter(Boolean).pop();
     try {
-      const segments = await resolveHref(brand, year, model, filename);
-      goToSegments(segments);
+      const target = await resolveHref(brand, year, model, filename);
+      goToSegments(target.brand, target.year, target.model, target.segments);
     } catch (err) {
+      if (err.notFound) {
+        // No node matches this page - it's an orphan page that the crawler
+        // never registered (e.g. an alternate-variant "Other Variant" page
+        // reachable only via this cross-link). Its HTML still exists in the
+        // current car's source folder, so render it through the raw-page
+        // route instead of failing.
+        router.push(`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/page/${encodeURIComponent(filename)}`);
+        return;
+      }
       console.error('Could not resolve manual link:', href, err);
+      showModal(
+        'بارگذاری محتوا ناموفق بود',
+        'در دریافت این صفحه از سامانه خطایی رخ داد. لطفاً دوباره تلاش کنید.',
+        '!'
+      );
     }
   }
 
   return (
-    <div className="content-renderer" onClick={handleClick}>
-      <div
-        className="content-wrapper"
-        dangerouslySetInnerHTML={{ __html: content }}
-      />
+    <div className="viewer glass">
+      <div className="viewer-body content-renderer" onClick={handleClick}>
+        <div
+          className="content-wrapper"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+      </div>
     </div>
   );
 }

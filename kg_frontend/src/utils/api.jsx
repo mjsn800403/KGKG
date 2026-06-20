@@ -97,7 +97,11 @@ export async function fetchNodes(brand, year, model, pathSegments = []) {
   }
 }
 // Resolve a manual cross-reference link (e.g. "pages/40738.html", with no
-// hash fragment) to the title-path segments of the node it points to.
+// hash fragment) to the node it points to. The link may belong to a
+// different vehicle variant than the one currently being viewed (e.g. a
+// "Land Cruiser Base" page pointing at a "Land Cruiser 1958" page), so the
+// backend searches every registered car, not just the current one - the
+// response tells us which car the target actually belongs to.
 export async function resolveHref(brand, year, model, filename) {
   const encodedBrand = encodeURIComponent(brand);
   const encodedModel = encodeURIComponent(model);
@@ -105,12 +109,29 @@ export async function resolveHref(brand, year, model, filename) {
 
   const res = await fetch(url);
   if (!res.ok) {
-    const errorText = await res.text();
-    console.error('resolveHref error response:', errorText);
-    throw new Error(`Failed to resolve link: ${res.status}`);
+    const error = await res.json().catch(() => ({}));
+    const err = new Error(error.error || `Failed to resolve link: ${res.status}`);
+    err.notFound = res.status === 404;
+    throw err;
   }
+  return res.json(); // { brand, year, model, segments }
+}
+
+// Fetch the raw HTML content of a manual page that has no node (an orphan
+// cross-link target served straight from the car's source folder).
+// Returns { title, content } or null if the page doesn't exist.
+export async function fetchRawPage(brand, year, model, filename) {
+  const encodedBrand = encodeURIComponent(brand);
+  const encodedModel = encodeURIComponent(model);
+  const url = `${API_BASE}/${encodedBrand}/${year}/${encodeURIComponent(model)}/?page=${encodeURIComponent(filename)}`;
+
+  const res = await fetch(url);
+  if (!res.ok) return null;
   const data = await res.json();
-  return data.segments;
+  if (data?.content) {
+    data.content = data.content.replaceAll('="/media/', `="${API_BASE}/media/`);
+  }
+  return data; // { title, content }
 }
 
 export async function fetchModels(brand, year, model) {

@@ -1,31 +1,16 @@
 # htmlparser_logical.py
 #
-# Breadcrumb-driven, link-crawled parser. (Successor to htmlparser_claude_7.py.)
+# Breadcrumb-driven, link-crawled parser with automated zip processing.
+# 
+# USAGE:
+#   python htmlparser_logical.py "path/to/backend_folder"
 #
-# WHAT CHANGED vs. the filesystem-mirror approach
-# ------------------------------------------------
-#   * DISCOVERY is logical, not on-disk. We start at ONE index.html (a specific
-#     car model) and crawl outward by FOLLOWING STRUCTURAL <a href="pages/N.html">
-#     links recursively. The folder layout on disk is NEVER used as a signal
-#     (it may be messy); files are only LOCATED by basename so their bytes can
-#     be read and parsed.
-#   * IDENTITY is the BREADCRUMB logical path. The chain of <a class="breadcrumb-part">
-#     gives every page its absolute path in the tree; parent = strip last segment.
-#     The same node seen as a leaf-link in a parent page and as its own page
-#     dedupe to ONE row by this path.
-#   * file_type is decided ONLY from a file's own HTML context:
-#         - no navigation children            -> 'end_path'  (+ store content)
-#         - hosts its own first-degree children-> 'intermediate_path'
-#         - the single provided index.html     -> 'root_path'
-#   * node_type (root/folder/leaf) is the SAME page-local DOM rule as before.
-#
-# HOW DEPTH IS REACHED
-# --------------------
-#   Split-tree pages are deliberately cut at a depth, so deeper nodes are not
-#   present in any one page. Depth is reached by (a) DOM recursion through the
-#   <a name="…/"> folder anchors inside a page, and (b) opening each structural
-#   <a href="pages/N.html"> leaf as a new page and continuing from ITS breadcrumb.
-#   An explicit BFS queue + visited-set walks the whole model subtree.
+# This will:
+#   1. Extract all LEMON *.zip files in the current directory (parallel)
+#   2. Parse each extracted HTML folder into a database (parallel)
+#   3. Copy databases to Database_warehouse/ (renamed without prefix/year)
+#   4. Copy images folders to static_warehouse/ (renamed to match)
+#   5. Update backend db.sqlite3 with car information
 
 import re
 import sqlite3
@@ -33,15 +18,22 @@ import hashlib
 import argparse
 import sys
 import os
+import shutil
+import zipfile
 from collections import deque
 from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 from bs4 import BeautifulSoup
 
 PARSER = "html5lib"  # MANDATORY: html.parser / lxml mis-nest the unclosed <li> tags.
+
+# Thread-safe print lock
+print_lock = threading.Lock()
 
 
 class LogicalHTMLParser:
@@ -67,9 +59,11 @@ class LogicalHTMLParser:
             if key not in self.files_by_basename:
                 self.files_by_basename[key] = p
             elif self.files_by_basename[key] != p:
-                print(f"⚠️ duplicate basename '{p.name}' — keeping "
-                      f"{self.files_by_basename[key]}, ignoring {p}")
-        print(f"🔎 Indexed {len(self.files_by_basename)} html files (by basename)")
+                with print_lock:
+                    print(f"⚠️ duplicate basename '{p.name}' — keeping "
+                          f"{self.files_by_basename[key]}, ignoring {p}")
+        with print_lock:
+            print(f"🔎 Indexed {len(self.files_by_basename)} html files (by basename)")
 
     def setup_database(self) -> None:
         conn = sqlite3.connect(self.db_path)
@@ -97,7 +91,8 @@ class LogicalHTMLParser:
         """)
         conn.commit()
         conn.close()
-        print(f"✅ Database initialized: {self.db_path}")
+        with print_lock:
+            print(f"✅ Database initialized: {self.db_path}")
 
     # ----------------------------------------------------------------- helpers
     @staticmethod
@@ -369,7 +364,8 @@ class LogicalHTMLParser:
             idx_soup = BeautifulSoup(f.read(), PARSER)
         idx_segs = self._breadcrumb_segments(idx_soup)
         self.model_root = idx_segs[-1] if idx_segs else ""
-        print(f"🌱 Model root: {self._unescape(self.model_root) or '(unknown)'}")
+        with print_lock:
+            print(f"🌱 Model root: {self._unescape(self.model_root) or '(unknown)'}")
 
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA journal_mode = WAL;")
@@ -386,7 +382,8 @@ class LogicalHTMLParser:
             queue.extend(children)
         except Exception as e:
             failed += 1
-            print(f"❌ index {self.index_file}: {e}")
+            with print_lock:
+                print(f"❌ index {self.index_file}: {e}")
 
         # 2) BFS over structural child pages.
         while queue:
@@ -397,7 +394,8 @@ class LogicalHTMLParser:
             visited.add(base)
             fp = self.files_by_basename.get(base)
             if fp is None:
-                print(f"⚠️ structural link '{base}' not found in index — skipped")
+                with print_lock:
+                    print(f"⚠️ structural link '{base}' not found in index — skipped")
                 continue
             try:
                 _, rows, grandchildren = self.parse_page(fp, is_index=False)
@@ -412,10 +410,12 @@ class LogicalHTMLParser:
                 queue.extend(grandchildren)
                 if processed % 100 == 0:
                     conn.commit()
-                    print(f"  …{processed} pages, {total_nodes} node rows, {len(queue)} queued")
+                    with print_lock:
+                        print(f"  …{processed} pages, {total_nodes} node rows, {len(queue)} queued")
             except Exception as e:
                 failed += 1
-                print(f"❌ {fp}: {e}")
+                with print_lock:
+                    print(f"❌ {fp}: {e}")
 
         conn.commit()
         roots_n = self._assign_root_order(conn)
@@ -423,13 +423,14 @@ class LogicalHTMLParser:
         conn.execute("PRAGMA optimize;")
         conn.close()
 
-        print("\n" + "=" * 70)
-        print("📊 SUMMARY")
-        print(f"✅ Pages processed : {processed}")
-        print(f"❌ Failed          : {failed}")
-        print(f"🧩 Node rows upserted (incl. dedup): {total_nodes}")
-        print(f"🌱 Root nodes ordered: {roots_n}")
-        print(f"💾 Database        : {self.db_path}")
+        with print_lock:
+            print("\n" + "=" * 70)
+            print("📊 SUMMARY")
+            print(f"✅ Pages processed : {processed}")
+            print(f"❌ Failed          : {failed}")
+            print(f"🧩 Node rows upserted (incl. dedup): {total_nodes}")
+            print(f"🌱 Root nodes ordered: {roots_n}")
+            print(f"💾 Database        : {self.db_path}")
 
     def _assign_root_order(self, conn: sqlite3.Connection) -> int:
         roots = conn.execute(
@@ -441,211 +442,370 @@ class LogicalHTMLParser:
         return len(roots)
 
 
-# ====================================================================== READ
-# Serve-side helpers — unchanged in spirit: bounded-depth fetch -> tree -> HTML.
+# ====================================================================== MAIN AUTOMATED PROCESS
 
-def fetch_subtree(db_path: str, root_id: str, max_depth: int = 2) -> List[sqlite3.Row]:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    rows = conn.execute("""
-        WITH RECURSIVE subtree(id, parent_id, title, node_type, file_type,
-                               href, sort_order, depth_from_root, content) AS (
-            SELECT id, parent_id, title, node_type, file_type, href, sort_order, 0, content
-            FROM nodes WHERE id = ?
-            UNION ALL
-            SELECT n.id, n.parent_id, n.title, n.node_type, n.file_type, n.href,
-                   n.sort_order, s.depth_from_root + 1, n.content
-            FROM nodes n JOIN subtree s ON n.parent_id = s.id
-            WHERE s.depth_from_root < ?
-        )
-        SELECT * FROM subtree ORDER BY depth_from_root, parent_id, sort_order;
-    """, (root_id, max_depth)).fetchall()
-    conn.close()
-    return rows
-
-
-def build_tree(rows: List[sqlite3.Row], root_id: str) -> Optional[Dict[str, Any]]:
-    by_parent: Dict[Optional[str], List[sqlite3.Row]] = {}
-    for r in rows:
-        by_parent.setdefault(r["parent_id"], []).append(r)
-
-    def attach(node: sqlite3.Row) -> Dict[str, Any]:
-        kids = sorted(by_parent.get(node["id"], []), key=lambda x: x["sort_order"])
-        return {
-            "id": node["id"],
-            "title": node["title"],
-            "type": node["node_type"],
-            "file_type": node["file_type"],
-            "href": node["href"],
-            "content": node["content"],
-            "children": [attach(k) for k in kids],
-        }
-
-    root = next((r for r in rows if r["id"] == root_id), None)
-    return attach(root) if root else None
+def extract_zip(zip_path: Path, extract_to: Path) -> Optional[Path]:
+    """Extract a zip file and return the path to the extracted folder."""
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Extract all files
+            zip_ref.extractall(extract_to)
+            
+            # Determine the root folder name from the zip contents
+            all_names = zip_ref.namelist()
+            if not all_names:
+                with print_lock:
+                    print(f"⚠️ Zip file is empty: {zip_path.name}")
+                return None
+            
+            # Find the common prefix directory
+            common_prefix = os.path.commonprefix(all_names)
+            if common_prefix and common_prefix.endswith('/'):
+                # There's a root directory in the zip
+                root_dir = extract_to / common_prefix.rstrip('/')
+            else:
+                # Files are at root level, use the zip name without extension
+                root_dir = extract_to / zip_path.stem
+            
+            with print_lock:
+                print(f"📦 Extracted: {zip_path.name} -> {root_dir}")
+            return root_dir
+            
+    except Exception as e:
+        with print_lock:
+            print(f"❌ Failed to extract {zip_path.name}: {e}")
+        return None
 
 
-def render_html(node: Optional[Dict[str, Any]]) -> str:
-    if not node:
-        return ""
+def parse_car_info(db_name: str) -> Tuple[str, int, str]:
+    """Parse brand, year, and car name from database filename.
+    Example: '2025 Toyota Land Cruiser Base.db' -> ('Toyota', 2025, 'Land Cruiser Base')"""
+    # Remove .db extension
+    name = db_name.replace('.db', '')
+    
+    # Extract year (first 4 digits)
+    year_match = re.match(r'^(\d{4})\s+(.+)$', name)
+    if year_match:
+        year = int(year_match.group(1))
+        rest = year_match.group(2)
+    else:
+        year = 2025  # Default fallback
+        rest = name
+    
+    # Extract brand (first word after year)
+    parts = rest.split(' ', 1)
+    if len(parts) >= 2:
+        brand = parts[0]
+        car_name = parts[1]
+    else:
+        brand = rest
+        car_name = rest
+    
+    return brand, year, car_name
 
-    def li(n: Dict[str, Any]) -> str:
-        kids = (f"<ul>{''.join(li(c) for c in n['children'])}</ul>"
-                if n["children"] else "")
-        if n.get("file_type") == "end_path":
-            label = f'<a href="{n.get("href") or "#"}">{n["title"]}</a>'
-            cls = ' class="li-end" data-has-content="true"' if n.get("content") else ' class="li-end"'
-        elif n["type"] in ("folder", "root"):
-            label = f'<a href="{n["href"]}">{n["title"]}</a>' if n["href"] else f'<a>{n["title"]}</a>'
-            cls = ' class="li-folder"'
+
+def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path, 
+                       static_warehouse: Path, current_dir: Path) -> Optional[Dict]:
+    """Process a single zip file - designed for parallel execution."""
+    with print_lock:
+        print(f"\n{'='*70}")
+        print(f"🔄 Processing: {zip_path.name}")
+        print("=" * 70)
+    
+    # Extract zip and get the extracted folder path
+    extract_dir = extract_zip(zip_path, current_dir)
+    if extract_dir is None:
+        return None
+    
+    # Find index.html in extracted folder (search recursively if needed)
+    index_file = None
+    for html_file in extract_dir.rglob("index.html"):
+        index_file = html_file
+        break
+    
+    if index_file is None:
+        with print_lock:
+            print(f"⚠️ No index.html found in {extract_dir}, skipping...")
+        return None
+    
+    with print_lock:
+        print(f"📄 Found index.html at: {index_file}")
+    
+    # Generate database name (remove "LEMON " prefix)
+    db_name = zip_path.name.replace("LEMON ", "").replace(".zip", ".db")
+    db_path = current_dir / db_name
+    
+    # Parse car info from database name
+    brand, year, car_name = parse_car_info(db_name)
+    with print_lock:
+        print(f"🚗 Car info: {brand} {year} {car_name}")
+    
+    # Run HTML parser
+    with print_lock:
+        print(f"\n🔧 Parsing HTML for {db_name}...")
+    
+    parser = LogicalHTMLParser(
+        html_dir=str(extract_dir),
+        index_file=str(index_file),
+        db_path=str(db_path)
+    )
+    parser.crawl()
+    
+    # Copy database to warehouse (rename without prefix/year)
+    final_db_name = f"{car_name}.db"
+    final_db_path = db_warehouse / final_db_name
+    
+    if db_path.exists():
+        shutil.copy2(db_path, final_db_path)
+        with print_lock:
+            print(f"📁 Copied database to: {final_db_path}")
+    else:
+        with print_lock:
+            print(f"⚠️ Database not found: {db_path}")
+        return None
+    
+    # Copy images folder to static warehouse
+    images_source = extract_dir / "images"
+    if images_source.exists() and images_source.is_dir():
+        images_dest = static_warehouse / car_name
+        if images_dest.exists():
+            shutil.rmtree(images_dest)
+        shutil.copytree(images_source, images_dest)
+        with print_lock:
+            print(f"📁 Copied images to: {images_dest}")
+    else:
+        # Try searching for images folder recursively
+        images_found = None
+        for img_dir in extract_dir.rglob("images"):
+            if img_dir.is_dir():
+                images_found = img_dir
+                break
+        
+        if images_found:
+            images_dest = static_warehouse / car_name
+            if images_dest.exists():
+                shutil.rmtree(images_dest)
+            shutil.copytree(images_found, images_dest)
+            with print_lock:
+                print(f"📁 Copied images from {images_found} to: {images_dest}")
         else:
-            label = f'<a href="{n.get("href") or "#"}">{n["title"]}</a>'
-            cls = ' class="li-leaf"'
-        return f"<li{cls}>{label}{kids}</li>"
+            with print_lock:
+                print(f"⚠️ No images folder found in {extract_dir}")
+    
+    # Optional: Cleanup extracted folder
+    # shutil.rmtree(extract_dir)
+    # with print_lock:
+    #     print(f"🧹 Cleaned up: {extract_dir}")
+    
+    # Return car info for backend update
+    return {
+        'brand': brand,
+        'year': year,
+        'car_name': car_name,
+        'db_address': f".\\Database_warehouse\\{final_db_name}"
+    }
 
-    return f"<ul>{li(node)}</ul>"
 
-
-def find_html_directories() -> List[str]:
-    """Find all directories in the current path that contain an index.html file."""
-    html_dirs = []
+def process_all_zips(backend_path: str, max_workers: int = None):
+    """Main function to process all LEMON zip files in parallel."""
+    backend_dir = Path(backend_path).resolve()
     current_dir = Path.cwd()
     
-    for item in current_dir.iterdir():
-        if item.is_dir():
-            # Check if this directory contains index.html
-            index_file = item / "index.html"
-            if index_file.exists() and index_file.is_file():
-                html_dirs.append(item.name)
+    # Check if backend directory exists
+    if not backend_dir.exists():
+        print(f"❌ Error: Backend directory '{backend_path}' does not exist.")
+        sys.exit(1)
     
-    return sorted(html_dirs)
+    # Check for db.sqlite3 in backend
+    db_backend = backend_dir / "db.sqlite3"
+    if not db_backend.exists():
+        print(f"❌ Error: Database file '{db_backend}' does not exist.")
+        sys.exit(1)
+    
+    # Create warehouse directories
+    db_warehouse = backend_dir / "Database_warehouse"
+    static_warehouse = backend_dir / "static_warehouse"
+    db_warehouse.mkdir(exist_ok=True)
+    static_warehouse.mkdir(exist_ok=True)
+    
+    print("=" * 70)
+    print("🚀 Starting Automated HTML Parser (Parallel)")
+    print(f"📁 Backend directory: {backend_dir}")
+    print(f"💾 Backend database: {db_backend}")
+    print(f"📂 Database warehouse: {db_warehouse}")
+    print(f"📂 Static warehouse: {static_warehouse}")
+    print(f"⚡ Max workers: {max_workers}")
+    print("=" * 70)
+    
+    # Find all LEMON zip files
+    zip_files = list(current_dir.glob("LEMON *.zip"))
+    
+    if max_workers is None:
+        max_workers = len(zip_files)
+
+    if not zip_files:
+        print("❌ No LEMON *.zip files found in current directory.")
+        print(f"   Current directory: {current_dir}")
+        sys.exit(1)
+    
+    print(f"\n📦 Found {len(zip_files)} zip file(s):")
+    for zf in zip_files:
+        print(f"   - {zf.name}")
+    
+    print(f"\n⚡ Processing {len(zip_files)} zip files with {max_workers} parallel workers...")
+    
+    # Process zips in parallel
+    processed_cars = []
+    failed_zips = []
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_zip = {
+            executor.submit(process_single_zip, zip_path, backend_dir, db_warehouse, 
+                          static_warehouse, current_dir): zip_path
+            for zip_path in zip_files
+        }
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_zip):
+            zip_path = future_to_zip[future]
+            try:
+                result = future.result()
+                if result:
+                    processed_cars.append(result)
+                    with print_lock:
+                        print(f"✅ Completed: {zip_path.name}")
+                else:
+                    failed_zips.append(zip_path.name)
+                    with print_lock:
+                        print(f"❌ Failed: {zip_path.name}")
+            except Exception as e:
+                failed_zips.append(zip_path.name)
+                with print_lock:
+                    print(f"❌ Error processing {zip_path.name}: {e}")
+    
+    # Update backend database (single-threaded to avoid locking issues)
+    print(f"\n{'='*70}")
+    print("💾 Updating backend database...")
+    print("=" * 70)
+    
+    if processed_cars:
+        try:
+            conn = sqlite3.connect(db_backend)
+            cursor = conn.cursor()
+            
+            # Ensure main_db table exists
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS main_db (
+                    id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    brand_name  TEXT NOT NULL,
+                    year        INTEGER NOT NULL,
+                    db_address  TEXT NOT NULL,
+                    car_name    TEXT NOT NULL
+                )
+            """)
+            
+            # Insert records
+            inserted = 0
+            updated = 0
+            for car in processed_cars:
+                # Check if car already exists
+                cursor.execute(
+                    "SELECT id FROM main_db WHERE brand_name = ? AND year = ? AND car_name = ?",
+                    (car['brand'], car['year'], car['car_name'])
+                )
+                existing = cursor.fetchone()
+                
+                if existing:
+                    # Update existing record
+                    cursor.execute(
+                        """UPDATE main_db 
+                           SET db_address = ? 
+                           WHERE brand_name = ? AND year = ? AND car_name = ?""",
+                        (car['db_address'], car['brand'], car['year'], car['car_name'])
+                    )
+                    updated += 1
+                    with print_lock:
+                        print(f"🔄 Updated: {car['brand']} {car['year']} {car['car_name']}")
+                else:
+                    # Insert new record
+                    cursor.execute(
+                        """INSERT INTO main_db (brand_name, year, db_address, car_name)
+                           VALUES (?, ?, ?, ?)""",
+                        (car['brand'], car['year'], car['db_address'], car['car_name'])
+                    )
+                    inserted += 1
+                    with print_lock:
+                        print(f"➕ Added: {car['brand']} {car['year']} {car['car_name']}")
+            
+            conn.commit()
+            conn.close()
+            print(f"\n✅ Backend database updated: {inserted} new, {updated} updated")
+            
+        except Exception as e:
+            print(f"❌ Failed to update backend database: {e}")
+            print(f"   Error details: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    else:
+        print("⚠️ No cars were processed successfully.")
+    
+    # Final summary
+    print("\n" + "=" * 70)
+    print("🎉 COMPLETE!")
+    print("=" * 70)
+    print(f"✅ Successfully processed: {len(processed_cars)} car(s)")
+    print(f"❌ Failed: {len(failed_zips)} zip(s)")
+    if failed_zips:
+        print(f"   Failed zips: {', '.join(failed_zips)}")
+    print(f"📂 Database warehouse: {db_warehouse}")
+    print(f"📂 Static warehouse: {static_warehouse}")
+    print(f"💾 Backend database: {db_backend}")
+    print("\n📋 Processed cars:")
+    for car in processed_cars:
+        print(f"   - {car['brand']} {car['year']} {car['car_name']}")
+    print("=" * 70)
 
 
-def parse_arguments():
-    """Parse command line arguments - simplified."""
+def main():
     parser = argparse.ArgumentParser(
-        description="Parse HTML files and build a logical node tree from breadcrumb-driven navigation.",
+        description="Automated HTML parser for LEMON car data (parallel processing)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 USAGE:
-  # AUTO MODE - scan current directory for folders with index.html
-  python htmlparser_logical.py
-  
-  # AUTO MODE - specify a folder name
-  python htmlparser_logical.py "2025 Toyota Corolla Cross Hybrid S"
-  
-  # MANUAL MODE - full control
-  python htmlparser_logical.py --html_dir "2025 Toyota Corolla Cross Hybrid S" --db_path "custom.db"
-  python htmlparser_logical.py --html_dir "2025 Toyota Corolla Cross Hybrid S" --index_file "custom_index.html"
+  python htmlparser_logical.py "path/to/backend_folder"
+  python htmlparser_logical.py "path/to/backend_folder" --workers 8
+
+This will:
+  1. Extract all LEMON *.zip files in the current directory (parallel)
+  2. Parse each extracted HTML folder into a database (parallel)
+  3. Copy databases to Database_warehouse/ (renamed without prefix/year)
+  4. Copy images folders to static_warehouse/ (renamed to match)
+  5. Update backend db.sqlite3 with car information
 
 EXAMPLES:
-  # Auto scan current directory
-  python htmlparser_logical.py
-  
-  # Process specific folder
-  python htmlparser_logical.py "2025 Toyota Corolla Cross Hybrid S"
-  
-  # Manual with custom database
-  python htmlparser_logical.py --html_dir "2025 Toyota Corolla Cross Hybrid S" --db_path "my_data.db"
+  python htmlparser_logical.py "C:\\MyProject\\backend"
+  python htmlparser_logical.py "C:\\MyProject\\backend" --workers 10
         """
     )
     
     parser.add_argument(
-        "html_dir",
+        "backend_folder",
         type=str,
-        nargs="?",  # Makes it optional
-        default=None,
-        help="Directory containing HTML files (optional: if not provided, auto-scans current directory)"
+        help="Path to the backend folder containing db.sqlite3"
     )
     
     parser.add_argument(
-        "--index_file",
-        type=str,
+        "--workers",
+        type=int,
         default=None,
-        help="Path to the index.html file (default: <html_dir>/index.html)"
+        help="Number of parallel workers (default: 5)"
     )
     
-    parser.add_argument(
-        "--db_path",
-        type=str,
-        default=None,
-        help="Path to the SQLite database file (default: <html_dir>.db)"
-    )
+    args = parser.parse_args()
     
-    return parser.parse_args()
-
-
-def main():
-    args = parse_arguments()
-    
-    # Determine html_dir
-    if args.html_dir is None:
-        # AUTO MODE: scan current directory
-        print("🔍 Auto mode: Scanning current directory for HTML folders...")
-        html_dirs = find_html_directories()
-        
-        if not html_dirs:
-            print("❌ Error: No directories containing index.html found in current directory.")
-            print(f"   Current directory: {os.getcwd()}")
-            print("   Please specify a directory: python htmlparser_logical.py 'Folder Name'")
-            sys.exit(1)
-        
-        print(f"📁 Found {len(html_dirs)} folder(s) with index.html:")
-        for i, dir_name in enumerate(html_dirs, 1):
-            print(f"   {i}. {dir_name}")
-        
-        # Use the first one found
-        selected_dir = html_dirs[0]
-        print(f"\n✅ Auto-selected: {selected_dir}")
-        args.html_dir = selected_dir
-    else:
-        # MANUAL MODE: user provided a directory name
-        print(f"📁 Manual mode: Using specified directory: {args.html_dir}")
-    
-    # Set default paths
-    if args.db_path is None:
-        dir_name = Path(args.html_dir).name
-        args.db_path = f"{dir_name}.db"
-    
-    if args.index_file is None:
-        args.index_file = str(Path(args.html_dir) / "index.html")
-    
-    # Validate that the files/directories exist
-    html_dir_path = Path(args.html_dir)
-    index_path = Path(args.index_file)
-    
-    if not html_dir_path.exists():
-        print(f"❌ Error: HTML directory '{args.html_dir}' does not exist.")
-        print(f"   Current working directory: {os.getcwd()}")
-        sys.exit(1)
-    
-    if not html_dir_path.is_dir():
-        print(f"❌ Error: '{args.html_dir}' is not a directory.")
-        sys.exit(1)
-    
-    if not index_path.exists():
-        print(f"❌ Error: Index file '{args.index_file}' does not exist.")
-        print(f"   Looking for index.html in: {html_dir_path}")
-        sys.exit(1)
-    
-    if not index_path.is_file():
-        print(f"❌ Error: '{args.index_file}' is not a file.")
-        sys.exit(1)
-    
-    print("=" * 70)
-    print("🚀 Starting HTML Parser")
-    print(f"📁 HTML directory: {args.html_dir}")
-    print(f"📄 Index file:     {args.index_file}")
-    print(f"💾 Database:       {args.db_path}")
-    print("=" * 70)
-    
-    parser = LogicalHTMLParser(
-        html_dir=args.html_dir,
-        index_file=args.index_file,
-        db_path=args.db_path,
-    )
-    parser.crawl()
-    print("\n✨ Done. Serve a page with: build_tree(fetch_subtree(db, root_id, depth), root_id)")
+    process_all_zips(args.backend_folder, args.workers)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import quote
 from django.http import JsonResponse
 from django.conf import settings
+from bs4 import BeautifulSoup
 from .models import Car
 
 def brands_list_view(request):
@@ -50,6 +51,48 @@ def node_to_dict(row, car_name):
     node['content'] = rewrite_image_urls(node.get('content'), car_name)
     return node
 
+def _car_source_dir(cur):
+    """The on-disk root of this car's original crawl, derived from the
+    source_file recorded against its index/root node."""
+    row = cur.execute(
+        "SELECT source_file FROM nodes WHERE source_file IS NOT NULL AND file_type='root_path' LIMIT 1"
+    ).fetchone()
+    if not row:
+        row = cur.execute(
+            "SELECT source_file FROM nodes WHERE source_file IS NOT NULL LIMIT 1"
+        ).fetchone()
+    if not row or not row['source_file']:
+        return None
+    return Path(row['source_file']).parent
+
+def read_page_content(cur, car_name, filename):
+    """Render the raw HTML of a manual page that exists on disk but was never
+    registered as a node (e.g. an alternate-variant page only reachable via a
+    cross-link, like "Labor Times: Other Variant"). Scoped to THIS car's own
+    source directory so a bare filename like "5.html" can't collide with an
+    unrelated page in another car's crawl."""
+    base = _car_source_dir(cur)
+    if base is None:
+        return None
+    candidates = [base / 'pages' / filename, base / filename]
+    fp = next((c for c in candidates if c.exists()), None)
+    if fp is None:
+        return None
+    html = fp.read_text(encoding='utf-8', errors='replace')
+    try:
+        soup = BeautifulSoup(html, 'html5lib')
+    except Exception:
+        soup = BeautifulSoup(html, 'html.parser')
+    main = soup.select_one('div.main') or soup.body or soup
+    h1 = main.find('h1')
+    if h1 and h1.get_text(strip=True):
+        title = h1.get_text(strip=True)
+    else:
+        parts = soup.select('a.breadcrumb-part')
+        title = parts[-1].get_text(strip=True) if parts else filename
+    content = rewrite_image_urls(main.decode_contents(), car_name)
+    return {'title': title, 'content': content}
+
 def car_view(request, brand_name=None, year=None, model_name=None):
     """
     /brand_name/                                -> from main.db
@@ -88,6 +131,16 @@ def car_view(request, brand_name=None, year=None, model_name=None):
 
             path_segments = request.GET.getlist('seg')
             href_lookup = request.GET.get('href')
+            page_file = request.GET.get('page')
+
+            if page_file:
+                # Serve a raw manual page that has no node (orphan cross-link
+                # target). Read straight from this car's own source folder.
+                result = read_page_content(cur, car.car_name, page_file.rstrip('/').split('/')[-1])
+                conn.close()
+                if result is None:
+                    return JsonResponse({'error': f'Page not found: {page_file}'}, status=404)
+                return JsonResponse(result)
 
             if href_lookup:
                 # The manual's HTML content cross-links to other pages by
@@ -96,11 +149,25 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 # Resolve the filename to a node, then walk up via parent_id
                 # to build the title chain so the frontend can navigate to
                 # the equivalent app URL.
+                #
+                # Deliberately scoped to THIS car's db only: filenames like
+                # "5.html" are sequential IDs assigned independently by each
+                # crawl run, not globally unique identifiers. Searching other
+                # cars' databases by filename alone risks matching a
+                # completely unrelated page that happens to share the same
+                # number (verified: "5.html" exists in two unrelated cars'
+                # dbs pointing at totally different content). Some cross-links
+                # point at a different vehicle variant that was never
+                # onboarded at all (e.g. "Land Cruiser Base" linking to
+                # "Land Cruiser 1958") - those correctly 404 here, and the
+                # frontend shows a "not available" message instead of
+                # guessing.
                 filename = href_lookup.rstrip('/').split('/')[-1]
                 cur.execute(f"""
                     SELECT {NODE_COLUMNS} FROM nodes WHERE href LIKE ? LIMIT 1
                 """, ('%/' + filename,))
                 node = cur.fetchone()
+
                 if not node:
                     return JsonResponse({'error': f'No node found for href: {href_lookup}'}, status=404)
 
@@ -116,14 +183,23 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 segments.reverse()
 
                 conn.close()
-                return JsonResponse({'segments': segments})
+                return JsonResponse({
+                    'brand': car.brand_name,
+                    'year': car.year,
+                    'model': car.car_name,
+                    'segments': segments,
+                })
 
             if not path_segments:
-                # No path: return the car's root nodes.
+                # No path: return the car's root nodes. Excludes dead-link
+                # artifacts from the crawl (e.g. a followed link that turned
+                # out to be the site's 404 page, misclassified as a real
+                # "Download .zip for offline use" node).
                 cur.execute(f"""
                     SELECT {NODE_COLUMNS}
                     FROM nodes
                     WHERE node_type = 'root' AND depth = 1
+                          AND (href IS NULL OR href != '404.html')
                     ORDER BY sort_order
                 """)
             else:
