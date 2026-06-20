@@ -44,6 +44,9 @@ class LogicalHTMLParser:
         self.db_path = db_path
         self.files_by_basename: Dict[str, Path] = {}
         self.model_root: str = ""        # escaped last-breadcrumb segment of index.html
+        # basename -> (abs_path, parent_path) memoized breadcrumb peek, so checking
+        # "is this link a first-degree child" never re-parses the same target twice.
+        self._breadcrumb_cache: Dict[str, Optional[Tuple[str, Optional[str]]]] = {}
         self._index_files()
         self.setup_database()
 
@@ -187,32 +190,63 @@ class LogicalHTMLParser:
     def _nav_ul(self, main):
         """The split-tree navigation <ul> is the one that is a DIRECT child of
         div.main. Content lists (e.g. <ul class='BULLET'> inside an article) are
-        nested deeper and are intentionally never treated as navigation."""
+        nested deeper and are intentionally never treated as navigation. (Still
+        used to build structural rows/children — NOT for file_type anymore.)"""
         return main.find("ul", recursive=False) if main else None
 
-    def _classify_file_type(self, main, is_index: bool) -> str:
-        """FILE axis, decided purely from this file's own HTML context.
+    def _peek_breadcrumb(self, base: str) -> Optional[Tuple[str, Optional[str]]]:
+        """Open another page JUST to read its own breadcrumb, returning
+        (its_abs_path, its_parent_path). Memoized — a target may be linked from
+        several places, but its breadcrumb never changes between peeks."""
+        if base in self._breadcrumb_cache:
+            return self._breadcrumb_cache[base]
+        fp = self.files_by_basename.get(base)
+        result: Optional[Tuple[str, Optional[str]]] = None
+        if fp is not None:
+            try:
+                with open(fp, "r", encoding="utf-8", errors="replace") as f:
+                    soup = BeautifulSoup(f.read(), PARSER)
+                segs = self._breadcrumb_segments(soup)
+                abs_path = self._page_abs_path(segs)
+                result = (abs_path, self._parent_path(abs_path))
+            except Exception:
+                result = None
+        self._breadcrumb_cache[base] = result
+        return result
 
-        Equivalent to the breadcrumb-name rule: a page is 'intermediate_path' iff
-        its own breadcrumb-leaf is the FIRST-DEGREE parent of something — i.e. its
-        nav <ul> directly lists a child (an <a name='…/'> folder, or a structural
-        child-page <a href='pages/N.html'> with no cross-ref fragment). Otherwise
-        'end_path'. The provided index.html is always 'root_path'."""
+    def _classify_file_type(self, main, is_index: bool, page_abs: str) -> str:
+        """FILE axis, decided purely from this file's div.main CONTENT — not its
+        DOM shape. Rule:
+          - no <a> at all in div.main                          -> 'end_path'
+          - has <a>, but none is a genuine first-degree child   -> 'end_path'
+          - has at least one genuine first-degree child         -> 'intermediate_path'
+        A link is a genuine first-degree child if either:
+          (a) it is a page-less folder anchor (<a name='…/'>) — by construction it
+              nests directly under this page, or
+          (b) it is a followable <a href> whose OWN breadcrumb names THIS page's
+              abs path as its immediate parent (checked by peeking at the target
+              file right now — every html file already exists on disk, so we never
+              need to wait for the rest of the crawl).
+        A cross-reference to a page that belongs elsewhere in the tree (its
+        breadcrumb parent is something else) never satisfies (b), so it can never
+        falsely promote a leaf. The provided index.html is always 'root_path'."""
         if is_index:
             return "root_path"
-        nav = self._nav_ul(main)
-        if nav is None:
+        if main is None:
             return "end_path"
-        for li in nav.find_all("li", recursive=False):
-            a = li.find("a", recursive=False)
-            if a is None:
-                continue
+        for a in main.find_all("a"):
             if a.get("name") is not None:
-                return "intermediate_path"               # a hosted folder = first-degree child
+                return "intermediate_path"
             href = a.get("href")
-            if not self._has_fragment(href) and self._is_followable(self._resolve_basename(href)):
-                return "intermediate_path"               # a hosted child page = first-degree child
-        return "end_path"                                # only cross-refs / no children
+            if self._has_fragment(href):
+                continue
+            base = self._resolve_basename(href)
+            if not self._is_followable(base):
+                continue
+            info = self._peek_breadcrumb(base)
+            if info is not None and info[1] == page_abs:
+                return "intermediate_path"
+        return "end_path"
 
     # ---------------------------------------------------------------- parse
     def parse_page(self, file_path: Path, is_index: bool
@@ -229,7 +263,7 @@ class LogicalHTMLParser:
         main = soup.select_one("div.main") or soup.body or soup
         segs = self._breadcrumb_segments(soup)
         page_abs = self._page_abs_path(segs)
-        file_type = self._classify_file_type(main, is_index)
+        file_type = self._classify_file_type(main, is_index, page_abs)
         source_file = str(file_path.resolve())
 
         h1 = main.find("h1")
@@ -256,6 +290,37 @@ class LogicalHTMLParser:
             nav = self._nav_ul(main)
             if nav is not None:
                 self._walk(nav, page_abs, page_abs, source_file, rows, children, is_top=True)
+
+        # ---- Broadened discovery (logical fix) -------------------------------
+        # A first-degree child page can be expressed as a BARE link in the body
+        # (a thin "redirect" page) instead of inside the split-tree <ul>. The
+        # nav-only walk above misses those, which orphans the target entirely
+        # (e.g. "Labor Times" -> "Labor Times: Other Variant"). So additionally
+        # scan EVERY followable, non-fragment <a href> in div.main and queue it
+        # as a candidate child.
+        #
+        # This only affects REACHABILITY. It never decides parentage: each target
+        # is placed under whoever its OWN breadcrumb names as parent, and the
+        # end_path/intermediate_path label is corrected post-crawl in
+        # _reconcile_file_types() from that same breadcrumb relationship — so a
+        # genuine cross-reference can never falsely promote a leaf page.
+        seen = {c["basename"] for c in children}
+        for a in main.find_all("a"):
+            if a.get("name") is not None:            # page-less folder anchor
+                continue
+            href = a.get("href")
+            if self._has_fragment(href):             # in-page / cross-ref anchor
+                continue
+            base = self._resolve_basename(href)
+            if self._is_followable(base) and base not in seen:
+                seen.add(base)
+                children.append(dict(
+                    basename=base,
+                    node_type=None,                  # no DOM <li> role; derived post-crawl
+                    sort_order=10_000 + len(children),
+                    href=href,
+                ))
+
         return page_abs, rows, children
 
     def _walk(self, ul, page_abs: str, current_base: str, source_file: str,
@@ -418,6 +483,8 @@ class LogicalHTMLParser:
                     print(f"❌ {fp}: {e}")
 
         conn.commit()
+        promoted = self._reconcile_file_types(conn)
+        conn.commit()
         roots_n = self._assign_root_order(conn)
         conn.commit()
         conn.execute("PRAGMA optimize;")
@@ -429,8 +496,60 @@ class LogicalHTMLParser:
             print(f"✅ Pages processed : {processed}")
             print(f"❌ Failed          : {failed}")
             print(f"🧩 Node rows upserted (incl. dedup): {total_nodes}")
+            print(f"🔁 Promoted end→intermediate (breadcrumb): {promoted}")
             print(f"🌱 Root nodes ordered: {roots_n}")
             print(f"💾 Database        : {self.db_path}")
+
+    def _reconcile_file_types(self, conn: sqlite3.Connection) -> int:
+        """Breadcrumb-driven correction of the FILE axis (the logical fix).
+
+        Parse-time classification calls a page 'end_path' when it has no
+        navigation <ul> of its own. That is a DOM-SHAPE proxy for "is a parent",
+        and it is wrong for a thin page whose only child is a bare body link
+        (e.g. 'Labor Times' -> 'Labor Times: Other Variant'). The breadcrumb is
+        the source of truth: if ANY real page row names this page as its
+        first-degree parent (child.parent_id == this.id), then this page is an
+        intermediate, not a leaf.
+
+        So, globally:
+          - promote any 'end_path' page that turns out to parent a real page,
+          - drop its now-meaningless placeholder content,
+          - upgrade a stale 'leaf' node_type to 'folder'.
+
+        A genuine cross-reference never triggers this, because the linked
+        target's OWN breadcrumb parent is some other page, not this one — so it
+        is not joined here.
+        """
+        cur = conn.execute("""
+            UPDATE nodes
+               SET file_type = 'intermediate_path',
+                   content   = NULL,
+                   node_type = CASE
+                                   WHEN node_type IS NULL OR node_type = 'leaf'
+                                   THEN 'folder' ELSE node_type
+                               END
+             WHERE file_type = 'end_path'
+               AND id IN (
+                   SELECT DISTINCT parent.id
+                     FROM nodes AS parent
+                     JOIN nodes AS child ON child.parent_id = parent.id
+                    WHERE child.file_type IS NOT NULL      -- child is a real page
+               );
+        """)
+        promoted = cur.rowcount
+
+        # Pages discovered via a bare body link have no DOM <li> to inherit a
+        # node_type from, so their page-base row carries node_type = NULL. Give
+        # them a concrete DOM role consistent with their realized file_type.
+        # (root_path rows are intentionally left as-is, matching prior behavior.)
+        conn.execute("""
+            UPDATE nodes
+               SET node_type = CASE WHEN file_type = 'end_path'
+                                    THEN 'leaf' ELSE 'folder' END
+             WHERE node_type IS NULL
+               AND file_type IN ('end_path', 'intermediate_path');
+        """)
+        return promoted
 
     def _assign_root_order(self, conn: sqlite3.Connection) -> int:
         roots = conn.execute(

@@ -54,7 +54,22 @@ body{
   -webkit-font-smoothing:antialiased;
   transition:background .4s,color .4s;
 }
-@media (prefers-reduced-motion: reduce){*{animation-duration:.001ms !important;transition-duration:.001ms !important;}}
+@media (prefers-reduced-motion: reduce){
+  /* Calm the big entrance/transform motion for motion-sensitive users… */
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+  /* …but keep the low-amplitude ambient brand signature alive. */
+  .blueprint{animation-duration:24s !important;animation-iteration-count:infinite !important}
+  .orb1{animation-duration:16s !important;animation-iteration-count:infinite !important}
+  .orb2{animation-duration:20s !important;animation-iteration-count:infinite !important}
+  .scanline{animation-duration:8s !important;animation-iteration-count:infinite !important}
+  .microbar .track{animation-duration:22s !important;animation-iteration-count:infinite !important}
+  .rig svg{animation-duration:10s !important;animation-iteration-count:infinite !important}
+  .credit .heart{animation-duration:1.4s !important;animation-iteration-count:infinite !important}
+  .vin-decode .cursor{animation-duration:1s !important;animation-iteration-count:infinite !important}
+  .hotspot{animation-duration:2.2s !important;animation-iteration-count:infinite !important}
+  .modal-overlay.show{animation-duration:.3s !important}
+  .modal-box{animation-duration:.4s !important}
+}
 
 /* ---------- animated background signature ---------- */
 #fxbg{position:fixed;inset:0;z-index:0;pointer-events:none;}
@@ -158,6 +173,7 @@ html[data-theme="light"] #spotlight{mix-blend-mode:multiply;opacity:.35}
   padding:10px 22px;border-radius:var(--radius);letter-spacing:.02em;
   transition:transform .25s cubic-bezier(.2,.9,.3,1),box-shadow .3s,border-color .3s,background .3s;
   position:relative;overflow:hidden;text-decoration:none;display:inline-flex;align-items:center;gap:8px;
+  transform:translateZ(0);backface-visibility:hidden;-webkit-backface-visibility:hidden;will-change:transform;
 }
 .btn-accent{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn-accent:hover{box-shadow:0 0 28px var(--accent-glow);filter:brightness(1.08);transform:translateY(-2px)}
