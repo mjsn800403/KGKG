@@ -101,7 +101,7 @@ class App(tk.Tk):
         )
         # --- zips folder row
         self._folder_row(
-            "📦  پوشه‌ی فایل‌های زیپ  (شامل فایل‌های  LEMON *.zip)",
+            "📦  پوشه‌ی فایل‌های زیپ  (شامل فایل‌های   *.zip)",
             self.zips_var, self._browse_zips,
         )
 
