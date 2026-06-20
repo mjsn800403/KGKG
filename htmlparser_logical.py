@@ -270,6 +270,16 @@ class LogicalHTMLParser:
         title = (h1.get_text(strip=True) if h1
                  else self._unescape(segs[-1]) if segs else (page_abs or "Root"))
 
+        # Strip dead placeholder links (e.g. "Download .zip for offline use" ->
+        # 404.html) so they never end up saved into a car's content HTML.
+        if main is not None:
+            for a in main.find_all("a"):
+                href = a.get("href")
+                if href and not self._has_fragment(href):
+                    base = Path(urlsplit(href).path).name.lower()
+                    if base in ("404.html", "about.html"):
+                        a.decompose()
+
         content = main.decode_contents() if (file_type == "end_path" and main) else None
 
         rows: List[Dict[str, Any]] = [dict(
@@ -725,10 +735,16 @@ def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
     }
 
 
-def process_all_zips(backend_path: str, max_workers: int = None):
-    """Main function to process all LEMON zip files in parallel."""
+def process_all_zips(backend_path: str, max_workers: int = None,
+                     zips_dir: str = None):
+    """Main function to process all LEMON zip files in parallel.
+
+    zips_dir: folder to search for 'LEMON *.zip' and to use as the extraction /
+    intermediate working directory. Defaults to the current working directory so
+    existing command-line behavior is unchanged.
+    """
     backend_dir = Path(backend_path).resolve()
-    current_dir = Path.cwd()
+    current_dir = Path(zips_dir).resolve() if zips_dir else Path.cwd()
     
     # Check if backend directory exists
     if not backend_dir.exists():
@@ -921,10 +937,26 @@ EXAMPLES:
         default=None,
         help="Number of parallel workers (default: 5)"
     )
-    
+
+    parser.add_argument(
+        "--zips-dir",
+        type=str,
+        default=None,
+        help="Folder containing the LEMON *.zip files "
+             "(default: current working directory)"
+    )
+
+    # Windows consoles default to cp1252, which cannot encode the emoji used in
+    # the progress output. Force UTF-8 so direct command-line runs don't crash.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     args = parser.parse_args()
-    
-    process_all_zips(args.backend_folder, args.workers)
+
+    process_all_zips(args.backend_folder, args.workers, args.zips_dir)
 
 
 if __name__ == "__main__":
