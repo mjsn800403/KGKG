@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 
+// Fixed ambient background layers + cursor-tracked spotlight, exactly as the
+// prototype: #fxbg, blueprint grid, two floating orbs, scanline, spotlight.
 export default function BackgroundFX() {
   useEffect(() => {
     function onMove(e) {
@@ -16,6 +18,7 @@ export default function BackgroundFX() {
 
   return (
     <>
+      <div id="fxbg" />
       <div className="blueprint" />
       <div className="orb orb1" />
       <div className="orb orb2" />

@@ -1,6 +1,8 @@
-// app/[brand]/[year]/page.js
+// app/[brand]/[year]/page.js — cars for a brand+year, in the dashboard shell
 import { fetchYearData } from '@/utils/api';
-import Link from 'next/link';
+import DashboardShell from '@/components/DashboardShell';
+import Breadcrumb from '@/components/Breadcrumb';
+import CardGrid from '@/components/CardGrid';
 
 export default async function YearPage({ params }) {
   const raw = await params;
@@ -8,22 +10,23 @@ export default async function YearPage({ params }) {
   const year = raw.year;
   const cars = await fetchYearData(brand, parseInt(year));
 
+  const items = cars.map((car) => ({
+    href: `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(car.car_name)}`,
+    icon: '▣',
+    title: car.car_name,
+    sub: String(brand).toUpperCase() + ' / ' + year,
+    go: 'مشاهده مستندات ←',
+  }));
+
   return (
-    <div className="container">
-      <h1>{brand} {year}</h1>
-      <div className="car-grid">
-        {cars.map((car) => (
-          <Link
-            key={car.car_name}
-            href={`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(car.car_name)}`}
-            className="car-card"
-          >
-            <h3>{car.car_name}</h3>
-            <p>Repair manuals · parts catalog · special tools</p>
-            <span>View Manual →</span>
-          </Link>
-        ))}
+    <DashboardShell>
+      <div className="topbar">
+        <Breadcrumb brand={brand} year={year} />
+        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
       </div>
-    </div>
+      <h1 className="page-title">{brand} {year}</h1>
+      <div className="page-sub">// SELECT_VEHICLE</div>
+      <CardGrid items={items} />
+    </DashboardShell>
   );
 }

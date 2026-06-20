@@ -1,6 +1,8 @@
-// app/[brand]/page.js
+// app/[brand]/page.js — years for a brand, in the dashboard shell
 import { fetchBrands } from '@/utils/api';
-import Link from 'next/link';
+import DashboardShell from '@/components/DashboardShell';
+import Breadcrumb from '@/components/Breadcrumb';
+import CardGrid from '@/components/CardGrid';
 
 export default async function BrandPage({ params }) {
   const raw = await params;
@@ -8,17 +10,23 @@ export default async function BrandPage({ params }) {
   const cars = await fetchBrands(brand);
   const years = [...new Set(cars.map((car) => car.year))].sort((a, b) => b - a);
 
+  const items = years.map((year) => ({
+    href: `/${encodeURIComponent(brand)}/${year}`,
+    icon: '◷',
+    title: String(year),
+    sub: 'MODEL YEAR',
+    go: 'مشاهده ←',
+  }));
+
   return (
-    <div className="container">
-      <h1>{decodeURIComponent(brand)}</h1>
-      <p className="subtitle">Select a year</p>
-      <div className="year-grid">
-        {years.map((year) => (
-          <Link key={year} href={`/${encodeURIComponent(brand)}/${year}`} className="year-card">
-            <h3>{year}</h3>
-          </Link>
-        ))}
+    <DashboardShell>
+      <div className="topbar">
+        <Breadcrumb brand={brand} />
+        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
       </div>
-    </div>
+      <h1 className="page-title">{brand}</h1>
+      <div className="page-sub">// SELECT_MODEL_YEAR</div>
+      <CardGrid items={items} />
+    </DashboardShell>
   );
 }
