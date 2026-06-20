@@ -10,7 +10,7 @@ export default async function Home() {
       <h1>Factory precision, <em>in the shop&apos;s hands</em>.</h1>
       <p className="subtitle">SELECT A BRAND TO GET STARTED</p>
       <div className="brand-list">
-        {brands.map((brand) => (
+        {brands.map((brand: string) => (
           <a key={brand} href={`/${encodeURIComponent(brand)}`} className="brand-card">
             <h2>{brand}</h2>
             <p>Repair manuals · parts catalog · special tools</p>
