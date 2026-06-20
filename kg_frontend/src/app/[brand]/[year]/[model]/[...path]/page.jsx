@@ -51,7 +51,6 @@ export default async function NodePage({ params }) {
     href: `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/${[...pathArray, node.title].map(encodeURIComponent).join('/')}`,
     icon: ICONS[i % ICONS.length],
     title: node.title,
-    sub: (node.file_type || node.node_type || 'DOCUMENT').toString().toUpperCase().replace(/_/g, ' '),
     go: 'ورود به مستند ←',
   }));
 

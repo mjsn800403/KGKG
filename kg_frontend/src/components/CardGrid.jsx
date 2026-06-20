@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 // Renders a doc-grid of cards with the prototype's staggered "explode" reveal.
-// items: [{ href, icon, title, sub, go }]
+// items: [{ href, icon, title, go }]
 export default function CardGrid({ items }) {
   const gridRef = useRef(null);
 
@@ -25,7 +25,6 @@ export default function CardGrid({ items }) {
           <div className="icon">{it.icon}</div>
           <div>
             <h4>{it.title}</h4>
-            <p>{it.sub}</p>
           </div>
           <div className="go">{it.go || 'ورود به مستند ←'}</div>
         </Link>

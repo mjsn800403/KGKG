@@ -18,7 +18,6 @@ export default async function ModelPage({ params }) {
     href: `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/${encodeURIComponent(node.title)}`,
     icon: ICONS[i % ICONS.length],
     title: node.title,
-    sub: (node.file_type || node.node_type || 'DOCUMENT').toString().toUpperCase().replace(/_/g, ' '),
     go: 'ورود به مستند ←',
   }));
 

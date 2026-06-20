@@ -34,7 +34,7 @@ export async function fetchAllBrands() {
 export async function fetchBrands(brand) {
   try {
     const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/`);
-    console.log(res)
+    // console.log(res)
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       throw new Error(error.error || `Failed to fetch brands: ${res.status}`);
