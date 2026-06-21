@@ -238,36 +238,41 @@ class LogicalHTMLParser:
         return result
 
     def _classify_file_type(self, main, is_index: bool, page_abs: str) -> str:
-        """FILE axis, decided purely from this file's div.main CONTENT — not its
-        DOM shape. Rule:
+        """FILE axis, decided purely from this file's div.main CONTENT. Rule:
           - no <a> at all in div.main                          -> 'end_path'
           - has <a>, but none is a genuine first-degree child   -> 'end_path'
           - has at least one genuine first-degree child         -> 'intermediate_path'
-        A link is a genuine first-degree child if either:
-          (a) it is a page-less folder anchor (<a name='…/'>) — by construction it
-              nests directly under this page, or
-          (b) it is a followable <a href> whose OWN breadcrumb names THIS page's
-              abs path as its immediate parent (checked by peeking at the target
-              file right now — every html file already exists on disk, so we never
-              need to wait for the rest of the crawl).
-        A cross-reference to a page that belongs elsewhere in the tree (its
-        breadcrumb parent is something else) never satisfies (b), so it can never
-        falsely promote a leaf. The provided index.html is always 'root_path'."""
+
+        For each <a> we decide whether it is a FIRST-DEGREE CHILD of this page:
+          * <a href> containing '#'  -> an in-page / cross-ref link: SKIPPED, never
+            counts (this is the user's '#' rule).
+          * <a name="…/">            -> a navigation FOLDER anchor (its name is a
+            path ending in '/'); a hosted child folder, so first-degree child.
+          * <a name="…">  (no '/')   -> an in-page BOOKMARK anchor (e.g. a content
+            section id like 'S11007…'); NOT a child: SKIPPED. This is the fix —
+            previously ANY <a name> wrongly promoted a leaf to intermediate.
+          * <a href> (no '#') to a followable page whose OWN breadcrumb names THIS
+            page as its immediate parent -> first-degree child.
+        Anything else (cross-references, external/dead links, sibling links) is not
+        a first-degree child, so the page stays 'end_path'. index.html is root."""
         if is_index:
             return "root_path"
         if main is None:
             return "end_path"
         for a in main.find_all("a"):
-            if a.get("name") is not None:
-                return "intermediate_path"
+            name = a.get("name")
+            if name is not None:
+                if name.endswith("/"):           # nav folder anchor = hosted child
+                    return "intermediate_path"
+                continue                          # in-page bookmark anchor: skip
             href = a.get("href")
-            if self._has_fragment(href):
+            if self._has_fragment(href):          # '#' link to current page: skip
                 continue
             base = self._resolve_basename(href)
             if not self._is_followable(base):
                 continue
             info = self._peek_breadcrumb(base)
-            if info is not None and info[1] == page_abs:
+            if info is not None and info[1] == page_abs:   # target's parent is us
                 return "intermediate_path"
         return "end_path"
 
