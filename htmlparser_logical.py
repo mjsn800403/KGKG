@@ -13,6 +13,7 @@
 #   5. Update backend db.sqlite3 with car information
 
 import re
+import json
 import sqlite3
 import hashlib
 import argparse
@@ -32,8 +33,21 @@ from bs4 import BeautifulSoup
 
 PARSER = "html5lib"  # MANDATORY: html.parser / lxml mis-nest the unclosed <li> tags.
 
+# How often (in pages) the resumable crawl flushes its visited/queue snapshot.
+# On an interruption, at most this many pages of frontier progress are redone.
+CHECKPOINT_EVERY = 250
+
 # Thread-safe print lock
 print_lock = threading.Lock()
+
+# Serializes all writes to the backend zip-level ledger across worker threads.
+ledger_lock = threading.Lock()
+
+
+class CrawlPaused(Exception):
+    """Raised by a crawl when an external cancel_event is set. Not an error: the
+    frontier has just been checkpointed, so the next run resumes from this point.
+    Callers must treat this as 'paused', NOT 'failed'."""
 
 
 class LogicalHTMLParser:
@@ -91,6 +105,15 @@ class LogicalHTMLParser:
             CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent_id, sort_order);
             CREATE INDEX IF NOT EXISTS idx_nodes_path   ON nodes(path);
             CREATE INDEX IF NOT EXISTS idx_nodes_root   ON nodes(root_order);
+
+            -- Resumable-crawl checkpoint. One row per key; holds a JSON snapshot of
+            -- the BFS 'visited' set, the pending 'queue' frontier, and progress
+            -- counters, rewritten atomically every CHECKPOINT_EVERY pages. If the
+            -- run is killed, the next run reloads this and continues mid-crawl.
+            CREATE TABLE IF NOT EXISTS crawl_state (
+                k  TEXT PRIMARY KEY,   -- 'snapshot' | 'status'
+                v  TEXT                -- JSON blob
+            );
         """)
         conn.commit()
         conn.close()
@@ -280,7 +303,11 @@ class LogicalHTMLParser:
                     if base in ("404.html", "about.html"):
                         a.decompose()
 
-        content = main.decode_contents() if (file_type == "end_path" and main) else None
+        # Keep the raw div.main HTML for EVERY page parsed from a real file,
+        # regardless of file_type. Intermediate/root pages can carry real article
+        # content too (intro text, notes, images), so restricting content to
+        # end_path silently dropped it. Page-less DOM folder nodes still get NULL.
+        content = main.decode_contents() if main is not None else None
 
         rows: List[Dict[str, Any]] = [dict(
             path=page_abs,
@@ -432,36 +459,99 @@ class LogicalHTMLParser:
             n += 1
         return n
 
-    # ---------------------------------------------------------------- crawl
-    def crawl(self) -> None:
-        # Establish the model root from index.html's last breadcrumb part.
-        with open(self.index_file, "r", encoding="utf-8", errors="replace") as f:
-            idx_soup = BeautifulSoup(f.read(), PARSER)
-        idx_segs = self._breadcrumb_segments(idx_soup)
-        self.model_root = idx_segs[-1] if idx_segs else ""
-        with print_lock:
-            print(f"🌱 Model root: {self._unescape(self.model_root) or '(unknown)'}")
+    # ----------------------------------------------------- resume checkpoint
+    def _save_checkpoint(self, conn: sqlite3.Connection, visited: set,
+                         queue: deque, processed: int, failed: int,
+                         total_nodes: int, done: bool = False) -> None:
+        """Atomically persist the crawl frontier so a killed run can resume.
+        Written inside the same connection right after a node commit, so the
+        snapshot is always consistent with what's already in the nodes table."""
+        snap = json.dumps({
+            "visited": list(visited),
+            "queue": list(queue),
+            "processed": processed,
+            "failed": failed,
+            "total_nodes": total_nodes,
+            "model_root": self.model_root,
+            "done": done,
+        })
+        conn.execute(
+            "INSERT INTO crawl_state(k, v) VALUES('snapshot', ?) "
+            "ON CONFLICT(k) DO UPDATE SET v = excluded.v", (snap,))
+        conn.commit()
 
+    def _load_checkpoint(self, conn: sqlite3.Connection):
+        """Return (visited, queue, processed, failed, total_nodes) if a
+        resumable, not-yet-finished snapshot exists, else None."""
+        row = conn.execute(
+            "SELECT v FROM crawl_state WHERE k = 'snapshot'").fetchone()
+        if not row:
+            return None
+        try:
+            s = json.loads(row[0])
+        except Exception:
+            return None
+        if s.get("done"):
+            return None  # already finished; nothing to resume
+        self.model_root = s.get("model_root", self.model_root)
+        return (set(s["visited"]), deque(s["queue"]),
+                s["processed"], s["failed"], s["total_nodes"])
+
+    # ---------------------------------------------------------------- crawl
+    def crawl(self, cancel_event=None) -> int:
+        """Crawl to completion and return the page count. If cancel_event is set
+        partway through, the current frontier is checkpointed and CrawlPaused is
+        raised so a later run can resume from exactly here."""
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA journal_mode = WAL;")
 
-        visited = {self.index_file.name.lower()}
-        queue: deque = deque()
-        processed = failed = total_nodes = 0
-
-        # 1) the index page itself (root_path; no parent <li> to inherit from).
-        try:
-            _, rows, children = self.parse_page(self.index_file, is_index=True)
-            total_nodes += self.save_rows(rows, conn)
-            processed += 1
-            queue.extend(children)
-        except Exception as e:
-            failed += 1
+        resumed = self._load_checkpoint(conn)
+        if resumed is not None:
+            visited, queue, processed, failed, total_nodes = resumed
             with print_lock:
-                print(f"❌ index {self.index_file}: {e}")
+                print(f"⏯️  Resuming crawl: {processed} pages already done, "
+                      f"{len(queue)} queued, model root "
+                      f"{self._unescape(self.model_root) or '(unknown)'}")
+        else:
+            # Fresh start. Establish the model root from index.html's last
+            # breadcrumb part, then seed the BFS with the index page itself.
+            with open(self.index_file, "r", encoding="utf-8", errors="replace") as f:
+                idx_soup = BeautifulSoup(f.read(), PARSER)
+            idx_segs = self._breadcrumb_segments(idx_soup)
+            self.model_root = idx_segs[-1] if idx_segs else ""
+            with print_lock:
+                print(f"🌱 Model root: {self._unescape(self.model_root) or '(unknown)'}")
+
+            visited = {self.index_file.name.lower()}
+            queue = deque()
+            processed = failed = total_nodes = 0
+
+            # 1) the index page itself (root_path; no parent <li> to inherit from).
+            try:
+                _, rows, children = self.parse_page(self.index_file, is_index=True)
+                total_nodes += self.save_rows(rows, conn)
+                processed += 1
+                queue.extend(children)
+            except Exception as e:
+                failed += 1
+                with print_lock:
+                    print(f"❌ index {self.index_file}: {e}")
+            self._save_checkpoint(conn, visited, queue, processed, failed, total_nodes)
 
         # 2) BFS over structural child pages.
         while queue:
+            # Cooperative cancel: checkpoint NOW (commit nodes + frontier together)
+            # and bail out so pressing Start later resumes from this exact spot.
+            if cancel_event is not None and cancel_event.is_set():
+                conn.commit()
+                self._save_checkpoint(conn, visited, queue,
+                                      processed, failed, total_nodes)
+                conn.close()
+                with print_lock:
+                    print(f"\n⏸️  Paused at {processed} pages "
+                          f"({len(queue)} still queued) — checkpoint saved.")
+                raise CrawlPaused()
+
             c = queue.popleft()
             base = c["basename"]
             if base in visited:
@@ -483,10 +573,15 @@ class LogicalHTMLParser:
                 total_nodes += self.save_rows(rows, conn)
                 processed += 1
                 queue.extend(grandchildren)
-                if processed % 100 == 0:
+                if processed % CHECKPOINT_EVERY == 0:
+                    # Commit nodes THEN snapshot the frontier in the same conn, so
+                    # the resume point can never be ahead of the persisted rows.
                     conn.commit()
+                    self._save_checkpoint(conn, visited, queue,
+                                          processed, failed, total_nodes)
                     with print_lock:
-                        print(f"  …{processed} pages, {total_nodes} node rows, {len(queue)} queued")
+                        print(f"  …{processed} pages, {total_nodes} node rows, "
+                              f"{len(queue)} queued (checkpointed)")
             except Exception as e:
                 failed += 1
                 with print_lock:
@@ -497,6 +592,9 @@ class LogicalHTMLParser:
         conn.commit()
         roots_n = self._assign_root_order(conn)
         conn.commit()
+        # Mark the crawl finished so a future run skips straight past it.
+        self._save_checkpoint(conn, visited, queue, processed, failed,
+                              total_nodes, done=True)
         conn.execute("PRAGMA optimize;")
         conn.close()
 
@@ -509,6 +607,7 @@ class LogicalHTMLParser:
             print(f"🔁 Promoted end→intermediate (breadcrumb): {promoted}")
             print(f"🌱 Root nodes ordered: {roots_n}")
             print(f"💾 Database        : {self.db_path}")
+        return processed
 
     def _reconcile_file_types(self, conn: sqlite3.Connection) -> int:
         """Breadcrumb-driven correction of the FILE axis (the logical fix).
@@ -523,8 +622,8 @@ class LogicalHTMLParser:
 
         So, globally:
           - promote any 'end_path' page that turns out to parent a real page,
-          - drop its now-meaningless placeholder content,
           - upgrade a stale 'leaf' node_type to 'folder'.
+        (Content is preserved — every page keeps its original div.main HTML.)
 
         A genuine cross-reference never triggers this, because the linked
         target's OWN breadcrumb parent is some other page, not this one — so it
@@ -533,7 +632,6 @@ class LogicalHTMLParser:
         cur = conn.execute("""
             UPDATE nodes
                SET file_type = 'intermediate_path',
-                   content   = NULL,
                    node_type = CASE
                                    WHEN node_type IS NULL OR node_type = 'leaf'
                                    THEN 'folder' ELSE node_type
@@ -571,7 +669,134 @@ class LogicalHTMLParser:
         return len(roots)
 
 
+# ====================================================================== ZIP-LEVEL LEDGER
+
+class ProcessingLedger:
+    """Tracks per-zip processing status in the backend db.sqlite3 so a re-run
+    skips zips that are already fully done and resumes the rest. Identity is
+    (name, size, mtime): if a zip is replaced with a newer/edited file, its row
+    no longer matches 'completed' and it is reprocessed. All writes go through a
+    single process-wide lock because worker threads share the SQLite file."""
+
+    def __init__(self, backend_db: Path):
+        self.backend_db = str(backend_db)
+        with ledger_lock:
+            conn = sqlite3.connect(self.backend_db)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS processing_status (
+                    zip_name        TEXT PRIMARY KEY,
+                    zip_size        INTEGER,
+                    zip_mtime       REAL,
+                    status          TEXT,      -- 'in_progress' | 'completed' | 'failed'
+                    pages_processed INTEGER,
+                    started_at      TEXT,
+                    finished_at     TEXT,
+                    error           TEXT
+                )
+            """)
+            conn.commit()
+            conn.close()
+
+    @staticmethod
+    def _sig(zip_path: Path) -> Tuple[int, float]:
+        st = zip_path.stat()
+        return st.st_size, st.st_mtime
+
+    def is_completed(self, zip_path: Path) -> bool:
+        """True only if this exact zip (same size+mtime) is recorded completed."""
+        size, mtime = self._sig(zip_path)
+        with ledger_lock:
+            conn = sqlite3.connect(self.backend_db)
+            row = conn.execute(
+                "SELECT status, zip_size, zip_mtime FROM processing_status "
+                "WHERE zip_name = ?", (zip_path.name,)).fetchone()
+            conn.close()
+        if not row:
+            return False
+        status, size_db, mtime_db = row
+        # mtime compared with tolerance (FS timestamp precision varies).
+        return (status == "completed" and size_db == size
+                and abs((mtime_db or 0) - mtime) < 1.0)
+
+    def mark_start(self, zip_path: Path) -> None:
+        size, mtime = self._sig(zip_path)
+        now = datetime.now(timezone.utc).isoformat()
+        with ledger_lock:
+            conn = sqlite3.connect(self.backend_db)
+            conn.execute("""
+                INSERT INTO processing_status
+                    (zip_name, zip_size, zip_mtime, status, pages_processed,
+                     started_at, finished_at, error)
+                VALUES (?,?,?,'in_progress',0,?,NULL,NULL)
+                ON CONFLICT(zip_name) DO UPDATE SET
+                    zip_size=excluded.zip_size, zip_mtime=excluded.zip_mtime,
+                    status='in_progress', started_at=excluded.started_at,
+                    finished_at=NULL, error=NULL
+            """, (zip_path.name, size, mtime, now))
+            conn.commit()
+            conn.close()
+
+    def mark_done(self, zip_path: Path, pages: int) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with ledger_lock:
+            conn = sqlite3.connect(self.backend_db)
+            conn.execute(
+                "UPDATE processing_status SET status='completed', "
+                "pages_processed=?, finished_at=?, error=NULL WHERE zip_name=?",
+                (pages, now, zip_path.name))
+            conn.commit()
+            conn.close()
+
+    def mark_failed(self, zip_path: Path, error: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with ledger_lock:
+            conn = sqlite3.connect(self.backend_db)
+            conn.execute(
+                "UPDATE processing_status SET status='failed', "
+                "finished_at=?, error=? WHERE zip_name=?",
+                (now, str(error)[:2000], zip_path.name))
+            conn.commit()
+            conn.close()
+
+
 # ====================================================================== MAIN AUTOMATED PROCESS
+
+def zip_extract_dir(zip_path: Path, extract_to: Path) -> Optional[Path]:
+    """Compute WHERE a zip would extract to, WITHOUT extracting it. Mirrors the
+    root-folder logic in extract_zip so we can detect an already-extracted folder
+    and skip re-unzipping on resume."""
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            all_names = zip_ref.namelist()
+    except Exception:
+        return None
+    if not all_names:
+        return None
+    common_prefix = os.path.commonprefix(all_names)
+    if common_prefix and common_prefix.endswith('/'):
+        return extract_to / common_prefix.rstrip('/')
+    return extract_to / zip_path.stem
+
+
+def has_resumable_checkpoint(db_path: Path) -> bool:
+    """True if this car's db holds a crawl checkpoint that is NOT yet finished —
+    i.e. the HTML was already extracted and parsing can continue mid-crawl."""
+    if not db_path.exists():
+        return False
+    try:
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute(
+            "SELECT v FROM crawl_state WHERE k = 'snapshot'").fetchone()
+        conn.close()
+    except Exception:
+        return False
+    if not row:
+        return False
+    try:
+        return not json.loads(row[0]).get("done", False)
+    except Exception:
+        return False
+
 
 def extract_zip(zip_path: Path, extract_to: Path) -> Optional[Path]:
     """Extract a zip file and return the path to the extracted folder."""
@@ -633,19 +858,94 @@ def parse_car_info(db_name: str) -> Tuple[str, int, str]:
     return brand, year, car_name
 
 
-def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path, 
-                       static_warehouse: Path, current_dir: Path) -> Optional[Dict]:
-    """Process a single zip file - designed for parallel execution."""
+def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
+                       static_warehouse: Path, current_dir: Path,
+                       ledger: "ProcessingLedger", cancel_event=None,
+                       force: bool = False) -> Optional[Dict]:
+    """Process a single zip file - designed for parallel execution.
+
+    Idempotent: a zip already recorded 'completed' (same size+mtime) is skipped
+    entirely. Otherwise the per-car crawl resumes from its last checkpoint, so an
+    interrupted run picks up mid-manual instead of restarting from scratch.
+
+    force=True ignores 'completed' and deletes the old car .db so the manual is
+    regenerated cleanly with the current parser logic."""
+    # ---- skip fully-completed zips (unless forcing a reprocess) -----------
+    if not force and ledger.is_completed(zip_path):
+        with print_lock:
+            print(f"⏭️  Skipping (already completed): {zip_path.name}")
+        return None
+
+    # ---- force: wipe the stale car db so regeneration starts fresh --------
+    if force:
+        db_name = zip_path.name.replace("LEMON ", "").replace(".zip", ".db")
+        for suffix in ("", "-wal", "-shm"):
+            stale = current_dir / (db_name + suffix)
+            try:
+                if stale.exists():
+                    stale.unlink()
+            except OSError as e:
+                with print_lock:
+                    print(f"⚠️ could not remove old db {stale}: {e}")
+
+    # ---- if a pause was requested before this zip even started, do nothing.
+    # Status stays untouched (or 'in_progress' if partially done) so a later run
+    # resumes it. This is what stops NEW zips from starting after Stop is pressed.
+    if cancel_event is not None and cancel_event.is_set():
+        with print_lock:
+            print(f"⏸️  Not starting (paused): {zip_path.name}")
+        return None
+
     with print_lock:
         print(f"\n{'='*70}")
         print(f"🔄 Processing: {zip_path.name}")
         print("=" * 70)
-    
-    # Extract zip and get the extracted folder path
-    extract_dir = extract_zip(zip_path, current_dir)
-    if extract_dir is None:
+    ledger.mark_start(zip_path)
+
+    try:
+        return _process_single_zip_inner(
+            zip_path, backend_dir, db_warehouse, static_warehouse,
+            current_dir, ledger, cancel_event)
+    except CrawlPaused:
+        # Not a failure: checkpoint is saved, status left 'in_progress' so the
+        # next run resumes this car from where it stopped.
+        with print_lock:
+            print(f"⏸️  Paused: {zip_path.name} (will resume on next run)")
         return None
-    
+    except Exception as e:
+        ledger.mark_failed(zip_path, str(e))
+        with print_lock:
+            print(f"❌ Error processing {zip_path.name}: {e}")
+        return None
+
+
+def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: Path,
+                              static_warehouse: Path, current_dir: Path,
+                              ledger: "ProcessingLedger", cancel_event=None) -> Optional[Dict]:
+    # The per-car db lives next to the zips; its name is derived from the zip,
+    # independent of extraction, so we can check for a checkpoint up front.
+    db_name = zip_path.name.replace("LEMON ", "").replace(".zip", ".db")
+    db_path = current_dir / db_name
+
+    # ---- Resume fast-path: if a not-yet-finished checkpoint exists AND the
+    # already-extracted folder is still on disk, skip unzipping entirely and go
+    # straight back to crawling. A checkpoint implies the HTML was fully extracted
+    # in a previous run, so re-unzipping would be wasted work.
+    extract_dir = None
+    expected_dir = zip_extract_dir(zip_path, current_dir)
+    if (has_resumable_checkpoint(db_path) and expected_dir is not None
+            and expected_dir.exists()
+            and next(expected_dir.rglob("index.html"), None) is not None):
+        extract_dir = expected_dir
+        with print_lock:
+            print(f"⏩ Checkpoint found — skipping unzip, reusing: {extract_dir}")
+    else:
+        # Fresh (or extracted folder missing): extract the zip.
+        extract_dir = extract_zip(zip_path, current_dir)
+        if extract_dir is None:
+            ledger.mark_failed(zip_path, "extraction failed / empty zip")
+            return None
+
     # Find index.html in extracted folder (search recursively if needed)
     index_file = None
     for html_file in extract_dir.rglob("index.html"):
@@ -655,16 +955,13 @@ def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
     if index_file is None:
         with print_lock:
             print(f"⚠️ No index.html found in {extract_dir}, skipping...")
+        ledger.mark_failed(zip_path, "no index.html found")
         return None
     
     with print_lock:
         print(f"📄 Found index.html at: {index_file}")
-    
-    # Generate database name (remove "LEMON " prefix)
-    db_name = zip_path.name.replace("LEMON ", "").replace(".zip", ".db")
-    db_path = current_dir / db_name
-    
-    # Parse car info from database name
+
+    # Parse car info from database name (db_name/db_path computed above).
     brand, year, car_name = parse_car_info(db_name)
     with print_lock:
         print(f"🚗 Car info: {brand} {year} {car_name}")
@@ -678,12 +975,12 @@ def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
         index_file=str(index_file),
         db_path=str(db_path)
     )
-    parser.crawl()
-    
+    pages = parser.crawl(cancel_event)
+
     # Copy database to warehouse (rename without prefix/year)
     final_db_name = f"{car_name}.db"
     final_db_path = db_warehouse / final_db_name
-    
+
     if db_path.exists():
         shutil.copy2(db_path, final_db_path)
         with print_lock:
@@ -691,6 +988,7 @@ def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
     else:
         with print_lock:
             print(f"⚠️ Database not found: {db_path}")
+        ledger.mark_failed(zip_path, "car database not produced")
         return None
     
     # Copy images folder to static warehouse
@@ -726,22 +1024,37 @@ def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
     # with print_lock:
     #     print(f"🧹 Cleaned up: {extract_dir}")
     
+    # Mark this zip fully completed so future runs skip it.
+    ledger.mark_done(zip_path, pages)
+    with print_lock:
+        print(f"🏁 Completed {zip_path.name}: {pages} pages")
+
     # Return car info for backend update
     return {
         'brand': brand,
         'year': year,
         'car_name': car_name,
-        'db_address': f".\\Database_warehouse\\{final_db_name}"
+        # Always use POSIX '/' separators so the address is portable: the frontend
+        # may serve from Linux/macOS where a Windows '\' is a literal filename char
+        # (causing 404s). '/' is valid on Windows too, so this is safe everywhere.
+        'db_address': f"./Database_warehouse/{final_db_name}"
     }
 
 
 def process_all_zips(backend_path: str, max_workers: int = None,
-                     zips_dir: str = None):
+                     zips_dir: str = None, cancel_event=None, force: bool = False):
     """Main function to process all LEMON zip files in parallel.
 
     zips_dir: folder to search for 'LEMON *.zip' and to use as the extraction /
     intermediate working directory. Defaults to the current working directory so
     existing command-line behavior is unchanged.
+
+    cancel_event: optional threading.Event. When set, in-flight crawls checkpoint
+    and stop, and no new zips are started. Re-running resumes from the checkpoints.
+
+    force: when True, ignore the 'completed' ledger status and REPROCESS every zip
+    from scratch (the old car .db is deleted first for a clean regenerate). Use
+    this after changing the parser logic.
     """
     backend_dir = Path(backend_path).resolve()
     current_dir = Path(zips_dir).resolve() if zips_dir else Path.cwd()
@@ -762,6 +1075,9 @@ def process_all_zips(backend_path: str, max_workers: int = None,
     static_warehouse = backend_dir / "static_warehouse"
     db_warehouse.mkdir(exist_ok=True)
     static_warehouse.mkdir(exist_ok=True)
+
+    # Zip-level progress ledger (lives in the backend db.sqlite3).
+    ledger = ProcessingLedger(db_backend)
     
     print("=" * 70)
     print("🚀 Starting Automated HTML Parser (Parallel)")
@@ -773,34 +1089,54 @@ def process_all_zips(backend_path: str, max_workers: int = None,
     print("=" * 70)
     
     # Find all LEMON zip files
-    zip_files = list(current_dir.glob("LEMON *.zip"))
-    
-    if max_workers is None:
-        max_workers = len(zip_files)
+    all_zip_files = list(current_dir.glob("LEMON *.zip"))
 
-    if not zip_files:
+    if not all_zip_files:
         print("❌ No LEMON *.zip files found in current directory.")
         print(f"   Current directory: {current_dir}")
         sys.exit(1)
-    
-    print(f"\n📦 Found {len(zip_files)} zip file(s):")
+
+    # Split into already-done vs to-do so finished zips are never reprocessed.
+    # With force=True, nothing is treated as done -> every zip is reprocessed.
+    if force:
+        zip_files = list(all_zip_files)
+        skipped = []
+    else:
+        zip_files = [z for z in all_zip_files if not ledger.is_completed(z)]
+        skipped = [z for z in all_zip_files if z not in zip_files]
+
+    if force:
+        print(f"\n🔁 FORCE reprocess: regenerating all {len(all_zip_files)} zip(s) "
+              f"from scratch (ignoring 'completed' status).")
+    print(f"\n📦 Found {len(all_zip_files)} zip file(s): "
+          f"{len(skipped)} already completed, {len(zip_files)} to process.")
+    for zf in skipped:
+        print(f"   ⏭️  done : {zf.name}")
     for zf in zip_files:
-        print(f"   - {zf.name}")
-    
+        print(f"   ▶️  todo : {zf.name}")
+
+    if not zip_files:
+        print("\n✅ Nothing to do — all zips already processed.")
+        return
+
+    if max_workers is None:
+        max_workers = len(zip_files)
+
     print(f"\n⚡ Processing {len(zip_files)} zip files with {max_workers} parallel workers...")
     
     # Process zips in parallel
     processed_cars = []
     failed_zips = []
-    
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         future_to_zip = {
-            executor.submit(process_single_zip, zip_path, backend_dir, db_warehouse, 
-                          static_warehouse, current_dir): zip_path
+            executor.submit(process_single_zip, zip_path, backend_dir, db_warehouse,
+                          static_warehouse, current_dir, ledger, cancel_event,
+                          force): zip_path
             for zip_path in zip_files
         }
-        
+
         # Collect results as they complete
         for future in as_completed(future_to_zip):
             zip_path = future_to_zip[future]
@@ -811,13 +1147,20 @@ def process_all_zips(backend_path: str, max_workers: int = None,
                     with print_lock:
                         print(f"✅ Completed: {zip_path.name}")
                 else:
-                    failed_zips.append(zip_path.name)
-                    with print_lock:
-                        print(f"❌ Failed: {zip_path.name}")
+                    # None can mean paused/skipped (not failures). Only count it as
+                    # failed if the ledger actually recorded a failure for it.
+                    if not (cancel_event is not None and cancel_event.is_set()):
+                        failed_zips.append(zip_path.name)
+                        with print_lock:
+                            print(f"❌ Failed: {zip_path.name}")
             except Exception as e:
                 failed_zips.append(zip_path.name)
                 with print_lock:
                     print(f"❌ Error processing {zip_path.name}: {e}")
+
+    if cancel_event is not None and cancel_event.is_set():
+        with print_lock:
+            print("\n⏸️  Paused by user. Re-run to resume from the last checkpoint.")
     
     # Update backend database (single-threaded to avoid locking issues)
     print(f"\n{'='*70}")
@@ -946,6 +1289,14 @@ EXAMPLES:
              "(default: current working directory)"
     )
 
+    parser.add_argument(
+        "--force", "--reprocess",
+        dest="force",
+        action="store_true",
+        help="Reprocess every zip from scratch, ignoring 'completed' status "
+             "(deletes the old car .db first). Use after changing parser logic."
+    )
+
     # Windows consoles default to cp1252, which cannot encode the emoji used in
     # the progress output. Force UTF-8 so direct command-line runs don't crash.
     for stream in (sys.stdout, sys.stderr):
@@ -956,7 +1307,8 @@ EXAMPLES:
 
     args = parser.parse_args()
 
-    process_all_zips(args.backend_folder, args.workers, args.zips_dir)
+    process_all_zips(args.backend_folder, args.workers, args.zips_dir,
+                     force=args.force)
 
 
 if __name__ == "__main__":

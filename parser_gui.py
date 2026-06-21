@@ -74,11 +74,13 @@ class App(tk.Tk):
 
         self.log_q: "queue.Queue[str]" = queue.Queue()
         self.worker: threading.Thread | None = None
+        self.cancel_event = threading.Event()   # set -> parser pauses & checkpoints
         cfg = load_config()
 
         self.backend_var = tk.StringVar(value=cfg.get("backend", ""))
         self.zips_var = tk.StringVar(value=cfg.get("zips", ""))
         self.workers_var = tk.StringVar(value=cfg.get("workers", ""))
+        self.force_var = tk.BooleanVar(value=False)   # reprocess completed zips
 
         self._build_ui()
         self.after(100, self._drain_log)
@@ -112,6 +114,13 @@ class App(tk.Tk):
         ttk.Spinbox(wf, from_=1, to=64, width=6,
                     textvariable=self.workers_var, justify="center").pack(side="right", padx=8)
 
+        # Reprocess switch: when on, already-completed zips are regenerated from
+        # scratch (use after the parser logic changes).
+        ttk.Checkbutton(
+            wf, variable=self.force_var,
+            text="🔁  پردازش مجدد همه (نادیده‌گرفتن موارد تکمیل‌شده)",
+        ).pack(side="right", padx=16)
+
         # --- log pane
         ttk.Label(self, text="📋  گزارش پردازش:").pack(anchor="e", padx=12)
         self.log = scrolledtext.ScrolledText(
@@ -127,6 +136,11 @@ class App(tk.Tk):
 
         self.start_btn = ttk.Button(bar, text="▶  شروع پردازش", command=self._start)
         self.start_btn.pack(side="left")
+
+        # Stop = pause: checkpoints the current car and stops; press Start to resume.
+        self.stop_btn = ttk.Button(bar, text="⏸  توقف / مکث",
+                                   command=self._stop, state="disabled")
+        self.stop_btn.pack(side="left", padx=(8, 0))
 
         self.progress = ttk.Progressbar(bar, mode="indeterminate")
         self.progress.pack(side="left", fill="x", expand=True, padx=12)
@@ -221,19 +235,25 @@ class App(tk.Tk):
         self.log.delete("1.0", "end")
         self.log.configure(state="disabled")
 
+        self.cancel_event.clear()
         self.start_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
         self.progress.start(12)
         self.status.configure(text="در حال پردازش…", foreground="#e8ad3f")
 
+        force = bool(self.force_var.get())
         self.worker = threading.Thread(
-            target=self._run, args=(backend, zips, workers), daemon=True)
+            target=self._run, args=(backend, zips, workers, force), daemon=True)
         self.worker.start()
 
-    def _run(self, backend: str, zips: str, workers: "int | None") -> None:
+    def _run(self, backend: str, zips: str, workers: "int | None",
+             force: bool = False) -> None:
         old_out, old_err = sys.stdout, sys.stderr
         sys.stdout = sys.stderr = QueueWriter(self.log_q)
         try:
-            parser.process_all_zips(backend, workers, zips)
+            parser.process_all_zips(backend, workers, zips,
+                                    cancel_event=self.cancel_event,
+                                    force=force)
         except SystemExit as e:
             # the script calls sys.exit() on some errors; surface, don't crash.
             print(f"\n⛔ پردازش متوقف شد (کد: {e.code}).")
@@ -243,18 +263,40 @@ class App(tk.Tk):
             sys.stdout, sys.stderr = old_out, old_err
             self.log_q.put("<<DONE>>")
 
+    def _stop(self) -> None:
+        """Request a clean pause: the parser checkpoints the in-flight car and
+        stops starting new ones. Press Start again to resume from the checkpoint."""
+        if self.worker and self.worker.is_alive():
+            self.cancel_event.set()
+            self.stop_btn.configure(state="disabled")
+            self.status.configure(text="در حال توقف ایمن…", foreground="#e8ad3f")
+            self._append("\n⏸️  درخواست توقف ثبت شد؛ در حال ذخیره‌ی نقطه‌ی ادامه…\n")
+
     def _finish(self) -> None:
         self.progress.stop()
         self.start_btn.configure(state="normal")
-        self.status.configure(text="پایان یافت ✓", foreground="#2bb3a3")
+        self.stop_btn.configure(state="disabled")
+        if self.cancel_event.is_set():
+            self.status.configure(text="متوقف شد (قابل ادامه) ⏸",
+                                  foreground="#e8ad3f")
+        else:
+            self.status.configure(text="پایان یافت ✓", foreground="#2bb3a3")
 
     # ----------------------------------------------------------------- close
     def _on_close(self) -> None:
         if self.worker and self.worker.is_alive():
             if not messagebox.askyesno(
                 "در حال پردازش",
-                "پردازش هنوز تمام نشده است. آیا می‌خواهید خارج شوید؟"):
+                "پردازش هنوز تمام نشده است.\n"
+                "با خروج، پردازش متوقف می‌شود اما پیشرفت ذخیره‌شده "
+                "از دست نمی‌رود و دفعه‌ی بعد از همان‌جا ادامه می‌یابد.\n\n"
+                "آیا می‌خواهید خارج شوید؟"):
                 return
+            # Ask the parser to checkpoint, then give it a brief moment to flush
+            # the current frontier before the process (and its daemon thread) die.
+            self.cancel_event.set()
+            self._append("\n⏸️  در حال ذخیره‌ی نقطه‌ی ادامه پیش از خروج…\n")
+            self.worker.join(timeout=10)
         self.destroy()
 
 
