@@ -9,3 +9,7 @@
 # Ignore compiled Python files and markdown
 *.pyc
 *.md
+.DS_Store
+/.venv
+/Cars_database
+/KG_backend/.venv
