@@ -303,11 +303,9 @@ class LogicalHTMLParser:
                     if base in ("404.html", "about.html"):
                         a.decompose()
 
-        # Keep the raw div.main HTML for EVERY page parsed from a real file,
-        # regardless of file_type. Intermediate/root pages can carry real article
-        # content too (intro text, notes, images), so restricting content to
-        # end_path silently dropped it. Page-less DOM folder nodes still get NULL.
-        content = main.decode_contents() if main is not None else None
+        # Store the raw div.main HTML ONLY for end_path (leaf) pages. Intermediate
+        # and root pages are navigation hubs, so their content column stays NULL.
+        content = main.decode_contents() if (file_type == "end_path" and main is not None) else None
 
         rows: List[Dict[str, Any]] = [dict(
             path=page_abs,
@@ -622,8 +620,8 @@ class LogicalHTMLParser:
 
         So, globally:
           - promote any 'end_path' page that turns out to parent a real page,
+          - drop its now-meaningless placeholder content (only leaves keep content),
           - upgrade a stale 'leaf' node_type to 'folder'.
-        (Content is preserved — every page keeps its original div.main HTML.)
 
         A genuine cross-reference never triggers this, because the linked
         target's OWN breadcrumb parent is some other page, not this one — so it
@@ -632,6 +630,7 @@ class LogicalHTMLParser:
         cur = conn.execute("""
             UPDATE nodes
                SET file_type = 'intermediate_path',
+                   content   = NULL,
                    node_type = CASE
                                    WHEN node_type IS NULL OR node_type = 'leaf'
                                    THEN 'folder' ELSE node_type
