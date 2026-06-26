@@ -202,13 +202,16 @@ def blob_boost_map():
             return _BOOST_CACHE['map']
         out = {}
         try:
-            for bid, (up, down, clk) in _decayed_counts().items():
+            counts = _decayed_counts()
+            for bid, (up, down, clk) in counts.items():
                 m = scoring.feedback_multiplier(
                     up, down, clk, min_count=config.FB_MIN_COUNT,
                     cap_lo=config.FB_CAP_LO, cap_hi=config.FB_CAP_HI)
                 if m != 1.0:
                     out[bid] = m
-        except Exception:
+        except Exception as e:
+            import sys, traceback
+            traceback.print_exc(file=sys.stderr)
             out = {}
         _BOOST_CACHE['map'] = out
         _BOOST_CACHE['at'] = time.monotonic()
