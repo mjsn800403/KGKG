@@ -175,8 +175,10 @@ class LogicalHTMLParser:
     # ------------------------------------------------------------- breadcrumb
     def _breadcrumb_segments(self, soup: BeautifulSoup) -> List[str]:
         """Ordered, escaped text of every <a class='breadcrumb-part'>."""
+        # find_all (not CSS .select) so we don't depend on the soupsieve package,
+        # whose version varies across machines (e.g. macOS lacked .select support).
         return [self._escape_text(a.get_text(strip=True))
-                for a in soup.select("a.breadcrumb-part")]
+                for a in soup.find_all("a", class_="breadcrumb-part")]
 
     def _page_abs_path(self, segs: List[str]) -> str:
         """Absolute logical path of a page = its breadcrumb from the MODEL ROOT
@@ -288,7 +290,8 @@ class LogicalHTMLParser:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             soup = BeautifulSoup(f.read(), PARSER)
 
-        main = soup.select_one("div.main") or soup.body or soup
+        # find(...) (not CSS .select_one) to avoid the soupsieve dependency.
+        main = soup.find("div", class_="main") or soup.body or soup
         segs = self._breadcrumb_segments(soup)
         page_abs = self._page_abs_path(segs)
         file_type = self._classify_file_type(main, is_index, page_abs)

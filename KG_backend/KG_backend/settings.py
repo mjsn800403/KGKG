@@ -10,22 +10,47 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _env_bool(name, default=False):
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _env_list(name, default=''):
+    raw = os.environ.get(name, default)
+    return [h.strip() for h in raw.split(',') if h.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-04jc1&foetc*#q9y1j+^b3607920=us+em$9xnr8p3xg*sknr8'
+# Falls back to the historical insecure dev key only when DEBUG is on; in
+# production DJANGO_SECRET_KEY is required (we refuse to boot without it).
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _env_bool('DJANGO_DEBUG', default=False)
 
-ALLOWED_HOSTS = []
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-04jc1&foetc*#q9y1j+^b3607920=us+em$9xnr8p3xg*sknr8'
+    else:
+        raise RuntimeError(
+            'DJANGO_SECRET_KEY must be set when DEBUG is off (production).')
+
+# Comma-separated, e.g. DJANGO_ALLOWED_HOSTS="example.com,api.example.com".
+# Defaults to localhost so dev works out of the box.
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS',
+                          'localhost,127.0.0.1' if DEBUG else '')
 
 
 # Application definition
@@ -51,7 +76,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
 ]
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS: allow-all only in DEBUG. In production set DJANGO_CORS_ORIGINS to a
+# comma-separated allowlist (e.g. "https://app.example.com").
+CORS_ALLOWED_ORIGINS = _env_list('DJANGO_CORS_ORIGINS')
+CORS_ALLOW_ALL_ORIGINS = _env_bool('DJANGO_CORS_ALLOW_ALL', default=DEBUG)
 ROOT_URLCONF = 'KG_backend.urls'
 
 TEMPLATES = [

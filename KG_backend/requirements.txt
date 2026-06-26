@@ -2,3 +2,14 @@ Django>=4.2,<6
 django-cors-headers>=4.0
 beautifulsoup4>=4.12
 html5lib>=1.1
+
+# --- RAG / relationship-graph assistant (local, offline embeddings) ---
+# Built/served with bge-m3 on Apple-Silicon (MPS, fp16). Vectors live in
+# sqlite-vec inside Database_warehouse/_rag/index.rag.db (no external service).
+numpy>=1.26
+torch>=2.2
+sentence-transformers>=2.7
+sqlite-vec>=0.1.6
+
+# --- Code graph analysis ---
+graphify>=0.8

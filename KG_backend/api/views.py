@@ -1,16 +1,290 @@
 import re
+import json
 import sqlite3
 from pathlib import Path
 from urllib.parse import quote
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from bs4 import BeautifulSoup
 from .models import Car
+from .ratelimit import rate_limited, require_admin_token
 
 def brands_list_view(request):
     """GET / -> distinct list of brand names available across all cars."""
     brands = Car.objects.order_by('brand_name').values_list('brand_name', flat=True).distinct()
     return JsonResponse(list(brands), safe=False)
+
+
+@csrf_exempt
+@rate_limited('assist', 60, 60)
+def assist_view(request):
+    """POST /api/assist/  body: {query, brand?, model?, car?}
+       GET  /api/assist/?q=...&brand=...&model=...&car=...
+
+    Runs the local RAG + relationship-graph retrieval entirely against our own
+    sidecar index (no external service). Returns ranked manual excerpts, each
+    with a real in-app URL plus graph-related and cross-vehicle context. The
+    AI assistant uses this as grounding; it is NOT the language generator.
+    """
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body or '{}')
+        except (ValueError, TypeError):
+            body = {}
+        query = (body.get('query') or body.get('q') or '').strip()
+        brand = body.get('brand') or None
+        model = body.get('model') or None
+        car = body.get('car') or body.get('car_stem') or None
+    else:
+        query = (request.GET.get('q') or request.GET.get('query') or '').strip()
+        brand = request.GET.get('brand') or None
+        model = request.GET.get('model') or None
+        car = request.GET.get('car') or None
+
+    if not query:
+        return JsonResponse({'error': 'query is required'}, status=400)
+
+    try:
+        from .rag import service
+        result = service.assist(query, brand=brand, model=model, car_stem=car)
+        return JsonResponse(result)
+    except FileNotFoundError as e:
+        return JsonResponse(
+            {'error': 'RAG index not built yet. Run: python manage.py build_rag',
+             'detail': str(e)}, status=503)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@rate_limited('diagnose', 60, 60)
+def diagnose_view(request):
+    """POST /api/diagnose/  body: {query, brand?, model?, car?}
+       GET  /api/diagnose/?q=...&car=...
+
+    The deterministic per-car diagnostic rule engine: maps a Persian symptom or a
+    DTC code to ranked candidate DTCs with their inheritance scope, ordered
+    diagnostic steps, repair procedure + labor time and cross-vehicle matches.
+    All processing happens here; the language model only phrases the result.
+    """
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body or '{}')
+        except (ValueError, TypeError):
+            body = {}
+        query = (body.get('query') or body.get('q') or '').strip()
+        brand = body.get('brand') or None
+        model = body.get('model') or None
+        car = body.get('car') or body.get('car_stem') or None
+    else:
+        query = (request.GET.get('q') or request.GET.get('query') or '').strip()
+        brand = request.GET.get('brand') or None
+        model = request.GET.get('model') or None
+        car = request.GET.get('car') or None
+
+    if not query:
+        return JsonResponse({'error': 'query is required'}, status=400)
+
+    try:
+        from .rag import service
+        result = service.diagnose(query, brand=brand, model=model, car_stem=car)
+        return JsonResponse(result)
+    except FileNotFoundError as e:
+        return JsonResponse(
+            {'error': 'Diagnostic index not built yet. Run: python manage.py build_diag',
+             'detail': str(e)}, status=503)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@rate_limited('click', 120, 60)
+def assist_feedback_view(request):
+    """POST /api/assist/feedback/  body: {query, blob_id, app_url}
+    Records which result the user actually opened — a relevance signal used to
+    improve ranking over time. Best-effort; always returns ok."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        body = {}
+    try:
+        from .rag import feedback
+        feedback.log_click(body.get('query') or '', body.get('blob_id'), body.get('app_url') or '')
+    except Exception:
+        pass
+    return JsonResponse({'ok': True})
+
+
+def _post_body(request):
+    try:
+        return json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return {}
+
+
+@csrf_exempt
+@rate_limited('rate', 20, 60)
+def feedback_rate_view(request):
+    """POST /api/feedback/rate/  body: {query, verdict(+1/-1), mode?, top_blobs?,
+    blob_id?, reason?, comment?, brand?, model?, car?}
+    Records a 👍/👎 verdict (human-in-the-loop). Best-effort; always ok."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _post_body(request)
+    scope = {'brand': b.get('brand'), 'model': b.get('model'),
+             'car_stem': b.get('car') or b.get('car_stem')}
+    try:
+        from .rag import feedback, service
+        feedback.rate(
+            b.get('query') or '', scope, b.get('mode') or 'assist',
+            b.get('top_blobs') or [], b.get('verdict', -1),
+            blob_id=b.get('blob_id'), reason=b.get('reason'), comment=b.get('comment'))
+        # A verdict shifts the feedback boost map, so any cached answer is now
+        # stale (the boost map alone is invalidated inside rate(); the answer
+        # and semantic caches must be dropped too or they serve the old ranking
+        # until TTL).
+        service.clear_cache()
+    except Exception:
+        pass
+    return JsonResponse({'ok': True})
+
+
+@csrf_exempt
+@require_admin_token
+@rate_limited('pin', 30, 60)
+def feedback_pin_view(request):
+    """POST /api/feedback/pin/  body: {pattern_query, app_url, blob_id?, title?,
+    note?, by?}  — expert "pinned / verified answer". Embeds pattern_query so it
+    can be matched against future queries. Returns {ok}."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _post_body(request)
+    pattern = (b.get('pattern_query') or b.get('query') or '').strip()
+    if not pattern:
+        return JsonResponse({'error': 'pattern_query is required'}, status=400)
+    try:
+        from .rag import retrieve, feedback, service
+        qvec = retrieve.embed_query(pattern)
+        qlist = qvec.tolist() if hasattr(qvec, 'tolist') else list(qvec)
+        ok = feedback.add_override(
+            pattern, qlist, b.get('app_url') or '', source_blob_id=b.get('blob_id'),
+            title=b.get('title'), note=b.get('note'), created_by=b.get('by'))
+        # A new pin should take effect immediately, not after the cache TTL.
+        if ok:
+            service.clear_cache()
+        return JsonResponse({'ok': bool(ok)})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_admin_token
+def feedback_recent_view(request):
+    """GET /api/feedback/recent/?limit=50  -> recent 👎 verdicts for the admin
+    review queue (so an expert can pin a correction). Admin-only: the queue
+    exposes raw user queries + which sources were shown."""
+    try:
+        limit = max(1, min(int(request.GET.get('limit', 50) or 50), 200))
+    except (TypeError, ValueError):
+        limit = 50
+    try:
+        from .rag import feedback
+        rows = feedback.recent_downvotes(limit=limit)
+    except Exception:
+        rows = []
+    return JsonResponse({'count': len(rows), 'items': rows})
+
+
+def eval_report_view(request):
+    """GET /api/eval/report/  -> the latest offline evaluation run (+ trend)."""
+    try:
+        from .rag import evalreport
+        return JsonResponse(evalreport.latest_report())
+    except Exception as e:
+        return JsonResponse({'error': str(e), 'runs': []}, status=200)
+
+
+@rate_limited('search', 90, 60)
+def search_view(request):
+    """GET /api/search/?q=&car=&brand=&model=&limit=
+    Semantic, cross-lingual site search over the unified RAG index, scoped to one
+    car. A Persian query matches the English manual (the naive SQL LIKE it
+    replaces was English-only). Returns the same lightweight navigation shape the
+    old per-car search did — [{title, segments, path, ...}] — so the frontend is
+    unchanged. Falls back to per-car SQL LIKE if the index isn't built yet."""
+    q = (request.GET.get('q') or request.GET.get('query') or '').strip()
+    brand = request.GET.get('brand') or None
+    model = request.GET.get('model') or None
+    car = request.GET.get('car') or request.GET.get('car_stem') or None
+    if not q:
+        return JsonResponse([], safe=False)
+    try:
+        limit = int(request.GET.get('limit', 30) or 30)
+    except (TypeError, ValueError):
+        limit = 30
+    limit = max(1, min(limit, 50))
+    try:
+        from .rag import service
+        results = service.search(q, brand=brand, model=model, car_stem=car, limit=limit)
+        return JsonResponse(results, safe=False)
+    except FileNotFoundError:
+        # Index not built yet -> degrade gracefully to the old keyword search so
+        # the box keeps working (English-only, but better than a hard error).
+        try:
+            return _search_like_fallback(brand, model, car, q, limit)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def _search_like_fallback(brand, model, car, q, limit):
+    """Per-car SQL LIKE search (the previous behaviour), used only when the
+    semantic index is absent. Mirrors car_view's ?q branch."""
+    stem = car or model
+    qs = Car.objects.all()
+    if brand:
+        qs = qs.filter(brand_name__iexact=brand)
+    car_obj = qs.filter(car_name__iexact=stem).first() if stem else None
+    if car_obj is None:
+        return JsonResponse([], safe=False)
+    conn = get_car_db(car_obj.db_address)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    try:
+        like = f'%{q}%'
+        cur.execute(f"""
+            SELECT {NODE_COLUMNS},
+                   CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
+            FROM nodes
+            WHERE (title LIKE ? OR content LIKE ?)
+                  AND (href IS NULL OR href != '404.html')
+            ORDER BY rank, depth, sort_order
+            LIMIT ?
+        """, (like, like, like, limit))
+        results = []
+        for row in cur.fetchall():
+            segments, current = [], row
+            while current['parent_id'] is not None:
+                segments.append(current['title'])
+                cur.execute(f"SELECT {NODE_COLUMNS} FROM nodes WHERE id = ?",
+                            (current['parent_id'],))
+                parent = cur.fetchone()
+                if not parent:
+                    break
+                current = parent
+            segments.reverse()
+            results.append({
+                'title': row['title'], 'path': row['path'],
+                'node_type': row['node_type'],
+                'is_leaf': row['content'] is not None,
+                'segments': segments,
+            })
+        return JsonResponse(results, safe=False)
+    finally:
+        conn.close()
 
 def get_car_db(db_address):
     """Connect to car-specific database"""
@@ -132,6 +406,60 @@ def car_view(request, brand_name=None, year=None, model_name=None):
             path_segments = request.GET.getlist('seg')
             href_lookup = request.GET.get('href')
             page_file = request.GET.get('page')
+            search_q = request.GET.get('q')
+
+            if search_q is not None:
+                # Full-text-ish search over this car's tree: match the query
+                # against node titles AND raw content, English input against
+                # English data (sqlite's default LIKE is ASCII case-insensitive).
+                # Title matches rank ahead of content-only matches. Each result
+                # carries its segment chain (walked up via parent_id, same as
+                # the href branch) so the frontend can build a navigation URL.
+                q = search_q.strip()
+                if not q:
+                    conn.close()
+                    return JsonResponse([], safe=False)
+                try:
+                    limit = int(request.GET.get('limit', 30) or 30)
+                except (TypeError, ValueError):
+                    limit = 30
+                limit = max(1, min(limit, 50))
+                like = f'%{q}%'
+                cur.execute(f"""
+                    SELECT {NODE_COLUMNS},
+                           CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
+                    FROM nodes
+                    WHERE (title LIKE ? OR content LIKE ?)
+                          AND (href IS NULL OR href != '404.html')
+                    ORDER BY rank, depth, sort_order
+                    LIMIT ?
+                """, (like, like, like, limit))
+
+                results = []
+                for row in cur.fetchall():
+                    segments = []
+                    current = row
+                    while current['parent_id'] is not None:
+                        segments.append(current['title'])
+                        cur.execute(
+                            f"SELECT {NODE_COLUMNS} FROM nodes WHERE id = ?",
+                            (current['parent_id'],),
+                        )
+                        parent = cur.fetchone()
+                        if not parent:
+                            break
+                        current = parent
+                    segments.reverse()
+                    results.append({
+                        'title': row['title'],
+                        'path': row['path'],
+                        'node_type': row['node_type'],
+                        'is_leaf': row['content'] is not None,
+                        'segments': segments,
+                    })
+
+                conn.close()
+                return JsonResponse(results, safe=False)
 
             if page_file:
                 # Serve a raw manual page that has no node (orphan cross-link
