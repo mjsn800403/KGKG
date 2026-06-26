@@ -19,13 +19,17 @@ class FeedbackStoreTest(unittest.TestCase):
         # Redirect every feedback path to a fresh temp dir; restore in tearDown.
         self._tmp = tempfile.TemporaryDirectory()
         tmp = Path(self._tmp.name)
-        self._orig = (config.RAG_DIR, config.FEEDBACK_DB)
+        self._orig = (config.RAG_DIR, config.FEEDBACK_DB, config.FEEDBACK_BOOST,
+                      config.LOG_QUERIES)
         config.RAG_DIR = tmp
         config.FEEDBACK_DB = tmp / 'feedback.db'
+        config.FEEDBACK_BOOST = True
+        config.LOG_QUERIES = True
         feedback.invalidate_boost_cache()
 
     def tearDown(self):
-        config.RAG_DIR, config.FEEDBACK_DB = self._orig
+        config.RAG_DIR, config.FEEDBACK_DB, config.FEEDBACK_BOOST, \
+            config.LOG_QUERIES = self._orig
         feedback.invalidate_boost_cache()
         self._tmp.cleanup()
 
