@@ -4,6 +4,7 @@ import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
 import ContentRenderer from '@/components/ContentRenderer';
+import SearchBox from '@/components/SearchBox';
 
 const ICONS = ['▣', '⌖', '◷', '⚙', '◧', '◩', '⬡', '⊞'];
 
@@ -35,6 +36,7 @@ export default async function NodePage({ params }) {
       <DashboardShell>
         <div className="topbar">
           <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
+          <SearchBox brand={brand} year={year} model={model} />
           <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
         </div>
         <h1 className="page-title">خطا</h1>
@@ -58,6 +60,7 @@ export default async function NodePage({ params }) {
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
+        <SearchBox brand={brand} year={year} model={model} />
         <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
       </div>
       <h1 className="page-title">{currentTitle}</h1>

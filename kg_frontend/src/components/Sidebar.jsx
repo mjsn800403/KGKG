@@ -8,7 +8,8 @@ import { usePathname } from 'next/navigation';
 export default function Sidebar() {
   const pathname = usePathname() || '';
   const onSettings = pathname.startsWith('/settings');
-  const onFleet = !onSettings;
+  const onAssistant = pathname.startsWith('/assistant');
+  const onFleet = !onSettings && !onAssistant;
 
   return (
     <aside className="sidebar">
@@ -18,6 +19,9 @@ export default function Sidebar() {
       </Link>
       <Link className={`sb-link${onFleet ? ' active' : ''}`} href="/browse">
         <span className="dot"></span> خودروهای فعال
+      </Link>
+      <Link className={`sb-link${onAssistant ? ' active' : ''}`} href="/assistant">
+        <span className="dot"></span> دستیار هوشمند
       </Link>
       <Link className="sb-link" href="/browse">
         <span className="dot"></span> سفارش‌ها و خریدها

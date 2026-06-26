@@ -25,6 +25,7 @@ export default function CardGrid({ items }) {
           <div className="icon">{it.icon}</div>
           <div>
             <h4>{it.title}</h4>
+            {it.sub && <div className="doc-card-sub" dir="ltr">{it.sub}</div>}
           </div>
           <div className="go">{it.go || 'ورود به مستند ←'}</div>
         </Link>
