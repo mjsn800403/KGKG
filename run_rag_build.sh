@@ -36,6 +36,13 @@ if [ ! -x "$PY" ]; then
     exit 1
 fi
 
+# Ensure the heavy ML deps for indexing are installed (pinned in
+# requirements-rag.txt, kept separate from the web app's requirements.txt).
+if ! "$PY" -c "import torch, sentence_transformers" >/dev/null 2>&1; then
+    echo "[*] Installing RAG build dependencies (torch, sentence-transformers, ...) ..."
+    "$PY" -m pip install -q -r "$BACKEND/requirements-rag.txt"
+fi
+
 # Fully offline + stable embedding settings (uses the model already cached on
 # this Mac; no internet needed). bge-m3 is loaded in float16 with a bounded
 # sequence length so Apple-Silicon GPU stays fast and never runs out of memory.

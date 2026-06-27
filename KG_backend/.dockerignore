@@ -1,0 +1,17 @@
+# Keep the backend image small and free of host data/secrets.
+.venv
+__pycache__
+*.pyc
+.git
+.gitignore
+.DS_Store
+*.sqlite3
+*.sqlite3-journal
+*.sqbpro
+db.sqlite3.sqbpro
+staticfiles
+# Large runtime data — mounted as volumes at runtime, never baked in.
+Database_warehouse
+static_warehouse
+.pytest_cache
+.env
