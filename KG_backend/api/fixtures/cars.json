@@ -6,7 +6,7 @@
     "brand_name": "Toyota",
     "car_name": "Corolla Cross Hybrid S",
     "year": 2025,
-    "db_address": ".\\Database_warehouse\\Corolla Cross Hybrid S.db"
+    "db_address": "./Database_warehouse/Corolla Cross Hybrid S.db"
   }
 },
 {
@@ -26,7 +26,7 @@
     "brand_name": "Lexus",
     "car_name": "NX 350h",
     "year": 2025,
-    "db_address": ".\\Database_warehouse\\NX 350h.db"
+    "db_address": "./Database_warehouse/NX 350h.db"
   }
 }
 ]

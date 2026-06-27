@@ -50,6 +50,11 @@ services:
       args:
         # Browser-side fetch target — must be the host-mapped backend URL.
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+    environment:
+      # Server-side (SSR) fetches run inside the compose network, where the
+      # browser URL (localhost) is the frontend itself — reach the backend by
+      # its service name instead.
+      BACKEND_INTERNAL_URL: http://backend:8000
     depends_on:
       backend:
         condition: service_healthy

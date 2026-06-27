@@ -1,7 +1,14 @@
 // utils/api.js
-// Backend origin. Set NEXT_PUBLIC_API_BASE at build time for deployments
-// (inlined into the client bundle); falls back to local dev backend.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+// Browser-facing backend origin: used for client-side fetches AND for rewriting
+// media URLs (images load in the user's browser). Inlined at build time.
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
+// Server-side (SSR) fetch origin. Inside a container, the browser URL
+// (localhost) does not point at the backend service, so server components use
+// an internal URL (e.g. http://backend:8000). Read at runtime on the server;
+// falls back to the public base for local/non-container runs.
+const SERVER_API_BASE = process.env.BACKEND_INTERNAL_URL || PUBLIC_API_BASE;
+// Pick the right base depending on where the fetch actually runs.
+const API_BASE = typeof window === 'undefined' ? SERVER_API_BASE : PUBLIC_API_BASE;
 
 // The backend returns node content with image references as relative
 // "/media/..." paths (it doesn't know its own public-facing host/port -
@@ -12,7 +19,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
 function withAbsoluteMediaUrls(nodes) {
   for (const node of nodes) {
     if (node?.content) {
-      node.content = node.content.replaceAll('="/media/', `="${API_BASE}/media/`);
+      // Always the public (browser) origin — these resolve in the user's browser.
+      node.content = node.content.replaceAll('="/media/', `="${PUBLIC_API_BASE}/media/`);
     }
   }
   return nodes;
