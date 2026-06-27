@@ -3,6 +3,10 @@ import DashboardShell from '@/components/DashboardShell';
 import FleetView from '@/components/FleetView';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
+// Data comes from the backend at request time — never prerender at build
+// (the backend is not reachable during `next build` / Docker image build).
+export const dynamic = 'force-dynamic';
+
 export default async function Browse() {
   const brands = await fetchAllBrands();
   const nested = await Promise.all(brands.map((b: string) => fetchBrands(b)));
