@@ -7,6 +7,16 @@ from django.conf import settings
 from bs4 import BeautifulSoup
 from .models import Car
 
+def health_view(request):
+    """GET /healthz -> liveness/readiness probe for load balancers and
+    container healthchecks. Touches the DB so an unreachable database is
+    reported as unhealthy."""
+    try:
+        Car.objects.exists()
+    except Exception:
+        return JsonResponse({'status': 'error', 'db': 'unreachable'}, status=503)
+    return JsonResponse({'status': 'ok'})
+
 def brands_list_view(request):
     """GET / -> distinct list of brand names available across all cars."""
     brands = Car.objects.order_by('brand_name').values_list('brand_name', flat=True).distinct()

@@ -1,0 +1,15 @@
+# Heavy ML dependencies for the offline RAG / diagnostic index build only.
+# NOT needed to run the web app (the browse API in requirements.txt is enough).
+# Install separately before running run_rag_build.sh:
+#   KG_backend/.venv/bin/python -m pip install -r KG_backend/requirements-rag.txt
+#
+# Versions pinned from the known-good local build environment (CPU torch).
+# The embedding model is bge-m3, loaded via sentence-transformers (see
+# run_rag_build.sh: RAG_EMBED_MODEL=bge-m3).
+torch==2.12.1
+sentence-transformers==5.6.0
+transformers==5.12.1
+huggingface-hub==1.20.1
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.1

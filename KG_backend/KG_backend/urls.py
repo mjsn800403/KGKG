@@ -19,7 +19,10 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.static import serve
 
+from api import views as api_views
+
 urlpatterns = [
+    path('healthz', api_views.health_view, name='healthz'),
     path('admin/', admin.site.urls),
     path('', include('api.urls')),
 ]

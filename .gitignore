@@ -9,6 +9,7 @@
 # Ignore compiled Python files and markdown
 *.pyc
 *.md
+!DEPLOYMENT.md
 .DS_Store
 /.venv
 /Cars_database
