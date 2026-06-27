@@ -6,10 +6,8 @@
 /.claude
 /.vscode
 
-# Ignore compiled Python files and markdown
+# Ignore compiled Python files (docs/ markdown is tracked — it's the design record)
 *.pyc
-*.md
-!DEPLOYMENT.md
 .DS_Store
 /.venv
 /Cars_database

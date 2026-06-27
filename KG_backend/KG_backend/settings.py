@@ -167,3 +167,34 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = _secure_ssl
     SECURE_HSTS_PRELOAD = _secure_ssl
     SECURE_CONTENT_TYPE_NOSNIFF = True
+
+
+# Logging — structured console output to stdout (captured by the container
+# runtime / process manager). Level via DJANGO_LOG_LEVEL.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '{asctime} {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': env('DJANGO_LOG_LEVEL', default='INFO'),
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}
