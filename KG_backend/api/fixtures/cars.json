@@ -1,0 +1,32 @@
+[
+{
+  "model": "api.car",
+  "pk": 1,
+  "fields": {
+    "brand_name": "Toyota",
+    "car_name": "Corolla Cross Hybrid S",
+    "year": 2025,
+    "db_address": ".\\Database_warehouse\\Corolla Cross Hybrid S.db"
+  }
+},
+{
+  "model": "api.car",
+  "pk": 2,
+  "fields": {
+    "brand_name": "Toyota",
+    "car_name": "Land Cruiser Base",
+    "year": 2025,
+    "db_address": "./Database_warehouse/Land Cruiser Base.db"
+  }
+},
+{
+  "model": "api.car",
+  "pk": 3,
+  "fields": {
+    "brand_name": "Lexus",
+    "car_name": "NX 350h",
+    "year": 2025,
+    "db_address": ".\\Database_warehouse\\NX 350h.db"
+  }
+}
+]

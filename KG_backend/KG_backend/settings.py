@@ -12,20 +12,26 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+import environ
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Read configuration from environment (with a project-root .env if present).
+# All deployment-specific values live in the environment, never in source.
+env = environ.Env()
+environ.Env.read_env(BASE_DIR.parent / '.env')
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-04jc1&foetc*#q9y1j+^b3607920=us+em$9xnr8p3xg*sknr8'
+# The default below is for local development ONLY; production must set
+# DJANGO_SECRET_KEY in the environment (the old committed key is rotated out).
+SECRET_KEY = env('DJANGO_SECRET_KEY', default='django-insecure-DEV-ONLY-do-not-use-in-prod')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool('DJANGO_DEBUG', default=True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 
 # Application definition
@@ -43,6 +49,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise serves collected static files in production (DEBUG off).
+    # Must sit directly after SecurityMiddleware.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -51,7 +60,12 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
 ]
-CORS_ALLOW_ALL_ORIGINS = True
+
+# CORS: wide open only in local development. In production, restrict to the
+# known frontend origin(s) via DJANGO_CORS_ORIGINS (comma-separated).
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = env.list('DJANGO_CORS_ORIGINS', default=[])
+
 ROOT_URLCONF = 'KG_backend.urls'
 
 TEMPLATES = [
@@ -74,12 +88,10 @@ WSGI_APPLICATION = 'KG_backend.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
+# Env-switchable via DATABASE_URL: defaults to local SQLite for development,
+# set e.g. postgres://user:pass@host:5432/db in production.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': env.db('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
 }
 
 
@@ -118,6 +130,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# collectstatic target; WhiteNoise serves these when DEBUG is off.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # Per-car image assets (svg/png/etc referenced from manual HTML content).
 # Each car gets a folder named exactly after its db file, e.g.
@@ -129,3 +152,18 @@ MEDIA_ROOT = BASE_DIR / 'static_warehouse'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Security hardening — applied when DEBUG is off. SSL-dependent flags are
+# gated behind DJANGO_SECURE_SSL so http-only internal deployments still work.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if not DEBUG:
+    _secure_ssl = env.bool('DJANGO_SECURE_SSL', default=False)
+    SESSION_COOKIE_SECURE = _secure_ssl
+    CSRF_COOKIE_SECURE = _secure_ssl
+    SECURE_SSL_REDIRECT = _secure_ssl
+    SECURE_HSTS_SECONDS = 31536000 if _secure_ssl else 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _secure_ssl
+    SECURE_HSTS_PRELOAD = _secure_ssl
+    SECURE_CONTENT_TYPE_NOSNIFF = True

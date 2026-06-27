@@ -2,3 +2,8 @@ Django>=4.2,<6
 django-cors-headers>=4.0
 beautifulsoup4>=4.12
 html5lib>=1.1
+# Configuration, DB URL parsing, prod serving (added for env-driven deploy)
+django-environ>=0.11
+psycopg[binary]>=3.1
+gunicorn>=21.2
+whitenoise>=6.6

@@ -1,0 +1,53 @@
+# Local prod-like stack: Postgres + Django (gunicorn) + Next.js (standalone).
+#   1. cp .env.example .env   (set DJANGO_SECRET_KEY at minimum)
+#   2. docker compose up --build
+# Backend runs with DEBUG off here; the per-car warehouse data is mounted from
+# the host, not baked into the image.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kg}
+      POSTGRES_DB: ${POSTGRES_DB:-kg}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kg}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./KG_backend
+    env_file: .env
+    # These override .env to force a prod-like, Postgres-backed run inside compose.
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,backend"
+      DJANGO_CORS_ORIGINS: "http://localhost:3000"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-kg}:${POSTGRES_PASSWORD:-kg}@db:5432/${POSTGRES_DB:-kg}"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Runtime data lives on the host (huge); image stays slim.
+      - ./KG_backend/Database_warehouse:/app/Database_warehouse
+      - ./KG_backend/static_warehouse:/app/static_warehouse
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./kg_frontend
+      args:
+        # Browser-side fetch target — must be the host-mapped backend URL.
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

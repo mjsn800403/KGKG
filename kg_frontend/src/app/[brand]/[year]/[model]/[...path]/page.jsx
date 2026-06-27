@@ -40,7 +40,7 @@ export default async function NodePage({ params }) {
         <h1 className="page-title">خطا</h1>
         <div className="error-box">
           <p>بارگذاری محتوا ناموفق بود: {error}</p>
-          <p>لطفاً مطمئن شوید سرور بک‌اند روی http://127.0.0.1:8000 در حال اجراست.</p>
+          <p>لطفاً مطمئن شوید سرور بک‌اند روی {process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000'} در حال اجراست.</p>
           <a href={`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`} className="back-link">← بازگشت</a>
         </div>
       </DashboardShell>

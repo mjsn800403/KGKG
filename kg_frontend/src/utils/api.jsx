@@ -1,5 +1,7 @@
 // utils/api.js
-const API_BASE = 'http://127.0.0.1:8000';
+// Backend origin. Set NEXT_PUBLIC_API_BASE at build time for deployments
+// (inlined into the client bundle); falls back to local dev backend.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000';
 
 // The backend returns node content with image references as relative
 // "/media/..." paths (it doesn't know its own public-facing host/port -

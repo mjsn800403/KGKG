@@ -13,3 +13,17 @@
 /.venv
 /Cars_database
 /KG_backend/.venv
+
+# Secrets / environment (never commit real values; .env.example is committed)
+.env
+*.env
+!.env.example
+
+# Local database files (data lives outside git; reseed via api/fixtures/cars.json)
+*.sqlite3
+*.sqlite3-journal
+*.sqbpro
+/KG_backend/db.sqlite3
+
+# Django collectstatic output
+/KG_backend/staticfiles/
