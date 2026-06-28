@@ -146,6 +146,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Per-car image assets (svg/png/etc referenced from manual HTML content).
 # Each car gets a folder named exactly after its db file, e.g.
