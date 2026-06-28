@@ -15,16 +15,19 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('api.urls')),
 ]
 
-# Serve per-car manual images from static_warehouse in all environments. This is
-# an internal technical-docs site served by gunicorn behind the VPS firewall, so
-# letting Django serve /media/ is acceptable (no CDN / object store in play).
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve per-car manual images from static_warehouse in all environments. The
+# django.conf.urls.static.static() helper is a no-op when DEBUG is off, so wire
+# the serve view explicitly. This is an internal technical-docs site served by
+# gunicorn behind the VPS firewall, so Django-served /media/ is acceptable here.
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]
