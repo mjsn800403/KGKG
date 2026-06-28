@@ -23,7 +23,7 @@ function withAbsoluteMediaUrls(nodes) {
 // For /  (distinct list of brand names across all cars)
 export async function fetchAllBrands() {
   try {
-    const res = await fetch(`${API_BASE}/`);
+    const res = await fetch(`${API_BASE}/`, { cache: 'no-store' });
     if (!res.ok) {
       throw new Error(`Failed to fetch brand list: ${res.status}`);
     }
@@ -37,7 +37,7 @@ export async function fetchAllBrands() {
 // For /brand/
 export async function fetchBrands(brand) {
   try {
-    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/`);
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/`, { cache: 'no-store' });
     // console.log(res)
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
@@ -53,7 +53,7 @@ export async function fetchBrands(brand) {
 // For /brand/year/
 export async function fetchYearData(brand, year) {
   try {
-    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/${year}/`);
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/${year}/`, { cache: 'no-store' });
     if (!res.ok) {
       throw new Error(`Failed to fetch year data: ${res.status}`);
     }
@@ -86,7 +86,7 @@ export async function fetchNodes(brand, year, model, pathSegments = []) {
 
     console.log('Fetching URL:', url);
     
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     
     if (!res.ok) {
       const errorText = await res.text();
@@ -148,7 +148,7 @@ export async function searchNodes(brand, year, model, q, limit = 30) {
     const params = new URLSearchParams({ q, car: model, limit: String(limit) });
     if (brand) params.set('brand', brand);
     const url = `${API_BASE}/api/search/?${params.toString()}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return [];
     return res.json();
   } catch (error) {
@@ -166,7 +166,7 @@ export function buildNodeHref(brand, year, model, segments = []) {
 
 export async function fetchModels(brand, year, model) {
   try {
-    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/`);
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/`, { cache: 'no-store' });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       throw new Error(error.error || `Failed to fetch models: ${res.status}`);
