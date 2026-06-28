@@ -24,5 +24,7 @@ urlpatterns = [
     path('', include('api.urls')),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve per-car manual images from static_warehouse in all environments. This is
+# an internal technical-docs site served by gunicorn behind the VPS firewall, so
+# letting Django serve /media/ is acceptable (no CDN / object store in play).
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
