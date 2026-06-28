@@ -289,7 +289,9 @@ def _search_like_fallback(brand, model, car, q, limit):
 def get_car_db(db_address):
     """Connect to car-specific database"""
     main_dir = Path(settings.DATABASES['default']['NAME']).parent
-    abs_path = main_dir / db_address
+    # db_address may carry Windows separators (rows seeded on Windows); normalize
+    # so it resolves on POSIX/macOS too.
+    abs_path = main_dir / db_address.replace('\\', '/')
     if not abs_path.exists():
         raise FileNotFoundError(f"Database not found: {abs_path}")
     return sqlite3.connect(str(abs_path))
