@@ -3,6 +3,10 @@ import DashboardShell from '@/components/DashboardShell';
 import FleetView from '@/components/FleetView';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
+// Always render against the live backend (cars change over time); never bake
+// the fleet list into a static prerender at build time.
+export const dynamic = 'force-dynamic';
+
 export default async function Browse() {
   const brands = await fetchAllBrands();
   const nested = await Promise.all(brands.map((b: string) => fetchBrands(b)));
