@@ -36,7 +36,10 @@ try:
     from urllib3.util.retry import Retry
 except ImportError:
     print("[INFO] Installing required packages (requests, beautifulsoup4)...")
-    os.system(f"{sys.executable} -m pip install --quiet requests beautifulsoup4")
+    pkgs = "requests beautifulsoup4"
+    if os.system(f"{sys.executable} -m pip install --quiet {pkgs}") != 0:
+        # Debian/Ubuntu PEP 668 "externally-managed-environment" fallback.
+        os.system(f"{sys.executable} -m pip install --quiet --break-system-packages {pkgs}")
     import requests
     from bs4 import BeautifulSoup
     from requests.adapters import HTTPAdapter
