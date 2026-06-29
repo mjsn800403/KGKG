@@ -170,16 +170,6 @@ def get_vehicles(session: requests.Session, year_url: str) -> list:
     return vehicles
 
 
-def _filename_from_disposition(resp, fallback: str) -> str:
-    """Use the server-suggested filename if present, else the model name."""
-    cd = resp.headers.get("content-disposition", "")
-    m = re.search(r'filename="?([^"]+)"?', cd)
-    name = m.group(1) if m else f"{fallback}.zip"
-    if not name.lower().endswith(".zip"):
-        name += ".zip"
-    return sanitize_filename(name)
-
-
 def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) -> str:
     """
     Download one vehicle's .zip. Returns "ok", "skip", or "fail".
@@ -191,11 +181,17 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
     safe_name = sanitize_filename(vehicle["name"])
     zip_path = output_dir / f"{safe_name}.zip"
 
-    # Already have a VALID zip? skip. A corrupt leftover (e.g. from the old
-    # broken version) is not a valid zip -> fall through and re-download.
-    if zip_path.exists() and zipfile.is_zipfile(zip_path):
-        log(f"[skip] already downloaded: {zip_path.name}")
-        return "skip"
+    # Already have a VALID zip? skip — WITHOUT hitting the server (avoids needless
+    # 429s on re-runs). Check both the model-name file and the older
+    # "LEMON <year> <brand> <model>.zip" name from earlier versions.
+    bp = [unquote(p) for p in urlparse(vehicle["bundle_url"]).path.strip("/").split("/")]
+    candidates = [zip_path]
+    if len(bp) == 4:   # ['bundle', brand, year, model]
+        candidates.append(output_dir / sanitize_filename(f"LEMON {bp[2]} {bp[1]} {bp[3]}.zip"))
+    for c in candidates:
+        if c.exists() and zipfile.is_zipfile(c):
+            log(f"[skip] already downloaded: {c.name}")
+            return "skip"
 
     part_path = zip_path.with_suffix(".zip.part")
     log(f"[start] {vehicle['name']}")
@@ -234,12 +230,8 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
                     f"(captcha flow may have changed)")
                 return "fail"
 
-            final_name = _filename_from_disposition(resp, safe_name)
-            zip_path = output_dir / final_name
-            if zip_path.exists() and zipfile.is_zipfile(zip_path):
-                log(f"[skip] already downloaded: {zip_path.name}")
-                return "skip"
-
+            # Save under the model name so the fast skip-check at the top of this
+            # function matches on re-runs (no wasted request -> no needless 429).
             downloaded = 0
             with open(part_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=1024 * 64):
