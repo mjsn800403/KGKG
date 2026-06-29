@@ -49,6 +49,11 @@ except ImportError:
 BASE_URL = "https://lemon-manuals.org.ua"
 CAPTCHA_ANSWER = "human"   # the site asks you to literally type "human"
 
+# On HTTP 429 (nginx rate limit, no Retry-After), wait this long and retry the
+# same file. The block clears after ~60-90s of quiet, so a few 45s waits ride it out.
+RL_WAIT = 45
+RL_RETRIES = 6
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) "
@@ -196,12 +201,28 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
     log(f"[start] {vehicle['name']}")
 
     try:
-        with session.post(
-            vehicle["bundle_url"],
-            data={"captcha": CAPTCHA_ANSWER},
-            stream=True,
-            timeout=180,
-        ) as resp:
+        # The site (nginx) rate-limits bursts with 429 and no Retry-After; it
+        # clears after ~60-90s of quiet. On 429, wait and retry the same file a
+        # few times so it rides out the cooldown instead of just failing.
+        for attempt in range(1, RL_RETRIES + 1):
+            resp = session.post(
+                vehicle["bundle_url"],
+                data={"captcha": CAPTCHA_ANSWER},
+                stream=True,
+                timeout=180,
+            )
+            if resp.status_code == 429:
+                resp.close()
+                if attempt == RL_RETRIES:
+                    err(f"[fail] {vehicle['name']}: still rate limited after {RL_RETRIES} tries")
+                    return "fail"
+                log(f"[429] {vehicle['name']}: rate limited, waiting {RL_WAIT}s "
+                    f"({attempt}/{RL_RETRIES - 1})")
+                time.sleep(RL_WAIT)
+                continue
+            break
+
+        with resp:
             if resp.status_code == 404:
                 err(f"[404] bundle not found: {vehicle['name']}")
                 return "fail"
@@ -260,7 +281,7 @@ def main():
     )
     parser.add_argument("url", nargs="?", help="Brand/Year page URL (asked interactively if omitted)")
     parser.add_argument("--output-dir", default="", help="Where to save .zip files")
-    parser.add_argument("--workers", type=int, default=3, help="Parallel downloads (default: 3)")
+    parser.add_argument("--workers", type=int, default=2, help="Parallel downloads (default: 2)")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="Seconds to stagger between starting downloads (default: 1.0)")
     parser.add_argument("--dry-run", action="store_true", help="List vehicles, download nothing")
