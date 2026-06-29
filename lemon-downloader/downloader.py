@@ -62,6 +62,28 @@ HEADERS = {
 _print_lock = threading.Lock()
 
 
+class Throttle:
+    """Ensure a minimum gap between request starts across all worker threads."""
+
+    def __init__(self, min_interval: float):
+        self.min_interval = min_interval
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    def wait(self):
+        if self.min_interval <= 0:
+            return
+        with self._lock:
+            gap = self.min_interval - (time.monotonic() - self._last)
+            if gap > 0:
+                time.sleep(gap)
+            self._last = time.monotonic()
+
+
+# Configured in main(); spaces out requests to avoid the site's 429 rate limit.
+THROTTLE = Throttle(0.0)
+
+
 def log(msg: str):
     with _print_lock:
         print(f"[INFO] {msg}", flush=True)
@@ -82,11 +104,15 @@ def build_session(workers: int) -> requests.Session:
     session = requests.Session()
     session.headers.update(HEADERS)
     retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
-        backoff_factor=1.0,            # 0s, 1s, 2s between retries
-        status_forcelist=(500, 502, 503, 504),
+        total=6,
+        connect=5,
+        read=5,
+        status=6,
+        backoff_factor=2.0,            # 0,2,4,8,16,32s between retries
+        backoff_max=120,
+        # 429 = rate limited -> retry (urllib3 honours the Retry-After header).
+        status_forcelist=(429, 500, 502, 503, 504),
+        respect_retry_after_header=True,
         allowed_methods=frozenset(["GET", "POST"]),
         raise_on_status=False,
     )
@@ -193,6 +219,7 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
         return "skip"
 
     part_path = zip_path.with_suffix(".zip.part")
+    THROTTLE.wait()
     log(f"[start] {vehicle['name']}")
 
     try:
@@ -260,9 +287,9 @@ def main():
     )
     parser.add_argument("url", nargs="?", help="Brand/Year page URL (asked interactively if omitted)")
     parser.add_argument("--output-dir", default="", help="Where to save .zip files")
-    parser.add_argument("--workers", type=int, default=3, help="Parallel downloads (default: 3)")
-    parser.add_argument("--delay", type=float, default=1.0,
-                        help="Seconds to stagger between starting downloads (default: 1.0)")
+    parser.add_argument("--workers", type=int, default=2, help="Parallel downloads (default: 2)")
+    parser.add_argument("--delay", type=float, default=2.0,
+                        help="Minimum seconds between request starts, across all workers (default: 2.0)")
     parser.add_argument("--dry-run", action="store_true", help="List vehicles, download nothing")
     args = parser.parse_args()
 
@@ -273,6 +300,9 @@ def main():
 
     workers = max(1, args.workers)
     session = build_session(workers)
+
+    global THROTTLE
+    THROTTLE = Throttle(args.delay)   # space out requests to dodge 429 rate limits
 
     # Site is case-sensitive; fix the brand spelling so any case works.
     url = correct_brand_case(session, url)
@@ -304,8 +334,6 @@ def main():
         futures = {}
         for v in vehicles:
             futures[pool.submit(download_bundle, session, v, save_dir)] = v
-            if args.delay:
-                time.sleep(args.delay)   # stagger starts; keeps it polite
         for fut in as_completed(futures):
             counts[fut.result()] += 1
 
