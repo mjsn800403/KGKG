@@ -83,6 +83,18 @@ class Throttle:
 # Configured in main(); spaces out requests to avoid the site's 429 rate limit.
 THROTTLE = Throttle(0.0)
 
+# Per-file persistence: each vehicle is retried this many times before giving up.
+MAX_ATTEMPTS = 12
+
+
+def _wait_seconds(resp, attempt: int) -> int:
+    """How long to back off before the next attempt. Honours Retry-After on 429."""
+    if resp is not None:
+        ra = resp.headers.get("Retry-After", "")
+        if ra.strip().isdigit():
+            return min(int(ra) + 1, 300)
+    return min(15 * attempt, 120)   # 15, 30, 45, ... capped at 120s
+
 
 def log(msg: str):
     with _print_lock:
@@ -111,7 +123,8 @@ def build_session(workers: int) -> requests.Session:
         backoff_factor=2.0,            # 0,2,4,8,16,32s between retries
         backoff_max=120,
         # 429 = rate limited -> retry (urllib3 honours the Retry-After header).
-        status_forcelist=(429, 500, 502, 503, 504),
+        # 429 is handled manually in download_bundle (clearer logs + longer waits).
+        status_forcelist=(500, 502, 503, 504),
         respect_retry_after_header=True,
         allowed_methods=frozenset(["GET", "POST"]),
         raise_on_status=False,
@@ -219,54 +232,77 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
         return "skip"
 
     part_path = zip_path.with_suffix(".zip.part")
-    THROTTLE.wait()
-    log(f"[start] {vehicle['name']}")
+    name = vehicle["name"]
+    log(f"[start] {name}")
 
-    try:
-        with session.post(
-            vehicle["bundle_url"],
-            data={"captcha": CAPTCHA_ANSWER},
-            stream=True,
-            timeout=180,
-        ) as resp:
-            if resp.status_code == 404:
-                err(f"[404] bundle not found: {vehicle['name']}")
-                return "fail"
-            resp.raise_for_status()
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        THROTTLE.wait()
+        try:
+            with session.post(
+                vehicle["bundle_url"],
+                data={"captcha": CAPTCHA_ANSWER},
+                stream=True,
+                timeout=180,
+            ) as resp:
+                if resp.status_code == 404:
+                    err(f"[404] bundle not found (giving up): {name}")
+                    return "fail"            # genuinely missing — never retry
 
-            ctype = resp.headers.get("content-type", "")
-            if "zip" not in ctype and "octet-stream" not in ctype:
-                err(f"[fail] {vehicle['name']}: server returned '{ctype}', not a zip "
-                    f"(captcha flow may have changed)")
-                return "fail"
+                if resp.status_code == 429:
+                    wait = _wait_seconds(resp, attempt)
+                    err(f"[429] {name}: rate limited, wait {wait}s "
+                        f"(attempt {attempt}/{MAX_ATTEMPTS})")
+                    time.sleep(wait)
+                    continue
 
-            final_name = _filename_from_disposition(resp, safe_name)
-            zip_path = output_dir / final_name
-            if zip_path.exists() and zipfile.is_zipfile(zip_path):
-                log(f"[skip] already downloaded: {zip_path.name}")
-                return "skip"
+                resp.raise_for_status()
 
-            downloaded = 0
-            with open(part_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=1024 * 64):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
+                ctype = resp.headers.get("content-type", "")
+                if "zip" not in ctype and "octet-stream" not in ctype:
+                    # Often a transient throttle/HTML page — back off and retry.
+                    wait = _wait_seconds(None, attempt)
+                    err(f"[retry] {name}: got '{ctype or 'no type'}', not a zip; "
+                        f"wait {wait}s (attempt {attempt}/{MAX_ATTEMPTS})")
+                    time.sleep(wait)
+                    continue
 
-        # Validate before committing the filename.
-        if not zipfile.is_zipfile(part_path):
-            err(f"[fail] {vehicle['name']}: downloaded data is not a valid zip")
+                final_name = _filename_from_disposition(resp, safe_name)
+                zip_path = output_dir / final_name
+                if zip_path.exists() and zipfile.is_zipfile(zip_path):
+                    log(f"[skip] already downloaded: {zip_path.name}")
+                    return "skip"
+
+                downloaded = 0
+                with open(part_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1024 * 64):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+
+            # Validate the whole file before committing the name.
+            if not zipfile.is_zipfile(part_path):
+                wait = _wait_seconds(None, attempt)
+                err(f"[retry] {name}: incomplete/invalid zip; "
+                    f"wait {wait}s (attempt {attempt}/{MAX_ATTEMPTS})")
+                part_path.unlink(missing_ok=True)
+                time.sleep(wait)
+                continue
+
+            os.replace(part_path, zip_path)
+            log(f"[done] {zip_path.name} ({downloaded / 1024 / 1024:.1f} MB)")
+            return "ok"
+
+        except requests.RequestException as e:
+            wait = _wait_seconds(None, attempt)
+            err(f"[retry] {name}: {e}; wait {wait}s "
+                f"(attempt {attempt}/{MAX_ATTEMPTS})")
             part_path.unlink(missing_ok=True)
-            return "fail"
+            time.sleep(wait)
+            continue
 
-        os.replace(part_path, zip_path)
-        log(f"[done] {zip_path.name} ({downloaded / 1024 / 1024:.1f} MB)")
-        return "ok"
-
-    except requests.RequestException as e:
-        err(f"[fail] {vehicle['name']}: {e}")
-        part_path.unlink(missing_ok=True)
-        return "fail"
+    err(f"[fail] {name}: gave up after {MAX_ATTEMPTS} attempts")
+    part_path.unlink(missing_ok=True)
+    return "fail"
 
 
 def resolve_output_dir(cli_value: str) -> Path:
@@ -328,19 +364,44 @@ def main():
         return
 
     log(f"Downloading {len(vehicles)} vehicle(s) with {workers} worker(s)...\n")
-    counts = {"ok": 0, "skip": 0, "fail": 0}
+    totals = {"ok": 0, "skip": 0}
+    pending = list(vehicles)
+    rounds = 0
 
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {}
-        for v in vehicles:
-            futures[pool.submit(download_bundle, session, v, save_dir)] = v
-        for fut in as_completed(futures):
-            counts[fut.result()] += 1
+    # Outer loop: re-attempt anything that still failed, until none remain or
+    # a whole round makes zero progress. Each file already retries MAX_ATTEMPTS
+    # times internally, so this only catches the truly stubborn ones.
+    while pending:
+        rounds += 1
+        log(f"--- round {rounds}: {len(pending)} file(s) to fetch ---")
+        failed = []
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(download_bundle, session, v, save_dir): v for v in pending}
+            for fut in as_completed(futures):
+                res = fut.result()
+                if res in ("ok", "skip"):
+                    totals[res] += 1
+                else:
+                    failed.append(futures[fut])
+
+        if not failed:
+            break
+        if len(failed) == len(pending):
+            err(f"Round {rounds} made no progress on {len(failed)} file(s); "
+                f"the site may be hard-blocking. Stopping — re-run later to resume.")
+            pending = failed
+            break
+        cooldown = 60
+        log(f"{len(failed)} still failing; cooling down {cooldown}s before retry round...")
+        time.sleep(cooldown)
+        pending = failed
 
     print("\n" + "=" * 50)
-    log(f"Done. ok={counts['ok']}  skipped={counts['skip']}  failed={counts['fail']}")
+    log(f"Done. ok={totals['ok']}  skipped={totals['skip']}  failed={len(pending) if pending else 0}  rounds={rounds}")
     log(f"Files saved in: {save_dir.resolve()}")
-    if counts["fail"]:
+    if pending:
+        err("Some files did not complete. Just run the script again to finish them "
+            "(downloaded files are skipped).")
         sys.exit(1)
 
 
