@@ -222,16 +222,16 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
                     err(f"[404] bundle not found (giving up): {vehicle['name']}")
                     return "fail"
                 if resp.status_code == 429:
-                    err(f"[429] {vehicle['name']}: rate limited, wait {wait}s "
-                        f"(attempt {attempt}/{RL_RETRIES})")
+                    log(f"[wait] {vehicle['name']}: server busy (429), pausing {wait}s "
+                        f"then retrying (attempt {attempt}/{RL_RETRIES})")
                     time.sleep(wait)
                     continue
                 resp.raise_for_status()
 
                 ctype = resp.headers.get("content-type", "")
                 if "zip" not in ctype and "octet-stream" not in ctype:
-                    err(f"[retry] {vehicle['name']}: got '{ctype or 'no type'}', "
-                        f"not a zip; wait {wait}s (attempt {attempt}/{RL_RETRIES})")
+                    log(f"[wait] {vehicle['name']}: got '{ctype or 'no type'}', "
+                        f"pausing {wait}s then retrying (attempt {attempt}/{RL_RETRIES})")
                     time.sleep(wait)
                     continue
 
@@ -244,8 +244,8 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
 
             # Validate the full file before committing it.
             if not zipfile.is_zipfile(part_path):
-                err(f"[retry] {vehicle['name']}: incomplete/invalid zip; "
-                    f"wait {wait}s (attempt {attempt}/{RL_RETRIES})")
+                log(f"[wait] {vehicle['name']}: incomplete download, pausing {wait}s "
+                    f"then retrying (attempt {attempt}/{RL_RETRIES})")
                 part_path.unlink(missing_ok=True)
                 time.sleep(wait)
                 continue
@@ -255,8 +255,8 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
             return "ok"
 
         except requests.RequestException as e:
-            err(f"[retry] {vehicle['name']}: {e}; wait {wait}s "
-                f"(attempt {attempt}/{RL_RETRIES})")
+            log(f"[wait] {vehicle['name']}: connection issue ({e.__class__.__name__}), "
+                f"pausing {wait}s then retrying (attempt {attempt}/{RL_RETRIES})")
             part_path.unlink(missing_ok=True)
             time.sleep(wait)
             continue
