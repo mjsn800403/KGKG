@@ -49,10 +49,16 @@ except ImportError:
 BASE_URL = "https://lemon-manuals.org.ua"
 CAPTCHA_ANSWER = "human"   # the site asks you to literally type "human"
 
-# On HTTP 429 (nginx rate limit, no Retry-After), wait this long and retry the
-# same file. The block clears after ~60-90s of quiet, so a few 45s waits ride it out.
-RL_WAIT = 45
-RL_RETRIES = 6
+# Rate-limit handling. On 429 / error, wait min(RL_WAIT*attempt, RL_WAIT_MAX)
+# seconds and retry the same file, up to RL_RETRIES times (persistent enough to
+# ride out the nginx block, which clears after ~60-90s of quiet).
+RL_WAIT = 20
+RL_WAIT_MAX = 120
+RL_RETRIES = 20
+
+# Seconds to wait before EVERY request, to pace requests and avoid bursts that
+# trigger 429 in the first place. Set from --delay in main().
+PACE_DELAY = 3.0
 
 HEADERS = {
     "User-Agent": (
@@ -196,63 +202,68 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
     part_path = zip_path.with_suffix(".zip.part")
     log(f"[start] {vehicle['name']}")
 
-    try:
-        # The site (nginx) rate-limits bursts with 429 and no Retry-After; it
-        # clears after ~60-90s of quiet. On 429, wait and retry the same file a
-        # few times so it rides out the cooldown instead of just failing.
-        for attempt in range(1, RL_RETRIES + 1):
-            resp = session.post(
+    # Persistent loop: the site (nginx) rate-limits bursts with 429 (no
+    # Retry-After) and clears after ~60-90s of quiet. We pace every request and,
+    # on any 429 / network hiccup / partial download, back off and retry the SAME
+    # file with an escalating wait until it succeeds. Slower, but it always
+    # finishes. Only a genuine 404 gives up.
+    for attempt in range(1, RL_RETRIES + 1):
+        if PACE_DELAY:
+            time.sleep(PACE_DELAY)          # space requests so we don't trigger 429
+        wait = min(RL_WAIT * attempt, RL_WAIT_MAX)
+        try:
+            with session.post(
                 vehicle["bundle_url"],
                 data={"captcha": CAPTCHA_ANSWER},
                 stream=True,
-                timeout=180,
-            )
-            if resp.status_code == 429:
-                resp.close()
-                if attempt == RL_RETRIES:
-                    err(f"[fail] {vehicle['name']}: still rate limited after {RL_RETRIES} tries")
+                timeout=(30, 300),
+            ) as resp:
+                if resp.status_code == 404:
+                    err(f"[404] bundle not found (giving up): {vehicle['name']}")
                     return "fail"
-                log(f"[429] {vehicle['name']}: rate limited, waiting {RL_WAIT}s "
-                    f"({attempt}/{RL_RETRIES - 1})")
-                time.sleep(RL_WAIT)
+                if resp.status_code == 429:
+                    err(f"[429] {vehicle['name']}: rate limited, wait {wait}s "
+                        f"(attempt {attempt}/{RL_RETRIES})")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+
+                ctype = resp.headers.get("content-type", "")
+                if "zip" not in ctype and "octet-stream" not in ctype:
+                    err(f"[retry] {vehicle['name']}: got '{ctype or 'no type'}', "
+                        f"not a zip; wait {wait}s (attempt {attempt}/{RL_RETRIES})")
+                    time.sleep(wait)
+                    continue
+
+                downloaded = 0
+                with open(part_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1024 * 64):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+
+            # Validate the full file before committing it.
+            if not zipfile.is_zipfile(part_path):
+                err(f"[retry] {vehicle['name']}: incomplete/invalid zip; "
+                    f"wait {wait}s (attempt {attempt}/{RL_RETRIES})")
+                part_path.unlink(missing_ok=True)
+                time.sleep(wait)
                 continue
-            break
 
-        with resp:
-            if resp.status_code == 404:
-                err(f"[404] bundle not found: {vehicle['name']}")
-                return "fail"
-            resp.raise_for_status()
+            os.replace(part_path, zip_path)
+            log(f"[done] {zip_path.name} ({downloaded / 1024 / 1024:.1f} MB)")
+            return "ok"
 
-            ctype = resp.headers.get("content-type", "")
-            if "zip" not in ctype and "octet-stream" not in ctype:
-                err(f"[fail] {vehicle['name']}: server returned '{ctype}', not a zip "
-                    f"(captcha flow may have changed)")
-                return "fail"
-
-            # Save under the model name so the fast skip-check at the top of this
-            # function matches on re-runs (no wasted request -> no needless 429).
-            downloaded = 0
-            with open(part_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=1024 * 64):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-
-        # Validate before committing the filename.
-        if not zipfile.is_zipfile(part_path):
-            err(f"[fail] {vehicle['name']}: downloaded data is not a valid zip")
+        except requests.RequestException as e:
+            err(f"[retry] {vehicle['name']}: {e}; wait {wait}s "
+                f"(attempt {attempt}/{RL_RETRIES})")
             part_path.unlink(missing_ok=True)
-            return "fail"
+            time.sleep(wait)
+            continue
 
-        os.replace(part_path, zip_path)
-        log(f"[done] {zip_path.name} ({downloaded / 1024 / 1024:.1f} MB)")
-        return "ok"
-
-    except requests.RequestException as e:
-        err(f"[fail] {vehicle['name']}: {e}")
-        part_path.unlink(missing_ok=True)
-        return "fail"
+    err(f"[fail] {vehicle['name']}: gave up after {RL_RETRIES} attempts")
+    part_path.unlink(missing_ok=True)
+    return "fail"
 
 
 def resolve_output_dir(cli_value: str) -> Path:
@@ -273,9 +284,10 @@ def main():
     )
     parser.add_argument("url", nargs="?", help="Brand/Year page URL (asked interactively if omitted)")
     parser.add_argument("--output-dir", default="", help="Where to save .zip files")
-    parser.add_argument("--workers", type=int, default=2, help="Parallel downloads (default: 2)")
-    parser.add_argument("--delay", type=float, default=1.0,
-                        help="Seconds to stagger between starting downloads (default: 1.0)")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Parallel downloads (default: 1 = safest, no bursts)")
+    parser.add_argument("--delay", type=float, default=3.0,
+                        help="Seconds to wait before every request, to avoid 429 bursts (default: 3.0)")
     parser.add_argument("--dry-run", action="store_true", help="List vehicles, download nothing")
     args = parser.parse_args()
 
@@ -286,6 +298,9 @@ def main():
 
     workers = max(1, args.workers)
     session = build_session(workers)
+
+    global PACE_DELAY
+    PACE_DELAY = max(0.0, args.delay)   # pace every request to avoid 429 bursts
 
     # Site is case-sensitive; fix the brand spelling so any case works.
     url = correct_brand_case(session, url)
@@ -317,8 +332,6 @@ def main():
         futures = {}
         for v in vehicles:
             futures[pool.submit(download_bundle, session, v, save_dir)] = v
-            if args.delay:
-                time.sleep(args.delay)   # stagger starts; keeps it polite
         for fut in as_completed(futures):
             counts[fut.result()] += 1
 
