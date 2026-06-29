@@ -96,6 +96,33 @@ def build_session(workers: int) -> requests.Session:
     return session
 
 
+def correct_brand_case(session: requests.Session, url: str) -> str:
+    """
+    The site is case-sensitive (/Toyota/ works, /toyota/ 404s). Look up the
+    brand's canonical spelling on the homepage and fix the first path segment,
+    so the user can type the brand in any case.
+    """
+    raw_parts = [p for p in urlparse(url).path.strip("/").split("/") if p]
+    if not raw_parts:
+        return url
+    brand_dec = unquote(raw_parts[0])
+    try:
+        resp = session.get(f"{BASE_URL}/", timeout=30)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for a in soup.find_all("a", href=True):
+            h = a["href"].strip("/")
+            if not h or "/" in h or "." in h:
+                continue
+            if unquote(h).lower() == brand_dec.lower() and h != raw_parts[0]:
+                fixed = f"{BASE_URL}/" + "/".join([h] + raw_parts[1:]) + "/"
+                log(f"Corrected brand case: '{raw_parts[0]}' -> '{h}'")
+                return fixed
+    except requests.RequestException:
+        pass
+    return url
+
+
 def get_vehicles(session: requests.Session, year_url: str) -> list:
     """
     Parse a Brand/Year page and return the list of vehicles on it.
@@ -246,6 +273,9 @@ def main():
 
     workers = max(1, args.workers)
     session = build_session(workers)
+
+    # Site is case-sensitive; fix the brand spelling so any case works.
+    url = correct_brand_case(session, url)
 
     # Folder name from the URL path, e.g. .../Toyota/2025/ -> Toyota_2025
     path_parts = [p for p in urlparse(url).path.strip("/").split("/") if p]
