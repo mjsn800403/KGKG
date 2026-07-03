@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import Icon from '@/components/Icon';
 import { showModal } from '@/components/Modal';
 
 export default function Home() {
@@ -45,7 +46,7 @@ export default function Home() {
         </div>
         <div className="nav-right">
           <ThemeToggle />
-          <Link className="btn btn-accent" href="/login">ورود به حساب کاربری</Link>
+          <Link className="btn btn-accent" href="/login" data-tour="login-btn">ورود به حساب کاربری</Link>
         </div>
       </nav>
 
@@ -93,11 +94,11 @@ export default function Home() {
           <h2>چهار لایه مستند، یک منبع واحد</h2>
           <div className="tag">// 01 — COVERAGE LAYERS</div>
         </div>
-        <div className="grid4">
-          <div className="card glass"><div className="num">PT · 01</div><h3>فهرست قطعات</h3><p>کدهای فنی، شماره‌فنی اورجینال و دیاگرام انفجاری برای هر مجموعه، مطابق دقیق با سال ساخت و آپشن.</p></div>
-          <div className="card glass"><div className="num">RM · 02</div><h3>منوال تعمیر</h3><p>رویه گام‌به‌گام کارخانه‌ای، گشتاورها، تلورانس‌ها و هشدارهای ایمنی — قابل اتصال به عکس ۳۶۰ درجه.</p></div>
-          <div className="card glass"><div className="num">ST · 03</div><h3>زمان استاندارد</h3><p>زمان مرجع هر عملیات برای برآورد دقیق هزینه و زمان‌بندی تعمیرگاه، بر اساس داده کارخانه‌ای.</p></div>
-          <div className="card glass"><div className="num">SE · 04</div><h3>ابزار مخصوص تعمیراتی</h3><p>فهرست ابزارهای ویژه کارخانه‌ای لازم برای هر عملیات، با کد فنی و نحوه استفاده صحیح.</p></div>
+        <div className="grid4" data-tour="doc-layers">
+          <div className="card glass"><div className="num"><Icon name="parts" />PT · 01</div><h3>فهرست قطعات</h3><p>کدهای فنی، شماره‌فنی اورجینال و دیاگرام انفجاری برای هر مجموعه، مطابق دقیق با سال ساخت و آپشن.</p></div>
+          <div className="card glass"><div className="num"><Icon name="manual" />RM · 02</div><h3>منوال تعمیر</h3><p>رویه گام‌به‌گام کارخانه‌ای، گشتاورها، تلورانس‌ها و هشدارهای ایمنی — قابل اتصال به عکس ۳۶۰ درجه.</p></div>
+          <div className="card glass"><div className="num"><Icon name="clock" />ST · 03</div><h3>زمان استاندارد</h3><p>زمان مرجع هر عملیات برای برآورد دقیق هزینه و زمان‌بندی تعمیرگاه، بر اساس داده کارخانه‌ای.</p></div>
+          <div className="card glass"><div className="num"><Icon name="wrench" />SE · 04</div><h3>ابزار مخصوص تعمیراتی</h3><p>فهرست ابزارهای ویژه کارخانه‌ای لازم برای هر عملیات، با کد فنی و نحوه استفاده صحیح.</p></div>
         </div>
 
         <div style={{ marginTop: 60, color: 'var(--text-dim)', fontSize: '14.5px', lineHeight: 2, maxWidth: 760 }}>
@@ -111,7 +112,7 @@ export default function Home() {
           <div className="tag">// 02 — VIN LOOKUP</div>
         </div>
         <p style={{ color: 'var(--text-dim)', maxWidth: 600, lineHeight: 1.9, fontSize: '14.5px' }}>شماره شاسی (VIN) خودرو را وارد کنید تا میزان پوشش مستندات فنی موجود برای آن مشخص شود.</p>
-        <div className="vin-box glass">
+        <div className="vin-box glass" data-tour="vin-box">
           <input type="text" placeholder="مثلاً: JTHBE1GG0E5012345" id="vinInput" />
           <button className="btn btn-accent" onClick={checkVin}>بررسی پوشش</button>
         </div>
@@ -139,20 +140,31 @@ export default function Home() {
       </div>
 
       <footer>
-        <div className="support-strip">
+        <div className="support-strip" data-tour="support">
           <div className="sblock">
-            <h4>پشتیبانی فنی</h4>
+            <h4><Icon name="phone" />پشتیبانی فنی</h4>
             <p>برای مشکلات دسترسی، خرید مستندات یا گزارش خرابی در سامانه با ما در ارتباط باشید.</p>
-            <a href="tel:02100000000">۰۲۱-۰۰۰۰۰۰۰۰</a><br />
-            <a href="mailto:support@khadamatgostar.com">support@khadamatgostar.com</a>
+            <div className="contact-row">
+              <Icon name="phone" />
+              <a href="tel:+982192001404"><span className="ltr">021-92001404</span></a>
+              <span style={{ color: 'var(--text-dim)' }}>داخلی ۱۷۲</span>
+            </div>
+            <div className="contact-row">
+              <Icon name="mail" />
+              <a href="mailto:mj.salimi@khadamatgostar.com"><span className="ltr">mj.salimi@khadamatgostar.com</span></a>
+            </div>
           </div>
           <div className="sblock">
-            <h4>درباره ما</h4>
+            <h4><Icon name="info" />درباره ما</h4>
             <p>کلیه محتوای سایت از دیتابیس‌های مرجع (مادر) تامین شده و صحت اطلاعات به دیتابیس مادر بستگی دارد. گردآوری، طراحی و تدوین: واحد سیستم و روش شرکت خدمات گستر سپهر گیتی.</p>
           </div>
           <div className="sblock">
-            <h4>دسترسی سریع</h4>
-            <p><a style={{ display: 'block', marginBottom: 6 }} href="#coverage">بررسی پوشش خودرو</a><a style={{ display: 'block' }} href="#">شرایط استفاده</a></p>
+            <h4><Icon name="arrow" />دسترسی سریع</h4>
+            <p>
+              <a style={{ display: 'block', marginBottom: 6 }} href="#coverage">بررسی پوشش خودرو</a>
+              <Link style={{ display: 'block', marginBottom: 6 }} href="/purchase" className="quick-link">درخواست خرید مستندات</Link>
+              <a style={{ display: 'block' }} href="#">شرایط استفاده</a>
+            </p>
           </div>
         </div>
         <div className="foot-bottom">

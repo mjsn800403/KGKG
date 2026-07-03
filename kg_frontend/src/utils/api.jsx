@@ -178,6 +178,21 @@ export async function fetchModels(brand, year, model) {
   }
 }
 
+// --- purchase request ------------------------------------------------------
+// Legal-entity documentation purchase requests. Stored server-side so the sales
+// team can follow up. Returns { ok: true, id } on success; throws on failure so
+// the form can surface an error instead of a false "we'll contact you".
+export async function submitPurchaseRequest(payload) {
+  const res = await fetch(`${API_BASE}/api/purchase-request/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ثبت درخواست ناموفق بود: ${res.status}`);
+  return data;
+}
+
 // --- admin auth (review queue + pin) ---------------------------------------
 // The pin and review-queue endpoints are admin-gated server-side (KG_ADMIN_TOKEN).
 // The token is typed by the admin at runtime and kept only in sessionStorage —

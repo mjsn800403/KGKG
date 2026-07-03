@@ -42,6 +42,72 @@ async function backend(path, body) {
   return res.json();
 }
 
+// ---- English -> Persian softener for titles/labels ------------------------
+// The manuals are English, so retrieved page titles ("Brake Fluid Replacement")
+// and diagnostic step names ("Monitor Description") are English. We keep the raw
+// English *body text* for grounding, but translate the short, high-frequency
+// title/label vocabulary to Persian before it reaches the prompt and the UI, so
+// the user sees far less English. Unknown tokens are left untouched (safe).
+const EN_FA = [
+  // actions / sections (longest phrases first so they win)
+  ['remove and replace', 'باز و بست'], ['removal and installation', 'باز و بست'],
+  ['on-vehicle inspection', 'بازرسی روی خودرو'], ['how to proceed', 'روند عیب‌یابی'],
+  ['monitor description', 'شرح پایش'], ['circuit description', 'شرح مدار'],
+  ['problem symptoms table', 'جدول علائم مشکل'], ['diagnostic trouble code', 'کد خطای عیب‌یابی'],
+  ['freeze frame data', 'داده فریز فریم'], ['service data', 'داده سرویس'],
+  ['torque specification', 'مشخصات گشتاور'], ['tightening torque', 'گشتاور سفت‌کردن'],
+  ['labor time', 'زمان کار'], ['flat rate', 'زمان استاندارد'],
+  ['wiring diagram', 'نقشه سیم‌کشی'], ['parts catalog', 'کاتالوگ قطعات'],
+  ['special service tool', 'ابزار مخصوص'], ['special tool', 'ابزار مخصوص'],
+  ['replacement', 'تعویض'], ['installation', 'نصب'], ['removal', 'باز کردن'],
+  ['reassembly', 'مونتاژ مجدد'], ['disassembly', 'دمونتاژ'], ['assembly', 'مونتاژ'],
+  ['inspection', 'بازرسی'], ['adjustment', 'تنظیم'], ['diagnosis', 'عیب‌یابی'],
+  ['diagnostic', 'عیب‌یابی'], ['procedure', 'رویه'], ['overhaul', 'اورهال'],
+  ['specifications', 'مشخصات فنی'], ['specification', 'مشخصه'], ['description', 'شرح'],
+  ['precaution', 'احتیاط'], ['operation', 'عملکرد'], ['definition', 'تعریف'],
+  ['calibration', 'کالیبراسیون'], ['initialization', 'مقداردهی اولیه'],
+  ['registration', 'ثبت'], ['maintenance', 'نگهداری'], ['service', 'سرویس'],
+  // systems / components
+  ['brake fluid', 'روغن ترمز'], ['engine oil', 'روغن موتور'],
+  ['transmission fluid', 'روغن گیربکس'], ['power steering', 'فرمان هیدرولیک'],
+  ['spark plug', 'شمع'], ['timing belt', 'تسمه تایم'], ['timing chain', 'زنجیر تایم'],
+  ['drive belt', 'تسمه دینام'], ['water pump', 'واتر پمپ'], ['fuel pump', 'پمپ بنزین'],
+  ['fuel injector', 'انژکتور'], ['cylinder head', 'سرسیلندر'], ['camshaft', 'میل سوپاپ'],
+  ['crankshaft', 'میل لنگ'], ['oil filter', 'فیلتر روغن'], ['air filter', 'فیلتر هوا'],
+  ['cabin air filter', 'فیلتر کابین'], ['fuel filter', 'فیلتر بنزین'],
+  ['shock absorber', 'کمک‌فنر'], ['control arm', 'طبق'], ['ball joint', 'سیبک'],
+  ['wheel bearing', 'بلبرینگ چرخ'], ['wheel alignment', 'تنظیم فرمان'],
+  ['air conditioning', 'کولر'], ['brake pad', 'لنت ترمز'], ['brake rotor', 'دیسک ترمز'],
+  ['brake disc', 'دیسک ترمز'], ['parking brake', 'ترمز دستی'], ['master cylinder', 'سیلندر اصلی'],
+  ['throttle body', 'دریچه گاز'], ['catalytic converter', 'کاتالیزور'],
+  ['oxygen sensor', 'سنسور اکسیژن'], ['coolant temperature', 'دمای خنک‌کننده'],
+  ['high voltage', 'فشار قوی'], ['hybrid battery', 'باتری هیبرید'],
+  ['electric motor', 'موتور برقی'], ['inverter', 'اینورتر'], ['alternator', 'دینام'],
+  ['starter', 'استارت'], ['radiator', 'رادیاتور'], ['thermostat', 'ترموستات'],
+  ['transmission', 'گیربکس'], ['differential', 'دیفرانسیل'], ['driveshaft', 'گاردان'],
+  ['suspension', 'سیستم تعلیق'], ['steering', 'فرمان'], ['clutch', 'کلاچ'],
+  ['coolant', 'مایع خنک‌کننده'], ['battery', 'باتری'], ['sensor', 'سنسور'],
+  ['relay', 'رله'], ['fuse', 'فیوز'], ['airbag', 'ایربگ'], ['engine', 'موتور'],
+  ['brake', 'ترمز'], ['circuit', 'مدار'], ['system', 'سیستم'], ['component', 'قطعه'],
+  ['assembly', 'مجموعه'], ['module', 'ماژول'], ['valve', 'سوپاپ'], ['pump', 'پمپ'],
+  ['filter', 'فیلتر'], ['belt', 'تسمه'], ['sensor', 'سنسور'], ['wheel', 'چرخ'],
+  ['tire', 'لاستیک'], ['lamp', 'چراغ'], ['light', 'چراغ'], ['fluid', 'مایع'],
+  ['front', 'جلو'], ['rear', 'عقب'], ['left', 'چپ'], ['right', 'راست'],
+  ['upper', 'بالا'], ['lower', 'پایین'], ['torque', 'گشتاور'], ['test', 'تست'],
+];
+
+// Word-boundary, case-insensitive, longest-phrase-first replacement. Only whole
+// tokens are translated, so partial words are never mangled.
+function faTitle(s) {
+  if (!s) return s;
+  let out = String(s);
+  for (const [en, fa] of EN_FA) {
+    const re = new RegExp(`(^|[^A-Za-z])(${en.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})(?![A-Za-z])`, 'gi');
+    out = out.replace(re, (_m, pre) => `${pre}${fa}`);
+  }
+  return out;
+}
+
 // Persian labels for a confidence band (diagnostic path; the assist path reuses
 // the backend's own label_fa).
 function bandLabel(band) {
@@ -159,20 +225,22 @@ function buildContext(rag) {
   const blocks = [];
   rag.hits.forEach((h, i) => {
     const n = i + 1;
-    sources.push({ n, title: h.title, path: h.title_path, url: h.app_url,
+    // Persian-softened title for the UI/prompt; keep the English body for grounding.
+    const titleFa = faTitle(h.title);
+    sources.push({ n, title: titleFa, path: faTitle(h.title_path), url: h.app_url,
                    model: h.model, variant: h.variant, blob_id: h.blob_id,
                    band: h.confidence_band, band_label: h.confidence_label,
                    matched_via: h.matched_via, similarity: h.similarity });
     let b = `[منبع ${n}] خودرو: ${h.brand} ${h.model}${h.variant ? ' ' + h.variant : ''}\n`;
-    b += `عنوان: ${h.title}\nمسیر: ${h.title_path}\nلینک: ${h.app_url}\n`;
+    b += `عنوان: ${titleFa}\nمسیر: ${faTitle(h.title_path)}\nلینک: ${h.app_url}\n`;
     b += `متن:\n${(h.text || '').slice(0, 1800)}\n`;
     const labor = (h.related || []).filter((r) => r.relation === 'labor_time');
     const other = (h.related || []).filter((r) => r.relation !== 'labor_time');
     if (labor.length) {
-      b += `زمان کار مرتبط: ` + labor.map((r) => `${r.title} (${r.app_url})`).join(' ، ') + `\n`;
+      b += `زمان کار مرتبط: ` + labor.map((r) => `${faTitle(r.title)} (${r.app_url})`).join(' ، ') + `\n`;
     }
     if (other.length) {
-      b += `صفحات مرتبط: ` + other.map((r) => `${r.title} (${r.app_url})`).join(' ، ') + `\n`;
+      b += `صفحات مرتبط: ` + other.map((r) => `${faTitle(r.title)} (${r.app_url})`).join(' ، ') + `\n`;
     }
     if (h.cross_vehicle?.length) {
       b += `همین رویه در خودروهای دیگر: ` +
@@ -195,9 +263,12 @@ function buildPrompt({ message, contextText, hasContext }) {
     `تو دستیار تعمیراتی هستی و فقط بر اساس «متن‌های دفترچهٔ سرویس» زیر پاسخ می‌دهی.\n` +
     `قوانین:\n` +
     `1) فقط از همین متن‌ها استفاده کن؛ اگر چیزی در آن‌ها نبود، بگو در داده‌ها نیست و حدس نزن.\n` +
-    `2) پاسخ را فارسی، مرحله‌به‌مرحله و کاربردی بنویس (مقادیر گشتاور/سیال را دقیق نقل کن).\n` +
-    `3) برای هر منبعی که استفاده می‌کنی، یک دکمهٔ لینک با همین قالب بده: ` +
-    `[BUTTON](title="عنوان صفحه", href="لینک منبع").\n` +
+    `2) پاسخ را کاملاً فارسی، روان، مرحله‌به‌مرحله و کاربردی بنویس. اصطلاحات فنی را به فارسی بنویس؛ ` +
+    `اگر معادل فارسی رایج نبود، فقط همان اصطلاح را نگه دار و یک‌بار نام انگلیسی را داخل پرانتز بیاور ` +
+    `(مثلاً «سنسور اکسیژن (Oxygen Sensor)»). از کپی مستقیم جمله‌ها و عبارت‌های انگلیسی خودداری کن و ` +
+    `متن انگلیسی را به فارسی برگردان. مقادیر عددی گشتاور/سیال/فاصله را دقیق نقل کن.\n` +
+    `3) برای هر منبعی که استفاده می‌کنی، یک دکمهٔ لینک با همین قالب بده و «عنوان» را به فارسیِ کوتاه بنویس ` +
+    `(نه عین عنوان انگلیسی): [BUTTON](title="عنوان فارسی صفحه", href="لینک منبع").\n` +
     `4) اگر «همین رویه در خودروهای دیگر» آمده و به کاربر کمک می‌کند، آن را هم به‌عنوان مرجع مکمل ذکر کن.\n` +
     `5) اگر «زمان کار مرتبط» آمده، مدت زمان تخمینی انجام کار را هم به کاربر بگو و لینکش را بده.\n` +
     `6) پاسخ را سناریومحور و بر اساس نوع سؤال بساز. اگر سؤال دربارهٔ «تعمیر/تعویض یک قطعه» است، تا حد امکان این بخش‌ها را (فقط آن‌هایی که در متن‌ها هست) رعایت کن:\n` +
@@ -240,22 +311,22 @@ function buildDiagnosisContext(d) {
     // Enriched source row so the evidence panel shows the SAME signals the assist
     // path does (band, how it matched, a confidence bar, the blob it maps to).
     sources.push({
-      n, title: `DTC ${c.code} — ${c.name}`, url: c.app_url,
+      n, title: `DTC ${c.code} — ${faTitle(c.name)}`, url: c.app_url,
       blob_id: c.blob_id ?? null,
       band: c.confidence_band || null,
       band_label: c.confidence_label || null,
       matched_via: c.matched_via || 'diagnostic',
       similarity: typeof c.confidence === 'number' ? c.confidence : null,
     });
-    (c.steps || []).forEach((s) => sources.push({ n, title: `${c.code}: ${s.aspect}`, url: s.app_url }));
+    (c.steps || []).forEach((s) => sources.push({ n, title: `${c.code}: ${faTitle(s.aspect)}`, url: s.app_url }));
     if (idx >= maxCand) return;            // keep the prompt small
-    let b = `[کاندیدا ${n}] کد: ${c.code} — ${c.name}`;
+    let b = `[کاندیدا ${n}] کد: ${c.code} — ${faTitle(c.name)}`;
     if (c.confidence != null) b += ` (اطمینان ${(c.confidence * 100).toFixed(0)}٪)`;
     b += `\n`;
-    if (c.inheritance_path) b += `جایگاه: ${c.inheritance_path}\n`;
+    if (c.inheritance_path) b += `جایگاه: ${faTitle(c.inheritance_path)}\n`;
     if (c.trigger) b += `چه زمانی ثبت می‌شود: ${(c.trigger || '').slice(0, 220)}\n`;
     if (c.steps?.length) {
-      b += `مراحل عیب‌یابی: ${c.steps.map((s) => s.aspect).join(' ← ')}\n`;
+      b += `مراحل عیب‌یابی: ${c.steps.map((s) => faTitle(s.aspect)).join(' ← ')}\n`;
       const desc = c.steps.find((s) => /description/i.test(s.aspect)) || c.steps[0];
       if (desc) b += `لینک توضیح/تشخیص: ${desc.app_url}\n`;
     }
@@ -271,14 +342,14 @@ function buildDiagnosisContext(d) {
 
   (d.procedures || []).slice(0, 3).forEach((p) => {
     n += 1;
-    sources.push({ n, title: p.title, url: p.app_url });
-    blocks.push(`[رویهٔ تشخیص کارخانه] ${p.title}\nلینک: ${p.app_url}` +
-      (p.matched_symptom ? `\nمرتبط با علامت: ${p.matched_symptom}` : ''));
+    sources.push({ n, title: faTitle(p.title), url: p.app_url });
+    blocks.push(`[رویهٔ تشخیص کارخانه] ${faTitle(p.title)}\nلینک: ${p.app_url}` +
+      (p.matched_symptom ? `\nمرتبط با علامت: ${faTitle(p.matched_symptom)}` : ''));
   });
 
   if (d.symptoms?.length) {
     blocks.push(`علائم نزدیک و «ناحیهٔ مشکوک» کارخانه (به‌ترتیب احتمال):\n` +
-      d.symptoms.slice(0, 4).map((s) => `   • ${s.text}${s.suspected ? ` → ${s.suspected}` : ''}`).join('\n'));
+      d.symptoms.slice(0, 4).map((s) => `   • ${faTitle(s.text)}${s.suspected ? ` → ${faTitle(s.suspected)}` : ''}`).join('\n'));
   }
 
   return { sources, contextText: blocks.join('\n---\n') };
@@ -301,10 +372,12 @@ function buildDiagnosisPrompt({ message, d, contextText }) {
     `${header}\n` +
     `قوانین:\n` +
     `1) فقط از همین داده استفاده کن؛ چیزی از خودت اضافه/حدس نزن. اگر داده کافی نبود، صادقانه بگو.\n` +
-    `2) پاسخ فارسی، ساختارمند و عملی باشد. منطق را به‌صورت شرطی و سلسله‌مراتبی بیان کن: ` +
+    `2) پاسخ کاملاً فارسی، ساختارمند و عملی باشد. اصطلاحات فنی را فارسی بنویس و در صورت نبودِ معادل، ` +
+    `نام انگلیسی را فقط یک‌بار داخل پرانتز بیاور؛ از کپی مستقیم عبارات انگلیسی خودداری کن. ` +
+    `منطق را به‌صورت شرطی و سلسله‌مراتبی بیان کن: ` +
     `«اگر این علامت/شرط بود → محتمل‌ترین کد Y؛ اول این تست را انجام بده؛ اگر تأیید شد → رویهٔ تعمیر؛ اگر نه → کد بعدی Z».\n` +
     `3) کاندیداها را به‌ترتیب احتمال فهرست کن و برای هرکدام بگو «این کد چه زمانی ثبت می‌شود» و «جایگاهش در کدام سیستم/زیرسیستم است».\n` +
-    `4) برای هر مرحله/رویه/کد، یک دکمهٔ لینک با همین قالب بده: [BUTTON](title="عنوان", href="لینک").\n` +
+    `4) برای هر مرحله/رویه/کد، یک دکمهٔ لینک با همین قالب بده و «عنوان» را فارسی و کوتاه بنویس: [BUTTON](title="عنوان فارسی", href="لینک").\n` +
     `5) اگر «زمان کار» موجود بود، مدت تخمینی تعمیر را هم بگو و لینکش را بده.\n` +
     `6) اگر «رویهٔ تشخیص» (How to Proceed) موجود بود، آن را به‌عنوان نقطهٔ شروع عیب‌یابی پیشنهاد بده.\n` +
     `7) در پایان یک جمله بگو که این تشخیص اولیه بر پایهٔ دفترچهٔ کارخانه است و تأیید نهایی با تست عملی است.\n\n` +

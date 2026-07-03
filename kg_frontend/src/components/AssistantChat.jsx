@@ -71,6 +71,12 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
   const [sessionId, setSessionId] = useState(null);
   const userIdRef = useRef(null);
   const scrollRef = useRef(null);
+  const hydratedRef = useRef(false);
+
+  // Per-conversation storage key: scoped to the car so each vehicle keeps its
+  // own thread, and a global one for the car-less assistant.
+  const storageKey = `kg_chat_v1_${brand || ''}_${carName || ''}_${year || ''}`
+    .replace(/\s+/g, '_');
 
   // Stable per-browser user id, persisted so the conversation context survives reloads.
   useEffect(() => {
@@ -86,6 +92,34 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
     }
     userIdRef.current = uid;
   }, []);
+
+  // Restore the saved conversation after mount (kept out of the initial state to
+  // avoid an SSR/CSR hydration mismatch). The chat then survives a page reload
+  // instead of resetting to the greeting.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (Array.isArray(saved?.messages) && saved.messages.length) {
+          setMessages(saved.messages);
+        }
+        if (saved?.sessionId) setSessionId(saved.sessionId);
+      }
+    } catch { /* corrupt/unavailable storage — start fresh */ }
+    hydratedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  // Persist the conversation (only after the restore has run, so we never
+  // overwrite a saved thread with the empty greeting on first paint).
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      const trimmed = messages.slice(-60);   // cap growth
+      localStorage.setItem(storageKey, JSON.stringify({ messages: trimmed, sessionId }));
+    } catch { /* storage full/unavailable — non-fatal */ }
+  }, [messages, sessionId, storageKey]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -134,6 +168,13 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
     }
   }
 
+  function resetChat() {
+    setMessages([{ role: 'ai', content: greeting }]);
+    setSessionId(null);
+    setInput('');
+    try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+  }
+
   function rate(msg, idx, { verdict, reason, comment }) {
     rateAnswer({
       query: msg.query, verdict, reason, comment, mode: msg.mode,
@@ -145,6 +186,18 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
 
   return (
     <div className="chat-wrap glass">
+      <div className="chat-topbar">
+        <span className="chat-topbar-title">دستیار هوشمند</span>
+        <button
+          type="button"
+          className="chat-reset"
+          onClick={resetChat}
+          disabled={loading || messages.length <= 1}
+          title="شروع گفتگوی تازه"
+        >
+          گفتگوی جدید
+        </button>
+      </div>
       <div className="chat-scroll" ref={scrollRef}>
         {messages.map((msg, i) => (
           <div key={i} className={`chat-msg ${msg.role === 'user' ? 'from-user' : 'from-ai'}`}>

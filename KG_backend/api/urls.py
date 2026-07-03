@@ -17,6 +17,9 @@ urlpatterns = [
     # /api/search/ -> semantic, cross-lingual per-car site search (replaces the
     # English-only SQL LIKE search). Falls back to LIKE if the index is missing.
     path('api/search/', views.search_view, name='search'),
+    # /api/purchase-request/ -> legal-entity documentation purchase request (POST).
+    # Declared before the <brand> patterns so "api" is never read as a brand.
+    path('api/purchase-request/', views.purchase_request_view, name='purchase_request'),
 
     # /                                            -> distinct list of brands
     path('', views.brands_list_view, name='brands_list'),
