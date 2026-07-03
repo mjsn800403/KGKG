@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Icon from './Icon';
 
 // Renders a doc-grid of cards with the prototype's staggered "explode" reveal.
-// items: [{ href, icon, title, go }]
+// items: [{ href, icon: <Icon name>, title, go }]
 export default function CardGrid({ items }) {
   const gridRef = useRef(null);
 
@@ -22,7 +23,7 @@ export default function CardGrid({ items }) {
     <div className="doc-grid" ref={gridRef}>
       {items.map((it) => (
         <Link key={it.href} href={it.href} className="doc-card explode glass">
-          <div className="icon">{it.icon}</div>
+          <div className="icon"><Icon name={it.icon} /></div>
           <div>
             <h4>{it.title}</h4>
             {it.sub && <div className="doc-card-sub" dir="ltr">{it.sub}</div>}

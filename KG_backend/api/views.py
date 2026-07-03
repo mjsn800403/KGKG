@@ -7,7 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from bs4 import BeautifulSoup
-from .models import Car
+from .models import Car, PurchaseRequest
 from .ratelimit import rate_limited, require_admin_token
 
 def brands_list_view(request):
@@ -116,6 +116,63 @@ def assist_feedback_view(request):
     except Exception:
         pass
     return JsonResponse({'ok': True})
+
+
+ALLOWED_DOC_TYPES = {'parts', 'manual', 'standard_time', 'special_tools', 'full_spec'}
+
+
+@csrf_exempt
+@rate_limited('purchase', 10, 60)
+def purchase_request_view(request):
+    """POST /api/purchase-request/  body:
+       {brand, model, year, documents[], company, landline, mobile, reg_no, note?}
+
+    Stores a legal-entity documentation purchase request so the sales team can
+    follow up. Returns {ok: true, id}. Validates the required fields server-side
+    (never trust the client) and keeps only known document ids.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    try:
+        body = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'بدنه درخواست نامعتبر است.'}, status=400)
+
+    def _clean(v, limit):
+        return (str(v or '')).strip()[:limit]
+
+    brand = _clean(body.get('brand'), 120)
+    model = _clean(body.get('model'), 200)
+    year = _clean(body.get('year'), 20)
+    company = _clean(body.get('company'), 200)
+    landline = _clean(body.get('landline'), 40)
+    mobile = _clean(body.get('mobile'), 40)
+    reg_no = _clean(body.get('reg_no'), 60)
+    note = _clean(body.get('note'), 2000)
+
+    raw_docs = body.get('documents') or []
+    if not isinstance(raw_docs, list):
+        raw_docs = []
+    documents = [d for d in raw_docs if d in ALLOWED_DOC_TYPES]
+
+    if not (brand and model and year):
+        return JsonResponse({'error': 'برند، مدل و سال خودرو الزامی است.'}, status=400)
+    if not documents:
+        return JsonResponse({'error': 'حداقل یک نوع مستند را انتخاب کنید.'}, status=400)
+    if not (company and landline and mobile and reg_no):
+        return JsonResponse(
+            {'error': 'برای اشخاص حقوقی، نام شرکت، تلفن ثابت، تلفن همراه و شماره ثبتی الزامی است.'},
+            status=400)
+
+    try:
+        pr = PurchaseRequest.objects.create(
+            brand=brand, model=model, year=year, documents=documents,
+            company=company, landline=landline, mobile=mobile, reg_no=reg_no, note=note,
+        )
+    except Exception as e:
+        return JsonResponse({'error': f'ثبت درخواست ناموفق بود: {e}'}, status=500)
+
+    return JsonResponse({'ok': True, 'id': pr.id})
 
 
 def _post_body(request):

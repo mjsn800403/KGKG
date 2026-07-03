@@ -5,7 +5,20 @@ import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
 import SearchBox from '@/components/SearchBox';
 
-const ICONS = ['▣', '⌖', '◷', '⚙', '◧', '◩', '⬡', '⊞'];
+// Pick a meaningful icon from the section title; fall back to a rotation so
+// neighbouring cards still look distinct.
+const FALLBACK_ICONS = ['manual', 'parts', 'clock', 'wrench', 'catalog', 'bulletin', 'wiring', 'gear'];
+function iconFor(title, i) {
+  const t = String(title || '').toLowerCase();
+  if (/part|catalog/.test(t)) return 'parts';
+  if (/wiring|electric|diagram/.test(t)) return 'wiring';
+  if (/labor|labour|time|flat rate/.test(t)) return 'clock';
+  if (/tool|equipment/.test(t)) return 'wrench';
+  if (/bulletin|tsb|campaign/.test(t)) return 'bulletin';
+  if (/repair|manual|service|procedure/.test(t)) return 'manual';
+  if (/feature|new car|spec/.test(t)) return 'car';
+  return FALLBACK_ICONS[i % FALLBACK_ICONS.length];
+}
 
 export default async function ModelPage({ params }) {
   const raw = await params;
@@ -21,14 +34,14 @@ export default async function ModelPage({ params }) {
   const items = [
     {
       href: `${base}/assistant`,
-      icon: '🤖',
+      icon: 'bot',
       title: 'دستیار هوشمند',
       sub: 'تشخیص عیب از روی علائم یا کد خطا (DTC) + راهنمای تعمیر',
       go: 'گفتگو با دستیار ←',
     },
     ...nodes.map((node, i) => ({
       href: `${base}/${encodeURIComponent(node.title)}`,
-      icon: ICONS[i % ICONS.length],
+      icon: iconFor(node.title, i),
       title: node.title,
       go: 'ورود به مستند ←',
     })),
