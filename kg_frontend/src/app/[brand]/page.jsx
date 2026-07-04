@@ -1,5 +1,6 @@
 // app/[brand]/page.js — years for a brand, in the dashboard shell
 import { fetchBrands } from '@/utils/api';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
@@ -22,7 +23,7 @@ export default async function BrandPage({ params }) {
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">{brand}</h1>
       <div className="page-sub">// SELECT_MODEL_YEAR</div>

@@ -150,6 +150,18 @@ def purchase_request_view(request):
     reg_no = _clean(body.get('reg_no'), 60)
     note = _clean(body.get('note'), 2000)
 
+    def _int_or_none(v):
+        try:
+            n = int(v)
+            return n if 0 < n < 1_000_000 else None
+        except (TypeError, ValueError):
+            return None
+
+    employees_count = _int_or_none(body.get('employees_count'))
+    seats_count = _int_or_none(body.get('seats_count'))
+    wants_demo = bool(body.get('wants_demo'))
+    wants_ai_assistant = bool(body.get('wants_ai_assistant'))
+
     raw_docs = body.get('documents') or []
     if not isinstance(raw_docs, list):
         raw_docs = []
@@ -163,11 +175,17 @@ def purchase_request_view(request):
         return JsonResponse(
             {'error': 'برای اشخاص حقوقی، نام شرکت، تلفن ثابت، تلفن همراه و شماره ثبتی الزامی است.'},
             status=400)
+    if not employees_count or not seats_count:
+        return JsonResponse(
+            {'error': 'تعداد پرسنل شرکت و تعداد کاربران مورد نیاز را وارد کنید.'},
+            status=400)
 
     try:
         pr = PurchaseRequest.objects.create(
             brand=brand, model=model, year=year, documents=documents,
             company=company, landline=landline, mobile=mobile, reg_no=reg_no, note=note,
+            employees_count=employees_count, seats_count=seats_count,
+            wants_demo=wants_demo, wants_ai_assistant=wants_ai_assistant,
         )
     except Exception as e:
         return JsonResponse({'error': f'ثبت درخواست ناموفق بود: {e}'}, status=500)

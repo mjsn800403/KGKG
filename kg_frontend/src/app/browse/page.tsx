@@ -1,5 +1,6 @@
 // app/browse/page.js — dashboard fleet view (real cars)
 import DashboardShell from '@/components/DashboardShell';
+import UserChip from '@/components/UserChip';
 import FleetView from '@/components/FleetView';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
@@ -16,7 +17,7 @@ export default async function Browse() {
     <DashboardShell>
       <div className="topbar">
         <div className="breadcrumb"><b>خودروهای فعال</b></div>
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">پنل دسترسی به مستندات فنی</h1>
       <div className="page-sub">// ACTIVE_VEHICLE_ACCESS.LIST</div>

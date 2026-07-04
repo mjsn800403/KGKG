@@ -2,6 +2,7 @@
 // The static "search" segment takes precedence over the sibling [...path]
 // catch-all in the App Router, so it never collides with node navigation.
 import { searchNodes, buildNodeHref } from '@/utils/api';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
@@ -35,7 +36,7 @@ export default async function SearchPage({ params, searchParams }) {
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} />
         <SearchBox brand={brand} year={year} model={model} initialQuery={q} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">نتایج جستجو{q ? `: ${q}` : ''}</h1>
       <div className="page-sub">{`// SEARCH_RESULTS — ${results.length} نتیجه`}</div>

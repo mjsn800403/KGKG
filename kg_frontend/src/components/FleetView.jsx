@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { getPortalUser, logActivity } from '../utils/api';
 
 // Model families whose name spans more than one word — checked before the
 // default "first word" rule so "Land Cruiser Base" groups under "Land Cruiser"
@@ -22,7 +23,24 @@ export function familyOf(carName) {
 // dropdowns and the fleet-grid are driven by REAL cars from the backend.
 // All cars show by default; the model chips narrow to one family (e.g. all
 // bZ4X trims together), composing with the brand/year dropdowns.
-export default function FleetView({ cars }) {
+export default function FleetView({ cars: allCars }) {
+  // If a portal seat is logged in, the fleet is narrowed to the cars the admin
+  // granted to that specific user (the company can never see more than it
+  // bought; the user can never see more than the company). No session (local
+  // dev / legacy flow) shows everything, as before.
+  const [grantedKeys, setGrantedKeys] = useState(null);
+  useEffect(() => {
+    const u = getPortalUser();
+    if (u && Array.isArray(u.accesses)) {
+      setGrantedKeys(new Set(u.accesses.map((a) => `${a.car.brand}|${a.car.year}|${a.car.model}`)));
+      logActivity('view_fleet', 'مشاهده فهرست خودروهای فعال');
+    }
+  }, []);
+  const cars = useMemo(() => {
+    if (!grantedKeys) return allCars;
+    return allCars.filter((c) => grantedKeys.has(`${c.brand_name}|${c.year}|${c.car_name}`));
+  }, [allCars, grantedKeys]);
+
   const [brand, setBrand] = useState('');     // '' = all
   const [year, setYear] = useState('');       // '' = all
   const [family, setFamily] = useState('');   // '' = all model families

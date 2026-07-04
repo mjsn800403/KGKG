@@ -24,8 +24,11 @@ export default function PurchaseForm({ cars }) {
   const [form, setForm] = useState({
     brand: '', model: '', year: '',
     company: '', landline: '', mobile: '', reg_no: '', note: '',
+    employees_count: '', seats_count: '',
   });
   const [docs, setDocs] = useState([]);
+  const [wantsDemo, setWantsDemo] = useState(false);
+  const [wantsAI, setWantsAI] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -62,6 +65,10 @@ export default function PurchaseForm({ cars }) {
       setError('برای اشخاص حقوقی، نام شرکت، تلفن ثابت، تلفن همراه و شماره ثبتی الزامی است.');
       return;
     }
+    if (!String(form.employees_count).trim() || !String(form.seats_count).trim()) {
+      setError('تعداد پرسنل شرکت و تعداد کاربران مورد نیاز را وارد کنید.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -75,14 +82,20 @@ export default function PurchaseForm({ cars }) {
         mobile: form.mobile.trim(),
         reg_no: form.reg_no.trim(),
         note: form.note.trim(),
+        employees_count: Number(form.employees_count) || null,
+        seats_count: Number(form.seats_count) || null,
+        wants_demo: wantsDemo,
+        wants_ai_assistant: wantsAI,
       });
       showModal(
         'درخواست شما ثبت شد',
         'کارشناسان ما در اولین فرصت با شما تماس خواهند گرفت. از اعتماد شما سپاسگزاریم.',
         '✓'
       );
-      setForm({ brand: '', model: '', year: '', company: '', landline: '', mobile: '', reg_no: '', note: '' });
+      setForm({ brand: '', model: '', year: '', company: '', landline: '', mobile: '', reg_no: '', note: '', employees_count: '', seats_count: '' });
       setDocs([]);
+      setWantsDemo(false);
+      setWantsAI(false);
     } catch (err) {
       setError(err.message || 'ثبت درخواست ناموفق بود. کمی بعد دوباره تلاش کنید.');
     } finally {
@@ -168,6 +181,50 @@ export default function PurchaseForm({ cars }) {
           <label>تلفن همراه <span className="req-star">*</span></label>
           <input type="tel" dir="ltr" value={form.mobile} onChange={set('mobile')} placeholder="09XXXXXXXXX" />
         </div>
+      </div>
+
+      <div className="pform-section">ابعاد سازمان و کاربران</div>
+      <div className="pform-grid">
+        <div className="field">
+          <label>تعداد پرسنل شرکت <span className="req-star">*</span></label>
+          <input
+            type="number" inputMode="numeric" dir="ltr" min="1"
+            value={form.employees_count} onChange={set('employees_count')}
+            placeholder="مثلاً 120"
+          />
+        </div>
+        <div className="field">
+          <label>تعداد کاربران مورد نیاز (صندلی) <span className="req-star">*</span></label>
+          <input
+            type="number" inputMode="numeric" dir="ltr" min="1"
+            value={form.seats_count} onChange={set('seats_count')}
+            placeholder="مثلاً 5"
+          />
+        </div>
+      </div>
+
+      <div className="pform-section">گزینه‌های اختیاری</div>
+      <div className="doc-chips">
+        <button
+          type="button"
+          className={`doc-chip${wantsDemo ? ' active' : ''}`}
+          onClick={() => setWantsDemo((v) => !v)}
+          aria-pressed={wantsDemo}
+        >
+          <span className="tick">✓</span>
+          <Icon name="info" size={16} />
+          درخواست نسخه دمو (آزمایشی)
+        </button>
+        <button
+          type="button"
+          className={`doc-chip${wantsAI ? ' active' : ''}`}
+          onClick={() => setWantsAI((v) => !v)}
+          aria-pressed={wantsAI}
+        >
+          <span className="tick">✓</span>
+          <Icon name="bot" size={16} />
+          دستیار هوش مصنوعی (افزودنی)
+        </button>
       </div>
 
       <div className="field">

@@ -1,5 +1,7 @@
-// app/purchase/page.tsx — legal-entity documentation purchase request form.
-import DashboardShell from '@/components/DashboardShell';
+// app/purchase/page.tsx — PUBLIC purchase/demo request page, reached from the
+// landing page (deliberately NOT part of the logged-in dashboard: buying and
+// requesting a demo happen before any account exists).
+import Link from 'next/link';
 import PurchaseForm from '@/components/PurchaseForm';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
@@ -19,14 +21,20 @@ export default async function Purchase() {
   }
 
   return (
-    <DashboardShell>
-      <div className="topbar">
-        <div className="breadcrumb"><b>درخواست خرید مستندات</b></div>
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
-      </div>
-      <h1 className="page-title">درخواست خرید مستندات فنی</h1>
-      <div className="page-sub">// PURCHASE_REQUEST</div>
-      <PurchaseForm cars={cars} />
-    </DashboardShell>
+    <div className="screen fade" id="purchase-public">
+      <main className="main" style={{ maxWidth: 920, margin: '0 auto', padding: '32px 20px' }}>
+        <div className="topbar">
+          <div className="breadcrumb">
+            <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              → بازگشت به صفحه اصلی
+            </Link>
+          </div>
+          <div className="userchip"><div className="avatar">KG</div> KGTECHVAULT Company</div>
+        </div>
+        <h1 className="page-title">درخواست خرید مستندات فنی</h1>
+        <div className="page-sub">// PURCHASE_REQUEST — ثبت درخواست خرید یا نسخه دمو</div>
+        <PurchaseForm cars={cars} />
+      </main>
+    </div>
   );
 }
