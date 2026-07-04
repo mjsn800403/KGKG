@@ -193,6 +193,116 @@ export async function submitPurchaseRequest(payload) {
   return data;
 }
 
+// --- portal auth (company seats issued by the admin) ------------------------
+// Token + user snapshot live in localStorage so the dashboard can show the
+// company name and filter the fleet by granted cars.
+const PORTAL_TOKEN_KEY = 'kg_portal_token';
+const PORTAL_USER_KEY = 'kg_portal_user';
+
+export function getPortalToken() {
+  try { return localStorage.getItem(PORTAL_TOKEN_KEY) || ''; } catch { return ''; }
+}
+
+export function getPortalUser() {
+  try { return JSON.parse(localStorage.getItem(PORTAL_USER_KEY) || 'null'); } catch { return null; }
+}
+
+export function setPortalSession(token, user) {
+  try {
+    if (token) localStorage.setItem(PORTAL_TOKEN_KEY, token);
+    else localStorage.removeItem(PORTAL_TOKEN_KEY);
+    if (user) localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(PORTAL_USER_KEY);
+  } catch { /* storage unavailable */ }
+}
+
+export async function portalLogin(username, password) {
+  const res = await fetch(`${API_BASE}/api/auth/login/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ورود ناموفق بود: ${res.status}`);
+  setPortalSession(data.token, data.user);
+  return data;
+}
+
+export async function portalLogout() {
+  const token = getPortalToken();
+  setPortalSession('', null);
+  if (!token) return;
+  try {
+    await fetch(`${API_BASE}/api/auth/logout/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch { /* best-effort */ }
+}
+
+// Best-effort usage signal for the admin's activity report.
+export async function logActivity(action, detail = '') {
+  const token = getPortalToken();
+  if (!token) return;
+  try {
+    await fetch(`${API_BASE}/api/activity/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, detail }),
+    });
+  } catch { /* never block the UI on telemetry */ }
+}
+
+// --- admin panel API ---------------------------------------------------------
+// All gated server-side by KG_ADMIN_TOKEN (Bearer). Uses the same stored token
+// as the review queue below.
+async function adminFetch(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...adminHeaders(),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 503) {
+    const err = new Error(data?.error || 'unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(data?.error || `admin api: ${res.status}`);
+  return data;
+}
+
+export const adminApi = {
+  overview: () => adminFetch('/api/admin/overview/'),
+  requests: () => adminFetch('/api/admin/requests/'),
+  setRequestStatus: (id, status) =>
+    adminFetch(`/api/admin/requests/${id}/status/`, { method: 'POST', body: JSON.stringify({ status }) }),
+  cars: () => adminFetch('/api/admin/cars/'),
+  companies: () => adminFetch('/api/admin/companies/'),
+  createCompany: (payload) =>
+    adminFetch('/api/admin/companies/', { method: 'POST', body: JSON.stringify(payload) }),
+  companyDetail: (id) => adminFetch(`/api/admin/companies/${id}/`),
+  updateCompany: (id, payload) =>
+    adminFetch(`/api/admin/companies/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
+  setCompanyAccess: (id, accesses) =>
+    adminFetch(`/api/admin/companies/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses }) }),
+  users: (companyId) =>
+    adminFetch(`/api/admin/users/${companyId ? `?company_id=${companyId}` : ''}`),
+  createUser: (payload) =>
+    adminFetch('/api/admin/users/', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (id, payload) =>
+    adminFetch(`/api/admin/users/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
+  setUserAccess: (id, accesses) =>
+    adminFetch(`/api/admin/users/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses }) }),
+  activity: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/activity/${qs ? `?${qs}` : ''}`);
+  },
+};
+
 // --- admin auth (review queue + pin) ---------------------------------------
 // The pin and review-queue endpoints are admin-gated server-side (KG_ADMIN_TOKEN).
 // The token is typed by the admin at runtime and kept only in sessionStorage —

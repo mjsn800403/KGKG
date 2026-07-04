@@ -3,6 +3,7 @@
 // vehicle (its DTC / symptom diagnostic index + manual), so answers and links
 // are about THIS car.
 import DashboardShell from '@/components/DashboardShell';
+import UserChip from '@/components/UserChip';
 import Breadcrumb from '@/components/Breadcrumb';
 import SearchBox from '@/components/SearchBox';
 import AssistantChat from '@/components/AssistantChat';
@@ -18,7 +19,7 @@ export default async function CarAssistantPage({ params }) {
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} path={['دستیار هوشمند']} />
         <SearchBox brand={brand} year={year} model={model} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">دستیار هوشمند — {model} {year}</h1>
       <div className="page-sub">// AI_DIAGNOSTIC_ASSISTANT</div>

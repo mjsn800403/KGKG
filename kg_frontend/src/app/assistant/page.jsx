@@ -2,6 +2,7 @@
 // INSIDE each car (the customer picks the vehicle first, then diagnoses faults /
 // asks repair questions scoped to that car). This page just routes there.
 import DashboardShell from '@/components/DashboardShell';
+import UserChip from '@/components/UserChip';
 import CardGrid from '@/components/CardGrid';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
@@ -32,7 +33,7 @@ export default async function AssistantPickerPage() {
     <DashboardShell>
       <div className="topbar">
         <div className="breadcrumb"><b>دستیار هوشمند</b></div>
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">دستیار هوشمند سرویس</h1>
       <div className="page-sub">{'// اول خودرو را انتخاب کن، بعد عیب را بگو یا کد خطا را وارد کن'}</div>

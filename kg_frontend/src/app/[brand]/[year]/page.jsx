@@ -1,5 +1,6 @@
 // app/[brand]/[year]/page.js — cars for a brand+year, in the dashboard shell
 import { fetchYearData } from '@/utils/api';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
@@ -22,7 +23,7 @@ export default async function YearPage({ params }) {
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">{brand} {year}</h1>
       <div className="page-sub">// SELECT_VEHICLE</div>

@@ -1,7 +1,25 @@
 from django.urls import path
-from . import views
+from . import views, portal
 
 urlpatterns = [
+    # Portal auth (company seats issued by the admin).
+    path('api/auth/login/', portal.login_view, name='portal_login'),
+    path('api/auth/logout/', portal.logout_view, name='portal_logout'),
+    path('api/auth/me/', portal.me_view, name='portal_me'),
+    path('api/activity/', portal.activity_view, name='portal_activity'),
+    # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).
+    path('api/admin/overview/', portal.admin_overview_view, name='admin_overview'),
+    path('api/admin/requests/', portal.admin_requests_view, name='admin_requests'),
+    path('api/admin/requests/<int:req_id>/status/', portal.admin_request_status_view, name='admin_request_status'),
+    path('api/admin/cars/', portal.admin_cars_view, name='admin_cars'),
+    path('api/admin/companies/', portal.admin_companies_view, name='admin_companies'),
+    path('api/admin/companies/<int:company_id>/', portal.admin_company_detail_view, name='admin_company_detail'),
+    path('api/admin/companies/<int:company_id>/access/', portal.admin_company_access_view, name='admin_company_access'),
+    path('api/admin/users/', portal.admin_users_view, name='admin_users'),
+    path('api/admin/users/<int:user_id>/', portal.admin_user_detail_view, name='admin_user_detail'),
+    path('api/admin/users/<int:user_id>/access/', portal.admin_user_access_view, name='admin_user_access'),
+    path('api/admin/activity/', portal.admin_activity_view, name='admin_activity'),
+
     # /api/assist/  -> local RAG + relationship-graph retrieval (POST or GET).
     # Declared before the <brand> patterns so "api" is never read as a brand.
     path('api/assist/', views.assist_view, name='assist'),

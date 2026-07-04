@@ -3,6 +3,7 @@
 // cross-link target, e.g. "Labor Times: Other Variant"). Served straight
 // from the car's source folder by the backend's ?page= endpoint.
 import { fetchRawPage } from '@/utils/api';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import ContentRenderer from '@/components/ContentRenderer';
@@ -26,7 +27,7 @@ export default async function RawPage({ params }) {
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} path={[page?.title || file]} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">{page?.title || file}</h1>
       <div className="page-sub">// DOCUMENT_VIEW</div>

@@ -2,11 +2,36 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { portalLogin } from '@/utils/api';
 
 export default function Login() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [captcha, setCaptcha] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Step 1 verifies real credentials against the backend; the captcha/OTP
+  // steps stay as the confirmation UX but only run after a successful login.
+  async function submitCredentials() {
+    if (busy) return;
+    setError('');
+    if (!username.trim() || !password) {
+      setError('نام کاربری و رمز عبور را وارد کنید.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await portalLogin(username.trim(), password);
+      setStep(2);
+    } catch (e) {
+      setError((e as Error).message || 'ورود ناموفق بود.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="screen fade login-screen" id="login">
@@ -22,9 +47,19 @@ export default function Login() {
                 <p>AUTHENTICATION // STEP 1 OF 3</p>
               </div>
               <div className="steps"><i className="done"></i><i></i><i></i></div>
-              <div className="field"><label>نام کاربری</label><input type="text" placeholder="مثلاً: khadamatgostar_0142" /></div>
-              <div className="field"><label>رمز عبور</label><input type="password" placeholder="••••••••••" /></div>
-              <button className="btn btn-accent full" onClick={() => setStep(2)}>ادامه ←</button>
+              <div className="field"><label>نام کاربری</label>
+                <input type="text" placeholder="نام کاربری صادرشده توسط ادمین" value={username}
+                  onChange={(e) => setUsername(e.target.value)} />
+              </div>
+              <div className="field"><label>رمز عبور</label>
+                <input type="password" placeholder="••••••••••" value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && submitCredentials()} />
+              </div>
+              {error && <div className="pform-error" style={{ marginBottom: 12 }}>{error}</div>}
+              <button className="btn btn-accent full" onClick={submitCredentials} disabled={busy}>
+                {busy ? 'در حال بررسی…' : 'ادامه ←'}
+              </button>
               <div className="auth-foot">رمز را فراموش کرده‌اید؟ <a href="#">بازیابی حساب</a></div>
             </div>
           </div>
@@ -43,7 +78,7 @@ export default function Login() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div className="chk"></div><span>من ربات نیستم</span></div>
                 <small>KGTV-VERIFY</small>
               </div>
-              <button className="btn btn-accent full" onClick={() => setStep(3)}>ادامه ←</button>
+              <button className="btn btn-accent full" onClick={() => captcha && setStep(3)}>ادامه ←</button>
             </div>
           </div>
         )}

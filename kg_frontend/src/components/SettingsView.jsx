@@ -40,7 +40,7 @@ export default function SettingsView() {
           <>
             <div className="acct-card">
               <h3><Icon name="building" /> مشخصات حساب</h3>
-              <div className="acct-row"><span className="k">نام شرکت</span><span className="v">شرکت خدمات گستر سپهر گیتی</span></div>
+              <div className="acct-row"><span className="k">نام شرکت</span><span className="v">KGTECHVAULT Company</span></div>
               <div className="acct-row"><span className="k">نوع حساب</span><span className="v">شخص حقوقی</span></div>
               <div className="acct-row"><span className="k">پشتیبانی</span><span className="v ltr">021-92001404</span></div>
               <div className="acct-row"><span className="k">ایمیل</span><span className="v ltr">mj.salimi@khadamatgostar.com</span></div>

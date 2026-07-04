@@ -1,5 +1,6 @@
 // app/[brand]/[year]/[model]/[[...path]]/page.js
 import { fetchNodes } from '@/utils/api';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
@@ -37,7 +38,7 @@ export default async function NodePage({ params }) {
         <div className="topbar">
           <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
           <SearchBox brand={brand} year={year} model={model} />
-          <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+          <UserChip />
         </div>
         <h1 className="page-title">خطا</h1>
         <div className="error-box">
@@ -61,7 +62,7 @@ export default async function NodePage({ params }) {
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
         <SearchBox brand={brand} year={year} model={model} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">{currentTitle}</h1>
       <div className="page-sub">// {isLeafWithContent ? 'DOCUMENT_VIEW' : 'SECTION_INDEX'}</div>
