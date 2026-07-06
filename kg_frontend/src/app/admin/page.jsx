@@ -16,22 +16,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/Icon';
-import { adminApi, getAdminToken, setAdminToken } from '@/utils/api';
+import { adminApi, adminLogin, adminLogout, getAdminToken, getAdminUser, setAdminToken } from '@/utils/api';
+import { DEPARTMENT_PRESETS, PACKAGES, ROLES, packageLabel, roleWithDepartment } from '@/lib/packages';
 
-const ROLES = [
-  { id: 'after_sales_manager', label: 'مدیر خدمات پس از فروش' },
-  { id: 'after_sales_head', label: 'رئیس خدمات پس از فروش' },
-  { id: 'technical_expert', label: 'کارشناس فنی' },
-  { id: 'after_sales_supervisor', label: 'سرپرست خدمات پس از فروش' },
-  { id: 'technical_staff', label: 'پرسنل خدمات فنی' },
-];
+const DOCS = PACKAGES.map((p) => ({ id: p.id, label: p.label }));
+const ALL_DOC_IDS = DOCS.map((d) => d.id);
 
-const DOCS = [
-  { id: 'parts', label: 'فهرست قطعات' },
-  { id: 'manual', label: 'منوال تعمیر' },
-  { id: 'standard_time', label: 'زمان استاندارد' },
-  { id: 'special_tools', label: 'ابزار مخصوص' },
-  { id: 'full_spec', label: 'مشخصات کامل' },
+const ACCESS_PRESETS = [
+  { id: 'all', label: 'همه پکیج‌ها', docs: ALL_DOC_IDS },
+  { id: 'manager', label: 'مدیر (همه)', docs: ALL_DOC_IDS },
+  { id: 'specialist', label: 'کارشناس (راهنما+قطعات)', docs: ['manual', 'parts'] },
+  { id: 'parts_only', label: 'فقط قطعات', docs: ['parts'] },
 ];
 
 const REQ_STATUS = {
@@ -58,21 +53,37 @@ function fmtDate(iso) {
 
 export default function AdminPage() {
   const [section, setSection] = useState('overview');
-  const [needToken, setNeedToken] = useState(false);
-  const [tokenInput, setTokenInput] = useState('');
+  const [needToken, setNeedToken] = useState(true);
+  const [adminUser, setAdminUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginBusy, setLoginBusy] = useState(false);
   const [flash, setFlash] = useState('');
   const [companyPrefill, setCompanyPrefill] = useState(null);
+
+  useEffect(() => {
+    const token = getAdminToken();
+    setNeedToken(!token);
+    setAdminUser(getAdminUser());
+    setAuthReady(true);
+  }, []);
 
   const guard = useCallback(async (fn) => {
     try {
       return await fn();
     } catch (e) {
-      if (e?.unauthorized) { setNeedToken(true); return null; }
+      if (e?.unauthorized) { setNeedToken(true); setAdminUser(null); return null; }
       setFlash(e?.message || 'خطای نامشخص');
       setTimeout(() => setFlash(''), 5000);
       return null;
     }
   }, []);
+
+  const handleLogout = () => {
+    adminLogout();
+    setNeedToken(true);
+    setAdminUser(null);
+  };
 
   return (
     <div className="screen fade" id="admin-panel">
@@ -83,14 +94,14 @@ export default function AdminPage() {
             <span>پنل مدیریت</span>
           </Link>
           {SECTIONS.map((s) => (
-            <a
+            <button
               key={s.id}
+              type="button"
               className={`sb-link${section === s.id ? ' active' : ''}`}
               onClick={() => setSection(s.id)}
-              style={{ cursor: 'pointer' }}
             >
               <Icon name={s.icon} /> {s.label}
-            </a>
+            </button>
           ))}
           <div style={{ marginTop: 'auto', paddingTop: 30 }}>
             <Link className="sb-link" href="/">
@@ -101,27 +112,55 @@ export default function AdminPage() {
         <main className="main">
           <div className="topbar">
             <div className="breadcrumb"><b>مدیریت سامانه</b></div>
-            <div className="userchip"><div className="avatar">AD</div> KGTECHVAULT Company — ادمین</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="userchip">
+                <div className="avatar">AD</div>
+                {adminUser?.username ? `${adminUser.username} — ادمین` : 'KGTECHVAULT — ادمین'}
+              </div>
+              {!needToken && (
+                <button className="btn" onClick={handleLogout}>خروج</button>
+              )}
+            </div>
           </div>
 
           {flash && <div className="pform-error" style={{ marginBottom: 16 }}>{flash}</div>}
 
-          {needToken ? (
+          {!authReady ? (
+            <div className="empty-state">در حال بارگذاری…</div>
+          ) : needToken ? (
             <div className="card glass" style={{ maxWidth: 480, padding: 24 }}>
               <h3 style={{ marginTop: 0 }}>ورود ادمین</h3>
               <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>
-                توکن مدیریتی (KG_ADMIN_TOKEN) را وارد کنید.
+                نام کاربری و رمز عبور مدیر سامانه (توسعه: admin / admin)
               </p>
-              <div className="field">
-                <label>توکن مدیریتی</label>
-                <input type="password" dir="ltr" value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} />
-              </div>
-              <button
-                className="btn btn-accent"
-                onClick={() => { setAdminToken(tokenInput.trim()); setNeedToken(false); }}
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (loginBusy) return;
+                  setLoginBusy(true);
+                  try {
+                    await adminLogin(loginForm.username.trim(), loginForm.password);
+                    setNeedToken(false);
+                    setAdminUser(getAdminUser());
+                  } catch (err) {
+                    setFlash(err.message || 'ورود ناموفق');
+                  } finally {
+                    setLoginBusy(false);
+                  }
+                }}
               >
-                ورود
+              <div className="field">
+                <label>نام کاربری</label>
+                <input dir="ltr" placeholder="admin" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>رمز عبور</label>
+                <input type="password" dir="ltr" placeholder="••••••" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} />
+              </div>
+              <button className="btn btn-accent" type="submit" disabled={loginBusy}>
+                {loginBusy ? 'در حال ورود…' : 'ورود'}
               </button>
+              </form>
             </div>
           ) : (
             <>
@@ -242,10 +281,138 @@ function Catalog({ guard }) {
 }
 
 // ---------------------------------------------------------------------------
+function SeatPlanTable({ plan }) {
+  if (!plan?.length) return null;
+  return (
+    <table className="seat-plan-table adm-table">
+      <thead>
+        <tr><th>نقش</th><th>واحد</th><th>تعداد</th><th>توضیح</th></tr>
+      </thead>
+      <tbody>
+        {plan.map((row, i) => {
+          const role = ROLES.find((r) => r.id === row.role);
+          const label = roleWithDepartment(role?.label || row.role, row.department);
+          return (
+            <tr key={i}>
+              <td>{label}</td>
+              <td>{row.department || '—'}</td>
+              <td dir="ltr">{row.count}</td>
+              <td style={{ color: 'var(--text-dim)' }}>{row.note || '—'}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function IssueUsersWizard({ request, companies, guard, onDone }) {
+  const [companyId, setCompanyId] = useState('');
+  const [drafts, setDrafts] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState([]);
+
+  useEffect(() => {
+    const match = companies.find((c) => c.name === request.company);
+    const cid = match?.id ? String(match.id) : '';
+    setCompanyId(cid);
+    const rows = [];
+    (request.seat_plan || []).forEach((row, ri) => {
+      const slug = (request.company || 'co').replace(/\s+/g, '_').slice(0, 12).toLowerCase();
+      for (let i = 0; i < (row.count || 0); i += 1) {
+        rows.push({
+          key: `${ri}-${i}`,
+          username: `${slug}_${row.role}_${ri + 1}_${i + 1}`,
+          display_name: '',
+          role: row.role,
+          department: row.department || '',
+          note: row.note || '',
+        });
+      }
+    });
+    setDrafts(rows);
+    setResults([]);
+  }, [request, companies]);
+
+  const issue = async () => {
+    if (!companyId) return;
+    setBusy(true);
+    const out = [];
+    for (const d of drafts) {
+      if (!d.username.trim()) continue;
+      const r = await guard(() => adminApi.createUser({
+        company_id: Number(companyId),
+        username: d.username.trim(),
+        display_name: d.display_name.trim(),
+        role: d.role,
+      }));
+      if (r) out.push({ username: r.user.username, password: r.password });
+    }
+    setResults(out);
+    setBusy(false);
+    if (out.length) onDone?.();
+  };
+
+  if (!request.seat_plan?.length) {
+    return <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>این درخواست برنامه صندلی ندارد.</p>;
+  }
+
+  return (
+    <div className="admin-edit-panel glass" style={{ padding: 14, marginTop: 12 }}>
+      <div className="pform-section">صدور سریع کاربران از برنامه سازمانی</div>
+      <div className="field" style={{ maxWidth: 360, marginBottom: 12 }}>
+        <label>شرکت</label>
+        <select className="adm-select" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+          <option value="">انتخاب شرکت…</option>
+          {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      {drafts.map((d, idx) => (
+        <div key={d.key} className="wizard-user-row pform-grid">
+          <div className="field">
+            <label>نام کاربری</label>
+            <input dir="ltr" value={d.username}
+              onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, username: e.target.value } : x))} />
+          </div>
+          <div className="field">
+            <label>نام نمایشی</label>
+            <input value={d.display_name}
+              onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, display_name: e.target.value } : x))} />
+          </div>
+          <div className="field">
+            <label>نقش</label>
+            <select className="adm-select" value={d.role}
+              onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, role: e.target.value } : x))}>
+              {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </div>
+        </div>
+      ))}
+      <button className="btn btn-accent" disabled={busy || !companyId || !drafts.length} onClick={issue}>
+        {busy ? 'در حال صدور…' : `صدور ${drafts.length} کاربر`}
+      </button>
+      {results.length > 0 && (
+        <div style={{ marginTop: 12, fontSize: 13 }}>
+          <b>رمزهای صادرشده:</b>
+          {results.map((r) => (
+            <div key={r.username} dir="ltr" style={{ fontFamily: 'monospace', marginTop: 4 }}>
+              {r.username} / {r.password}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 function Requests({ guard, onCreateCompany }) {
   const [items, setItems] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [wizardFor, setWizardFor] = useState(null);
   const load = useCallback(() => {
     guard(adminApi.requests).then((d) => d && setItems(d.items));
+    guard(adminApi.companies).then((d) => d && setCompanies(d.items));
   }, [guard]);
   useEffect(load, [load]);
 
@@ -285,6 +452,12 @@ function Requests({ guard, onCreateCompany }) {
                 مستندات: {(r.documents || []).map((d) => DOCS.find((x) => x.id === d)?.label || d).join('، ') || '—'}
                 {r.note && <div style={{ color: 'var(--text-dim)', marginTop: 4 }}>یادداشت: {r.note}</div>}
               </div>
+              {(r.seat_plan?.length > 0) && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="pform-section">برنامه صندلی سازمان</div>
+                  <SeatPlanTable plan={r.seat_plan} />
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {['reviewing', 'approved', 'rejected'].filter((s) => s !== r.status).map((s) => (
                   <button key={s} className="btn" onClick={() => setStatus(r.id, s)}>
@@ -307,7 +480,15 @@ function Requests({ guard, onCreateCompany }) {
                 >
                   تعریف شرکت از این درخواست
                 </button>
+                {r.seat_plan?.length > 0 && (
+                  <button className="btn" onClick={() => setWizardFor(wizardFor === r.id ? null : r.id)}>
+                    {wizardFor === r.id ? 'بستن صدور سریع' : 'صدور سریع کاربران'}
+                  </button>
+                )}
               </div>
+              {wizardFor === r.id && (
+                <IssueUsersWizard request={r} companies={companies} guard={guard} onDone={load} />
+              )}
             </div>
           );
         })}
@@ -318,66 +499,110 @@ function Requests({ guard, onCreateCompany }) {
 }
 
 // ---------------------------------------------------------------------------
-// Shared: pick cars + doc layers. `scope` limits selectable cars/docs (used for
-// per-user grants so they can't exceed the company's purchase).
-function AccessEditor({ cars, value, onChange, scope }) {
-  const scoped = scope
-    ? cars.filter((c) => scope.some((s) => s.car.id === c.id))
-    : cars;
+// Access editor — admin has full catalog; explicit doc selection (no empty=all).
+function AccessEditor({ cars, value, onChange, copyFromUsers = [], onCopyFrom }) {
+  const [q, setQ] = useState('');
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return cars;
+    return cars.filter((c) => `${c.brand} ${c.model} ${c.year}`.toLowerCase().includes(needle));
+  }, [cars, q]);
 
   const rowFor = (carId) => value.find((v) => v.car_id === carId);
 
   const toggleCar = (carId) => {
     if (rowFor(carId)) onChange(value.filter((v) => v.car_id !== carId));
-    else onChange([...value, { car_id: carId, documents: [] }]);
+    else onChange([...value, { car_id: carId, documents: [...ALL_DOC_IDS] }]);
+  };
+
+  const setDocs = (carId, documents) => {
+    onChange(value.map((v) => (v.car_id === carId ? { ...v, documents } : v)));
   };
 
   const toggleDoc = (carId, doc) => {
-    onChange(value.map((v) => {
-      if (v.car_id !== carId) return v;
-      const has = v.documents.includes(doc);
-      return { ...v, documents: has ? v.documents.filter((d) => d !== doc) : [...v.documents, doc] };
-    }));
+    const row = rowFor(carId);
+    if (!row) return;
+    const has = row.documents.includes(doc);
+    setDocs(carId, has ? row.documents.filter((d) => d !== doc) : [...row.documents, doc]);
   };
 
-  const allowedDocs = (carId) => {
-    if (!scope) return DOCS;
-    const s = scope.find((x) => x.car.id === carId);
-    if (!s || !s.documents || s.documents.length === 0) return DOCS;
-    return DOCS.filter((d) => s.documents.includes(d.id));
-  };
+  const applyPreset = (carId, docs) => setDocs(carId, [...docs]);
 
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
-      {scoped.map((c) => {
-        const row = rowFor(c.id);
-        return (
-          <div key={c.id} className="glass" style={{ padding: '10px 14px', borderRadius: 10 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={!!row} onChange={() => toggleCar(c.id)} />
-              <b>{c.brand} {c.model}</b>
-              <span style={{ color: 'var(--text-dim)' }}>{c.year}</span>
-            </label>
-            {row && (
-              <div className="doc-chips" style={{ marginTop: 8 }}>
-                {allowedDocs(c.id).map((d) => (
-                  <button
-                    key={d.id} type="button"
-                    className={`doc-chip${row.documents.includes(d.id) ? ' active' : ''}`}
-                    onClick={() => toggleDoc(c.id, d.id)}
-                  >
-                    <span className="tick">✓</span>{d.label}
-                  </button>
-                ))}
-                <span style={{ fontSize: 12, color: 'var(--text-faint)', alignSelf: 'center' }}>
-                  (خالی = همه لایه‌های مجاز)
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {scoped.length === 0 && <div className="empty-state">خودرویی در محدوده مجاز نیست.</div>}
+    <div>
+      <input
+        className="access-editor-search"
+        placeholder="جستجو برند / مدل / سال…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+      {copyFromUsers?.length > 0 && onCopyFrom && (
+        <div className="field" style={{ marginBottom: 12, maxWidth: 360 }}>
+          <label>کپی دسترسی از کاربر دیگر</label>
+          <select className="adm-select" defaultValue="" onChange={(e) => {
+            const u = copyFromUsers.find((x) => String(x.id) === e.target.value);
+            if (u) onCopyFrom(u.accesses.map((a) => ({ car_id: a.car.id, documents: a.documents?.length ? a.documents : [...ALL_DOC_IDS] })));
+            e.target.value = '';
+          }}>
+            <option value="">انتخاب کاربر…</option>
+            {copyFromUsers.map((u) => (
+              <option key={u.id} value={u.id}>{u.username}{u.display_name ? ` (${u.display_name})` : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="access-editor-presets">
+        {ACCESS_PRESETS.map((p) => (
+          <button key={p.id} type="button" className="btn" style={{ fontSize: 12 }}
+            onClick={() => onChange(value.map((v) => ({ ...v, documents: [...p.docs] })))}
+            disabled={!value.length}>
+            {p.label} — همه خودروهای انتخاب‌شده
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {filtered.map((c) => {
+          const row = rowFor(c.id);
+          const docs = row?.documents || [];
+          const allOn = ALL_DOC_IDS.every((d) => docs.includes(d));
+          return (
+            <div key={c.id} className="glass" style={{ padding: '10px 14px', borderRadius: 10 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!row} onChange={() => toggleCar(c.id)} />
+                <b>{c.brand} {c.model}</b>
+                <span style={{ color: 'var(--text-dim)' }}>{c.year}</span>
+              </label>
+              {row && (
+                <>
+                  <div className="doc-chips" style={{ marginTop: 8 }}>
+                    <button type="button"
+                      className={`doc-chip${allOn ? ' active' : ''}`}
+                      onClick={() => setDocs(c.id, allOn ? [] : [...ALL_DOC_IDS])}>
+                      <span className="tick">✓</span>همه پکیج‌ها
+                    </button>
+                    {DOCS.map((d) => (
+                      <button key={d.id} type="button"
+                        className={`doc-chip${docs.includes(d.id) ? ' active' : ''}`}
+                        onClick={() => toggleDoc(c.id, d.id)}>
+                        <span className="tick">✓</span>{d.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="access-editor-car-actions">
+                    {ACCESS_PRESETS.map((p) => (
+                      <button key={p.id} type="button" className="btn"
+                        onClick={() => applyPreset(c.id, p.docs)}>{p.label}</button>
+                    ))}
+                    <button type="button" className="btn" onClick={() => setDocs(c.id, [])}>پاک کردن</button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <div className="empty-state">خودرویی یافت نشد.</div>}
+      </div>
     </div>
   );
 }
@@ -386,10 +611,11 @@ function AccessEditor({ cars, value, onChange, scope }) {
 function Companies({ guard, prefilled, onPrefillUsed }) {
   const [companies, setCompanies] = useState([]);
   const [cars, setCars] = useState([]);
-  const [selected, setSelected] = useState(null);     // deep company dict
+  const [selected, setSelected] = useState(null);
   const [accessDraft, setAccessDraft] = useState([]);
+  const [editForm, setEditForm] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: '', reg_no: '', landline: '', mobile: '', employees_count: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '' });
+  const [form, setForm] = useState({ name: '', department_label: 'خدمات پس از فروش', reg_no: '', landline: '', mobile: '', employees_count: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '' });
 
   useEffect(() => {
     if (!prefilled) return;
@@ -408,8 +634,33 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
   const openCompany = async (id) => {
     const d = await guard(() => adminApi.companyDetail(id));
     if (!d) return;
-    setSelected(d.company);
-    setAccessDraft(d.company.accesses.map((a) => ({ car_id: a.car.id, documents: a.documents })));
+    const co = d.company;
+    setSelected(co);
+    setAccessDraft(co.accesses.map((a) => ({
+      car_id: a.car.id,
+      documents: a.documents?.length ? a.documents : [...ALL_DOC_IDS],
+    })));
+    setEditForm({
+      name: co.name,
+      department_label: co.department_label || 'خدمات پس از فروش',
+      reg_no: co.reg_no || '',
+      landline: co.landline || '',
+      mobile: co.mobile || '',
+      employees_count: co.employees_count ?? '',
+      seats_count: co.seats_count ?? '',
+      note: co.note || '',
+    });
+  };
+
+  const saveCompanyDetails = async () => {
+    if (!selected || !editForm) return;
+    const payload = {
+      ...editForm,
+      employees_count: Number(editForm.employees_count) || null,
+      seats_count: Number(editForm.seats_count) || null,
+    };
+    const d = await guard(() => adminApi.updateCompany(selected.id, payload));
+    if (d) { setSelected(d.company); load(); }
   };
 
   const saveAccess = async () => {
@@ -431,7 +682,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
     const d = await guard(() => adminApi.createCompany(payload));
     if (d) {
       setCreating(false);
-      setForm({ name: '', reg_no: '', landline: '', mobile: '', employees_count: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '' });
+      setForm({ name: '', department_label: 'خدمات پس از فروش', reg_no: '', landline: '', mobile: '', employees_count: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '' });
       load();
       setSelected(d.company);
       setAccessDraft([]);
@@ -454,6 +705,11 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
           <div className="pform-grid">
             <div className="field"><label>نام شرکت *</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            <div className="field"><label>نام واحد سازمانی</label>
+              <select className="adm-select" value={form.department_label} onChange={(e) => setForm({ ...form, department_label: e.target.value })}>
+                {DEPARTMENT_PRESETS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
             <div className="field"><label>شماره ثبتی</label>
               <input dir="ltr" value={form.reg_no} onChange={(e) => setForm({ ...form, reg_no: e.target.value })} /></div>
             <div className="field"><label>تلفن ثابت</label>
@@ -490,7 +746,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
               </div>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>
-              کاربران: {c.users_count} · صندلی: {c.seats_count ?? '—'} · پرسنل: {c.employees_count ?? '—'}
+              واحد: {c.department_label || 'خدمات پس از فروش'} · کاربران: {c.users_count} · صندلی: {c.seats_count ?? '—'} · پرسنل: {c.employees_count ?? '—'}
             </div>
 
             {selected?.id === c.id && (
@@ -500,6 +756,35 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
                   <button className="btn" onClick={() => toggleField('ai_assistant_enabled')}>{selected.ai_assistant_enabled ? 'حذف دستیار AI' : 'فعال‌سازی دستیار AI'}</button>
                   <button className="btn" onClick={() => toggleField('is_demo')}>{selected.is_demo ? 'خروج از حالت دمو' : 'تبدیل به دمو'}</button>
                 </div>
+                {editForm && (
+                  <div className="admin-edit-panel">
+                    <div className="pform-section">ویرایش مشخصات شرکت</div>
+                    <div className="pform-grid">
+                      <div className="field"><label>نام شرکت</label>
+                        <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
+                      <div className="field"><label>واحد سازمانی</label>
+                        <select className="adm-select" value={editForm.department_label}
+                          onChange={(e) => setEditForm({ ...editForm, department_label: e.target.value })}>
+                          {DEPARTMENT_PRESETS.map((d) => <option key={d} value={d}>{d}</option>)}
+                        </select></div>
+                      <div className="field"><label>شماره ثبتی</label>
+                        <input dir="ltr" value={editForm.reg_no} onChange={(e) => setEditForm({ ...editForm, reg_no: e.target.value })} /></div>
+                      <div className="field"><label>تلفن ثابت</label>
+                        <input dir="ltr" value={editForm.landline} onChange={(e) => setEditForm({ ...editForm, landline: e.target.value })} /></div>
+                      <div className="field"><label>تلفن همراه</label>
+                        <input dir="ltr" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })} /></div>
+                      <div className="field"><label>تعداد پرسنل</label>
+                        <input type="number" dir="ltr" value={editForm.employees_count}
+                          onChange={(e) => setEditForm({ ...editForm, employees_count: e.target.value })} /></div>
+                      <div className="field"><label>تعداد صندلی</label>
+                        <input type="number" dir="ltr" value={editForm.seats_count}
+                          onChange={(e) => setEditForm({ ...editForm, seats_count: e.target.value })} /></div>
+                    </div>
+                    <div className="field"><label>یادداشت</label>
+                      <textarea value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} /></div>
+                    <button className="btn btn-accent" style={{ marginTop: 8 }} onClick={saveCompanyDetails}>ذخیره مشخصات شرکت</button>
+                  </div>
+                )}
                 <div className="pform-section">خودروها و لایه‌های خریداری‌شده</div>
                 <AccessEditor cars={cars} value={accessDraft} onChange={setAccessDraft} />
                 <button className="btn btn-accent" style={{ marginTop: 12 }} onClick={saveAccess}>ذخیره دسترسی شرکت</button>
@@ -520,11 +805,12 @@ function Users({ guard }) {
   const [cars, setCars] = useState([]);
   const [companyFilter, setCompanyFilter] = useState('');
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ company_id: '', username: '', display_name: '', role: 'technical_expert', ai_assistant_enabled: false });
-  const [issued, setIssued] = useState(null);          // {username, password}
-  const [editingAccess, setEditingAccess] = useState(null); // user id
+  const [form, setForm] = useState({ company_id: '', username: '', display_name: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
+  const [issued, setIssued] = useState(null);
+  const [editingAccess, setEditingAccess] = useState(null);
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [profileDraft, setProfileDraft] = useState(null);
   const [accessDraft, setAccessDraft] = useState([]);
-  const [companyScope, setCompanyScope] = useState(null);
 
   const load = useCallback(() => {
     guard(() => adminApi.users(companyFilter || undefined)).then((d) => d && setUsers(d.items));
@@ -538,25 +824,56 @@ function Users({ guard }) {
     if (d) {
       setIssued({ username: d.user.username, password: d.password });
       setCreating(false);
-      setForm({ company_id: '', username: '', display_name: '', role: 'technical_expert', ai_assistant_enabled: false });
+      setForm({ company_id: '', username: '', display_name: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
       load();
     }
   };
 
   const openAccess = async (u) => {
-    const d = await guard(() => adminApi.companyDetail(u.company_id));
-    if (!d) return;
-    setCompanyScope(d.company.accesses);
-    setAccessDraft(u.accesses.map((a) => ({ car_id: a.car.id, documents: a.documents })));
+    setAccessDraft(u.accesses.map((a) => ({
+      car_id: a.car.id,
+      documents: a.documents?.length ? a.documents : [...ALL_DOC_IDS],
+    })));
     setEditingAccess(u.id);
+    setEditingProfile(null);
+  };
+
+  const openProfile = (u) => {
+    setEditingProfile(u.id);
+    setEditingAccess(null);
+    setProfileDraft({
+      role: u.role,
+      display_name: u.display_name || '',
+      access_expires_at: u.access_expires_at
+        ? new Date(u.access_expires_at).toISOString().slice(0, 16)
+        : '',
+    });
+  };
+
+  const saveProfile = async (id) => {
+    if (!profileDraft) return;
+    const payload = {
+      role: profileDraft.role,
+      display_name: profileDraft.display_name,
+      access_expires_at: profileDraft.access_expires_at
+        ? new Date(profileDraft.access_expires_at).toISOString()
+        : null,
+    };
+    const d = await guard(() => adminApi.updateUser(id, payload));
+    if (d) { setEditingProfile(null); load(); }
   };
 
   const saveAccess = async () => {
-    const d = await guard(() => adminApi.setUserAccess(editingAccess, accessDraft));
+    const d = await guard(() => adminApi.setUserAccess(editingAccess, accessDraft, true));
     if (d) { setEditingAccess(null); load(); }
   };
 
   const patch = async (id, payload) => {
+    if (payload.delete) {
+      await guard(() => adminApi.deleteUser(id));
+      load();
+      return;
+    }
     const d = await guard(() => adminApi.updateUser(id, payload));
     if (d?.password) setIssued({ username: d.user.username, password: d.password });
     load();
@@ -605,11 +922,14 @@ function Users({ guard }) {
               <input dir="ltr" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="e.g. gostar_manager_01" /></div>
             <div className="field"><label>نام نمایشی</label>
               <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
+            <div className="field"><label>انقضای دسترسی (اختیاری)</label>
+              <input type="datetime-local" dir="ltr" value={form.access_expires_at}
+                onChange={(e) => setForm({ ...form, access_expires_at: e.target.value ? new Date(e.target.value).toISOString() : '' })} /></div>
           </div>
           <div className="doc-chips" style={{ margin: '10px 0' }}>
             <button type="button" className={`doc-chip${form.ai_assistant_enabled ? ' active' : ''}`}
               onClick={() => setForm({ ...form, ai_assistant_enabled: !form.ai_assistant_enabled })}>
-              <span className="tick">✓</span>دستیار هوش مصنوعی (در صورت فعال بودن برای شرکت)
+              <span className="tick">✓</span>دستیار AI (نیازمند پکیج راهنمای تعمیرات)
             </button>
           </div>
           <button className="btn btn-accent" onClick={create} disabled={!form.company_id || !form.username}>
@@ -628,27 +948,65 @@ function Users({ guard }) {
                 <span style={{ color: 'var(--text-dim)', marginRight: 10 }}>{u.company} · {u.role_label}</span>
               </div>
               <div style={{ display: 'flex', gap: 8, fontSize: 12.5 }}>
-                {u.ai_assistant_enabled && <span className="adm-status st-ok">AI</span>}
+                {u.ai_eligible && <span className="adm-status st-ok">AI فعال</span>}
+                {u.ai_assistant_enabled && !u.ai_eligible && <span className="adm-status st-rev">AI (بدون مجوز)</span>}
+                {u.locked && <span className="adm-status st-no">قفل</span>}
                 <span className={`adm-status ${u.active ? 'st-ok' : 'st-no'}`}>{u.active ? 'فعال' : 'غیرفعال'}</span>
               </div>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>
-              دسترسی: {u.accesses.length ? u.accesses.map((a) => `${a.car.brand} ${a.car.model} ${a.car.year}`).join('، ') : 'هیچ خودرویی'}
+              پکیج‌ها: {(u.packages || []).map(packageLabel).join('، ') || '—'}
+              · دسترسی خودرو: {u.accesses.length ? u.accesses.map((a) => `${a.car.brand} ${a.car.model}`).join('، ') : 'هیچ'}
+              {u.access_expires_at && <> · انقضا: {fmtDate(u.access_expires_at)}</>}
               {u.last_login_at && <> · آخرین ورود: {fmtDate(u.last_login_at)}</>}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button className="btn" onClick={() => openProfile(u)}>ویرایش پروفایل</button>
               <button className="btn" onClick={() => openAccess(u)}>ویرایش دسترسی</button>
-              <button className="btn" onClick={() => patch(u.id, { active: !u.active })}>{u.active ? 'غیرفعال‌سازی' : 'فعال‌سازی'}</button>
+              <button className="btn" onClick={() => patch(u.id, { active: !u.active })}>{u.active ? 'غیرفعال' : 'فعال'}</button>
+              <button className="btn" onClick={() => patch(u.id, { locked: !u.locked })}>{u.locked ? 'باز کردن قفل' : 'قفل حساب'}</button>
               <button className="btn" onClick={() => patch(u.id, { reset_password: true })}>بازنشانی رمز</button>
               <button className="btn" onClick={() => patch(u.id, { ai_assistant_enabled: !u.ai_assistant_enabled })}>
                 {u.ai_assistant_enabled ? 'حذف AI' : 'فعال‌سازی AI'}
               </button>
+              <button className="btn" style={{ color: '#e5484d' }} onClick={() => {
+                if (window.confirm(`حذف کاربر ${u.username}؟`)) patch(u.id, { delete: true });
+              }}>حذف</button>
             </div>
 
+            {editingProfile === u.id && profileDraft && (
+              <div className="admin-edit-panel">
+                <div className="pform-section">ویرایش پروفایل کاربر</div>
+                <div className="pform-grid">
+                  <div className="field"><label>نقش سازمانی</label>
+                    <select className="adm-select" value={profileDraft.role}
+                      onChange={(e) => setProfileDraft({ ...profileDraft, role: e.target.value })}>
+                      {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select></div>
+                  <div className="field"><label>نام نمایشی</label>
+                    <input value={profileDraft.display_name}
+                      onChange={(e) => setProfileDraft({ ...profileDraft, display_name: e.target.value })} /></div>
+                  <div className="field"><label>انقضای دسترسی</label>
+                    <input type="datetime-local" dir="ltr" value={profileDraft.access_expires_at}
+                      onChange={(e) => setProfileDraft({ ...profileDraft, access_expires_at: e.target.value })} /></div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button className="btn btn-accent" onClick={() => saveProfile(u.id)}>ذخیره</button>
+                  <button className="btn" onClick={() => setEditingProfile(null)}>انصراف</button>
+                </div>
+              </div>
+            )}
+
             {editingAccess === u.id && (
-              <div style={{ marginTop: 14 }}>
-                <div className="pform-section">دسترسی این کاربر (زیرمجموعه خرید شرکت)</div>
-                <AccessEditor cars={cars} value={accessDraft} onChange={setAccessDraft} scope={companyScope} />
+              <div className="admin-edit-panel">
+                <div className="pform-section">پکیج‌ها و خودروها — دسترسی کامل ادمین</div>
+                <AccessEditor
+                  cars={cars}
+                  value={accessDraft}
+                  onChange={setAccessDraft}
+                  copyFromUsers={users.filter((x) => x.company_id === u.company_id && x.id !== u.id)}
+                  onCopyFrom={setAccessDraft}
+                />
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button className="btn btn-accent" onClick={saveAccess}>ذخیره</button>
                   <button className="btn" onClick={() => setEditingAccess(null)}>انصراف</button>

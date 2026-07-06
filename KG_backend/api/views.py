@@ -162,6 +162,17 @@ def purchase_request_view(request):
     wants_demo = bool(body.get('wants_demo'))
     wants_ai_assistant = bool(body.get('wants_ai_assistant'))
 
+    from .access import parse_seat_plan
+    seat_plan_raw = body.get('seat_plan')
+    seat_plan, seat_plan_err = parse_seat_plan(seat_plan_raw)
+    if seat_plan is None:
+        return JsonResponse({'error': seat_plan_err}, status=400)
+    plan_total = sum(r['count'] for r in seat_plan)
+    if seats_count and seats_count != plan_total:
+        return JsonResponse(
+            {'error': 'تعداد صندلی با جمع نقش‌های سازمانی همخوانی ندارد.'}, status=400)
+    seats_count = plan_total
+
     raw_docs = body.get('documents') or []
     if not isinstance(raw_docs, list):
         raw_docs = []
@@ -185,6 +196,7 @@ def purchase_request_view(request):
             brand=brand, model=model, year=year, documents=documents,
             company=company, landline=landline, mobile=mobile, reg_no=reg_no, note=note,
             employees_count=employees_count, seats_count=seats_count,
+            seat_plan=seat_plan,
             wants_demo=wants_demo, wants_ai_assistant=wants_ai_assistant,
         )
     except Exception as e:

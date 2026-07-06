@@ -8,7 +8,9 @@ urlpatterns = [
     path('api/auth/me/', portal.me_view, name='portal_me'),
     path('api/activity/', portal.activity_view, name='portal_activity'),
     # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).
+    path('api/admin/login/', portal.admin_login_view, name='admin_login'),
     path('api/admin/overview/', portal.admin_overview_view, name='admin_overview'),
+    path('api/admin/packages/', portal.admin_packages_view, name='admin_packages'),
     path('api/admin/requests/', portal.admin_requests_view, name='admin_requests'),
     path('api/admin/requests/<int:req_id>/status/', portal.admin_request_status_view, name='admin_request_status'),
     path('api/admin/cars/', portal.admin_cars_view, name='admin_cars'),

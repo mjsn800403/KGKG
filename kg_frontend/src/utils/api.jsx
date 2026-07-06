@@ -275,8 +275,21 @@ async function adminFetch(path, options = {}) {
   return data;
 }
 
+export async function adminLogin(username, password) {
+  const res = await fetch(`${API_BASE}/api/admin/login/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ورود ادمین ناموفق بود: ${res.status}`);
+  setAdminToken(data.token, data.admin);
+  return data;
+}
+
 export const adminApi = {
   overview: () => adminFetch('/api/admin/overview/'),
+  packages: () => adminFetch('/api/admin/packages/'),
   requests: () => adminFetch('/api/admin/requests/'),
   setRequestStatus: (id, status) =>
     adminFetch(`/api/admin/requests/${id}/status/`, { method: 'POST', body: JSON.stringify({ status }) }),
@@ -295,8 +308,13 @@ export const adminApi = {
     adminFetch('/api/admin/users/', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (id, payload) =>
     adminFetch(`/api/admin/users/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
-  setUserAccess: (id, accesses) =>
-    adminFetch(`/api/admin/users/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses }) }),
+  deleteUser: (id) =>
+    adminFetch(`/api/admin/users/${id}/`, { method: 'POST', body: JSON.stringify({ delete: true }) }),
+  setUserAccess: (id, accesses, overridePurchase = true) =>
+    adminFetch(`/api/admin/users/${id}/access/`, {
+      method: 'POST',
+      body: JSON.stringify({ accesses, override_purchase: overridePurchase }),
+    }),
   activity: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/activity/${qs ? `?${qs}` : ''}`);
@@ -309,16 +327,27 @@ export const adminApi = {
 // it is NEVER baked into the client bundle. Sent as a Bearer header, which the
 // Django gate (api/ratelimit.require_admin_token) verifies.
 const ADMIN_TOKEN_KEY = 'kg_admin_token';
+const ADMIN_USER_KEY = 'kg_admin_user';
 
 export function getAdminToken() {
   try { return sessionStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch { return ''; }
 }
 
-export function setAdminToken(token) {
+export function getAdminUser() {
+  try { return JSON.parse(sessionStorage.getItem(ADMIN_USER_KEY) || 'null'); } catch { return null; }
+}
+
+export function setAdminToken(token, admin = null) {
   try {
     if (token) sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
     else sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-  } catch { /* sessionStorage unavailable (SSR / privacy mode) */ }
+    if (admin) sessionStorage.setItem(ADMIN_USER_KEY, JSON.stringify(admin));
+    else if (!token) sessionStorage.removeItem(ADMIN_USER_KEY);
+  } catch { /* sessionStorage unavailable */ }
+}
+
+export function adminLogout() {
+  setAdminToken('', null);
 }
 
 function adminHeaders() {
