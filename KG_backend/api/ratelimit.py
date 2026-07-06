@@ -123,38 +123,6 @@ def rate_limited(name, default_limit, default_window):
 
 
 # ---------------------------------------------------------------------------
-# Admin gate (shared secret) — protects ranking-mutating + review endpoints
+# Admin gate — see admin_auth.py (env secret OR platform-admin session token)
 # ---------------------------------------------------------------------------
-def _configured_token():
-    return (os.environ.get('KG_ADMIN_TOKEN') or '').strip()
-
-
-def _presented_token(request):
-    auth = request.META.get('HTTP_AUTHORIZATION', '')
-    if auth.lower().startswith('bearer '):
-        return auth[7:].strip()
-    return (request.META.get('HTTP_X_ADMIN_TOKEN', '') or '').strip()
-
-
-def require_admin_token(view):
-    """Gate a view behind KG_ADMIN_TOKEN. Caller proves it via
-    `Authorization: Bearer <token>` or an `X-Admin-Token` header.
-
-    Fail-closed: if no token is configured we deny in production and only allow
-    in DEBUG (so local dev keeps working without ceremony). This is what stops an
-    anonymous client from pinning a poisoned "expert answer" or reading the
-    review queue."""
-    @wraps(view)
-    def wrapped(request, *args, **kwargs):
-        configured = _configured_token()
-        if not configured:
-            if getattr(settings, 'DEBUG', False):
-                return view(request, *args, **kwargs)
-            return JsonResponse(
-                {'error': 'admin_disabled',
-                 'detail': 'KG_ADMIN_TOKEN is not configured on the server.'},
-                status=503)
-        if not hmac.compare_digest(_presented_token(request), configured):
-            return JsonResponse({'error': 'unauthorized'}, status=401)
-        return view(request, *args, **kwargs)
-    return wrapped
+from .admin_auth import require_admin_token  # noqa: F401 — re-exported for callers

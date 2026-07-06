@@ -43,6 +43,7 @@ export default function Home() {
           <a href="#about">درباره ما</a>
           <a href="#coverage">پوشش خودرو</a>
           <a href="#how">روند کار</a>
+          <Link href="/purchase">سفارش / خرید</Link>
         </div>
         <div className="nav-right">
           <ThemeToggle />
@@ -83,7 +84,6 @@ export default function Home() {
         <p>دسترسی مستقیم به منوال تعمیر، فهرست قطعات، زمان‌های استاندارد و ابزار مخصوص تعمیراتی — دقیقاً برای مدل، سال و آپشن خودروی شما. بدون تخمین، بدون حدس.</p>
         <div className="hero-actions">
           <Link className="btn btn-accent" href="/login">ورود به پورتال ←</Link>
-          <Link className="btn" href="/purchase">درخواست خرید / نسخه دمو</Link>
           <a className="btn" href="#coverage">مشاهده پوشش خودروها</a>
         </div>
         <div className="vin-decode">VIN// در حال تجزیه شناسه خودرو<span className="cursor"></span></div>

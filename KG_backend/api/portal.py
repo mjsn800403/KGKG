@@ -21,13 +21,15 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import (
-    ActivityLog, AuthToken, Car, Company, CompanyCarAccess,
-    DOC_TYPE_CHOICES, PortalUser, PurchaseRequest, ROLE_CHOICES, UserCarAccess,
+    ActivityLog, AdminAuthToken, AuthToken, Car, Company, CompanyCarAccess,
+    PlatformAdmin, PortalUser, PurchaseRequest, UserCarAccess,
 )
-from .ratelimit import rate_limited, require_admin_token
-
-VALID_ROLES = {r for r, _ in ROLE_CHOICES}
-VALID_DOCS = {d for d, _ in DOC_TYPE_CHOICES}
+from .access import (
+    DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL, VALID_DOCS, VALID_ROLES,
+    normalize_role, role_label, user_ai_eligible, user_package_set,
+)
+from .admin_auth import require_admin_token
+from .ratelimit import rate_limited
 
 
 def _body(request):
@@ -50,9 +52,14 @@ def portal_user(request):
     if not key:
         return None
     token = AuthToken.objects.filter(key=key).select_related('user', 'user__company').first()
-    if token and token.user.active and token.user.company.active:
-        return token.user
-    return None
+    if not token or not token.user.active or not token.user.company.active:
+        return None
+    u = token.user
+    if u.locked:
+        return None
+    if u.access_expires_at and u.access_expires_at <= timezone.now():
+        return None
+    return u
 
 
 def _car_dict(car):
@@ -60,17 +67,25 @@ def _car_dict(car):
 
 
 def _user_dict(u, with_access=False):
+    dept = u.company.department_label if hasattr(u, 'company') else ''
     d = {
         'id': u.id, 'username': u.username, 'display_name': u.display_name,
-        'role': u.role, 'role_label': dict(ROLE_CHOICES).get(u.role, u.role),
+        'role': normalize_role(u.role),
+        'role_label': role_label(u.role, dept),
+        'role_level': ROLE_LEVEL.get(normalize_role(u.role)),
         'company_id': u.company_id, 'company': u.company.name,
-        'ai_assistant_enabled': u.ai_assistant_enabled, 'active': u.active,
+        'department_label': u.company.department_label,
+        'ai_assistant_enabled': u.ai_assistant_enabled,
+        'ai_eligible': user_ai_eligible(u),
+        'packages': sorted(user_package_set(u)) if with_access else [],
+        'active': u.active, 'locked': u.locked,
+        'access_expires_at': u.access_expires_at.isoformat() if u.access_expires_at else None,
         'created_at': u.created_at.isoformat(),
         'last_login_at': u.last_login_at.isoformat() if u.last_login_at else None,
     }
     if with_access:
         d['accesses'] = [
-            {'car': _car_dict(a.car), 'documents': a.documents}
+            {'car': _car_dict(a.car), 'documents': a.documents, 'admin_granted': a.admin_granted}
             for a in u.car_accesses.select_related('car')
         ]
     return d
@@ -78,7 +93,8 @@ def _user_dict(u, with_access=False):
 
 def _company_dict(c, deep=False):
     d = {
-        'id': c.id, 'name': c.name, 'reg_no': c.reg_no,
+        'id': c.id, 'name': c.name, 'department_label': c.department_label,
+        'reg_no': c.reg_no,
         'landline': c.landline, 'mobile': c.mobile,
         'employees_count': c.employees_count, 'seats_count': c.seats_count,
         'is_demo': c.is_demo, 'ai_assistant_enabled': c.ai_assistant_enabled,
@@ -112,6 +128,10 @@ def login_view(request):
         return JsonResponse({'error': 'نام کاربری یا رمز عبور اشتباه است.'}, status=401)
     if not user.active or not user.company.active:
         return JsonResponse({'error': 'این حساب غیرفعال شده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    if user.locked:
+        return JsonResponse({'error': 'این حساب قفل شده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    if user.access_expires_at and user.access_expires_at <= timezone.now():
+        return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
     user.last_login_at = timezone.now()
     user.save(update_fields=['last_login_at'])
     token = AuthToken.issue(user)
@@ -155,6 +175,28 @@ def activity_view(request):
 
 
 # ---------------------------------------------------------------------------
+# Platform admin login (default dev: admin / admin)
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@rate_limited('admin_login', 20, 60)
+def admin_login_view(request):
+    """POST /api/admin/login/ {username, password} -> {token, admin}"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    username = (b.get('username') or '').strip()
+    password = b.get('password') or ''
+    admin = PlatformAdmin.objects.filter(username__iexact=username).first()
+    if not admin or not admin.check_password(password):
+        return JsonResponse({'error': 'نام کاربری یا رمز عبور ادمین اشتباه است.'}, status=401)
+    if not admin.active:
+        return JsonResponse({'error': 'حساب ادمین غیرفعال است.'}, status=403)
+    token = AdminAuthToken.issue(admin)
+    return JsonResponse({'token': token.key, 'admin': {'username': admin.username}})
+
+
+# ---------------------------------------------------------------------------
 # Admin: overview / purchase requests
 # ---------------------------------------------------------------------------
 
@@ -180,6 +222,7 @@ def admin_requests_view(request):
         'documents': r.documents, 'company': r.company, 'landline': r.landline,
         'mobile': r.mobile, 'reg_no': r.reg_no, 'note': r.note,
         'employees_count': r.employees_count, 'seats_count': r.seats_count,
+        'seat_plan': r.seat_plan or [],
         'wants_demo': r.wants_demo, 'wants_ai_assistant': r.wants_ai_assistant,
         'status': r.status, 'handled': r.handled,
         'created_at': r.created_at.isoformat(),
@@ -208,6 +251,12 @@ def admin_request_status_view(request, req_id):
 # ---------------------------------------------------------------------------
 
 @require_admin_token
+def admin_packages_view(request):
+    """GET /api/admin/packages/ — subscription package catalog."""
+    return JsonResponse({'items': [{'id': p, 'label': l} for p, l in PACKAGE_CHOICES]})
+
+
+@require_admin_token
 def admin_cars_view(request):
     """GET /api/admin/cars/ — the FULL catalog (admin sees everything)."""
     return JsonResponse({'items': [_car_dict(c) for c in Car.objects.order_by('brand_name', 'car_name')]})
@@ -225,6 +274,7 @@ def admin_companies_view(request):
         try:
             c = Company.objects.create(
                 name=name,
+                department_label=(str(b.get('department_label') or 'خدمات پس از فروش')).strip()[:80],
                 reg_no=(str(b.get('reg_no') or '')).strip()[:60],
                 landline=(str(b.get('landline') or '')).strip()[:40],
                 mobile=(str(b.get('mobile') or '')).strip()[:40],
@@ -249,7 +299,7 @@ def admin_company_detail_view(request, company_id):
         return JsonResponse({'error': 'not found'}, status=404)
     if request.method == 'POST':
         b = _body(request)
-        for f in ('name', 'reg_no', 'landline', 'mobile', 'note'):
+        for f in ('name', 'reg_no', 'landline', 'mobile', 'note', 'department_label'):
             if f in b:
                 setattr(c, f, (str(b[f] or '')).strip())
         for f in ('employees_count', 'seats_count'):
@@ -319,17 +369,28 @@ def admin_users_view(request):
         company = Company.objects.filter(id=b.get('company_id')).first()
         if not company:
             return JsonResponse({'error': 'شرکت یافت نشد.'}, status=400)
-        role = b.get('role')
+        role = normalize_role(b.get('role'))
         if role not in VALID_ROLES:
             return JsonResponse({'error': 'نقش سازمانی نامعتبر است.'}, status=400)
         username = (str(b.get('username') or '')).strip()[:100]
         if not username:
             return JsonResponse({'error': 'نام کاربری الزامی است.'}, status=400)
         password = (str(b.get('password') or '')).strip() or _gen_password()
+        expires = b.get('access_expires_at')
+        access_expires_at = None
+        if expires:
+            try:
+                access_expires_at = timezone.datetime.fromisoformat(str(expires).replace('Z', '+00:00'))
+                if timezone.is_naive(access_expires_at):
+                    access_expires_at = timezone.make_aware(access_expires_at)
+            except (ValueError, TypeError):
+                access_expires_at = None
         u = PortalUser(
             company=company, username=username, role=role,
             display_name=(str(b.get('display_name') or '')).strip()[:150],
-            ai_assistant_enabled=bool(b.get('ai_assistant_enabled')) and company.ai_assistant_enabled,
+            ai_assistant_enabled=bool(b.get('ai_assistant_enabled')),
+            locked=bool(b.get('locked')),
+            access_expires_at=access_expires_at,
         )
         u.set_password(password)
         try:
@@ -348,25 +409,48 @@ def admin_users_view(request):
 @csrf_exempt
 @require_admin_token
 def admin_user_detail_view(request, user_id):
-    """POST /api/admin/users/<id>/ {active?, ai_assistant_enabled?, display_name?,
-    role?, reset_password?} — returns the new password when reset."""
+    """POST /api/admin/users/<id>/ — update, delete, reset password."""
     u = PortalUser.objects.filter(id=user_id).select_related('company').first()
     if not u:
         return JsonResponse({'error': 'not found'}, status=404)
     new_password = None
     if request.method == 'POST':
         b = _body(request)
+        if b.get('delete'):
+            u.tokens.all().delete()
+            u.delete()
+            return JsonResponse({'ok': True, 'deleted': True})
         if 'active' in b:
             u.active = bool(b['active'])
             if not u.active:
                 u.tokens.all().delete()
+        if 'locked' in b:
+            u.locked = bool(b['locked'])
+            if u.locked:
+                u.tokens.all().delete()
         if 'ai_assistant_enabled' in b:
-            u.ai_assistant_enabled = bool(b['ai_assistant_enabled']) and u.company.ai_assistant_enabled
+            u.ai_assistant_enabled = bool(b['ai_assistant_enabled'])
         if 'display_name' in b:
             u.display_name = (str(b['display_name'] or '')).strip()[:150]
-        if b.get('role') in VALID_ROLES:
-            u.role = b['role']
-        if b.get('reset_password'):
+        if b.get('role'):
+            role = normalize_role(b['role'])
+            if role in VALID_ROLES:
+                u.role = role
+        if 'access_expires_at' in b:
+            exp = b.get('access_expires_at')
+            if not exp:
+                u.access_expires_at = None
+            else:
+                try:
+                    dt = timezone.datetime.fromisoformat(str(exp).replace('Z', '+00:00'))
+                    u.access_expires_at = timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+                except (ValueError, TypeError):
+                    pass
+        if b.get('password'):
+            new_password = (str(b['password'] or '')).strip() or _gen_password()
+            u.set_password(new_password)
+            u.tokens.all().delete()
+        elif b.get('reset_password'):
             new_password = _gen_password()
             u.set_password(new_password)
             u.tokens.all().delete()
@@ -380,18 +464,20 @@ def admin_user_detail_view(request, user_id):
 @csrf_exempt
 @require_admin_token
 def admin_user_access_view(request, user_id):
-    """POST /api/admin/users/<id>/access/ {accesses: [{car_id, documents[]}]}
+    """POST /api/admin/users/<id>/access/ {accesses: [{car_id, documents[], admin_granted?}],
+    override_purchase?: bool}
 
-    Replaces the user's grants. Every grant is clamped to the company's
-    purchased scope — a user can never see a car or a document layer the
-    company didn't buy.
+    Purchase-based grants are clamped to company scope. Admin-granted entries
+    (admin_granted or override_purchase) bypass purchase limits.
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     u = PortalUser.objects.filter(id=user_id).select_related('company').first()
     if not u:
         return JsonResponse({'error': 'not found'}, status=404)
-    accesses = _body(request).get('accesses') or []
+    b = _body(request)
+    accesses = b.get('accesses') or []
+    override = bool(b.get('override_purchase'))
     if not isinstance(accesses, list):
         return JsonResponse({'error': 'accesses must be a list'}, status=400)
 
@@ -402,8 +488,16 @@ def admin_user_access_view(request, user_id):
     u.car_accesses.all().delete()
     for a in accesses:
         car_id = a.get('car_id')
+        if not Car.objects.filter(id=car_id).exists():
+            continue
+        admin_granted = bool(a.get('admin_granted')) or override
+        if admin_granted:
+            docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
+            UserCarAccess.objects.create(
+                user=u, car_id=car_id, documents=docs, admin_granted=True)
+            continue
         if car_id not in company_scope:
-            continue  # outside what the company bought
+            continue
         docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]
         UserCarAccess.objects.create(user=u, car_id=car_id, documents=docs)
     return JsonResponse({'user': _user_dict(u, with_access=True)})
@@ -427,7 +521,7 @@ def admin_activity_view(request):
         qs = qs.filter(user__company_id=request.GET['company_id'])
     items = [{
         'id': a.id, 'user': a.user.username, 'company': a.user.company.name,
-        'role_label': dict(ROLE_CHOICES).get(a.user.role, a.user.role),
+        'role_label': role_label(a.user.role, a.user.company.department_label),
         'action': a.action, 'detail': a.detail,
         'created_at': a.created_at.isoformat(),
     } for a in qs[:limit]]
