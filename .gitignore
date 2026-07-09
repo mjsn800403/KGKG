@@ -13,3 +13,10 @@
 /.venv
 /Cars_database
 /KG_backend/.venv
+
+# Env files and backups (never commit secrets/binaries)
+.env.prod
+.env.prod.bak
+*.bak
+*.bak_*
+KG_backend/staticfiles/

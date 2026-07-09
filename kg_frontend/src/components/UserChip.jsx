@@ -1,13 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getPortalUser } from '../utils/api';
+import { getPortalToken, getPortalUser, portalRefreshMe } from '../utils/api';
 
 // Topbar identity chip. Shows the logged-in seat's company + role; falls back
 // to the platform brand when no portal session exists.
 export default function UserChip() {
   const [user, setUser] = useState(null);
-  useEffect(() => { setUser(getPortalUser()); }, []);
+  useEffect(() => {
+    if (!getPortalToken()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const fresh = await portalRefreshMe();
+        if (!cancelled) setUser(fresh || getPortalUser());
+      } catch {
+        if (!cancelled) setUser(getPortalUser());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const label = user
     ? `${user.company} — ${user.role_label || ''}`

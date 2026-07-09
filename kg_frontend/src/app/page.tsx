@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 import Icon from '@/components/Icon';
@@ -8,6 +8,7 @@ import { showModal } from '@/components/Modal';
 
 export default function Home() {
   const rigRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Hero "rig" parallax — follows the cursor exactly as in the prototype.
   useEffect(() => {
@@ -34,12 +35,12 @@ export default function Home() {
 
   return (
     <div className="screen fade" id="landing">
-      <nav className="topnav">
+      <nav className={`topnav${menuOpen ? ' menu-open' : ''}`}>
         <Link className="brand" href="/">
           <img src="/logo.png" alt="KGtechvault" />
           <div className="name">KG<span>techvault</span></div>
         </Link>
-        <div className="navlinks">
+        <div className="navlinks" onClick={() => setMenuOpen(false)}>
           <a href="#about">درباره ما</a>
           <a href="#coverage">پوشش خودرو</a>
           <a href="#how">روند کار</a>
@@ -47,7 +48,22 @@ export default function Home() {
         </div>
         <div className="nav-right">
           <ThemeToggle />
-          <Link className="btn btn-accent" href="/login" data-tour="login-btn">ورود به حساب کاربری</Link>
+          <Link className="btn btn-accent nav-login" href="/login" data-tour="login-btn" aria-label="ورود به حساب کاربری">
+            <span className="nav-login-text">ورود به حساب کاربری</span>
+            <svg className="nav-login-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l-5-5 5-5" /><path d="M5 12h12" /></svg>
+          </Link>
+          <button
+            className="nav-burger"
+            aria-label={menuOpen ? 'بستن منو' : 'باز کردن منو'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(o => !o)}
+          >
+            {menuOpen ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            )}
+          </button>
         </div>
       </nav>
 

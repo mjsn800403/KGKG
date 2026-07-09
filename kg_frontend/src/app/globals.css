@@ -85,14 +85,18 @@ html[data-theme="light"]{
   color-scheme:light;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+/* scrollbar-gutter:stable reserves the scrollbar's space on every page, so the
+   vertical scrollbar no longer pops in/out (shifting content sideways) as you
+   navigate between short pages (login) and tall ones (landing/dashboard). */
+html{scroll-behavior:smooth;overflow-x:clip;scrollbar-gutter:stable}
+img{max-width:100%}
 body{
   background:var(--bg);
   color:var(--text);
   font-family:var(--fa);
   font-size:15.5px;
   line-height:1.75;              /* Persian text needs more leading than the ~1.2 default */
-  overflow-x:hidden;
+  overflow-x:clip;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
   text-rendering:optimizeLegibility;
@@ -209,6 +213,15 @@ html[data-theme="light"] #spotlight{mix-blend-mode:multiply;opacity:.22}
 .navlinks a::after{content:'';position:absolute;right:0;bottom:-6px;width:0;height:1px;background:var(--accent);transition:width .35s cubic-bezier(.2,.9,.3,1)}
 .navlinks a:hover::after{width:100%}
 .nav-right{display:flex;align-items:center;gap:14px}
+/* hamburger — hidden on desktop, replaces the inline navlinks on mobile */
+.nav-burger{
+  display:none;width:40px;height:40px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);color:var(--text-dim);cursor:pointer;place-items:center;transition:.25s;flex:none;
+}
+.nav-burger:hover{border-color:var(--accent);color:var(--accent)}
+.nav-burger svg{width:18px;height:18px}
+/* login button collapses to an icon-only control on phones (see ≤560 block) */
+.nav-login .nav-login-ico{display:none;width:18px;height:18px}
 .theme-toggle{
   width:40px;height:40px;border:1px solid var(--border);border-radius:50%;display:grid;place-items:center;
   cursor:pointer;background:var(--surface);transition:.3s;font-size:15px;color:var(--text-dim);
@@ -235,7 +248,7 @@ html[data-theme="light"] #spotlight{mix-blend-mode:multiply;opacity:.22}
 @keyframes fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* ===== LANDING ===== */
-.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:26px 48px 0;position:relative}
+.hero{min-height:100vh;min-height:100svh;display:flex;flex-direction:column;justify-content:center;padding:26px 48px 0;position:relative}
 .eyebrow{
   font-family:var(--mono);font-size:12.5px;font-weight:600;letter-spacing:.2em;color:var(--accent);
   display:flex;align-items:center;gap:10px;margin-bottom:22px;text-transform:uppercase;
@@ -316,7 +329,7 @@ footer{border-top:1px solid var(--border);background:var(--surface)}
 @keyframes heartbeat{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
 
 /* ===== LOGIN ===== */
-.login-screen{display:flex;min-height:100vh;align-items:center;justify-content:center;position:relative}
+.login-screen{display:flex;min-height:100vh;min-height:100svh;align-items:center;justify-content:center;position:relative;padding:60px 0 40px}
 .login-screen::before{
   content:'';position:absolute;inset:0;z-index:0;
   background:radial-gradient(circle at 50% 38%,var(--accent-glow),transparent 55%);
@@ -367,7 +380,7 @@ footer{border-top:1px solid var(--border);background:var(--surface)}
 .backlink:hover{color:var(--accent)}
 
 /* ===== DASHBOARD ===== */
-.shell{display:flex;min-height:100vh;padding-top:26px}
+.shell{display:flex;min-height:100vh;min-height:100svh;padding-top:26px}
 .sidebar{width:240px;flex:none;border-left:1px solid var(--border);padding:28px 22px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
 .sb-brand{display:flex;align-items:center;gap:10px;margin-bottom:36px;padding:0 6px;text-decoration:none;color:inherit}
 .sb-brand img{height:26px}
@@ -383,6 +396,7 @@ footer{border-top:1px solid var(--border);background:var(--surface)}
 .sb-link.active svg{color:var(--accent);opacity:1}
 .sb-link.active .dot{background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
 .sb-link:hover{color:var(--text);background:var(--surface-2)}
+.sb-logout-wrap{margin-top:auto;padding-top:30px}
 .main{flex:1;padding:34px 44px;max-width:100%;min-width:0}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:36px;flex-wrap:wrap;gap:14px}
 .breadcrumb{display:flex;align-items:center;gap:10px;font-family:var(--fa);font-size:13.5px;color:var(--text-dim);flex-wrap:wrap}
@@ -564,7 +578,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 .doc-card-sub{font-family:var(--mono);font-size:11px;color:var(--text-faint);margin-top:2px;line-height:1.5}
 
 /* ── AI assistant chat ─────────────────────────────────────────────────── */
-.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 260px);min-height:420px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;margin-top:8px}
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 260px);height:calc(100dvh - 260px);min-height:420px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden;margin-top:8px}
 .chat-topbar{
   display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;
   border-bottom:1px solid var(--border-soft);
@@ -749,12 +763,54 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   .hero h1{max-width:100%}
 }
 
+/* ── Touch devices: no hover-dependent affordances, bigger targets ─────── */
+@media (hover:none){
+  #spotlight{display:none}
+  .card:hover,.fleet-card:hover,.doc-card:hover,.btn:hover,.model-chip:hover{transform:none}
+  .doc-card.locked::after{opacity:1;background:rgba(0,0,0,.35)}
+}
+@media (pointer:coarse){
+  .btn{min-height:44px}
+  .sb-link{min-height:44px}
+  .dd-item{padding:13px 16px}
+  .vtab{padding:12px 14px}
+  .model-chip,.doc-chip{min-height:40px}
+  .navlinks a,.settings-tabs .stab{min-height:44px;display:flex;align-items:center}
+}
+
 /* ── Responsive: mobile ────────────────────────────────────────────────── */
 @media (max-width:880px){
   .topnav{padding:12px 18px}
-  .hero{padding:26px 18px 0;min-height:92vh}
+  .hero{padding:26px 18px 0;min-height:92vh;min-height:92svh}
   section{padding:70px 18px}
-  .navlinks{display:none}
+  /* keep the bar on one line — brand shrinks, controls stay put */
+  .topnav{gap:10px}
+  .nav-right{gap:10px;flex:none;flex-wrap:nowrap}
+  .brand{min-width:0;overflow:hidden}
+  .brand .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* nav links collapse into a hamburger panel instead of disappearing */
+  .nav-burger{display:grid}
+  .navlinks{
+    position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;
+    background:var(--bg-2);
+    border-bottom:1px solid var(--border);padding:6px 18px 12px;
+    box-shadow:var(--shadow);
+    opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity .25s,transform .25s;
+  }
+  .topnav.menu-open{background:var(--bg-2)}
+  .topnav.menu-open .navlinks{opacity:1;transform:none;pointer-events:auto}
+  .navlinks a{padding:14px 2px;border-bottom:1px solid var(--border-soft);font-size:15.5px}
+  .navlinks a:last-child{border-bottom:none}
+  .navlinks a::after{display:none}
+  /* keep decorative orbs from dominating small screens */
+  .orb1{width:320px;height:320px}
+  .orb2{width:260px;height:260px}
+  /* wide data tables scroll inside themselves instead of stretching the page */
+  .viewer-body table,.adm-table,.seat-plan-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* 16px inputs stop iOS Safari from zooming the page on focus */
+  .field input,.field select,.field textarea,.searchbox .search-input,.vin-box input,
+  .doc-search input,.chat-input,.fb-comment,.adm-select,.access-editor-search{font-size:16px}
+  .review-wrap{padding:16px 12px}
   .grid3,.grid4,.doc-grid{grid-template-columns:1fr}
   .shell{flex-direction:column}
   .sidebar{
@@ -765,8 +821,10 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   .sidebar::-webkit-scrollbar{display:none}
   .sb-brand{margin-bottom:0;margin-left:10px}
   .sb-brand span{display:none}
-  .sb-link{flex:none;padding:9px 12px;font-size:13.5px;border-right:none;border-bottom:2px solid transparent}
+  .sb-link{flex:none;padding:9px 12px;font-size:13.5px;border-right:none;border-bottom:2px solid transparent;white-space:nowrap}
   .sb-link.active{border-right-color:transparent;border-bottom-color:var(--accent)}
+  /* logout sits inline in the horizontal bar, not pushed down/away */
+  .sb-logout-wrap{margin-top:0;padding-top:0;margin-right:auto}
   .main{padding:24px 16px}
   .topbar{margin-bottom:24px}
   h1.page-title{font-size:24px}
@@ -795,6 +853,10 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   .brand .name{font-size:15px}
   .brand img{height:28px}
   .topnav .btn{padding:9px 13px;font-size:12.5px}
+  /* the login CTA becomes a compact icon button so brand+theme+login+burger all fit */
+  .nav-login{padding:0;width:40px;height:40px;justify-content:center;flex:none}
+  .nav-login .nav-login-text{display:none}
+  .nav-login .nav-login-ico{display:block}
   .hero h1{font-size:clamp(32px,10vw,48px)}
   .hero p{font-size:15.5px;line-height:2}
   .hero-actions{flex-direction:column;align-items:stretch;gap:12px}
@@ -815,6 +877,37 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   .chat-send{padding:0 16px}
   .foot-bottom{flex-direction:column;align-items:flex-start}
   .tour-help-btn{bottom:16px;left:16px}
+  .purchase-hero{padding:22px 16px}
+  .purchase-tour-step{flex-direction:column;gap:8px}
+  .notif-item{flex-wrap:wrap}
+  .acct-row{flex-wrap:wrap}
+  .acct-row .v.ltr{word-break:break-all}
+}
+
+/* ── Responsive: small phones ──────────────────────────────────────────── */
+@media (max-width:400px){
+  .topnav{padding:10px 12px}
+  .nav-right{gap:8px}
+  .theme-toggle,.nav-burger{width:36px;height:36px}
+  .topnav .btn{padding:8px 10px;font-size:12px}
+  .hero{padding:26px 14px 0}
+  section{padding:56px 14px}
+  .main{padding:20px 12px}
+  .stat-strip{gap:18px}
+  .fleet-grid{grid-template-columns:1fr}
+  .otp-row{gap:6px;justify-content:center}
+  .otp-row input{width:38px;font-size:16px}
+  .auth-card{padding:28px 18px}
+  .cta-strip{margin:0 14px 56px;padding:28px 20px}
+  .chat-msg{max-width:100%}
+  .viewer-body{padding:18px 12px}
+}
+
+/* ── Landscape phones / very short viewports ───────────────────────────── */
+@media (max-height:520px){
+  .hero{min-height:auto;padding-top:110px;padding-bottom:60px}
+  .login-screen{align-items:flex-start;padding:100px 0 40px}
+  .chat-wrap{height:auto;min-height:320px;max-height:calc(100dvh - 140px)}
 }
 
 /* ---- Admin panel ---------------------------------------------------------- */

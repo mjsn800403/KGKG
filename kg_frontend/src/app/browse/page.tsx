@@ -1,18 +1,9 @@
-// app/browse/page.js — dashboard fleet view (real cars)
+// app/browse/page.js — dashboard fleet view (live grants from backend)
 import DashboardShell from '@/components/DashboardShell';
 import UserChip from '@/components/UserChip';
 import FleetView from '@/components/FleetView';
-import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
-// Always render against the live backend (cars change over time); never bake
-// the fleet list into a static prerender at build time.
-export const dynamic = 'force-dynamic';
-
-export default async function Browse() {
-  const brands = await fetchAllBrands();
-  const nested = await Promise.all(brands.map((b: string) => fetchBrands(b)));
-  const cars = nested.flat();
-
+export default function Browse() {
   return (
     <DashboardShell>
       <div className="topbar">
@@ -21,7 +12,7 @@ export default async function Browse() {
       </div>
       <h1 className="page-title">پنل دسترسی به مستندات فنی</h1>
       <div className="page-sub">// ACTIVE_VEHICLE_ACCESS.LIST</div>
-      <FleetView cars={cars} />
+      <FleetView />
     </DashboardShell>
   );
 }

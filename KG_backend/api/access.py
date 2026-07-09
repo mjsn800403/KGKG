@@ -122,3 +122,17 @@ def user_ai_eligible(user):
     if not user.company.ai_assistant_enabled:
         return False
     return AI_REQUIRED_PACKAGE in user_package_set(user)
+
+
+def car_db_path(car):
+    """Absolute path to a car's content database on this server."""
+    from django.conf import settings
+    from pathlib import Path
+    main_dir = Path(settings.DATABASES['default']['NAME']).parent
+    return main_dir / (car.db_address or '').replace('\\', '/')
+
+
+def car_db_ready(car):
+    """True when the car's per-vehicle database file exists on disk."""
+    path = car_db_path(car)
+    return bool(car.db_address) and path.is_file()

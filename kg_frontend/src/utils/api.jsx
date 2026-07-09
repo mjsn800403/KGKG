@@ -228,6 +228,45 @@ export async function portalLogin(username, password) {
   return data;
 }
 
+/** Refresh the logged-in portal user from the server (picks up admin grant/revoke). */
+export async function portalRefreshMe() {
+  const token = getPortalToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/auth/me/`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    setPortalSession('', null);
+    const err = new Error('unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(data?.error || `me: ${res.status}`);
+  setPortalSession(token, data.user);
+  return data.user;
+}
+
+/** Cars this portal seat may open — always read live from the backend. */
+export async function fetchGrantedFleet() {
+  const token = getPortalToken();
+  if (!token) return [];
+  const res = await fetch(`${API_BASE}/api/auth/fleet/`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    setPortalSession('', null);
+    const err = new Error('unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(data?.error || `fleet: ${res.status}`);
+  return data.items || [];
+}
+
 export async function portalLogout() {
   const token = getPortalToken();
   setPortalSession('', null);

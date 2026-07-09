@@ -26,7 +26,7 @@ from .models import (
 )
 from .access import (
     DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL, VALID_DOCS, VALID_ROLES,
-    normalize_role, role_label, user_ai_eligible, user_package_set,
+    car_db_ready, normalize_role, role_label, user_ai_eligible, user_package_set,
 )
 from .admin_auth import require_admin_token
 from .ratelimit import rate_limited
@@ -87,6 +87,7 @@ def _user_dict(u, with_access=False):
         d['accesses'] = [
             {'car': _car_dict(a.car), 'documents': a.documents, 'admin_granted': a.admin_granted}
             for a in u.car_accesses.select_related('car')
+            if car_db_ready(a.car)
         ]
     return d
 
@@ -155,6 +156,28 @@ def me_view(request):
     if not user:
         return JsonResponse({'error': 'unauthorized'}, status=401)
     return JsonResponse({'user': _user_dict(user, with_access=True)})
+
+
+def fleet_view(request):
+    """GET /api/auth/fleet/ -> catalog rows for cars this user may open."""
+    user = portal_user(request)
+    if not user:
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    car_ids = list(user.car_accesses.values_list('car_id', flat=True))
+    if not car_ids:
+        return JsonResponse({'items': []})
+    cars = [c for c in Car.objects.filter(id__in=car_ids).order_by('brand_name', 'car_name', 'year') if car_db_ready(c)]
+    return JsonResponse({
+        'items': [
+            {
+                'brand_name': c.brand_name,
+                'car_name': c.car_name,
+                'year': c.year,
+                'db_address': c.db_address,
+            }
+            for c in cars
+        ],
+    })
 
 
 @csrf_exempt
@@ -259,7 +282,12 @@ def admin_packages_view(request):
 @require_admin_token
 def admin_cars_view(request):
     """GET /api/admin/cars/ — the FULL catalog (admin sees everything)."""
-    return JsonResponse({'items': [_car_dict(c) for c in Car.objects.order_by('brand_name', 'car_name')]})
+    items = []
+    for c in Car.objects.order_by('brand_name', 'car_name'):
+        row = _car_dict(c)
+        row['ready'] = car_db_ready(c)
+        items.append(row)
+    return JsonResponse({'items': items})
 
 
 @csrf_exempt

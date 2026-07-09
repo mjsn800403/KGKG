@@ -6,6 +6,7 @@ urlpatterns = [
     path('api/auth/login/', portal.login_view, name='portal_login'),
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
+    path('api/auth/fleet/', portal.fleet_view, name='portal_fleet'),
     path('api/activity/', portal.activity_view, name='portal_activity'),
     # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).
     path('api/admin/login/', portal.admin_login_view, name='admin_login'),

@@ -28,7 +28,7 @@ export default function Sidebar() {
       <Link className={`sb-link${onSettings ? ' active' : ''}`} href="/settings" data-tour="nav-settings">
         <Icon name="gear" /> تنظیمات حساب
       </Link>
-      <div style={{ marginTop: 'auto', paddingTop: 30 }}>
+      <div className="sb-logout-wrap">
         <Link className="sb-link" href="/" onClick={() => portalLogout()}>
           <Icon name="logout" /> خروج از حساب
         </Link>
