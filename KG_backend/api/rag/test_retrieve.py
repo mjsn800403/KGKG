@@ -180,5 +180,44 @@ class ScopeAwareRetrievalTest(unittest.TestCase):
             self.assertEqual(h['explain']['boosts']['scope'], 1.0)
 
 
+class CarNotIndexedGateTest(unittest.TestCase):
+    """Hard vehicle-scope gate: a query pinned to a car that has NO content in
+    the index must refuse honestly, not answer from a different car's manual.
+
+    Reuses RetrieveIntegrationTest's index (only 'Corolla' is populated), so
+    'Corolla' is indexed and any other car_stem is not."""
+
+    def setUp(self):
+        self._h = RetrieveIntegrationTest()
+        self._h.setUp()
+
+    def tearDown(self):
+        self._h.tearDown()
+
+    def test_unindexed_car_is_refused_not_answered_from_another_car(self):
+        res = retrieve.assist('brake fluid', brand='Toyota', model='Camry',
+                              car_stem='Camry LE')          # not in the index
+        self.assertEqual(res['count'], 0)
+        self.assertEqual(res['hits'], [])
+        self.assertFalse(res['grounded'])
+        self.assertEqual(res.get('out_of_scope'), 'car_not_indexed')
+        self.assertFalse(res.get('car_indexed'))
+
+    def test_indexed_car_still_answers_and_is_flagged_indexed(self):
+        res = retrieve.assist('brake fluid', brand='Toyota', model='Corolla',
+                              car_stem='Corolla')            # in the index
+        self.assertTrue(res['grounded'])
+        self.assertGreater(res['count'], 0)
+        self.assertTrue(res.get('car_indexed'))
+        self.assertIsNone(res.get('out_of_scope'))
+        for h in res['hits']:                                # no leak
+            self.assertEqual(h['car_stem'], 'Corolla')
+
+    def test_unscoped_query_is_unaffected_by_the_gate(self):
+        res = retrieve.assist('brake fluid')                 # no car pinned
+        self.assertTrue(res['grounded'])
+        self.assertIsNone(res.get('out_of_scope'))
+
+
 if __name__ == '__main__':
     unittest.main()

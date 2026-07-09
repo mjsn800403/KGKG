@@ -8,12 +8,16 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from bs4 import BeautifulSoup
 from .models import Car, PurchaseRequest
+from .access import car_db_ready
 from .ratelimit import rate_limited, require_admin_token
 
 def brands_list_view(request):
     """GET / -> distinct list of brand names available across all cars."""
-    brands = Car.objects.order_by('brand_name').values_list('brand_name', flat=True).distinct()
-    return JsonResponse(list(brands), safe=False)
+    brands = sorted({
+        c.brand_name for c in Car.objects.order_by('brand_name')
+        if car_db_ready(c)
+    })
+    return JsonResponse(brands, safe=False)
 
 
 @csrf_exempt
@@ -469,13 +473,25 @@ def car_view(request, brand_name=None, year=None, model_name=None):
 
     # Case 1: Only brand name
     if brand_name and not year:
-        cars = Car.objects.filter(brand_name__iexact=brand_name).values('brand_name', 'car_name', 'year', 'db_address')
-        return JsonResponse(list(cars), safe=False)
+        cars = [
+            c for c in Car.objects.filter(brand_name__iexact=brand_name).order_by('car_name', 'year')
+            if car_db_ready(c)
+        ]
+        return JsonResponse([
+            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year, 'db_address': c.db_address}
+            for c in cars
+        ], safe=False)
 
     # Case 2: Brand and year
     if brand_name and year and not model_name:
-        cars = Car.objects.filter(brand_name__iexact=brand_name, year=year).values('brand_name', 'car_name', 'year', 'db_address')
-        return JsonResponse(list(cars), safe=False)
+        cars = [
+            c for c in Car.objects.filter(brand_name__iexact=brand_name, year=year).order_by('car_name')
+            if car_db_ready(c)
+        ]
+        return JsonResponse([
+            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year, 'db_address': c.db_address}
+            for c in cars
+        ], safe=False)
 
     # Case 3: Brand, year, and car_name
     if brand_name and year and model_name:
@@ -486,6 +502,8 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 year=year,
                 car_name__iexact=model_name
             )
+            if not car_db_ready(car):
+                return JsonResponse({'error': 'vehicle database not available on server'}, status=404)
 
             # Connect to car database
             conn = get_car_db(car.db_address)

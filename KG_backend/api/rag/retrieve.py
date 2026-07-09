@@ -69,6 +69,31 @@ def _occurrences_bulk(index, blob_ids):
     return out
 
 
+def _car_indexed(index, car_stem):
+    """True if this exact vehicle has any content in the unified index. Tested
+    against the `occurrences` table (index-backed by idx_occ_car, so O(1)) —
+    that's the authoritative "what can actually be served for this car", and a
+    car with zero occurrences cannot ground an answer no matter what the query
+    is. Used to short-circuit before the expensive vector/keyword scan."""
+    return index.execute(
+        "SELECT 1 FROM occurrences WHERE car_stem=? LIMIT 1", (car_stem,)
+    ).fetchone() is not None
+
+
+def _no_scope_result(query, brand, model, car_stem, kind, reason):
+    """Honest empty answer when the pinned vehicle isn't in the index at all —
+    returned instead of silently citing a DIFFERENT car's manual, which for
+    repair data (torque specs, procedures) would be actively unsafe. `reason`
+    lets the chat layer phrase it precisely ("this vehicle isn't loaded yet")
+    rather than a generic no-answer."""
+    return {'query': query,
+            'scope': {'brand': brand, 'model': model, 'car_stem': car_stem},
+            'count': 0, 'hits': [], 'kind': kind,
+            'grounded': False, 'top_similarity': 0.0,
+            'car_indexed': False, 'out_of_scope': reason,
+            'confidence_band': scoring.confidence_band(0.0, 0.0, 0.0)}
+
+
 def _pick_occurrence(occs, brand, model, car_stem):
     """Choose which occurrence of a blob to cite, preferring the page context."""
     if car_stem:
@@ -150,6 +175,14 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
     scoped = bool(car_stem or model or brand)
     vec_k = config.SCOPED_VEC_K if scoped else config.RETRIEVE_VEC_K
     fts_k = config.SCOPED_FTS_K if scoped else config.RETRIEVE_FTS_K
+    # Hard vehicle-scope gate (part 1): if the caller pinned an exact car that
+    # has no content in the index at all, a global search's nearest neighbours
+    # would necessarily be OTHER vehicles. Refuse honestly instead of citing
+    # them — and skip the vector/keyword scan entirely (a real saving for the
+    # many catalog cars not yet embedded).
+    if car_stem and not _car_indexed(index, car_stem):
+        return _no_scope_result(query, brand, model, car_stem, cls['kind'],
+                                'car_not_indexed')
     # reuse a precomputed embedding (semantic cache) or embed once now
     if qvec is None:
         qvec = embed.encode([embed_q], is_query=True)[0]
@@ -291,11 +324,17 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
                                           high_sim=config.CONF_HIGH_SIM,
                                           high_margin=config.CONF_HIGH_MARGIN,
                                           low_sim=config.CONF_LOW_SIM)
-    return {'query': query,
-            'scope': {'brand': brand, 'model': model, 'car_stem': car_stem},
-            'count': len(hits), 'hits': hits, 'kind': cls['kind'],
-            'grounded': grounded, 'top_similarity': round(float(top_eff), 4),
-            'confidence_band': overall, 'adaptive': {'easy': easy, 'k': k_eff}}
+    out = {'query': query,
+           'scope': {'brand': brand, 'model': model, 'car_stem': car_stem},
+           'count': len(hits), 'hits': hits, 'kind': cls['kind'],
+           'grounded': grounded, 'top_similarity': round(float(top_eff), 4),
+           'confidence_band': overall, 'adaptive': {'easy': easy, 'k': k_eff}}
+    if car_stem:
+        # The pinned car IS in the index (part-1 gate passed); flag it so the
+        # chat layer can tell "vehicle loaded, just no strong match" apart from
+        # "vehicle not loaded at all" (car_indexed=False above).
+        out['car_indexed'] = True
+    return out
 
 
 def _pinned_hit(index, pin, brand, model, car_stem):

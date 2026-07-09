@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { getPortalUser, logActivity } from '../utils/api';
+import { useRouter } from 'next/navigation';
+import { fetchGrantedFleet, getPortalToken, logActivity, portalRefreshMe } from '../utils/api';
 
 // Model families whose name spans more than one word — checked before the
 // default "first word" rule so "Land Cruiser Base" groups under "Land Cruiser"
@@ -19,32 +20,46 @@ export function familyOf(carName) {
   return base.split(/\s+/)[0] || base;
 }
 
-// Fleet view — the prototype's dashboard fleet screen, but the picker
-// dropdowns and the fleet-grid are driven by REAL cars from the backend.
-// All cars show by default; the model chips narrow to one family (e.g. all
-// bZ4X trims together), composing with the brand/year dropdowns.
-export default function FleetView({ cars: allCars }) {
-  // If a portal seat is logged in, the fleet is narrowed to the cars the admin
-  // granted to that specific user (the company can never see more than it
-  // bought; the user can never see more than the company). No session (local
-  // dev / legacy flow) shows everything, as before.
-  const [grantedKeys, setGrantedKeys] = useState(null);
-  useEffect(() => {
-    const u = getPortalUser();
-    if (u && Array.isArray(u.accesses)) {
-      setGrantedKeys(new Set(u.accesses.map((a) => `${a.car.brand}|${a.car.year}|${a.car.model}`)));
-      logActivity('view_fleet', 'مشاهده فهرست خودروهای فعال');
-    }
-  }, []);
-  const cars = useMemo(() => {
-    if (!grantedKeys) return allCars;
-    return allCars.filter((c) => grantedKeys.has(`${c.brand_name}|${c.year}|${c.car_name}`));
-  }, [allCars, grantedKeys]);
+// Fleet view — loads only the cars the admin granted to this portal seat,
+// refreshed from the backend on every visit so grant/revoke takes effect
+// immediately without forcing a re-login.
+export default function FleetView() {
+  const router = useRouter();
+  const [cars, setCars] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const [brand, setBrand] = useState('');     // '' = all
-  const [year, setYear] = useState('');       // '' = all
-  const [family, setFamily] = useState('');   // '' = all model families
-  const [open, setOpen] = useState('');        // which dropdown is open
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!getPortalToken()) {
+        router.replace('/login');
+        return;
+      }
+      try {
+        await portalRefreshMe();
+        const items = await fetchGrantedFleet();
+        if (cancelled) return;
+        setCars(items);
+        if (items.length) logActivity('view_fleet', 'مشاهده فهرست خودروهای فعال');
+      } catch (e) {
+        if (cancelled) return;
+        if (e?.unauthorized) {
+          router.replace('/login');
+          return;
+        }
+        setError(e?.message || 'بارگذاری خودروها ناموفق بود. لطفاً دوباره وارد شوید.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
+  const [brand, setBrand] = useState('');
+  const [year, setYear] = useState('');
+  const [family, setFamily] = useState('');
+  const [open, setOpen] = useState('');
   const rootRef = useRef(null);
 
   const brands = useMemo(() => [...new Set(cars.map((c) => c.brand_name))].sort(), [cars]);
@@ -71,7 +86,6 @@ export default function FleetView({ cars: allCars }) {
     [cars, brand, year, family]
   );
 
-  // If the active family disappears after a brand/year change, reset to "all".
   useEffect(() => {
     if (family && !families.some(([f]) => f === family)) setFamily('');
   }, [families, family]);
@@ -85,6 +99,14 @@ export default function FleetView({ cars: allCars }) {
   }, []);
 
   const toggle = (id) => setOpen((o) => (o === id ? '' : id));
+
+  if (loading) {
+    return <div className="empty-state">در حال بارگذاری خودروهای فعال…</div>;
+  }
+
+  if (error) {
+    return <div className="pform-error">{error}</div>;
+  }
 
   return (
     <div ref={rootRef}>
@@ -143,7 +165,13 @@ export default function FleetView({ cars: allCars }) {
             <div className="yrs">مشاهده مستندات ←</div>
           </Link>
         ))}
-        {filtered.length === 0 && <div className="empty-state">خودرویی مطابق فیلتر یافت نشد.</div>}
+        {filtered.length === 0 && (
+          <div className="empty-state">
+            {cars.length === 0
+              ? 'هنوز خودرویی برای این حساب تعریف نشده. با ادمین تماس بگیرید.'
+              : 'خودرویی مطابق فیلتر یافت نشد.'}
+          </div>
+        )}
       </div>
     </div>
   );

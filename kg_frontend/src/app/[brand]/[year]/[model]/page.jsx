@@ -27,7 +27,25 @@ export default async function ModelPage({ params }) {
   const year = raw.year;
   const model = decodeURIComponent(raw.model);
 
-  const nodes = await fetchModels(brand, parseInt(year), model);
+  let nodes = [];
+  let loadError = '';
+  try {
+    nodes = await fetchModels(brand, parseInt(year), model);
+  } catch (e) {
+    loadError = e?.message || 'بارگذاری مستندات این خودرو ناموفق بود.';
+  }
+
+  if (loadError) {
+    return (
+      <DashboardShell>
+        <div className="topbar">
+          <Breadcrumb brand={brand} year={year} model={model} />
+          <UserChip />
+        </div>
+        <div className="empty-state" style={{ marginTop: 24 }}>{loadError}</div>
+      </DashboardShell>
+    );
+  }
 
   const base = `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`;
   // The smart assistant lives inside each car: the customer picks the vehicle
