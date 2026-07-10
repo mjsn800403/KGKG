@@ -20,16 +20,27 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
+from django.db.models import Count, Q
+
 from .models import (
     ActivityLog, AdminAuthToken, AuthToken, Car, Company, CompanyCarAccess,
     PlatformAdmin, PortalUser, PurchaseRequest, UserCarAccess,
 )
 from .access import (
-    DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL, VALID_DOCS, VALID_ROLES,
-    car_db_ready, normalize_role, role_label, user_ai_eligible, user_package_set,
+    CONTENT_CATEGORIES, DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL,
+    VALID_CATEGORIES, VALID_DOCS, VALID_ROLES,
+    apply_user_access, car_db_ready, category_label, normalize_role, resolve_category,
+    role_label, user_ai_eligible, user_package_set,
 )
 from .admin_auth import require_admin_token
 from .ratelimit import rate_limited
+
+
+# A valid-format hash to check bad/absent logins against, so the wrong-password
+# and no-such-user paths take the same (constant) time — no user enumeration.
+# Computed once; the password it encodes is never used to authenticate anything.
+from django.contrib.auth.hashers import make_password as _make_password
+_DUMMY_PASSWORD_HASH = _make_password('kg-login-timing-equalizer')
 
 
 def _body(request):
@@ -46,9 +57,23 @@ def _bearer(request):
     return ''
 
 
-def portal_user(request):
-    """Resolve the PortalUser from a Bearer token, or None."""
+def _portal_token(request):
+    """Session token from the Authorization header OR the ``kg_portal_token``
+    cookie. The cookie path is what lets Next.js server components (SSR) carry
+    the session when they fetch content — the browser sends the cookie to the
+    Next server, which forwards it here."""
     key = _bearer(request)
+    if key:
+        return key
+    try:
+        return (request.COOKIES.get('kg_portal_token') or '').strip()
+    except Exception:
+        return ''
+
+
+def portal_user(request):
+    """Resolve the PortalUser from a Bearer token or session cookie, or None."""
+    key = _portal_token(request)
     if not key:
         return None
     token = AuthToken.objects.filter(key=key).select_related('user', 'user__company').first()
@@ -68,26 +93,39 @@ def _car_dict(car):
 
 def _user_dict(u, with_access=False):
     dept = u.company.department_label if hasattr(u, 'company') else ''
+    reports_to = None
+    if u.reports_to_id:
+        reports_to = {'id': u.reports_to_id,
+                      'name': (u.reports_to.display_name or u.reports_to.username)
+                      if u.reports_to else None}
     d = {
         'id': u.id, 'username': u.username, 'display_name': u.display_name,
+        'email': u.email, 'phone': u.phone, 'personnel_code': u.personnel_code,
         'role': normalize_role(u.role),
         'role_label': role_label(u.role, dept),
         'role_level': ROLE_LEVEL.get(normalize_role(u.role)),
         'company_id': u.company_id, 'company': u.company.name,
         'department_label': u.company.department_label,
+        'reports_to': reports_to,
+        'can_manage_team': u.can_manage_team,
+        'can_view_analytics': u.can_view_analytics,
         'ai_assistant_enabled': u.ai_assistant_enabled,
         'ai_eligible': user_ai_eligible(u),
         'packages': sorted(user_package_set(u)) if with_access else [],
         'active': u.active, 'locked': u.locked,
+        'invite_status': u.invite_status, 'password_set': u.password_set,
         'access_expires_at': u.access_expires_at.isoformat() if u.access_expires_at else None,
         'created_at': u.created_at.isoformat(),
         'last_login_at': u.last_login_at.isoformat() if u.last_login_at else None,
     }
     if with_access:
+        # Show the user's full set of granted vehicles (entitlements). Whether a
+        # car's content DB is on disk yet is a serve-time concern (car_view 404s),
+        # not a reason to hide the grant from the manager/admin who set it.
         d['accesses'] = [
-            {'car': _car_dict(a.car), 'documents': a.documents, 'admin_granted': a.admin_granted}
+            {'car': _car_dict(a.car), 'documents': a.documents, 'admin_granted': a.admin_granted,
+             'ready': car_db_ready(a.car)}
             for a in u.car_accesses.select_related('car')
-            if car_db_ready(a.car)
         ]
     return d
 
@@ -118,14 +156,27 @@ def _company_dict(c, deep=False):
 @csrf_exempt
 @rate_limited('login', 15, 60)
 def login_view(request):
-    """POST /api/auth/login {username, password} -> {token, user}"""
+    """POST /api/auth/login {username, password} -> {token, user}
+
+    ``username`` may be a username OR an email (invited employees log in with
+    their email). Invited-but-not-accepted accounts are rejected until they
+    set a password via the invite link.
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
     username = (b.get('username') or '').strip()
     password = b.get('password') or ''
-    user = PortalUser.objects.filter(username__iexact=username).select_related('company').first()
-    if not user or not user.check_password(password):
+    user = (PortalUser.objects
+            .filter(Q(username__iexact=username) | Q(email__iexact=username))
+            .select_related('company').first())
+    if not user or not user.password_set:
+        # Equalise timing with the wrong-password path so a missing/invited
+        # account isn't distinguishable from a bad password (no user enumeration).
+        from django.contrib.auth.hashers import check_password as _cp
+        _cp(password, _DUMMY_PASSWORD_HASH)
+        return JsonResponse({'error': 'نام کاربری یا رمز عبور اشتباه است.'}, status=401)
+    if not user.check_password(password):
         return JsonResponse({'error': 'نام کاربری یا رمز عبور اشتباه است.'}, status=401)
     if not user.active or not user.company.active:
         return JsonResponse({'error': 'این حساب غیرفعال شده است. با پشتیبانی تماس بگیرید.'}, status=403)
@@ -173,7 +224,6 @@ def fleet_view(request):
                 'brand_name': c.brand_name,
                 'car_name': c.car_name,
                 'year': c.year,
-                'db_address': c.db_address,
             }
             for c in cars
         ],
@@ -183,7 +233,12 @@ def fleet_view(request):
 @csrf_exempt
 @rate_limited('activity', 120, 60)
 def activity_view(request):
-    """POST /api/activity/ {action, detail?} — usage signal for the admin report."""
+    """POST /api/activity/ {action, detail?, category?, car_id?, node_title?}
+
+    Usage signal for the admin report + analytics. ``category`` (if supplied) is
+    validated against the canonical taxonomy; ``segments`` may be sent instead
+    and the server resolves the category from them.
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     user = portal_user(request)
@@ -192,8 +247,19 @@ def activity_view(request):
     b = _body(request)
     action = (str(b.get('action') or '')).strip()[:60]
     detail = (str(b.get('detail') or '')).strip()[:400]
+    category = (str(b.get('category') or '')).strip()
+    if not category and b.get('segments'):
+        category = resolve_category(b.get('segments'))
+    if category and category not in VALID_CATEGORIES:
+        category = ''
+    car = None
+    if b.get('car_id'):
+        car = Car.objects.filter(id=b['car_id']).first()
+    node_title = (str(b.get('node_title') or '')).strip()[:300]
     if action:
-        ActivityLog.objects.create(user=user, action=action, detail=detail)
+        ActivityLog.objects.create(
+            user=user, action=action, detail=detail,
+            category=category, car=car, node_title=node_title)
     return JsonResponse({'ok': True})
 
 
@@ -413,9 +479,19 @@ def admin_users_view(request):
                     access_expires_at = timezone.make_aware(access_expires_at)
             except (ValueError, TypeError):
                 access_expires_at = None
+        reports_to = None
+        if b.get('reports_to_id'):
+            reports_to = PortalUser.objects.filter(
+                id=b['reports_to_id'], company=company).first()
         u = PortalUser(
             company=company, username=username, role=role,
             display_name=(str(b.get('display_name') or '')).strip()[:150],
+            email=(str(b.get('email') or '')).strip()[:254] or None,
+            phone=(str(b.get('phone') or '')).strip()[:40],
+            personnel_code=(str(b.get('personnel_code') or '')).strip()[:60],
+            reports_to=reports_to,
+            can_manage_team=bool(b.get('can_manage_team')),
+            can_view_analytics=bool(b.get('can_view_analytics')),
             ai_assistant_enabled=bool(b.get('ai_assistant_enabled')),
             locked=bool(b.get('locked')),
             access_expires_at=access_expires_at,
@@ -424,7 +500,7 @@ def admin_users_view(request):
         try:
             u.save()
         except IntegrityError:
-            return JsonResponse({'error': 'این نام کاربری قبلاً استفاده شده است.'}, status=400)
+            return JsonResponse({'error': 'این نام کاربری یا ایمیل قبلاً استفاده شده است.'}, status=400)
         return JsonResponse({'ok': True, 'user': _user_dict(u, with_access=True), 'password': password})
 
     qs = PortalUser.objects.select_related('company')
@@ -458,8 +534,26 @@ def admin_user_detail_view(request, user_id):
                 u.tokens.all().delete()
         if 'ai_assistant_enabled' in b:
             u.ai_assistant_enabled = bool(b['ai_assistant_enabled'])
+        if 'can_manage_team' in b:
+            u.can_manage_team = bool(b['can_manage_team'])
+        if 'can_view_analytics' in b:
+            u.can_view_analytics = bool(b['can_view_analytics'])
         if 'display_name' in b:
             u.display_name = (str(b['display_name'] or '')).strip()[:150]
+        if 'email' in b:
+            u.email = (str(b['email'] or '')).strip()[:254] or None
+        if 'phone' in b:
+            u.phone = (str(b['phone'] or '')).strip()[:40]
+        if 'personnel_code' in b:
+            u.personnel_code = (str(b['personnel_code'] or '')).strip()[:60]
+        if 'reports_to_id' in b:
+            rid = b.get('reports_to_id')
+            if not rid:
+                u.reports_to = None
+            else:
+                mgr = PortalUser.objects.filter(id=rid, company=u.company).first()
+                if mgr and mgr.id != u.id:
+                    u.reports_to = mgr
         if b.get('role'):
             role = normalize_role(b['role'])
             if role in VALID_ROLES:
@@ -482,7 +576,10 @@ def admin_user_detail_view(request, user_id):
             new_password = _gen_password()
             u.set_password(new_password)
             u.tokens.all().delete()
-        u.save()
+        try:
+            u.save()
+        except IntegrityError:
+            return JsonResponse({'error': 'این ایمیل قبلاً استفاده شده است.'}, status=400)
     resp = {'user': _user_dict(u, with_access=True)}
     if new_password:
         resp['password'] = new_password
@@ -506,28 +603,11 @@ def admin_user_access_view(request, user_id):
     b = _body(request)
     accesses = b.get('accesses') or []
     override = bool(b.get('override_purchase'))
-    if not isinstance(accesses, list):
-        return JsonResponse({'error': 'accesses must be a list'}, status=400)
-
-    company_scope = {
-        a.car_id: (set(a.documents) if a.documents else VALID_DOCS)
-        for a in u.company.car_accesses.all()
-    }
-    u.car_accesses.all().delete()
-    for a in accesses:
-        car_id = a.get('car_id')
-        if not Car.objects.filter(id=car_id).exists():
-            continue
-        admin_granted = bool(a.get('admin_granted')) or override
-        if admin_granted:
-            docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
-            UserCarAccess.objects.create(
-                user=u, car_id=car_id, documents=docs, admin_granted=True)
-            continue
-        if car_id not in company_scope:
-            continue
-        docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]
-        UserCarAccess.objects.create(user=u, car_id=car_id, documents=docs)
+    # The platform admin may bypass the company's purchase scope (admin_granted).
+    try:
+        apply_user_access(u, accesses, override_purchase=override, allow_admin_grants=True)
+    except ValueError as e:
+        return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'user': _user_dict(u, with_access=True)})
 
 
@@ -537,7 +617,7 @@ def admin_user_access_view(request, user_id):
 
 @require_admin_token
 def admin_activity_view(request):
-    """GET /api/admin/activity/?limit=&user_id=&company_id= — usage report."""
+    """GET /api/admin/activity/?limit=&user_id=&company_id=&category= — usage report."""
     try:
         limit = max(1, min(int(request.GET.get('limit', 200) or 200), 1000))
     except (TypeError, ValueError):
@@ -547,10 +627,88 @@ def admin_activity_view(request):
         qs = qs.filter(user_id=request.GET['user_id'])
     if request.GET.get('company_id'):
         qs = qs.filter(user__company_id=request.GET['company_id'])
+    if request.GET.get('category'):
+        qs = qs.filter(category=request.GET['category'])
     items = [{
         'id': a.id, 'user': a.user.username, 'company': a.user.company.name,
         'role_label': role_label(a.user.role, a.user.company.department_label),
         'action': a.action, 'detail': a.detail,
+        'category': a.category, 'category_label': category_label(a.category) if a.category else '',
         'created_at': a.created_at.isoformat(),
     } for a in qs[:limit]]
     return JsonResponse({'items': items})
+
+
+# ---------------------------------------------------------------------------
+# Admin: cross-company analytics (platform-wide)
+# ---------------------------------------------------------------------------
+
+@require_admin_token
+def admin_analytics_view(request):
+    """GET /api/admin/analytics/?range= — platform-wide usage analytics.
+
+    Aggregated in SQL (no per-row transfer): platform totals, per-company usage,
+    per-category breakdown, and the most active employees across all companies.
+    """
+    try:
+        days = max(1, min(int(request.GET.get('range', 30) or 30), 365))
+    except (TypeError, ValueError):
+        days = 30
+    since = timezone.now() - timezone.timedelta(days=days)
+    logs = ActivityLog.objects.filter(created_at__gte=since)
+    if request.GET.get('company_id'):
+        logs = logs.filter(user__company_id=request.GET['company_id'])
+
+    # Category breakdown.
+    cat_counts = {row['category']: row['n'] for row in
+                  logs.exclude(category='').values('category').annotate(n=Count('id'))}
+    categories = [
+        {'id': cid, 'label': category_label(cid, 'fa'), 'label_en': category_label(cid, 'en'),
+         'count': cat_counts.get(cid, 0)}
+        for cid, _ in CONTENT_CATEGORIES
+    ]
+
+    # Per-company usage.
+    companies = []
+    for row in (logs.values('user__company_id', 'user__company__name')
+                .annotate(n=Count('id')).order_by('-n')):
+        companies.append({
+            'company_id': row['user__company_id'],
+            'company': row['user__company__name'],
+            'events': row['n'],
+        })
+
+    # Most active employees, cross-company.
+    top_users = []
+    for row in (logs.values('user_id', 'user__username', 'user__display_name',
+                            'user__company__name')
+                .annotate(n=Count('id')).order_by('-n')[:20]):
+        top_users.append({
+            'user_id': row['user_id'],
+            'user': row['user__display_name'] or row['user__username'],
+            'company': row['user__company__name'],
+            'events': row['n'],
+        })
+
+    # Daily series.
+    day_counts = {}
+    for dt in logs.values_list('created_at', flat=True):
+        key = dt.date().isoformat()
+        day_counts[key] = day_counts.get(key, 0) + 1
+    series = [{'date': k, 'count': v} for k, v in sorted(day_counts.items())]
+
+    return JsonResponse({
+        'range_days': days,
+        'totals': {
+            'events': logs.count(),
+            'companies': Company.objects.count(),
+            'users': PortalUser.objects.count(),
+            'active_users': logs.values('user_id').distinct().count(),
+        },
+        'categories': categories,
+        'companies_usage': companies,
+        'top_users': top_users,
+        'series': series,
+        'action_breakdown': {row['action']: row['n'] for row in
+                             logs.values('action').annotate(n=Count('id'))},
+    })

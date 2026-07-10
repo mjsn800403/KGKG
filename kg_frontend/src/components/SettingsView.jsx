@@ -1,22 +1,31 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Icon from './Icon';
 import Switch from './Switch';
 import { applyTheme } from './ThemeToggle';
+import { getPortalUser } from '../utils/api';
 
 // Interactive account settings: working tabs, a theme picker (light/dark) wired
 // to the same persisted store as the header toggle, and a "restart site tour"
-// action. The old page only showed a static notifications list.
+// action. Account details now reflect the real signed-in user + company.
 export default function SettingsView() {
   const [tab, setTab] = useState('account');
   const [theme, setTheme] = useState('dark');
+  const [me, setMe] = useState(null);
 
   useEffect(() => {
     setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    setMe(getPortalUser());
     const onTheme = (e) => setTheme(e.detail);
+    const onMe = () => setMe(getPortalUser());
     window.addEventListener('kg:theme', onTheme);
-    return () => window.removeEventListener('kg:theme', onTheme);
+    window.addEventListener('kg:me', onMe);
+    return () => {
+      window.removeEventListener('kg:theme', onTheme);
+      window.removeEventListener('kg:me', onMe);
+    };
   }, []);
 
   const restartTour = () => window.dispatchEvent(new CustomEvent('kg:tour'));
@@ -40,11 +49,24 @@ export default function SettingsView() {
           <>
             <div className="acct-card">
               <h3><Icon name="building" /> مشخصات حساب</h3>
-              <div className="acct-row"><span className="k">نام شرکت</span><span className="v">KGTECHVAULT Company</span></div>
-              <div className="acct-row"><span className="k">نوع حساب</span><span className="v">شخص حقوقی</span></div>
+              <div className="acct-row"><span className="k">نام شرکت</span><span className="v">{me?.company || '—'}</span></div>
+              <div className="acct-row"><span className="k">کاربر</span><span className="v">{me?.display_name || me?.username || '—'}</span></div>
+              <div className="acct-row"><span className="k">نقش سازمانی</span><span className="v">{me?.role_label || '—'}</span></div>
+              {me?.email && <div className="acct-row"><span className="k">ایمیل</span><span className="v ltr">{me.email}</span></div>}
               <div className="acct-row"><span className="k">پشتیبانی</span><span className="v ltr">021-92001404</span></div>
-              <div className="acct-row"><span className="k">ایمیل</span><span className="v ltr">mj.salimi@khadamatgostar.com</span></div>
             </div>
+
+            {me?.can_manage_team && (
+              <div className="acct-card">
+                <h3><Icon name="users" /> تیم شما</h3>
+                <div className="acct-row"><span className="k">مدیریت کارکنان</span>
+                  <Link className="btn btn-accent" href="/team">مدیریت تیم ←</Link></div>
+                {me?.can_view_analytics && (
+                  <div className="acct-row" style={{ borderBottom: 'none' }}><span className="k">گزارش استفاده</span>
+                    <Link className="btn" href="/team/analytics">مشاهده تحلیل‌ها</Link></div>
+                )}
+              </div>
+            )}
 
             <div className="acct-card">
               <h3><Icon name="sun" /> نمایش و ظاهر</h3>
@@ -80,9 +102,12 @@ export default function SettingsView() {
         {tab === 'security' && (
           <div className="acct-card">
             <h3><Icon name="shield" /> امنیت و دسترسی</h3>
-            <div className="acct-row"><span className="k">ورود دو مرحله‌ای</span><Switch on /></div>
-            <div className="acct-row"><span className="k">نمایش تاریخچهٔ ورود</span><span className="v">فعال</span></div>
-            <div className="acct-row" style={{ borderBottom: 'none' }}><span className="k">خروج از سایر دستگاه‌ها</span><button className="btn">خروج همه</button></div>
+            <div className="acct-row"><span className="k">آخرین ورود</span>
+              <span className="v ltr">{me?.last_login_at ? new Date(me.last_login_at).toLocaleString('fa-IR') : '—'}</span></div>
+            <div className="acct-row"><span className="k">وضعیت حساب</span>
+              <span className="v">{me?.locked ? 'قفل‌شده' : (me?.active === false ? 'غیرفعال' : 'فعال')}</span></div>
+            <div className="acct-row" style={{ borderBottom: 'none' }}><span className="k">ورود دو مرحله‌ای</span>
+              <span className="v">به‌زودی</span></div>
           </div>
         )}
       </div>

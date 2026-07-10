@@ -2,9 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { motion, MotionConfig } from 'motion/react';
 import ThemeToggle from '@/components/ThemeToggle';
 import Icon from '@/components/Icon';
 import { showModal } from '@/components/Modal';
+
+// Shared scroll-reveal motion (respects reduced-motion via <MotionConfig>).
+const EASE = [0.22, 1, 0.36, 1] as const;
+const revealContainer = { hidden: {}, show: { transition: { staggerChildren: 0.09 } } };
+const revealItem = {
+  hidden: { opacity: 0, y: 26 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
+};
+const viewport = { once: true, amount: 0.2 } as const;
 
 export default function Home() {
   const rigRef = useRef<HTMLDivElement>(null);
@@ -34,6 +44,7 @@ export default function Home() {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="screen fade" id="landing">
       <nav className={`topnav${menuOpen ? ' menu-open' : ''}`}>
         <Link className="brand" href="/">
@@ -95,13 +106,13 @@ export default function Home() {
             <text x="438" y="84" fill="var(--accent)" fontFamily="'IBM Plex Mono',monospace" fontSize="10" opacity=".8">ECU-REF-02</text>
           </svg>
         </div>
-        <div className="eyebrow">سامانه مستندات فنی خودرو</div>
-        <h1>دقتِ کارخانه،<br />در دستِ <em>تعمیرگاه</em>.</h1>
-        <p>دسترسی مستقیم به منوال تعمیر، فهرست قطعات، زمان‌های استاندارد و ابزار مخصوص تعمیراتی — دقیقاً برای مدل، سال و آپشن خودروی شما. بدون تخمین، بدون حدس.</p>
-        <div className="hero-actions">
+        <motion.div className="eyebrow" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}>سامانه مستندات فنی خودرو</motion.div>
+        <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}>دقتِ کارخانه،<br />در دستِ <em>تعمیرگاه</em>.</motion.h1>
+        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE, delay: 0.16 }}>دسترسی مستقیم به منوال تعمیر، فهرست قطعات، زمان‌های استاندارد و ابزار مخصوص تعمیراتی — دقیقاً برای مدل، سال و آپشن خودروی شما. بدون تخمین، بدون حدس.</motion.p>
+        <motion.div className="hero-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE, delay: 0.24 }}>
           <Link className="btn btn-accent" href="/login">ورود به پورتال ←</Link>
           <a className="btn" href="#coverage">مشاهده پوشش خودروها</a>
-        </div>
+        </motion.div>
         <div className="vin-decode">VIN// در حال تجزیه شناسه خودرو<span className="cursor"></span></div>
         <div className="coord"><span><b>SYS</b> KGTV-02</span></div>
       </div>
@@ -111,12 +122,12 @@ export default function Home() {
           <h2>چهار لایه مستند، یک منبع واحد</h2>
           <div className="tag">// 01 — COVERAGE LAYERS</div>
         </div>
-        <div className="grid4" data-tour="doc-layers">
-          <div className="card glass"><div className="num"><Icon name="parts" />PT · 01</div><h3>فهرست قطعات</h3><p>کدهای فنی، شماره‌فنی اورجینال و دیاگرام انفجاری برای هر مجموعه، مطابق دقیق با سال ساخت و آپشن.</p></div>
-          <div className="card glass"><div className="num"><Icon name="manual" />RM · 02</div><h3>منوال تعمیر</h3><p>رویه گام‌به‌گام کارخانه‌ای، گشتاورها، تلورانس‌ها و هشدارهای ایمنی — قابل اتصال به عکس ۳۶۰ درجه.</p></div>
-          <div className="card glass"><div className="num"><Icon name="clock" />ST · 03</div><h3>زمان استاندارد</h3><p>زمان مرجع هر عملیات برای برآورد دقیق هزینه و زمان‌بندی تعمیرگاه، بر اساس داده کارخانه‌ای.</p></div>
-          <div className="card glass"><div className="num"><Icon name="wrench" />SE · 04</div><h3>ابزار مخصوص تعمیراتی</h3><p>فهرست ابزارهای ویژه کارخانه‌ای لازم برای هر عملیات، با کد فنی و نحوه استفاده صحیح.</p></div>
-        </div>
+        <motion.div className="grid4" data-tour="doc-layers" variants={revealContainer} initial="hidden" whileInView="show" viewport={viewport}>
+          <motion.div className="card glass" variants={revealItem} whileHover={{ y: -6 }}><div className="num"><Icon name="parts" />PT · 01</div><h3>فهرست قطعات</h3><p>کدهای فنی، شماره‌فنی اورجینال و دیاگرام انفجاری برای هر مجموعه، مطابق دقیق با سال ساخت و آپشن.</p></motion.div>
+          <motion.div className="card glass" variants={revealItem} whileHover={{ y: -6 }}><div className="num"><Icon name="manual" />RM · 02</div><h3>منوال تعمیر</h3><p>رویه گام‌به‌گام کارخانه‌ای، گشتاورها، تلورانس‌ها و هشدارهای ایمنی — قابل اتصال به عکس ۳۶۰ درجه.</p></motion.div>
+          <motion.div className="card glass" variants={revealItem} whileHover={{ y: -6 }}><div className="num"><Icon name="clock" />ST · 03</div><h3>زمان استاندارد</h3><p>زمان مرجع هر عملیات برای برآورد دقیق هزینه و زمان‌بندی تعمیرگاه، بر اساس داده کارخانه‌ای.</p></motion.div>
+          <motion.div className="card glass" variants={revealItem} whileHover={{ y: -6 }}><div className="num"><Icon name="wrench" />SE · 04</div><h3>ابزار مخصوص تعمیراتی</h3><p>فهرست ابزارهای ویژه کارخانه‌ای لازم برای هر عملیات، با کد فنی و نحوه استفاده صحیح.</p></motion.div>
+        </motion.div>
 
         <div style={{ marginTop: 60, color: 'var(--text-dim)', fontSize: '14.5px', lineHeight: 2, maxWidth: 760 }}>
           کلیه محتوای این سایت از دیتابیس‌های مرجع (مادر) تامین شده و صحت و درستی اطلاعات به دیتابیس مادر بستگی دارد. کلیه فرآیند استخراج، گردآوری، طراحی و تدوین این پلتفرم توسط واحد سیستم و روش شرکت خدمات گستر سپهر گیتی انجام شده است.
@@ -144,11 +155,11 @@ export default function Home() {
           <h2>روند ورود به اطلاعات خودرو</h2>
           <div className="tag">// 03 — ACCESS FLOW</div>
         </div>
-        <div className="grid3">
-          <div className="card glass"><div className="num">01</div><h3>انتخاب خودرو</h3><p>برند، مدل، سال و آپشن را از منوهای کشویی انتخاب می‌کنید.</p></div>
-          <div className="card glass"><div className="num">02</div><h3>تطبیق خرید</h3><p>سامانه فقط مستنداتی را نشان می‌دهد که برای آن مدل خریداری شده است.</p></div>
-          <div className="card glass"><div className="num">03</div><h3>مشاهده مستند</h3><p>ورود به منوال، قطعات، زمان استاندارد یا ابزار تعمیراتی، با امکان اتصال به عکس ۳۶۰.</p></div>
-        </div>
+        <motion.div className="grid3" variants={revealContainer} initial="hidden" whileInView="show" viewport={viewport}>
+          <motion.div className="card glass" variants={revealItem} whileHover={{ y: -6 }}><div className="num">01</div><h3>انتخاب خودرو</h3><p>برند، مدل، سال و آپشن را از منوهای کشویی انتخاب می‌کنید.</p></motion.div>
+          <motion.div className="card glass" variants={revealItem} whileHover={{ y: -6 }}><div className="num">02</div><h3>تطبیق خرید</h3><p>سامانه فقط مستنداتی را نشان می‌دهد که برای آن مدل خریداری شده است.</p></motion.div>
+          <motion.div className="card glass" variants={revealItem} whileHover={{ y: -6 }}><div className="num">03</div><h3>مشاهده مستند</h3><p>ورود به منوال، قطعات، زمان استاندارد یا ابزار تعمیراتی، با امکان اتصال به عکس ۳۶۰.</p></motion.div>
+        </motion.div>
       </section>
 
       <div className="cta-strip glass">
@@ -190,5 +201,6 @@ export default function Home() {
         </div>
       </footer>
     </div>
+    </MotionConfig>
   );
 }

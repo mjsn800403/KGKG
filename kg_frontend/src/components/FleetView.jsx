@@ -3,7 +3,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
 import { fetchGrantedFleet, getPortalToken, logActivity, portalRefreshMe } from '../utils/api';
+
+const MotionLink = motion.create(Link);
 
 // Model families whose name spans more than one word — checked before the
 // default "first word" rule so "Land Cruiser Base" groups under "Land Cruiser"
@@ -153,17 +156,21 @@ export default function FleetView() {
       </div>
 
       <div className="fleet-grid">
-        {filtered.map((c) => (
-          <Link
+        {filtered.map((c, i) => (
+          <MotionLink
             key={`${c.brand_name}-${c.year}-${c.car_name}`}
             href={`/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
             className="fleet-card glass"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ y: -5 }}
           >
             <span className="badge"></span>
             <div className="tag">{String(c.brand_name).toUpperCase()} / {c.year}</div>
             <h4>{c.car_name}</h4>
             <div className="yrs">مشاهده مستندات ←</div>
-          </Link>
+          </MotionLink>
         ))}
         {filtered.length === 0 && (
           <div className="empty-state">

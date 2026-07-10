@@ -67,6 +67,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First in the chain so it times the full stack. In-memory aggregation +
+    # periodic batched flush — adds no per-request DB work (api/monitoring.py).
+    'api.monitoring.RequestMetricsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -107,6 +110,20 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            # WAL lets readers proceed during writes (metrics flush, activity
+            # logging) — the classic "database is locked" fix for SQLite under
+            # concurrent gunicorn workers. IMMEDIATE transactions grab the
+            # write lock up front instead of failing mid-transaction.
+            'timeout': 20,
+            'transaction_mode': 'IMMEDIATE',
+            'init_command': (
+                'PRAGMA journal_mode=WAL;'
+                'PRAGMA synchronous=NORMAL;'
+                'PRAGMA mmap_size=134217728;'
+                'PRAGMA cache_size=-8192;'
+            ),
+        },
     }
 }
 

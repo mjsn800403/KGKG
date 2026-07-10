@@ -1,17 +1,37 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Icon from './Icon';
-import { portalLogout } from '../utils/api';
+import { getPortalUser, portalLogout } from '../utils/api';
 
-// Dashboard sidebar — exact prototype markup, with a proper icon per section.
-// "Active vehicles" is highlighted across the whole browsing area.
+// Dashboard sidebar. "Active vehicles" is highlighted across the browsing area.
+// The Team + Analytics sections appear only for users whose capabilities allow
+// them (company managers), read from the cached portal user on mount.
 export default function Sidebar() {
   const pathname = usePathname() || '';
   const onSettings = pathname.startsWith('/settings');
   const onAssistant = pathname.startsWith('/assistant');
-  const onFleet = !onSettings && !onAssistant;
+  const onTeam = pathname.startsWith('/team') && !pathname.startsWith('/team/analytics');
+  const onAnalytics = pathname.startsWith('/team/analytics');
+  const onFleet = !onSettings && !onAssistant && !onTeam && !onAnalytics;
+
+  // Capability flags come from the cached portal user (resolved after mount to
+  // avoid an SSR hydration mismatch).
+  const [caps, setCaps] = useState({ manage: false, analytics: false });
+  useEffect(() => {
+    const read = () => {
+      const u = getPortalUser();
+      setCaps({
+        manage: !!u?.can_manage_team,
+        analytics: !!(u?.can_view_analytics || u?.can_manage_team),
+      });
+    };
+    read();
+    window.addEventListener('kg:me', read);
+    return () => window.removeEventListener('kg:me', read);
+  }, []);
 
   return (
     <aside className="sidebar">
@@ -25,6 +45,16 @@ export default function Sidebar() {
       <Link className={`sb-link${onAssistant ? ' active' : ''}`} href="/assistant" data-tour="nav-assistant">
         <Icon name="bot" /> دستیار هوشمند
       </Link>
+      {caps.manage && (
+        <Link className={`sb-link${onTeam ? ' active' : ''}`} href="/team" data-tour="nav-team">
+          <Icon name="users" /> تیم و کارکنان
+        </Link>
+      )}
+      {caps.analytics && (
+        <Link className={`sb-link${onAnalytics ? ' active' : ''}`} href="/team/analytics" data-tour="nav-analytics">
+          <Icon name="chart" /> تحلیل و گزارش‌ها
+        </Link>
+      )}
       <Link className={`sb-link${onSettings ? ' active' : ''}`} href="/settings" data-tour="nav-settings">
         <Icon name="gear" /> تنظیمات حساب
       </Link>

@@ -1,13 +1,28 @@
 from django.urls import path
-from . import views, portal
+from . import adminops, views, portal, team
 
 urlpatterns = [
+    # Liveness probe (public, cheap, no secrets) + operational admin API.
+    path('api/health/', adminops.health_view, name='health'),
+    path('api/admin/data-quality/', adminops.admin_data_quality_view, name='admin_data_quality'),
+    path('api/admin/system/', adminops.admin_system_view, name='admin_system'),
+    path('api/admin/traffic/', adminops.admin_traffic_view, name='admin_traffic'),
+
     # Portal auth (company seats issued by the admin).
     path('api/auth/login/', portal.login_view, name='portal_login'),
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
     path('api/auth/fleet/', portal.fleet_view, name='portal_fleet'),
     path('api/activity/', portal.activity_view, name='portal_activity'),
+
+    # Company self-service team management (manager-gated) + employee invites.
+    path('api/team/members/', team.team_members_view, name='team_members'),
+    path('api/team/members/<int:user_id>/', team.team_member_detail_view, name='team_member_detail'),
+    path('api/team/members/<int:user_id>/access/', team.team_member_access_view, name='team_member_access'),
+    path('api/team/org/', team.team_org_view, name='team_org'),
+    path('api/team/analytics/', team.team_analytics_view, name='team_analytics'),
+    path('api/invite/<str:token>/', team.invite_view, name='invite'),
+
     # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).
     path('api/admin/login/', portal.admin_login_view, name='admin_login'),
     path('api/admin/overview/', portal.admin_overview_view, name='admin_overview'),
@@ -22,6 +37,7 @@ urlpatterns = [
     path('api/admin/users/<int:user_id>/', portal.admin_user_detail_view, name='admin_user_detail'),
     path('api/admin/users/<int:user_id>/access/', portal.admin_user_access_view, name='admin_user_access'),
     path('api/admin/activity/', portal.admin_activity_view, name='admin_activity'),
+    path('api/admin/analytics/', portal.admin_analytics_view, name='admin_analytics'),
 
     # /api/assist/  -> local RAG + relationship-graph retrieval (POST or GET).
     # Declared before the <brand> patterns so "api" is never read as a brand.

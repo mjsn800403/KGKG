@@ -28,18 +28,46 @@ async function metis(path, body) {
   return res.json();
 }
 
-async function backend(path, body) {
+async function backend(path, body, token) {
   const res = await fetch(`${BACKEND_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(60000),
   });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
-    throw new Error(detail?.error || `${path} failed: ${res.status}`);
+    const err = new Error(detail?.error || `${path} failed: ${res.status}`);
+    err.status = res.status;
+    throw err;
   }
   return res.json();
+}
+
+// GET the backend with the caller's token (used to validate the session + read
+// AI eligibility before we spend anything on the paid phraser).
+async function backendGet(path, token) {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    const err = new Error(`${path}: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+// Read a cookie from the raw header — robust whether the runtime hands us a
+// NextRequest or a plain Request.
+function readCookie(request, name) {
+  const raw = request.headers.get('cookie') || '';
+  const m = raw.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : '';
 }
 
 // ---- English -> Persian softener for titles/labels ------------------------
@@ -125,9 +153,14 @@ const RL_WINDOW = parseInt(process.env.CHAT_RL_WINDOW || '60', 10) * 1000;
 const _RL = new Map();   // ip -> number[] (ms timestamps)
 
 function clientIp(request) {
+  // Prefer X-Real-IP (nginx sets it to the true client). Otherwise use the LAST
+  // X-Forwarded-For hop, which is the one our proxy appended — earlier entries
+  // are client-supplied and spoofable (taking [0] was the bypass bug).
+  const xri = request.headers.get('x-real-ip');
+  if (xri) return xri.trim();
   const xff = request.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
-  return request.headers.get('x-real-ip') || 'unknown';
+  if (xff) return xff.split(',').pop().trim();
+  return 'unknown';
 }
 
 function rateLimited(ip) {
@@ -396,6 +429,29 @@ export async function POST(request) {
       );
     }
 
+    // The assistant is a paid feature: require a logged-in portal user whose
+    // account is AI-eligible, validated against the backend, BEFORE any work
+    // (grounding retrieval + the paid Metis call). Token rides the same-site
+    // session cookie the browser sends to this same-origin route.
+    const token = readCookie(request, 'kg_portal_token');
+    if (!token) {
+      return Response.json({ error: 'برای استفاده از دستیار هوشمند ابتدا وارد شوید.' }, { status: 401 });
+    }
+    let me;
+    try {
+      me = await backendGet('/api/auth/me/', token);
+    } catch {
+      return Response.json({ error: 'نشست شما منقضی شده؛ دوباره وارد شوید.' }, { status: 401 });
+    }
+    if (!me?.user) {
+      return Response.json({ error: 'نشست شما منقضی شده؛ دوباره وارد شوید.' }, { status: 401 });
+    }
+    if (!me.user.ai_eligible) {
+      return Response.json(
+        { error: 'دستیار هوش مصنوعی برای حساب شما فعال نیست. با مدیر یا پشتیبانی تماس بگیرید.' },
+        { status: 403 });
+    }
+
     const { message, sessionId, userId, brand, model, car } = await request.json();
     if (!message || !message.trim()) {
       return Response.json({ error: 'پیام خالی است.' }, { status: 400 });
@@ -410,7 +466,7 @@ export async function POST(request) {
     let allowedHrefs = new Set();   // hrefs we actually retrieved (link validation)
     if (car || model) {
       try {
-        diag = await backend('/api/diagnose/', { query: message, brand, model, car });
+        diag = await backend('/api/diagnose/', { query: message, brand, model, car }, token);
       } catch (e) {
         console.error('diagnose error (will fall back to assist):', e);
       }
@@ -438,7 +494,7 @@ export async function POST(request) {
     } else {
       let rag;
       try {
-        rag = await backend('/api/assist/', { query: message, brand, model, car });
+        rag = await backend('/api/assist/', { query: message, brand, model, car }, token);
       } catch (e) {
         console.error('RAG retrieve error:', e);
         return Response.json(

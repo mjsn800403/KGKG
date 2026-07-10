@@ -1,11 +1,14 @@
 // app/[brand]/[year]/[model]/[[...path]]/page.js
+import { redirect } from 'next/navigation';
 import { fetchNodes } from '@/utils/api';
+import { portalTokenCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
 import ContentRenderer from '@/components/ContentRenderer';
 import SearchBox from '@/components/SearchBox';
+import ActivityBeacon from '@/components/ActivityBeacon';
 
 const ICONS = ['▣', '⌖', '◷', '⚙', '◧', '◩', '⬡', '⊞'];
 
@@ -16,14 +19,39 @@ export default async function NodePage({ params }) {
   const model = decodeURIComponent(raw.model);
   const pathArray = (raw.path || []).map(decodeURIComponent);
 
+  // Paid content: must be signed in (token in the SSR cookie). No token -> login.
+  const token = await portalTokenCookie();
+  if (!token) redirect('/login');
+
   let nodes = [];
   let error = null;
+  let denied = false;
 
   try {
-    nodes = await fetchNodes(brand, parseInt(year), model, pathArray);
+    nodes = await fetchNodes(brand, parseInt(year), model, pathArray, token);
   } catch (err) {
-    console.error('Error fetching nodes:', err);
-    error = err.message;
+    if (err?.status === 401) redirect('/login');
+    else if (err?.status === 403) denied = true;
+    else {
+      console.error('Error fetching nodes:', err);
+      error = err.message;
+    }
+  }
+
+  if (denied) {
+    return (
+      <DashboardShell>
+        <div className="topbar">
+          <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
+          <UserChip />
+        </div>
+        <h1 className="page-title">دسترسی محدود</h1>
+        <div className="error-box">
+          <p>دسترسی به مستندات این خودرو در اشتراک شما نیست. برای افزودن این خودرو با مدیر یا پشتیبانی تماس بگیرید.</p>
+          <a href="/browse" className="back-link">← بازگشت به خودروهای فعال</a>
+        </div>
+      </DashboardShell>
+    );
   }
 
   const isLeafWithContent =
@@ -66,6 +94,12 @@ export default async function NodePage({ params }) {
       </div>
       <h1 className="page-title">{currentTitle}</h1>
       <div className="page-sub">// {isLeafWithContent ? 'DOCUMENT_VIEW' : 'SECTION_INDEX'}</div>
+      <ActivityBeacon
+        action={isLeafWithContent ? 'view_node' : 'view_section'}
+        detail={`${model} — ${currentTitle}`}
+        segments={pathArray}
+        nodeTitle={currentTitle}
+      />
 
       {isLeafWithContent ? (
         <ContentRenderer content={nodes[0].content} brand={brand} year={year} model={model} />

@@ -35,17 +35,27 @@ _LOCK = threading.Lock()
 _HITS = defaultdict(deque)        # ip -> deque[monotonic timestamps]
 _LAST_SWEEP = 0.0
 
-# Trust X-Forwarded-For only when explicitly told to (i.e. you actually run
-# behind a proxy that sets it). Off by default: otherwise any client can spoof
-# the header and rotate IPs to dodge the limit.
-_TRUST_XFF = os.environ.get('KG_TRUST_XFF', '0') == '1'
+# Trust proxy headers only when explicitly told to (i.e. you actually run behind
+# a reverse proxy you control). Off by default: otherwise any client can spoof
+# the headers and rotate IPs to dodge the limit. IMPORTANT behind nginx:
+# REMOTE_ADDR is always the proxy (127.0.0.1), so WITHOUT this the per-IP limiter
+# collapses to one global bucket. Enable KG_TRUST_PROXY=1 in that setup.
+_TRUST_PROXY = (os.environ.get('KG_TRUST_PROXY')
+                or os.environ.get('KG_TRUST_XFF', '0')) == '1'
 
 
 def _client_ip(request):
-    if _TRUST_XFF:
+    if _TRUST_PROXY:
+        # nginx sets X-Real-IP to the true client ($remote_addr) — trustworthy.
+        xri = (request.META.get('HTTP_X_REAL_IP') or '').strip()
+        if xri:
+            return xri
+        # Fallback: the LAST X-Forwarded-For entry is the hop our own proxy
+        # appended ($proxy_add_x_forwarded_for). Earlier entries are attacker-
+        # supplied and must NOT be trusted (taking [0] was the spoofable bug).
         xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
         if xff:
-            return xff.split(',')[0].strip()
+            return xff.split(',')[-1].strip()
     return request.META.get('REMOTE_ADDR', '') or 'unknown'
 
 

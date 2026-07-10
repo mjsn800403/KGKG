@@ -142,6 +142,72 @@ const PATHS = {
     </>
   ),
   arrow: <path d="M19 12H5M11 6l-6 6 6 6" />,
+  // team / management
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M17.5 14.2A6.5 6.5 0 0 1 21.5 20" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  trash: (
+    <>
+      <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.8-2.8L5 17.2 4 20Z" />
+      <path d="M14 6.5l3.5 3.5" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M9 15l6-6" />
+      <path d="M11 6.5 12.8 4.7a3.5 3.5 0 0 1 5 5L16 11.5M13 17.5 11.2 19.3a3.5 3.5 0 0 1-5-5L8 12.5" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M20 11a8 8 0 0 0-14-4.5L4 8M4 4v4h4" />
+      <path d="M4 13a8 8 0 0 0 14 4.5L20 16M20 20v-4h-4" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M4 20V4M4 20h16" />
+      <path d="M8 20v-6M12 20V8M16 20v-9M20 20V6" />
+    </>
+  ),
+  org: (
+    <>
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <rect x="3" y="16" width="6" height="4" rx="1" />
+      <rect x="15" y="16" width="6" height="4" rx="1" />
+      <path d="M12 7v4M6 16v-2.5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1V16" />
+    </>
+  ),
+  sparkles: (
+    <>
+      <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3Z" />
+      <path d="M18.5 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z" />
+    </>
+  ),
+  mailplus: (
+    <>
+      <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H15a1.5 1.5 0 0 1 1.5 1.5v5" />
+      <path d="m3.5 7 6.5 4.5L14 8.7" />
+      <path d="M18 15v6M15 18h6" />
+    </>
+  ),
 };
 
 export default function Icon({ name, size = undefined, style = undefined, className = undefined }) {
