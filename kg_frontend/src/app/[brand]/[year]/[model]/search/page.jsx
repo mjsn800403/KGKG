@@ -1,7 +1,9 @@
 // app/[brand]/[year]/[model]/search/page.js — full search results page.
 // The static "search" segment takes precedence over the sibling [...path]
 // catch-all in the App Router, so it never collides with node navigation.
+import { redirect } from 'next/navigation';
 import { searchNodes, buildNodeHref } from '@/utils/api';
+import { portalTokenCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -18,7 +20,10 @@ export default async function SearchPage({ params, searchParams }) {
   const model = decodeURIComponent(raw.model);
   const q = (sp?.q || '').trim();
 
-  const results = q ? await searchNodes(brand, parseInt(year), model, q, 30) : [];
+  const token = await portalTokenCookie();
+  if (!token) redirect('/login');
+
+  const results = q ? await searchNodes(brand, parseInt(year), model, q, 30, token) : [];
 
   const items = results.map((node, i) => ({
     href: buildNodeHref(brand, year, model, node.segments),

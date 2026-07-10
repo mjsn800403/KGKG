@@ -20,3 +20,7 @@
 *.bak
 *.bak_*
 KG_backend/staticfiles/
+
+# Never commit the live application database (credentials, tokens, PII)
+/KG_backend/db.sqlite3
+/KG_backend/db.sqlite3.*

@@ -34,7 +34,10 @@ def _app_url(occ):
     /{brand}/{year}/{car_stem}/{seg}/{seg}... -- one segment per breadcrumb
     level below the vehicle root (which is dropped, matching car_view)."""
     segs = [s for s in (occ['title_path'] or '').split(' › ') if s][1:]
-    year = occ['year'] if occ['year'] is not None else ''
+    # Frontend route is /{brand}/{year}/{car_stem}/... — year is a real path
+    # segment there, so a missing year must not collapse into an empty segment
+    # (`/brand//stem`, a broken link). Fall back to the literal 'unknown'.
+    year = occ['year'] if occ['year'] is not None else 'unknown'
     base = f"/{quote(occ['brand'] or '')}/{year}/{quote(occ['car_stem'])}"
     if segs:
         base += '/' + '/'.join(quote(s) for s in segs)

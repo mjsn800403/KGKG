@@ -1,5 +1,7 @@
 // app/[brand]/[year]/[model]/page.js — vehicle view (real root documents)
+import { redirect } from 'next/navigation';
 import { fetchModels } from '@/utils/api';
+import { portalTokenCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -27,12 +29,20 @@ export default async function ModelPage({ params }) {
   const year = raw.year;
   const model = decodeURIComponent(raw.model);
 
+  const token = await portalTokenCookie();
+  if (!token) redirect('/login');
+
   let nodes = [];
   let loadError = '';
   try {
-    nodes = await fetchModels(brand, parseInt(year), model);
+    nodes = await fetchModels(brand, parseInt(year), model, token);
   } catch (e) {
-    loadError = e?.message || 'بارگذاری مستندات این خودرو ناموفق بود.';
+    if (e?.status === 401) redirect('/login');
+    else if (e?.status === 403) {
+      loadError = 'دسترسی به مستندات این خودرو در اشتراک شما نیست. برای افزودن این خودرو با مدیر یا پشتیبانی تماس بگیرید.';
+    } else {
+      loadError = e?.message || 'بارگذاری مستندات این خودرو ناموفق بود.';
+    }
   }
 
   if (loadError) {

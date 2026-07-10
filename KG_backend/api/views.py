@@ -1,22 +1,76 @@
 import re
 import json
-import sqlite3
 from pathlib import Path
 from urllib.parse import quote
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from bs4 import BeautifulSoup
+from . import cardb
 from .models import Car, PurchaseRequest
-from .access import car_db_ready
+from .access import car_db_ready, user_can_open_car
+from .portal import portal_user
 from .ratelimit import rate_limited, require_admin_token
+
+# Public catalog listings change only when the fleet changes; a short TTL keeps
+# them fresh enough while collapsing per-request table scans + fleet stat()s.
+CATALOG_CACHE_TTL = 60
+
+
+def _unauthorized():
+    return JsonResponse({'error': 'unauthorized'}, status=401)
+
+
+def _forbidden_car():
+    return JsonResponse(
+        {'error': 'forbidden',
+         'detail': 'دسترسی به مستندات این خودرو در اشتراک شما نیست.'},
+        status=403)
+
+
+def _resolve_car(stem, brand=None, year=None):
+    """Best-effort map a RAG car_stem / model name (+ optional brand/year) to a
+    catalog Car row, for per-car access checks. Returns a Car or None."""
+    if not stem:
+        return None
+    qs = Car.objects.all()
+    if brand:
+        qs = qs.filter(brand_name__iexact=brand)
+    if year:
+        try:
+            qs = qs.filter(year=int(year))
+        except (TypeError, ValueError):
+            pass
+    return qs.filter(car_name__iexact=stem).first()
+
+
+def _guard_car_content(request, stem, brand=None, year=None):
+    """Auth + per-car access gate for the manual-content endpoints (assist /
+    diagnose / search / car content). Returns (user, None) when allowed, or
+    (None, JsonResponse) with the right 401/403 to return.
+
+    A resolvable car is access-checked; a query with no resolvable car (the
+    general, car-less assistant) requires only a valid login. The RAG index is
+    small (a handful of indexed vehicles); scoping the car-less path to the
+    user's own vehicles is a follow-up."""
+    user = portal_user(request)
+    if not user:
+        return None, _unauthorized()
+    car = _resolve_car(stem, brand=brand, year=year)
+    if car is not None and not user_can_open_car(user, car):
+        return None, _forbidden_car()
+    return user, None
 
 def brands_list_view(request):
     """GET / -> distinct list of brand names available across all cars."""
-    brands = sorted({
-        c.brand_name for c in Car.objects.order_by('brand_name')
-        if car_db_ready(c)
-    })
+    brands = cache.get('kg:brands')
+    if brands is None:
+        brands = sorted({
+            c.brand_name for c in Car.objects.order_by('brand_name')
+            if car_db_ready(c)
+        })
+        cache.set('kg:brands', brands, CATALOG_CACHE_TTL)
     return JsonResponse(brands, safe=False)
 
 
@@ -48,6 +102,10 @@ def assist_view(request):
 
     if not query:
         return JsonResponse({'error': 'query is required'}, status=400)
+
+    _user, deny = _guard_car_content(request, car or model, brand=brand)
+    if deny:
+        return deny
 
     try:
         from .rag import service
@@ -90,6 +148,10 @@ def diagnose_view(request):
     if not query:
         return JsonResponse({'error': 'query is required'}, status=400)
 
+    _user, deny = _guard_car_content(request, car or model, brand=brand)
+    if deny:
+        return deny
+
     try:
         from .rag import service
         result = service.diagnose(query, brand=brand, model=model, car_stem=car)
@@ -110,6 +172,8 @@ def assist_feedback_view(request):
     improve ranking over time. Best-effort; always returns ok."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
+    if not portal_user(request):
+        return _unauthorized()
     try:
         body = json.loads(request.body or '{}')
     except (ValueError, TypeError):
@@ -224,6 +288,8 @@ def feedback_rate_view(request):
     Records a 👍/👎 verdict (human-in-the-loop). Best-effort; always ok."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
+    if not portal_user(request):
+        return _unauthorized()
     b = _post_body(request)
     scope = {'brand': b.get('brand'), 'model': b.get('model'),
              'car_stem': b.get('car') or b.get('car_stem')}
@@ -311,6 +377,9 @@ def search_view(request):
     car = request.GET.get('car') or request.GET.get('car_stem') or None
     if not q:
         return JsonResponse([], safe=False)
+    _user, deny = _guard_car_content(request, car or model, brand=brand)
+    if deny:
+        return deny
     try:
         limit = int(request.GET.get('limit', 30) or 30)
     except (TypeError, ValueError):
@@ -342,50 +411,39 @@ def _search_like_fallback(brand, model, car, q, limit):
     if car_obj is None:
         return JsonResponse([], safe=False)
     conn = get_car_db(car_obj.db_address)
-    conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    try:
-        like = f'%{q}%'
-        cur.execute(f"""
-            SELECT {NODE_COLUMNS},
-                   CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
-            FROM nodes
-            WHERE (title LIKE ? OR content LIKE ?)
-                  AND (href IS NULL OR href != '404.html')
-            ORDER BY rank, depth, sort_order
-            LIMIT ?
-        """, (like, like, like, limit))
-        results = []
-        for row in cur.fetchall():
-            segments, current = [], row
-            while current['parent_id'] is not None:
-                segments.append(current['title'])
-                cur.execute(f"SELECT {NODE_COLUMNS} FROM nodes WHERE id = ?",
-                            (current['parent_id'],))
-                parent = cur.fetchone()
-                if not parent:
-                    break
-                current = parent
-            segments.reverse()
-            results.append({
-                'title': row['title'], 'path': row['path'],
-                'node_type': row['node_type'],
-                'is_leaf': row['content'] is not None,
-                'segments': segments,
-            })
-        return JsonResponse(results, safe=False)
-    finally:
-        conn.close()
+    like = f'%{q}%'
+    cur.execute(f"""
+        SELECT {NODE_COLUMNS},
+               CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
+        FROM nodes
+        WHERE (title LIKE ? OR content LIKE ?)
+              AND (href IS NULL OR href != '404.html')
+        ORDER BY rank, depth, sort_order
+        LIMIT ?
+    """, (like, like, like, limit))
+    results = []
+    for row in cur.fetchall():
+        results.append({
+            'title': row['title'], 'path': row['path'],
+            'node_type': row['node_type'],
+            'is_leaf': row['content'] is not None,
+            'segments': cardb.breadcrumbs(conn, row['id']),
+        })
+    return JsonResponse(results, safe=False)
 
 def get_car_db(db_address):
-    """Connect to car-specific database"""
+    """Pooled, read-only connection to a car-specific database.
+
+    Callers must NOT close it — the pool owns the connection (see cardb)."""
     main_dir = Path(settings.DATABASES['default']['NAME']).parent
     # db_address may carry Windows separators (rows seeded on Windows); normalize
     # so it resolves on POSIX/macOS too.
     abs_path = main_dir / db_address.replace('\\', '/')
-    if not abs_path.exists():
+    try:
+        return cardb.connect(abs_path)
+    except FileNotFoundError:
         raise FileNotFoundError(f"Database not found: {abs_path}")
-    return sqlite3.connect(str(abs_path))
 
 NODE_COLUMNS = """id, parent_id, path, title, node_type, file_type,
                   href, sort_order, depth, content"""
@@ -471,25 +529,27 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                                                      car's root nodes.
     """
 
-    # Case 1: Only brand name
+    # Case 1: Only brand name. Public catalog (the sales/purchase page lists the
+    # vehicles we cover); intentionally exposes no manual content and no internal
+    # db_address path.
     if brand_name and not year:
         cars = [
             c for c in Car.objects.filter(brand_name__iexact=brand_name).order_by('car_name', 'year')
             if car_db_ready(c)
         ]
         return JsonResponse([
-            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year, 'db_address': c.db_address}
+            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year}
             for c in cars
         ], safe=False)
 
-    # Case 2: Brand and year
+    # Case 2: Brand and year. Public catalog, same rationale as Case 1.
     if brand_name and year and not model_name:
         cars = [
             c for c in Car.objects.filter(brand_name__iexact=brand_name, year=year).order_by('car_name')
             if car_db_ready(c)
         ]
         return JsonResponse([
-            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year, 'db_address': c.db_address}
+            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year}
             for c in cars
         ], safe=False)
 
@@ -502,12 +562,24 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 year=year,
                 car_name__iexact=model_name
             )
+
+            # A specific vehicle's manual is paid content: require a logged-in
+            # portal user who has this car in their effective grants — checked
+            # BEFORE anything else so readiness/existence isn't revealed to
+            # anonymous callers. (The brand and year listings above stay public
+            # for the sales catalog; opening a vehicle does not.)
+            _content_user = portal_user(request)
+            if not _content_user:
+                return _unauthorized()
+            if not user_can_open_car(_content_user, car):
+                return _forbidden_car()
+
             if not car_db_ready(car):
                 return JsonResponse({'error': 'vehicle database not available on server'}, status=404)
 
-            # Connect to car database
+            # Pooled read-only connection to the car database (never closed
+            # here — the pool owns it; see api/cardb.py).
             conn = get_car_db(car.db_address)
-            conn.row_factory = sqlite3.Row
             cur = conn.cursor()
 
             path_segments = request.GET.getlist('seg')
@@ -524,7 +596,6 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 # the href branch) so the frontend can build a navigation URL.
                 q = search_q.strip()
                 if not q:
-                    conn.close()
                     return JsonResponse([], safe=False)
                 try:
                     limit = int(request.GET.get('limit', 30) or 30)
@@ -544,35 +615,20 @@ def car_view(request, brand_name=None, year=None, model_name=None):
 
                 results = []
                 for row in cur.fetchall():
-                    segments = []
-                    current = row
-                    while current['parent_id'] is not None:
-                        segments.append(current['title'])
-                        cur.execute(
-                            f"SELECT {NODE_COLUMNS} FROM nodes WHERE id = ?",
-                            (current['parent_id'],),
-                        )
-                        parent = cur.fetchone()
-                        if not parent:
-                            break
-                        current = parent
-                    segments.reverse()
                     results.append({
                         'title': row['title'],
                         'path': row['path'],
                         'node_type': row['node_type'],
                         'is_leaf': row['content'] is not None,
-                        'segments': segments,
+                        'segments': cardb.breadcrumbs(conn, row['id']),
                     })
 
-                conn.close()
                 return JsonResponse(results, safe=False)
 
             if page_file:
                 # Serve a raw manual page that has no node (orphan cross-link
                 # target). Read straight from this car's own source folder.
                 result = read_page_content(cur, car.car_name, page_file.rstrip('/').split('/')[-1])
-                conn.close()
                 if result is None:
                     return JsonResponse({'error': f'Page not found: {page_file}'}, status=404)
                 return JsonResponse(result)
@@ -606,23 +662,11 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 if not node:
                     return JsonResponse({'error': f'No node found for href: {href_lookup}'}, status=404)
 
-                segments = []
-                current = node
-                while current['parent_id'] is not None:
-                    segments.append(current['title'])
-                    cur.execute(f"SELECT {NODE_COLUMNS} FROM nodes WHERE id = ?", (current['parent_id'],))
-                    parent = cur.fetchone()
-                    if not parent:
-                        break
-                    current = parent
-                segments.reverse()
-
-                conn.close()
                 return JsonResponse({
                     'brand': car.brand_name,
                     'year': car.year,
                     'model': car.car_name,
-                    'segments': segments,
+                    'segments': cardb.breadcrumbs(conn, node['id']),
                 })
 
             if not path_segments:
@@ -677,7 +721,6 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 # return the node itself instead of querying for children.
                 if matched['content'] is not None:
                     nodes = [node_to_dict(matched, car.car_name)]
-                    conn.close()
                     return JsonResponse(nodes, safe=False)
 
                 cur.execute(f"""
@@ -688,8 +731,6 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 """, (matched['id'],))
 
             nodes = [node_to_dict(row, car.car_name) for row in cur.fetchall()]
-            conn.close()
-
             return JsonResponse(nodes, safe=False)
 
         except Car.DoesNotExist:

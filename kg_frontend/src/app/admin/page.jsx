@@ -13,7 +13,7 @@
 // Server-side everything is gated by KG_ADMIN_TOKEN (open in DEBUG for local
 // dev). If the backend rejects us we prompt for the token.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/Icon';
 import { adminApi, adminLogin, adminLogout, getAdminToken, getAdminUser, setAdminToken } from '@/utils/api';
@@ -42,7 +42,10 @@ const SECTIONS = [
   { id: 'requests', label: 'درخواست‌های خرید', icon: 'cart' },
   { id: 'companies', label: 'شرکت‌ها و دسترسی‌ها', icon: 'info' },
   { id: 'users', label: 'کاربران', icon: 'gear' },
+  { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart' },
   { id: 'activity', label: 'گزارش فعالیت', icon: 'clock' },
+  { id: 'dataquality', label: 'سلامت داده‌ها', icon: 'shield' },
+  { id: 'system', label: 'پایش سیستم', icon: 'gear' },
 ];
 
 function fmtDate(iso) {
@@ -183,7 +186,10 @@ export default function AdminPage() {
                 />
               )}
               {section === 'users' && <Users guard={guard} />}
+              {section === 'analytics' && <PlatformAnalytics guard={guard} />}
               {section === 'activity' && <Activity guard={guard} />}
+              {section === 'dataquality' && <DataQuality guard={guard} />}
+              {section === 'system' && <SystemMonitor guard={guard} />}
             </>
           )}
         </main>
@@ -1048,7 +1054,7 @@ function Activity({ guard }) {
       <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
         <table className="adm-table">
           <thead>
-            <tr><th>زمان</th><th>کاربر</th><th>شرکت</th><th>نقش</th><th>عملیات</th><th>جزئیات</th></tr>
+            <tr><th>زمان</th><th>کاربر</th><th>شرکت</th><th>نقش</th><th>عملیات</th><th>حوزه</th><th>جزئیات</th></tr>
           </thead>
           <tbody>
             {items.map((a) => (
@@ -1058,15 +1064,445 @@ function Activity({ guard }) {
                 <td>{a.company}</td>
                 <td>{a.role_label}</td>
                 <td>{a.action}</td>
+                <td>{a.category_label || '—'}</td>
                 <td>{a.detail}</td>
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>فعالیتی ثبت نشده است.</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>فعالیتی ثبت نشده است.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Platform-wide usage analytics (cross-company). Same visual language as the
+// company manager's dashboard, but aggregated across every company.
+const AN_RANGES = [{ id: '7', label: '۷ روز' }, { id: '30', label: '۳۰ روز' }, { id: '90', label: '۹۰ روز' }];
+
+function PlatformAnalytics({ guard }) {
+  const [data, setData] = useState(null);
+  const [range, setRange] = useState('30');
+
+  useEffect(() => {
+    guard(() => adminApi.analytics({ range })).then((d) => d && setData(d));
+  }, [guard, range]);
+
+  if (!data) return <div className="empty-state">در حال بارگذاری تحلیل‌ها…</div>;
+  const maxCat = Math.max(1, ...data.categories.map((c) => c.count));
+  const maxCompany = Math.max(1, ...data.companies_usage.map((c) => c.events));
+  const maxUser = Math.max(1, ...data.top_users.map((u) => u.events));
+
+  return (
+    <>
+      <h1 className="page-title">تحلیل استفاده کل پلتفرم</h1>
+      <div className="page-sub">// PLATFORM_ANALYTICS</div>
+
+      <div className="range-chips" style={{ margin: '16px 0' }}>
+        {AN_RANGES.map((r) => (
+          <button key={r.id} className={`range-chip${range === r.id ? ' active' : ''}`} onClick={() => setRange(r.id)}>{r.label}</button>
+        ))}
+      </div>
+
+      <div className="an-kpis">
+        <div className="an-kpi glass"><div className="an-kpi-ico"><Icon name="chart" /></div><div><div className="an-kpi-val">{(data.totals.events || 0).toLocaleString('fa-IR')}</div><div className="an-kpi-label">کل فعالیت‌ها</div></div></div>
+        <div className="an-kpi glass"><div className="an-kpi-ico"><Icon name="building" /></div><div><div className="an-kpi-val">{(data.totals.companies || 0).toLocaleString('fa-IR')}</div><div className="an-kpi-label">شرکت‌ها</div></div></div>
+        <div className="an-kpi glass"><div className="an-kpi-ico"><Icon name="users" /></div><div><div className="an-kpi-val">{(data.totals.active_users || 0).toLocaleString('fa-IR')}</div><div className="an-kpi-label">کاربران فعال</div></div></div>
+      </div>
+
+      <div className="an-grid">
+        <section className="an-card glass">
+          <div className="an-card-head"><h3><Icon name="chart" size={16} /> استفاده به تفکیک حوزه فنی</h3></div>
+          <div className="bars">
+            {data.categories.map((c) => (
+              <div className="bar-row" key={c.id} title={`${c.label}: ${c.count}`}>
+                <span className="bar-label">{c.label}</span>
+                <div className="bar-track"><div className="bar-fill" style={{ width: `${(c.count / maxCat) * 100}%` }} /></div>
+                <span className="bar-val">{c.count.toLocaleString('fa-IR')}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="an-card glass">
+          <div className="an-card-head"><h3><Icon name="building" size={16} /> استفاده به تفکیک شرکت</h3></div>
+          <div className="bars">
+            {data.companies_usage.slice(0, 12).map((c) => (
+              <div className="bar-row" key={c.company_id} title={`${c.company}: ${c.events}`}>
+                <span className="bar-label">{c.company}</span>
+                <div className="bar-track"><div className="bar-fill alt" style={{ width: `${(c.events / maxCompany) * 100}%` }} /></div>
+                <span className="bar-val">{c.events.toLocaleString('fa-IR')}</span>
+              </div>
+            ))}
+            {data.companies_usage.length === 0 && <div className="muted">داده‌ای ثبت نشده است.</div>}
+          </div>
+        </section>
+
+        <section className="an-card glass an-span">
+          <div className="an-card-head"><h3><Icon name="users" size={16} /> فعال‌ترین کاربران (همه شرکت‌ها)</h3></div>
+          <div className="member-usage">
+            {data.top_users.map((u) => (
+              <div className="mu-row" key={u.user_id} style={{ cursor: 'default' }}>
+                <span className="mu-name">{u.user}<small>{u.company}</small></span>
+                <div className="mu-track"><div className="mu-fill" style={{ width: `${(u.events / maxUser) * 100}%` }} /></div>
+                <span className="mu-val">{u.events.toLocaleString('fa-IR')}</span>
+              </div>
+            ))}
+            {data.top_users.length === 0 && <div className="muted">داده‌ای ثبت نشده است.</div>}
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Data quality — which vehicles are complete, which have missing sections,
+// duplicates, and which pipeline processes are still pending per vehicle.
+// ---------------------------------------------------------------------------
+const DQ_STATUS = {
+  complete: { label: 'کامل', cls: 'st-ok' },
+  incomplete: { label: 'ناقص', cls: 'st-rev' },
+  duplicate: { label: 'تکراری', cls: 'st-no' },
+  corrupt: { label: 'خراب', cls: 'st-no' },
+};
+
+function DataQuality({ guard }) {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+  const [filter, setFilter] = useState('all');
+
+  const load = useCallback(() => {
+    guard(adminApi.dataQuality).then((d) => d && setData(d));
+  }, [guard]);
+  useEffect(() => { load(); }, [load]);
+
+  // While a refresh runs, poll until it lands.
+  useEffect(() => {
+    if (!data?.running) return undefined;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [data?.running, load]);
+
+  const refresh = async (fix) => {
+    setBusy(true);
+    try {
+      await guard(() => adminApi.dataQualityRefresh(fix));
+      setData((d) => ({ ...(d || {}), running: true }));
+    } finally { setBusy(false); }
+  };
+
+  const report = data?.report;
+  const vehicles = useMemo(() => {
+    const items = report?.vehicles || [];
+    if (filter === 'all') return items;
+    if (filter === 'issues') return items.filter((v) => v.status !== 'complete');
+    return items.filter((v) => v.status === filter);
+  }, [report, filter]);
+
+  const s = report?.summary;
+  return (
+    <>
+      <h1 className="page-title">سلامت داده‌های خودروها</h1>
+      <div className="page-sub">// DATA_QUALITY — کامل بودن بخش‌ها، تکراری‌ها و فرایندهای درانتظار</div>
+
+      <div style={{ display: 'flex', gap: 10, margin: '16px 0', flexWrap: 'wrap' }}>
+        <button className="btn btn-accent" disabled={busy || data?.running} onClick={() => refresh(false)}>
+          <Icon name="refresh" size={14} /> {data?.running ? 'در حال بررسی…' : 'بررسی مجدد انبار داده'}
+        </button>
+        <button
+          className="btn"
+          disabled={busy || data?.running}
+          onClick={() => refresh(true)}
+          title="موارد امن به‌صورت خودکار اصلاح می‌شوند (فایل‌های خراب و نسخه‌های تکراری قرنطینه می‌شوند)"
+        >
+          بررسی + اصلاح خودکار
+        </button>
+        {report?.finished_at && (
+          <span style={{ color: 'var(--text-dim)', fontSize: 13, alignSelf: 'center' }}>
+            آخرین بررسی: {fmtDate(report.finished_at)}
+          </span>
+        )}
+      </div>
+
+      {!report && !data?.running && (
+        <div className="empty-state">هنوز بررسی‌ای انجام نشده است — روی «بررسی مجدد» بزنید.</div>
+      )}
+      {data?.running && !report && <div className="empty-state">در حال بررسی انبار داده…</div>}
+
+      {s && (
+        <div className="grid3" style={{ marginBottom: 18 }}>
+          <div className="card glass"><div className="num">{s.total_dbs}</div><h3>کل خودروها (فایل داده)</h3></div>
+          <div className="card glass"><div className="num" style={{ color: '#22c55e' }}>{s.complete}</div><h3>کامل</h3></div>
+          <div className="card glass"><div className="num" style={{ color: '#eab308' }}>{s.incomplete}</div><h3>ناقص</h3></div>
+          <div className="card glass"><div className="num" style={{ color: '#ef4444' }}>{(s.duplicates || []).length}</div><h3>تکراری</h3></div>
+          <div className="card glass"><div className="num" style={{ color: '#ef4444' }}>{s.corrupt}</div><h3>فایل خراب</h3></div>
+          <div className="card glass"><div className="num">{s.rag_indexed}/{s.total_dbs}</div><h3>ایندکس هوشمند (RAG)</h3></div>
+        </div>
+      )}
+
+      {(s?.duplicates || []).length > 0 && (
+        <div className="card glass" style={{ marginBottom: 18 }}>
+          <h3 style={{ marginTop: 0 }}>خودروهای تکراری شناسایی‌شده</h3>
+          {s.duplicates.map((d, i) => (
+            <div key={i} style={{ fontSize: 14, marginBottom: 6 }} dir="ltr">
+              <b>{d.remove.join(', ')}</b>
+              {d.keep ? <> ← نسخهٔ اصلی: <b>{d.keep}</b> {d.fingerprint ? '(محتوای یکسان تأیید شد)' : ''}</> : ' (نسخهٔ اصلی یافت نشد)'}
+              {d.note ? <span style={{ color: 'var(--text-dim)' }}> — {d.note}</span> : null}
+            </div>
+          ))}
+          <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 0 }}>
+            «بررسی + اصلاح خودکار» نسخهٔ تکراری را با نسخهٔ اصلی ادغام و فایل آن را قرنطینه می‌کند (حذف نمی‌شود).
+          </p>
+        </div>
+      )}
+
+      {report && (
+        <>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            {[['all', 'همه'], ['issues', 'دارای مشکل'], ['complete', 'کامل'], ['incomplete', 'ناقص'], ['corrupt', 'خراب'], ['duplicate', 'تکراری']].map(([id, label]) => (
+              <button
+                key={id}
+                className={`btn${filter === id ? ' btn-accent' : ''}`}
+                style={{ padding: '4px 12px', fontSize: 13 }}
+                onClick={() => setFilter(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
+            <table className="adm-table">
+              <thead>
+                <tr><th>خودرو</th><th>وضعیت</th><th>بخش‌ها</th><th>حجم</th><th>کاتالوگ</th><th>RAG</th><th>عیب‌یاب</th><th>تصاویر</th><th>درانتظار</th></tr>
+              </thead>
+              <tbody>
+                {vehicles.map((v) => {
+                  const st = DQ_STATUS[v.status] || { label: v.status, cls: '' };
+                  const issues = (v.missing_sections || []).length + (v.empty_sections || []).length;
+                  const isOpen = expanded === v.stem;
+                  return (
+                    <Fragment key={v.stem}>
+                      <tr onClick={() => setExpanded(isOpen ? null : v.stem)} style={{ cursor: 'pointer' }}>
+                        <td dir="ltr">{v.stem}</td>
+                        <td><span className={`st-badge ${st.cls}`}>{st.label}</span></td>
+                        <td>{(v.sections || []).length}{issues > 0 ? ` (${issues} مشکل)` : ''}</td>
+                        <td dir="ltr">{v.size_mb ? `${Math.round(v.size_mb)}MB` : '—'}</td>
+                        <td>{v.cataloged ? '✓' : '✗'}</td>
+                        <td>{v.rag_indexed ? '✓' : '✗'}</td>
+                        <td>{v.diag_indexed ? '✓' : '✗'}</td>
+                        <td>{v.static_assets ? '✓' : '✗'}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-dim)' }} dir="ltr">{(v.pending_processes || []).join('، ') || '—'}</td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={9}>
+                            {v.error && <div style={{ color: '#ef4444', marginBottom: 8 }} dir="ltr">error: {v.error}</div>}
+                            {(v.missing_sections || []).length > 0 && (
+                              <div style={{ marginBottom: 6 }}>بخش‌های غایب: <b dir="ltr">{v.missing_sections.join(', ')}</b></div>
+                            )}
+                            {(v.empty_sections || []).length > 0 && (
+                              <div style={{ marginBottom: 6 }}>بخش‌های خالی: <b dir="ltr">{v.empty_sections.join(', ')}</b></div>
+                            )}
+                            {(v.shared_content_with || []).length > 0 && (
+                              <div style={{ marginBottom: 6, color: 'var(--text-dim)' }}>
+                                محتوای یکسان با (تریم‌های هم‌خانواده — طبیعی): <span dir="ltr">{v.shared_content_with.join(', ')}</span>
+                              </div>
+                            )}
+                            <table className="adm-table" style={{ fontSize: 13 }}>
+                              <thead><tr><th>بخش</th><th>تعداد صفحات</th><th>صفحات دارای محتوا</th><th>حجم محتوا</th></tr></thead>
+                              <tbody>
+                                {(v.sections || []).map((sec) => (
+                                  <tr key={sec.normalized}>
+                                    <td dir="ltr">{sec.title}</td>
+                                    <td>{sec.nodes}</td>
+                                    <td style={sec.content_leaves === 0 ? { color: '#ef4444' } : undefined}>{sec.content_leaves}</td>
+                                    <td dir="ltr">{sec.mb}MB</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+                {vehicles.length === 0 && (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>موردی یافت نشد.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// System monitoring — live server health, alerts, and traffic analytics.
+// ---------------------------------------------------------------------------
+const SEV = {
+  critical: { label: 'بحرانی', color: '#ef4444' },
+  warning: { label: 'هشدار', color: '#eab308' },
+  info: { label: 'اطلاع', color: '#3b82f6' },
+};
+
+function SystemMonitor({ guard }) {
+  const [sys, setSys] = useState(null);
+  const [traffic, setTraffic] = useState(null);
+  const [range, setRange] = useState(7);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    guard(adminApi.system).then((d) => d && setSys(d));
+  }, [guard]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    guard(() => adminApi.traffic(range)).then((d) => d && setTraffic(d));
+  }, [guard, range]);
+
+  const checkNow = async () => {
+    setBusy(true);
+    try { await guard(adminApi.checkAlerts); load(); } finally { setBusy(false); }
+  };
+
+  const snap = sys?.snapshot;
+  const fmtUptime = (sec) => {
+    if (!sec && sec !== 0) return '—';
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return `${d}روز ${h}ساعت`;
+    if (h > 0) return `${h}ساعت ${m}دقیقه`;
+    return `${m}دقیقه`;
+  };
+  const maxDay = Math.max(1, ...((traffic?.series || []).map((x) => x.requests || 0)));
+
+  return (
+    <>
+      <h1 className="page-title">پایش سیستم و ترافیک</h1>
+      <div className="page-sub">// SYSTEM_MONITOR — سلامت سرور، هشدارها و آمار بازدید</div>
+
+      <div style={{ display: 'flex', gap: 10, margin: '16px 0' }}>
+        <button className="btn" onClick={load}><Icon name="refresh" size={14} /> به‌روزرسانی</button>
+        <button className="btn" disabled={busy} onClick={checkNow}>ارزیابی هشدارها الان</button>
+      </div>
+
+      {!snap ? <div className="empty-state">در حال بارگذاری…</div> : (
+        <div className="grid3" style={{ marginBottom: 18 }}>
+          <div className="card glass">
+            <div className="num" style={{ color: snap.disk.used_pct > 85 ? '#ef4444' : undefined }}>{snap.disk.used_pct}%</div>
+            <h3>دیسک ({snap.disk.free_gb}GB آزاد از {snap.disk.total_gb}GB)</h3>
+          </div>
+          <div className="card glass">
+            <div className="num" style={{ color: (snap.memory.used_pct || 0) > 90 ? '#ef4444' : undefined }}>{snap.memory.used_pct ?? '—'}%</div>
+            <h3>حافظه ({snap.memory.available_mb ? Math.round(snap.memory.available_mb / 1024) : '—'}GB آزاد)</h3>
+          </div>
+          <div className="card glass">
+            <div className="num">{snap.load_avg ? snap.load_avg[0].toFixed(1) : '—'}</div>
+            <h3>بار پردازنده ({snap.cpu_count} هسته)</h3>
+          </div>
+          <div className="card glass"><div className="num">{fmtUptime(snap.uptime_s)}</div><h3>مدت فعال بودن سرویس</h3></div>
+          <div className="card glass">
+            <div className="num" style={{ color: snap.db_ok ? '#22c55e' : '#ef4444' }}>{snap.db_ok ? '✓' : '✗'}</div>
+            <h3>پایگاه‌داده اصلی ({snap.main_db_mb}MB)</h3>
+          </div>
+          <div className="card glass">
+            <div className="num" style={{ color: snap.rag_index.present ? '#22c55e' : '#ef4444' }}>{snap.rag_index.present ? '✓' : '✗'}</div>
+            <h3>ایندکس هوشمند ({snap.rag_index.size_mb}MB)</h3>
+          </div>
+        </div>
+      )}
+
+      <div className="card glass" style={{ marginBottom: 18 }}>
+        <h3 style={{ marginTop: 0 }}><Icon name="bell" size={16} /> هشدارهای فعال</h3>
+        {(sys?.alerts_open || []).length === 0 && <div className="muted">هشداری فعال نیست — همه‌چیز سالم است. ✓</div>}
+        {(sys?.alerts_open || []).map((a) => {
+          const sev = SEV[a.severity] || SEV.info;
+          return (
+            <div key={a.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 8 }}>
+              <span className="st-badge" style={{ background: `${sev.color}22`, color: sev.color }}>{sev.label}</span>
+              <span>{a.message}</span>
+              <small style={{ color: 'var(--text-dim)' }}>{fmtDate(a.last_seen)}</small>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+        <b>آمار ترافیک</b>
+        {[7, 30, 90].map((r) => (
+          <button
+            key={r}
+            className={`btn${range === r ? ' btn-accent' : ''}`}
+            style={{ padding: '4px 12px', fontSize: 13 }}
+            onClick={() => setRange(r)}
+          >
+            {r} روز
+          </button>
+        ))}
+      </div>
+
+      {traffic && (
+        <>
+          <div className="grid3" style={{ marginBottom: 18 }}>
+            <div className="card glass"><div className="num">{(traffic.totals.requests || 0).toLocaleString('fa-IR')}</div><h3>کل درخواست‌ها</h3></div>
+            <div className="card glass"><div className="num">{(traffic.totals.unique_visitors || 0).toLocaleString('fa-IR')}</div><h3>بازدیدکنندگان یکتا</h3></div>
+            <div className="card glass"><div className="num">{traffic.totals.avg_ms}ms</div><h3>میانگین زمان پاسخ</h3></div>
+            <div className="card glass"><div className="num" style={{ color: (traffic.totals.errors_5xx || 0) > 0 ? '#ef4444' : undefined }}>{traffic.totals.errors_5xx || 0}</div><h3>خطاهای سرور (5xx)</h3></div>
+          </div>
+
+          <div className="card glass" style={{ marginBottom: 18 }}>
+            <h3 style={{ marginTop: 0 }}>روند روزانه درخواست‌ها</h3>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120, direction: 'ltr' }}>
+              {(traffic.series || []).map((d) => (
+                <div
+                  key={d.date}
+                  title={`${d.date}: ${d.requests} درخواست، ${d.unique_visitors} بازدیدکننده`}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}
+                >
+                  <div style={{ background: 'var(--acc1, #6366f1)', opacity: 0.85, borderRadius: 3, height: `${Math.max(3, ((d.requests || 0) / maxDay) * 100)}%` }} />
+                </div>
+              ))}
+              {(traffic.series || []).length === 0 && <div className="muted">داده‌ای ثبت نشده است.</div>}
+            </div>
+          </div>
+
+          <div className="card glass" style={{ padding: 0, overflow: 'hidden', marginBottom: 18 }}>
+            <table className="adm-table">
+              <thead><tr><th>بخش</th><th>درخواست‌ها</th><th>میانگین پاسخ</th><th>بیشینه</th><th>4xx</th><th>5xx</th></tr></thead>
+              <tbody>
+                {(traffic.endpoints || []).map((e) => (
+                  <tr key={e.endpoint}>
+                    <td dir="ltr">{e.endpoint}</td>
+                    <td>{(e.requests || 0).toLocaleString('fa-IR')}</td>
+                    <td dir="ltr">{e.avg_ms}ms</td>
+                    <td dir="ltr">{e.max_ms}ms</td>
+                    <td>{e.errors_4xx || 0}</td>
+                    <td style={(e.errors_5xx || 0) > 0 ? { color: '#ef4444' } : undefined}>{e.errors_5xx || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card glass">
+            <h3 style={{ marginTop: 0 }}>استفاده از امکانات (کاربران واردشده)</h3>
+            {Object.entries(traffic.feature_usage || {}).map(([action, n]) => (
+              <div key={action} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+                <span dir="ltr">{action}</span><b>{n.toLocaleString('fa-IR')}</b>
+              </div>
+            ))}
+            {Object.keys(traffic.feature_usage || {}).length === 0 && <div className="muted">داده‌ای ثبت نشده است.</div>}
+          </div>
+        </>
+      )}
     </>
   );
 }

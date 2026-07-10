@@ -32,19 +32,18 @@ function RenderReply({ text }) {
     }
     const label = m[1];
     const href = m[2];
-    const internal = href.startsWith('/');
-    if (internal) {
+    // The assistant only ever cites in-app links (server-side faithfulness gate
+    // keeps the retrieved ones). So render ONLY internal "/..." hrefs as links;
+    // anything else is a hallucinated/injected URL — show its label as plain
+    // text, never an anchor. This also neutralises javascript:/data:/phishing.
+    if (href.startsWith('/')) {
       nodes.push(
         <Link key={key++} href={href} className="chat-action-btn">
           {label} ←
         </Link>
       );
     } else {
-      nodes.push(
-        <a key={key++} href={href} target="_blank" rel="noopener noreferrer" className="chat-action-btn">
-          {label} ↗
-        </a>
-      );
+      nodes.push(<span key={key++}>{label}</span>);
     }
     lastIndex = linkRe.lastIndex;
   }

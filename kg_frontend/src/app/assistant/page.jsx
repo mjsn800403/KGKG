@@ -4,6 +4,7 @@
 import DashboardShell from '@/components/DashboardShell';
 import UserChip from '@/components/UserChip';
 import CardGrid from '@/components/CardGrid';
+import ActivityBeacon from '@/components/ActivityBeacon';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
 export const metadata = {
@@ -37,6 +38,7 @@ export default async function AssistantPickerPage() {
       </div>
       <h1 className="page-title">دستیار هوشمند سرویس</h1>
       <div className="page-sub">{'// اول خودرو را انتخاب کن، بعد عیب را بگو یا کد خطا را وارد کن'}</div>
+      <ActivityBeacon action="open_assistant" detail="ورود به دستیار هوشمند" />
       <CardGrid items={items} />
     </DashboardShell>
   );

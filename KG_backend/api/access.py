@@ -124,6 +124,89 @@ def user_ai_eligible(user):
     return AI_REQUIRED_PACKAGE in user_package_set(user)
 
 
+def user_car_documents(user, car):
+    """Resolved document layers ``user`` effectively holds for ``car``, or None
+    if the user has no access to that car at all.
+
+    Mirrors ``user_package_set`` but for a single car: an admin-granted row wins
+    outright; a purchase-based row must fall inside the company's purchased scope
+    for that car (a company that lost the car in a re-scope revokes it for every
+    seat). This is the per-car authorization used to gate content serving.
+    """
+    ua = user.car_accesses.filter(car_id=car.id).first()
+    if ua is None:
+        return None
+    if ua.admin_granted:
+        return set(effective_documents(ua))
+    cca = user.company.car_accesses.filter(car_id=car.id).first()
+    if cca is None:
+        return None
+    scope = cca.documents or list(VALID_PACKAGES)
+    return set(effective_documents(ua, scope))
+
+
+def user_can_open_car(user, car):
+    """True iff ``user`` may open ``car``'s manual (any effective grant to it)."""
+    return user_car_documents(user, car) is not None
+
+
+def manager_grantable_cars(manager):
+    """``{car_id: set(grantable_docs)}`` — every car this manager may delegate.
+
+    A manager may ALWAYS distribute the company's purchased cars (capped at the
+    company's purchased layers), PLUS any car the platform admin granted the
+    manager directly beyond that purchase (capped at the manager's own layers,
+    and delivered by apply_managed_access as an admin grant so a later company
+    re-scope can't silently revoke it). This is the source of truth for what the
+    team UI offers and what apply_managed_access accepts.
+    """
+    company_scope = {
+        a.car_id: (set(a.documents) if a.documents else set(VALID_PACKAGES))
+        for a in manager.company.car_accesses.all()
+    }
+    out = {cid: set(docs) for cid, docs in company_scope.items()}
+    for a in manager.car_accesses.all():
+        if a.admin_granted and a.car_id not in company_scope:
+            out[a.car_id] = set(effective_documents(a))
+    return out
+
+
+def apply_managed_access(manager, employee, accesses):
+    """Replace ``employee``'s car grants with a MANAGER-delegated set.
+
+    Rules ("give only what you have"):
+      * only cars the manager can access are accepted (manager_grantable_cars);
+      * granted document layers are clamped to the manager's own layers;
+      * a car the manager holds beyond the company's purchase (admin-granted to
+        the manager) is delegated as ``admin_granted`` on the employee so a later
+        company re-scope prune can't silently revoke it;
+      * grants for cars OUTSIDE the manager's purview (e.g. set directly by the
+        platform admin) are left untouched — the manager only manages its own.
+    """
+    from django.db import transaction
+    from .models import UserCarAccess  # lazy
+    if not isinstance(accesses, list):
+        raise ValueError('accesses must be a list')
+    grantable = manager_grantable_cars(manager)
+    company_car_ids = set(employee.company.car_accesses.values_list('car_id', flat=True))
+    seen = set()
+    with transaction.atomic():
+        # Only clear the portion of the employee's grants the manager controls.
+        employee.car_accesses.filter(car_id__in=grantable.keys()).delete()
+        for a in accesses:
+            car_id = a.get('car_id')
+            if car_id in seen or car_id not in grantable:
+                continue
+            allowed = grantable[car_id]
+            docs = [d for d in (a.get('documents') or []) if d in allowed]
+            if not docs:
+                docs = sorted(allowed)  # never store empty (=all) beyond the ceiling
+            UserCarAccess.objects.create(
+                user=employee, car_id=car_id, documents=docs,
+                admin_granted=(car_id not in company_car_ids))
+            seen.add(car_id)
+
+
 def car_db_path(car):
     """Absolute path to a car's content database on this server."""
     from django.conf import settings
@@ -133,6 +216,199 @@ def car_db_path(car):
 
 
 def car_db_ready(car):
-    """True when the car's per-vehicle database file exists on disk."""
-    path = car_db_path(car)
-    return bool(car.db_address) and path.is_file()
+    """True when the car's per-vehicle database file exists on disk.
+
+    TTL-cached (see cardb.ready_path): catalog listings check the whole fleet
+    per request, and one stat() per car per request does not scale."""
+    from .cardb import ready_path
+    return bool(car.db_address) and ready_path(car_db_path(car))
+
+
+# ---------------------------------------------------------------------------
+# Per-user capabilities + company-manager authorization
+# ---------------------------------------------------------------------------
+# Capabilities are stored per-user (see PortalUser). Roles only *seed* sensible
+# defaults at creation; every flag stays individually editable afterwards.
+
+def default_capabilities_for_role(role):
+    """Seed capability defaults for a freshly created employee of ``role``.
+
+    Manager (level 1) and Head (level 2) get team-management + analytics by
+    default; everyone gets the AI assistant on (still gated by package + the
+    company toggle in user_ai_eligible). Fully overridable by the creator.
+    """
+    level = ROLE_LEVEL.get(normalize_role(role), 99)
+    return {
+        'can_manage_team': level <= 2,
+        'can_view_analytics': level <= 3,
+        'ai_assistant_enabled': True,
+    }
+
+
+def subtree_user_ids(manager, include_self=False):
+    """IDs of everyone reporting (transitively) to ``manager``.
+
+    Walks the explicit ``reports_to`` chain within the manager's company. Cycle
+    safe. Used to scope every team read/write to the manager's own org subtree.
+    """
+    from .models import PortalUser  # lazy: models imports this module
+    ids = set()
+    frontier = [manager.id]
+    company_reports = list(
+        PortalUser.objects.filter(company_id=manager.company_id)
+        .values_list('id', 'reports_to_id')
+    )
+    children = {}
+    for uid, parent in company_reports:
+        children.setdefault(parent, []).append(uid)
+    while frontier:
+        cur = frontier.pop()
+        for child in children.get(cur, []):
+            if child not in ids:
+                ids.add(child)
+                frontier.append(child)
+    if include_self:
+        ids.add(manager.id)
+    return ids
+
+
+def manager_can_target(actor, target):
+    """True iff ``actor`` (a manager) may view/manage ``target``.
+
+    Same company, target is inside the actor's reports subtree, and the actor
+    outranks the target. This is the authorization spine for every team write.
+    """
+    if not actor or not target or not getattr(actor, 'can_manage_team', False):
+        return False
+    if actor.id == target.id:
+        return False
+    if actor.company_id != target.company_id:
+        return False
+    if not role_can_manage(actor.role, target.role):
+        return False
+    return target.id in subtree_user_ids(actor)
+
+
+def apply_user_access(user, accesses, override_purchase=False, allow_admin_grants=False):
+    """Replace ``user``'s per-car grants from a list of {car_id, documents[], admin_granted?}.
+
+    Single source of truth (used by both the platform-admin panel and the
+    company-manager team API). Purchase-based grants are clamped to the
+    company's purchased scope; admin-granted / override entries bypass that
+    limit but ONLY when the caller is allowed to (``allow_admin_grants`` — the
+    platform admin). Company managers can never exceed the company's purchase.
+    """
+    from django.db import transaction
+    from .models import Car, UserCarAccess  # lazy
+    if not isinstance(accesses, list):
+        raise ValueError('accesses must be a list')
+    company_scope = {
+        a.car_id: (set(a.documents) if a.documents else set(VALID_DOCS))
+        for a in user.company.car_accesses.all()
+    }
+    # One row per car: dedupe by car_id (last write wins) so a duplicated car_id
+    # in the payload can't hit the (user, car) unique constraint mid-loop and
+    # leave the grants half-rewritten. The whole replace is atomic for the same
+    # reason — any failure rolls back to the pre-request grants.
+    seen = set()
+    with transaction.atomic():
+        user.car_accesses.all().delete()
+        for a in accesses:
+            car_id = a.get('car_id')
+            if car_id in seen:
+                continue
+            if not Car.objects.filter(id=car_id).exists():
+                continue
+            wants_admin = allow_admin_grants and (bool(a.get('admin_granted')) or override_purchase)
+            if wants_admin:
+                docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
+                UserCarAccess.objects.create(user=user, car_id=car_id, documents=docs, admin_granted=True)
+                seen.add(car_id)
+                continue
+            if car_id not in company_scope:
+                continue
+            docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]
+            UserCarAccess.objects.create(user=user, car_id=car_id, documents=docs)
+            seen.add(car_id)
+
+
+# ---------------------------------------------------------------------------
+# Content-category taxonomy (analytics dimension)
+# ---------------------------------------------------------------------------
+# Each per-car manual is a tree; the depth-2 nodes are the technical areas
+# ("Engine Mechanical", "Body & Frame", "Electrical", ...). We map those raw
+# English section titles onto a small set of canonical, bilingual categories
+# so usage can be reported by area (engine / body / electrical / ...).
+
+CONTENT_CATEGORIES = [
+    ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                     'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                     'aliases': ['brakes', 'brake']}),
+    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                     'aliases': ['steering']}),
+    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                     'aliases': ['suspension']}),
+    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                     'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                 'heating, ventilation & a/c', 'air conditioning']}),
+    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                     'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                     'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                     'aliases': ['maintenance', 'quick lookups', 'general information']}),
+    ('other',       {'fa': 'سایر',                  'en': 'Other',
+                     'aliases': ['external pages']}),
+]
+
+CATEGORY_MAP = dict(CONTENT_CATEGORIES)
+VALID_CATEGORIES = {c for c, _ in CONTENT_CATEGORIES}
+
+# Reverse lookup: normalized raw title -> canonical id.
+_CATEGORY_ALIAS = {}
+for _cid, _meta in CONTENT_CATEGORIES:
+    _CATEGORY_ALIAS[_cid] = _cid
+    for _al in _meta['aliases']:
+        _CATEGORY_ALIAS[_al] = _cid
+
+
+def category_label(cid, lang='fa'):
+    meta = CATEGORY_MAP.get(cid)
+    return meta[lang] if meta else cid
+
+
+def _normalize_title(s):
+    return (str(s or '')).strip().lower()
+
+
+def resolve_category(segments_or_path):
+    """Map a browse path / node path onto a canonical category id.
+
+    Accepts a list of path segments (e.g. ['Repair and Diagnosis',
+    'Engine Mechanical', ...]) or a '/'-joined string. The technical area is the
+    segment right under the "Repair and Diagnosis" root; we scan segments and
+    return the first that matches a known alias. Returns 'other' if nothing
+    matches, '' if there is nothing to classify.
+    """
+    if not segments_or_path:
+        return ''
+    if isinstance(segments_or_path, str):
+        segments = [s for s in segments_or_path.split('/') if s]
+    else:
+        segments = [s for s in segments_or_path if s]
+    for seg in segments:
+        cid = _CATEGORY_ALIAS.get(_normalize_title(seg))
+        if cid:
+            return cid
+    # Substring fallback (titles like "Engine Mechanical > ...").
+    for seg in segments:
+        norm = _normalize_title(seg)
+        for alias, cid in _CATEGORY_ALIAS.items():
+            if alias and alias in norm:
+                return cid
+    return 'other'
