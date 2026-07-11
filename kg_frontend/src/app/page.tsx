@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { motion, MotionConfig } from 'motion/react';
+import {
+  motion, MotionConfig, useMotionValue, useReducedMotion, useScroll, useSpring,
+} from 'motion/react';
 import ThemeToggle from '@/components/ThemeToggle';
 import Icon from '@/components/Icon';
 import { showModal } from '@/components/Modal';
@@ -19,19 +21,40 @@ const viewport = { once: true, amount: 0.2 } as const;
 export default function Home() {
   const rigRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
 
-  // Hero "rig" parallax — follows the cursor exactly as in the prototype.
+  // Reading progress — thin gradient bar under the topnav.
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 140, damping: 28, mass: 0.4 });
+
+  // Hero "rig" parallax — cursor-driven, but smoothed through springs so the
+  // blueprint glides instead of snapping (the raw handler felt mechanical).
+  const rigX = useMotionValue(0);
+  const rigY = useMotionValue(0);
+  const rigXs = useSpring(rigX, { stiffness: 60, damping: 18, mass: 0.9 });
+  const rigYs = useSpring(rigY, { stiffness: 60, damping: 18, mass: 0.9 });
   useEffect(() => {
+    if (reduceMotion) return undefined;
+    let raf = 0;
     function onMove(e: MouseEvent) {
-      const rig = rigRef.current;
-      if (!rig) return;
-      const dx = (e.clientX / window.innerWidth - 0.5) * 18;
-      const dy = (e.clientY / window.innerHeight - 0.5) * 12;
-      rig.style.transform = `translate(calc(-50% + ${dx}px), calc(-46% + ${dy}px))`;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        rigX.set((e.clientX / window.innerWidth - 0.5) * 18);
+        rigY.set((e.clientY / window.innerHeight - 0.5) * 12);
+      });
     }
+    const rig = rigRef.current;
+    const unsubX = rigXs.on('change', (v) => {
+      if (rig) rig.style.transform = `translate(calc(-50% + ${v}px), calc(-46% + ${rigYs.get()}px))`;
+    });
     document.addEventListener('mousemove', onMove);
-    return () => document.removeEventListener('mousemove', onMove);
-  }, []);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      if (raf) cancelAnimationFrame(raf);
+      unsubX();
+    };
+  }, [reduceMotion, rigX, rigY, rigXs, rigYs]);
 
   function checkVin() {
     const input = document.getElementById('vinInput') as HTMLInputElement | null;
@@ -46,6 +69,7 @@ export default function Home() {
   return (
     <MotionConfig reducedMotion="user">
     <div className="screen fade" id="landing">
+      <motion.div className="scroll-progress" style={{ scaleX: progress }} />
       <nav className={`topnav${menuOpen ? ' menu-open' : ''}`}>
         <Link className="brand" href="/">
           <img src="/logo.png" alt="KGtechvault" />
@@ -140,14 +164,26 @@ export default function Home() {
           <div className="tag">// 02 — VIN LOOKUP</div>
         </div>
         <p style={{ color: 'var(--text-dim)', maxWidth: 600, lineHeight: 1.9, fontSize: '14.5px' }}>شماره شاسی (VIN) خودرو را وارد کنید تا میزان پوشش مستندات فنی موجود برای آن مشخص شود.</p>
-        <div className="vin-box glass" data-tour="vin-box">
+        <motion.div
+          className="vin-box glass" data-tour="vin-box"
+          initial={{ opacity: 0, y: 22, scale: 0.985 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={viewport}
+          transition={{ duration: 0.55, ease: EASE }}
+        >
           <input type="text" placeholder="مثلاً: JTHBE1GG0E5012345" id="vinInput" />
-          <button className="btn btn-accent" onClick={checkVin}>بررسی پوشش</button>
-        </div>
-        <div className="not-found-note glass">
+          <motion.button className="btn btn-accent" onClick={checkVin} whileTap={{ scale: 0.96 }}>بررسی پوشش</motion.button>
+        </motion.div>
+        <motion.div
+          className="not-found-note glass"
+          initial={{ opacity: 0, y: 18 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewport}
+          transition={{ duration: 0.5, ease: EASE, delay: 0.1 }}
+        >
           <span>خودروی مورد نظر شما در فهرست نیست؟</span>
           <a href="#">با پشتیبانی برای گردآوری و تهیه دیتای آن در ارتباط باشید ←</a>
-        </div>
+        </motion.div>
       </section>
 
       <section id="how">
@@ -162,14 +198,24 @@ export default function Home() {
         </motion.div>
       </section>
 
-      <div className="cta-strip glass">
+      <motion.div
+        className="cta-strip glass"
+        initial={{ opacity: 0, y: 28, scale: 0.985 }}
+        whileInView={{ opacity: 1, y: 0, scale: 1 }}
+        viewport={viewport}
+        transition={{ duration: 0.6, ease: EASE }}
+      >
         <h3>دسترسی شما به مستندات فنی، آماده ورود است.</h3>
-        <Link className="btn btn-accent" href="/login">ورود به پورتال ←</Link>
-      </div>
+        <motion.span whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} style={{ display: 'inline-block' }}>
+          <Link className="btn btn-accent" href="/login">ورود به پورتال ←</Link>
+        </motion.span>
+      </motion.div>
 
       <footer>
-        <div className="support-strip" data-tour="support">
-          <div className="sblock">
+        <motion.div className="support-strip" data-tour="support"
+          variants={revealContainer} initial="hidden" whileInView="show" viewport={viewport}
+          transition={{ staggerChildren: 0.08 }}>
+          <motion.div className="sblock" variants={revealItem}>
             <h4><Icon name="phone" />پشتیبانی فنی</h4>
             <p>برای مشکلات دسترسی، خرید مستندات یا گزارش خرابی در سامانه با ما در ارتباط باشید.</p>
             <div className="contact-row">
@@ -181,20 +227,20 @@ export default function Home() {
               <Icon name="mail" />
               <a href="mailto:mj.salimi@khadamatgostar.com"><span className="ltr">mj.salimi@khadamatgostar.com</span></a>
             </div>
-          </div>
-          <div className="sblock">
+          </motion.div>
+          <motion.div className="sblock" variants={revealItem}>
             <h4><Icon name="info" />درباره ما</h4>
             <p>کلیه محتوای سایت از دیتابیس‌های مرجع (مادر) تامین شده و صحت اطلاعات به دیتابیس مادر بستگی دارد. گردآوری، طراحی و تدوین: واحد سیستم و روش شرکت خدمات گستر سپهر گیتی.</p>
-          </div>
-          <div className="sblock">
+          </motion.div>
+          <motion.div className="sblock" variants={revealItem}>
             <h4><Icon name="arrow" />دسترسی سریع</h4>
             <p>
               <a style={{ display: 'block', marginBottom: 6 }} href="#coverage">بررسی پوشش خودرو</a>
               <Link style={{ display: 'block', marginBottom: 6 }} href="/purchase" className="quick-link">درخواست خرید مستندات</Link>
               <a style={{ display: 'block' }} href="#">شرایط استفاده</a>
             </p>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
         <div className="foot-bottom">
           <span>© KGtechvault — سامانه مستندات فنی خودرو شرکت خدمات گستر سپهر گیتی</span>
           <span className="credit">طراحی و تدوین: محمد جواد سلیمی <span className="heart">♥</span> برای شرکت خدمات گستر سپهر گیتی</span>

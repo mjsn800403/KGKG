@@ -447,3 +447,222 @@ class ContentAccessGateTests(TestCase):
 
     def test_search_anonymous_401(self):
         self.assertEqual(self._get('/api/search/?q=oil&car=bZ4X').status_code, 401)
+
+
+class OrgHierarchyTests(TestCase):
+    """Company-defined positions (OrgRole): rank-based visibility, role CRUD,
+    reorder, access templates, and the org-chart endpoint."""
+
+    def setUp(self):
+        from .access import seed_default_org_roles
+        self.c = Client()
+        self.car1 = Car.objects.create(brand_name='Toyota', car_name='bZ4X', year=2023, db_address='x')
+        self.car2 = Car.objects.create(brand_name='Lexus', car_name='NX', year=2022, db_address='y')
+        self.company = Company.objects.create(name='Gamma', ai_assistant_enabled=True)
+        CompanyCarAccess.objects.create(company=self.company, car=self.car1,
+                                        documents=['manual', 'parts'])
+        CompanyCarAccess.objects.create(company=self.company, car=self.car2,
+                                        documents=['manual'])
+        seed_default_org_roles(self.company)
+        roles = {r.rank: r for r in self.company.org_roles.all()}
+        self.r_manager, self.r_head = roles[1], roles[2]
+        self.r_super, self.r_spec = roles[3], roles[4]
+
+        def mk(username, role, reports_to=None, **kw):
+            u = PortalUser(company=self.company, username=username,
+                           role={1: 'after_sales_manager', 2: 'after_sales_head',
+                                 3: 'after_sales_supervisor'}.get(role.rank, 'after_sales_specialist'),
+                           org_role=role, reports_to=reports_to, **kw)
+            u.set_password('p')
+            u.save()
+            return u
+
+        self.manager = mk('g_mgr', self.r_manager, can_manage_team=True, can_view_analytics=True)
+        self.head = mk('g_head', self.r_head, reports_to=self.manager,
+                       can_manage_team=True, can_view_analytics=True)
+        self.sup_a = mk('g_sup_a', self.r_super, reports_to=self.head,
+                        can_manage_team=True, can_view_analytics=True)
+        self.sup_b = mk('g_sup_b', self.r_super, reports_to=self.head,
+                        can_manage_team=True, can_view_analytics=True)
+        # spec_b intentionally reports to sup_b - sup_a must still see them
+        # under the rank-based ('org') scope.
+        self.spec_a = mk('g_spec_a', self.r_spec, reports_to=self.sup_a)
+        self.spec_b = mk('g_spec_b', self.r_spec, reports_to=self.sup_b)
+
+        self.t_mgr = AuthToken.issue(self.manager).key
+        self.t_head = AuthToken.issue(self.head).key
+        self.t_sup = AuthToken.issue(self.sup_a).key
+
+    def _post(self, url, payload, token=None):
+        kw = {'HTTP_AUTHORIZATION': f'Bearer {token}'} if token else {}
+        return self.c.post(url, json.dumps(payload), content_type='application/json', **kw)
+
+    def _get(self, url, token=None):
+        kw = {'HTTP_AUTHORIZATION': f'Bearer {token}'} if token else {}
+        return self.c.get(url, **kw)
+
+    # -- rank-based visibility ------------------------------------------------
+
+    def test_manager_sees_everyone(self):
+        r = self._get('/api/team/members/', token=self.t_mgr)
+        self.assertEqual(r.status_code, 200)
+        names = {m['username'] for m in r.json()['members']}
+        self.assertEqual(names, {'g_head', 'g_sup_a', 'g_sup_b', 'g_spec_a', 'g_spec_b'})
+
+    def test_head_sees_everyone_except_manager(self):
+        r = self._get('/api/team/members/', token=self.t_head)
+        names = {m['username'] for m in r.json()['members']}
+        self.assertEqual(names, {'g_sup_a', 'g_sup_b', 'g_spec_a', 'g_spec_b'})
+
+    def test_supervisor_sees_only_specialists_across_subtrees(self):
+        r = self._get('/api/team/members/', token=self.t_sup)
+        names = {m['username'] for m in r.json()['members']}
+        # spec_b reports to ANOTHER supervisor but is still visible (org scope).
+        self.assertEqual(names, {'g_spec_a', 'g_spec_b'})
+
+    def test_head_cannot_touch_manager(self):
+        from .access import manager_can_target as can
+        self.assertFalse(can(self.head, self.manager))
+        r = self._post(f'/api/team/members/{self.manager.id}/',
+                       {'display_name': 'hack'}, token=self.t_head)
+        self.assertEqual(r.status_code, 403)
+
+    def test_supervisor_cannot_touch_peer_supervisor(self):
+        r = self._post(f'/api/team/members/{self.sup_b.id}/',
+                       {'display_name': 'hack'}, token=self.t_sup)
+        self.assertEqual(r.status_code, 403)
+
+    def test_subtree_scope_restricts_to_reports(self):
+        self.r_super.manage_scope = 'subtree'
+        self.r_super.save(update_fields=['manage_scope'])
+        r = self._get('/api/team/members/', token=self.t_sup)
+        names = {m['username'] for m in r.json()['members']}
+        self.assertEqual(names, {'g_spec_a'})
+
+    # -- member create/update with org roles -----------------------------------
+
+    def test_create_member_with_org_role_and_template(self):
+        self.r_spec.default_accesses = [{'car_id': self.car1.id, 'documents': ['manual']}]
+        self.r_spec.save(update_fields=['default_accesses'])
+        r = self._post('/api/team/members/', {
+            'display_name': 'تازه‌وارد', 'provision': 'credentials',
+            'org_role_id': self.r_spec.id,
+        }, token=self.t_mgr)
+        self.assertEqual(r.status_code, 200, r.content)
+        u = PortalUser.objects.get(id=r.json()['user']['id'])
+        self.assertEqual(u.org_role_id, self.r_spec.id)
+        self.assertEqual(u.role, 'after_sales_specialist')  # legacy shim
+        rows = list(u.car_accesses.all())
+        self.assertEqual([(a.car_id, a.documents) for a in rows],
+                         [(self.car1.id, ['manual'])])
+
+    def test_cannot_create_at_or_above_own_rank(self):
+        r = self._post('/api/team/members/', {
+            'display_name': 'x', 'provision': 'credentials',
+            'org_role_id': self.r_head.id,
+        }, token=self.t_head)
+        self.assertEqual(r.status_code, 403)
+
+    def test_change_member_role(self):
+        r = self._post(f'/api/team/members/{self.spec_a.id}/',
+                       {'org_role_id': self.r_super.id}, token=self.t_mgr)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.spec_a.refresh_from_db()
+        self.assertEqual(self.spec_a.org_role_id, self.r_super.id)
+        self.assertEqual(self.spec_a.role, 'after_sales_supervisor')
+
+    # -- role management --------------------------------------------------------
+
+    def test_role_crud_reorder_delete(self):
+        # create
+        r = self._post('/api/team/roles/', {
+            'name': 'کارشناس ارشد', 'manage_scope': 'subtree',
+            'can_view_analytics': True, 'color': '#123456',
+        }, token=self.t_mgr)
+        self.assertEqual(r.status_code, 200, r.content)
+        new_id = r.json()['role']['id']
+        self.assertEqual(r.json()['role']['rank'], 5)
+        # reorder: move the new role above specialists
+        order = [self.r_head.id, self.r_super.id, new_id, self.r_spec.id]
+        r = self._post('/api/team/roles/reorder/', {'order': order}, token=self.t_mgr)
+        self.assertEqual(r.status_code, 200, r.content)
+        ranks = {x['id']: x['rank'] for x in r.json()['roles']}
+        self.assertEqual(ranks[new_id], 4)
+        self.assertEqual(ranks[self.r_spec.id], 5)
+        # legacy shim follows the new rank
+        self.spec_a.refresh_from_db()
+        self.assertEqual(self.spec_a.role, 'after_sales_specialist')
+        # update
+        r = self._post(f'/api/team/roles/{new_id}/',
+                       {'name': 'کارشناس خبره', 'can_manage_team': True}, token=self.t_mgr)
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['role']['can_manage_team'])
+        # delete with reassign
+        r = self._post(f'/api/team/roles/{self.r_spec.id}/',
+                       {'delete': True, 'reassign_to': new_id}, token=self.t_mgr)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.spec_a.refresh_from_db()
+        self.assertEqual(self.spec_a.org_role_id, new_id)
+
+    def test_head_cannot_edit_own_or_higher_role(self):
+        r = self._post(f'/api/team/roles/{self.r_head.id}/',
+                       {'name': 'nope'}, token=self.t_head)
+        self.assertEqual(r.status_code, 403)
+        r = self._post(f'/api/team/roles/{self.r_manager.id}/',
+                       {'name': 'nope'}, token=self.t_head)
+        self.assertEqual(r.status_code, 403)
+
+    def test_delete_role_with_members_requires_reassign(self):
+        r = self._post(f'/api/team/roles/{self.r_spec.id}/',
+                       {'delete': True}, token=self.t_mgr)
+        self.assertEqual(r.status_code, 400)
+
+    def test_apply_defaults_pushes_caps_and_access(self):
+        self.r_spec.default_accesses = [{'car_id': self.car2.id, 'documents': ['manual']}]
+        self.r_spec.can_view_analytics = True
+        self.r_spec.save()
+        r = self._post(f'/api/team/roles/{self.r_spec.id}/',
+                       {'apply_defaults': True}, token=self.t_mgr)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['applied'], 2)
+        self.spec_a.refresh_from_db()
+        self.assertTrue(self.spec_a.can_view_analytics)
+        self.assertEqual([(a.car_id, a.documents) for a in self.spec_a.car_accesses.all()],
+                         [(self.car2.id, ['manual'])])
+
+    # -- org chart + analytics scope ---------------------------------------------
+
+    def test_org_endpoint_shape(self):
+        r = self._get('/api/team/org/', token=self.t_head)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        names = {m['username'] for m in data['members']}
+        self.assertEqual(names, {'g_head', 'g_sup_a', 'g_sup_b', 'g_spec_a', 'g_spec_b'})
+        me = [m for m in data['members'] if m['is_self']]
+        self.assertEqual(len(me), 1)
+        # head's parent (the manager) is not visible -> parent edge hidden
+        self.assertIsNone(me[0]['reports_to_id'])
+        self.assertTrue(data['roles'])
+
+    def test_analytics_scoped_to_rank_visibility(self):
+        for u in (self.manager, self.head, self.spec_a, self.spec_b):
+            ActivityLog.objects.create(user=u, action='view_node', category='engine')
+        r = self._get('/api/team/analytics/', token=self.t_sup)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        # sup_a sees the two specialists + self; manager/head events are invisible.
+        self.assertEqual(data['total_events'], 2)
+        member_ids = {m['id'] for m in data['members']}
+        self.assertEqual(member_ids, {self.sup_a.id, self.spec_a.id, self.spec_b.id})
+
+    def test_pdf_report_endpoint(self):
+        try:
+            import weasyprint  # noqa: F401
+        except Exception:
+            self.skipTest('weasyprint not installed')
+        ActivityLog.objects.create(user=self.spec_a, action='view_node', category='engine',
+                                   car=self.car1)
+        r = self._get('/api/team/report/?range=30', token=self.t_mgr)
+        self.assertEqual(r.status_code, 200, getattr(r, 'content', b'')[:200])
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+        self.assertTrue(r.content.startswith(b'%PDF'))

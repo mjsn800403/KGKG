@@ -111,6 +111,55 @@ class CompanyCarAccess(models.Model):
         return f'{self.company.name} → {self.car.brand_name} {self.car.car_name} {self.car.year}'
 
 
+class OrgRole(models.Model):
+    """A company-defined position in its own organisational hierarchy.
+
+    Companies are not forced into the fixed 4-level after-sales ladder any
+    more: a manager can create, rename, re-rank and delete positions freely.
+    ``rank`` orders the hierarchy (1 = top; a smaller rank outranks a larger
+    one). ``manage_scope`` decides WHO a member of this position can see and
+    manage in the team area:
+
+      * ``org``     — everyone in the company with a strictly larger rank
+                      (e.g. the head sees every supervisor/specialist,
+                      regardless of reporting lines, but never the manager);
+      * ``subtree`` — only people who transitively report to them;
+      * ``none``    — nobody (a pure member).
+
+    The capability flags are the DEFAULTS seeded onto new members of the
+    position (each member's own flags stay individually editable), and
+    ``default_accesses`` is an optional car/package template applied to new
+    members (and bulk-applicable to existing ones).
+    """
+    MANAGE_SCOPE_CHOICES = [
+        ('org', 'همه رده‌های پایین‌تر'),
+        ('subtree', 'فقط زیرمجموعه مستقیم'),
+        ('none', 'بدون دسترسی مدیریتی'),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='org_roles')
+    name = models.CharField(max_length=80)
+    rank = models.PositiveIntegerField(default=1)
+    manage_scope = models.CharField(max_length=12, choices=MANAGE_SCOPE_CHOICES, default='org')
+    can_manage_team = models.BooleanField(default=False)
+    can_view_analytics = models.BooleanField(default=False)
+    ai_assistant_enabled = models.BooleanField(default=True)
+    # UI accent for the org chart / badges (hex like '#7c6cf0' or named token).
+    color = models.CharField(max_length=16, blank=True, default='')
+    # Access template: [{car_id, documents: [...]}, ...]. Applied (clamped to
+    # the granting manager's own scope) when a member joins the position.
+    default_accesses = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['company_id', 'rank', 'id']
+        unique_together = [('company', 'name')]
+        indexes = [models.Index(fields=['company', 'rank'])]
+
+    def __str__(self):
+        return f'{self.company.name} · {self.name} (rank {self.rank})'
+
+
 class PortalUser(models.Model):
     """A seat under a company, tied to an organisational role.
 
@@ -134,6 +183,10 @@ class PortalUser(models.Model):
     password_hash = models.CharField(max_length=256)
     display_name = models.CharField(max_length=150, blank=True, default='')
     role = models.CharField(max_length=40, choices=ROLE_CHOICES)
+    # The company-defined position (see OrgRole). ``role`` stays as a legacy
+    # fallback/compat label; when ``org_role`` is set it wins everywhere.
+    org_role = models.ForeignKey(
+        OrgRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
     # Explicit org hierarchy: who this person reports to (same company).
     reports_to = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reports')

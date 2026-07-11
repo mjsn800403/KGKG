@@ -5,11 +5,16 @@ import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from './Icon';
 import Switch from './Switch';
-import { teamApi, portalRefreshMe, getPortalToken } from '../utils/api';
+import OrgChart from './OrgChart';
+import RolesPanel from './RolesPanel';
+import { teamApi, portalRefreshMe, getPortalToken, downloadTeamReport } from '../utils/api';
 
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
+const EASE = [0.22, 1, 0.36, 1];
+const SPRING = { type: 'spring', stiffness: 380, damping: 32, mass: 0.75 };
+
 function initials(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '؟';
@@ -33,10 +38,16 @@ const STATUS_META = {
   disabled: { label: 'غیرفعال', cls: 'off' },
 };
 
+const TABS = [
+  { id: 'members', label: 'اعضای تیم', icon: 'users' },
+  { id: 'chart', label: 'چارت سازمانی', icon: 'org' },
+  { id: 'roles', label: 'نقش‌ها و دسترسی‌ها', icon: 'layers' },
+];
+
 function emptyForm() {
   return {
     display_name: '', email: '', phone: '', personnel_code: '',
-    role: '', reports_to_id: '',
+    org_role_id: '', reports_to_id: '',
     provision: 'invite', username: '', password: '',  // 'invite' | 'credentials'
     can_manage_team: false, can_view_analytics: false, ai_assistant_enabled: true,
     accesses: {},  // { car_id: [docs] }
@@ -52,14 +63,24 @@ export default function TeamView() {
   const [error, setError] = useState('');
   const [members, setMembers] = useState([]);
   const [meta, setMeta] = useState(null);
+  const [org, setOrg] = useState(null);
+  const [tab, setTab] = useState('members');
 
   const [drawer, setDrawer] = useState(null);   // null | {mode:'add'} | {mode:'edit', member}
   const [justAddedId, setJustAddedId] = useState(null);
+  const [toasts, setToasts] = useState([]);
+
+  const notify = (message, tone = 'ok') => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, message, tone }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3600);
+  };
 
   const load = async () => {
-    const data = await teamApi.members();
+    const [data, orgData] = await Promise.all([teamApi.members(), teamApi.org()]);
     setMembers(data.members || []);
     setMeta(data.meta || null);
+    setOrg(orgData);
   };
 
   useEffect(() => {
@@ -95,6 +116,11 @@ export default function TeamView() {
     }
   };
 
+  const openEditById = (node) => {
+    const m = members.find((x) => x.id === node.id);
+    if (m) setDrawer({ mode: 'edit', member: m });
+  };
+
   if (loading) return <TeamSkeleton />;
   if (error) return <div className="pform-error">{error}</div>;
 
@@ -105,7 +131,7 @@ export default function TeamView() {
           className="team-stats"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.4, ease: EASE }}
         >
           <StatTile icon="users" label="کل کارکنان" value={stats.total} />
           <StatTile icon="check" label="فعال" value={stats.active} tone="ok" />
@@ -118,23 +144,71 @@ export default function TeamView() {
           </button>
         </motion.div>
 
-        {members.length === 0 ? (
-          <EmptyTeam onAdd={() => setDrawer({ mode: 'add' })} />
-        ) : (
-          <motion.div className="team-grid" layout>
-            <AnimatePresence mode="popLayout">
-              {members.map((m, i) => (
-                <MemberCard
-                  key={m.id}
-                  member={m}
-                  index={i}
-                  highlight={m.id === justAddedId}
-                  onEdit={() => setDrawer({ mode: 'edit', member: m })}
-                />
-              ))}
-            </AnimatePresence>
+        <motion.nav
+          className="team-tabs glass"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: EASE, delay: 0.06 }}
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`team-tab${tab === t.id ? ' active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              <Icon name={t.icon} size={16} /> {t.label}
+              {tab === t.id && (
+                <motion.span className="team-tab-ink" layoutId="team-tab-ink" transition={SPRING} />
+              )}
+            </button>
+          ))}
+        </motion.nav>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 16, filter: 'blur(4px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+            transition={{ duration: 0.32, ease: EASE }}
+          >
+            {tab === 'members' && (
+              members.length === 0 ? (
+                <EmptyTeam onAdd={() => setDrawer({ mode: 'add' })} />
+              ) : (
+                <motion.div className="team-grid" layout>
+                  <AnimatePresence mode="popLayout">
+                    {members.map((m, i) => (
+                      <MemberCard
+                        key={m.id}
+                        member={m}
+                        index={i}
+                        highlight={m.id === justAddedId}
+                        onEdit={() => setDrawer({ mode: 'edit', member: m })}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )
+            )}
+            {tab === 'chart' && (
+              <OrgChart
+                data={org}
+                onReload={load}
+                onEditMember={openEditById}
+                notify={notify}
+              />
+            )}
+            {tab === 'roles' && meta && (
+              <RolesPanel
+                key={JSON.stringify((meta.roles || []).map((r) => r.id))}
+                meta={meta}
+                onChanged={() => load()}
+                notify={notify}
+              />
+            )}
           </motion.div>
-        )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {drawer && meta && (
@@ -148,6 +222,23 @@ export default function TeamView() {
             />
           )}
         </AnimatePresence>
+
+        <div className="toast-stack">
+          <AnimatePresence>
+            {toasts.map((t) => (
+              <motion.div
+                key={t.id}
+                className={`toast glass ${t.tone}`}
+                initial={{ opacity: 0, y: 24, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.95 }}
+                transition={SPRING}
+              >
+                <Icon name={t.tone === 'error' ? 'x' : 'check'} size={15} /> {t.message}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
       </div>
     </MotionConfig>
   );
@@ -170,21 +261,25 @@ function StatTile({ icon, label, value, tone }) {
 
 function MemberCard({ member, index, highlight, onEdit }) {
   const s = STATUS_META[member.invite_status] || STATUS_META.active;
+  const accent = member.org_role?.color || 'var(--accent)';
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 18, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.4, delay: Math.min(index * 0.04, 0.3), ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.4, delay: Math.min(index * 0.04, 0.3), ease: EASE }}
       className={`member-card glass${highlight ? ' just-added' : ''}`}
       whileHover={{ y: -4 }}
+      style={{ '--node-accent': accent }}
     >
       <div className="mc-head">
-        <div className="mc-avatar">{initials(member.display_name || member.username)}</div>
+        <div className="mc-avatar" style={{ background: `color-mix(in srgb, ${accent} 22%, transparent)` }}>
+          {initials(member.display_name || member.username)}
+        </div>
         <div className="mc-id">
           <div className="mc-name">{member.display_name || member.username}</div>
-          <div className="mc-role">{member.role_label}</div>
+          <div className="mc-role" style={{ color: accent }}>{member.role_label}</div>
         </div>
         <span className={`mc-status ${s.cls}`}>{s.label}</span>
       </div>
@@ -249,17 +344,26 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
   useEffect(() => { firstFieldRef.current?.focus(); }, []);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const assignableRoles = (meta.roles || []).filter((r) => r.editable);
 
-  // Seed capability defaults when role changes (per-user, but pre-filled).
-  const onRole = (roleId) => {
-    const role = meta.roles.find((r) => r.id === roleId);
-    const level = role?.level || 99;
-    set({
-      role: roleId,
-      can_manage_team: level <= 2,
-      can_view_analytics: level <= 3,
-      ai_assistant_enabled: true,
-    });
+  // Seed capability defaults from the chosen position (still editable per-user).
+  const onRole = (roleIdRaw) => {
+    const roleId = Number(roleIdRaw) || '';
+    const role = assignableRoles.find((r) => r.id === roleId);
+    const patch = { org_role_id: roleId };
+    if (role) {
+      patch.can_manage_team = !!role.can_manage_team;
+      patch.can_view_analytics = !!role.can_view_analytics;
+      patch.ai_assistant_enabled = !!role.ai_assistant_enabled;
+      // Pre-fill the position's access template so the manager SEES what the
+      // new member will get (and can still adjust before saving).
+      if (!isEdit && Array.isArray(role.default_accesses) && role.default_accesses.length) {
+        const acc = {};
+        role.default_accesses.forEach((a) => { acc[a.car_id] = a.documents || []; });
+        patch.accesses = acc;
+      }
+    }
+    set(patch);
   };
 
   const toggleCar = (carId, docs) => {
@@ -282,13 +386,13 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
       return setErr('برای دعوت با ایمیل، ایمیل الزامی است (یا حالت «نام کاربری و رمز» را انتخاب کنید).');
     if (!isEdit && form.provision === 'credentials' && form.password && form.password.length < 8)
       return setErr('رمز عبور باید حداقل ۸ نویسه باشد (یا خالی بگذارید تا خودکار ساخته شود).');
-    if (!form.role) return setErr('نقش سازمانی را انتخاب کنید.');
+    if (!form.org_role_id) return setErr('جایگاه سازمانی را انتخاب کنید.');
     setSubmitting(true);
     try {
       if (isEdit) {
         await teamApi.updateMember(member.id, {
           display_name: form.display_name, phone: form.phone, personnel_code: form.personnel_code,
-          role: form.role, reports_to_id: form.reports_to_id || null,
+          org_role_id: form.org_role_id, reports_to_id: form.reports_to_id || null,
           can_manage_team: form.can_manage_team, can_view_analytics: form.can_view_analytics,
           ai_assistant_enabled: form.ai_assistant_enabled,
         });
@@ -298,7 +402,7 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
       } else {
         const payload = {
           display_name: form.display_name, email: form.email || undefined, phone: form.phone,
-          personnel_code: form.personnel_code, role: form.role,
+          personnel_code: form.personnel_code, org_role_id: form.org_role_id,
           reports_to_id: form.reports_to_id || undefined,
           can_manage_team: form.can_manage_team, can_view_analytics: form.can_view_analytics,
           ai_assistant_enabled: form.ai_assistant_enabled,
@@ -424,10 +528,10 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
               </div>
               <div className="pform-grid">
                 <div className="field">
-                  <label>نقش سازمانی <span className="req-star">*</span></label>
-                  <select value={form.role} onChange={(e) => onRole(e.target.value)}>
+                  <label>جایگاه سازمانی <span className="req-star">*</span></label>
+                  <select value={form.org_role_id} onChange={(e) => onRole(e.target.value)}>
                     <option value="">— انتخاب کنید —</option>
-                    {meta.roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
                 <div className="field">
@@ -549,13 +653,20 @@ function SuccessPanel({ data, onDone }) {
 }
 
 function initForm(member, meta) {
-  if (!member) return { ...emptyForm(), role: '' };
+  if (!member) return emptyForm();
   const accesses = {};
   (member.accesses || []).forEach((a) => { accesses[a.car.id] = a.documents || []; });
+  // Legacy members may miss org_role — map their legacy rank onto a position.
+  let roleId = member.org_role?.id || '';
+  if (!roleId && meta?.roles?.length) {
+    const match = meta.roles.find((r) => r.rank === member.role_level);
+    roleId = match?.id || '';
+  }
   return {
     display_name: member.display_name || '', email: member.email || '',
     phone: member.phone || '', personnel_code: member.personnel_code || '',
-    role: member.role || '', reports_to_id: member.reports_to?.id || '',
+    org_role_id: roleId, reports_to_id: member.reports_to?.id || '',
+    provision: 'invite', username: '', password: '',
     can_manage_team: !!member.can_manage_team, can_view_analytics: !!member.can_view_analytics,
     ai_assistant_enabled: !!member.ai_assistant_enabled, accesses,
   };

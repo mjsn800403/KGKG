@@ -230,6 +230,66 @@ def car_db_ready(car):
 # Capabilities are stored per-user (see PortalUser). Roles only *seed* sensible
 # defaults at creation; every flag stays individually editable afterwards.
 
+def seed_default_org_roles(company):
+    """Create the standard 4-position ladder for a fresh company (idempotent).
+
+    The company's manager can rename/re-rank/extend it later — this is only
+    the sensible starting point, matching the legacy fixed hierarchy.
+    """
+    from .models import OrgRole  # lazy
+    if OrgRole.objects.filter(company=company).exists():
+        return
+    dept = (company.department_label or '').strip()
+    seed = [
+        (1, 'مدیر خدمات پس از فروش', 'org', True, True, '#e8b04b'),
+        (2, 'رئیس خدمات پس از فروش', 'org', True, True, '#7c6cf0'),
+        (3, 'سرپرست خدمات پس از فروش', 'org', False, True, '#4bb3e8'),
+        (4, 'کارشناس خدمات پس از فروش', 'none', False, False, '#5ecf8a'),
+    ]
+    for rank, base_name, scope, manage, analytics, color in seed:
+        name = base_name
+        if dept and dept != 'خدمات پس از فروش':
+            name = base_name.replace('خدمات پس از فروش', dept)
+        OrgRole.objects.get_or_create(
+            company=company, name=name,
+            defaults={'rank': rank, 'manage_scope': scope,
+                      'can_manage_team': manage, 'can_view_analytics': analytics,
+                      'ai_assistant_enabled': True, 'color': color})
+
+
+def org_role_for_legacy(company, role):
+    """The company's OrgRole matching a legacy fixed-ladder id (by rank), or
+    None. Used by admin flows that still speak legacy role ids so the new
+    hierarchy stays in step."""
+    from .models import OrgRole  # lazy
+    want_rank = ROLE_LEVEL.get(normalize_role(role))
+    if want_rank is None:
+        return None
+    return (OrgRole.objects.filter(company=company, rank=want_rank)
+            .order_by('id').first())
+
+
+def legacy_role_for_rank(rank):
+    """Nearest legacy fixed-ladder id for a custom rank (compat shim: the
+    ``PortalUser.role`` charfield keeps working for old admin flows)."""
+    if rank <= 1:
+        return 'after_sales_manager'
+    if rank == 2:
+        return 'after_sales_head'
+    if rank == 3:
+        return 'after_sales_supervisor'
+    return 'after_sales_specialist'
+
+
+def default_capabilities_for_org_role(role):
+    """Capability defaults seeded onto a new member of ``role`` (an OrgRole)."""
+    return {
+        'can_manage_team': role.can_manage_team,
+        'can_view_analytics': role.can_view_analytics,
+        'ai_assistant_enabled': role.ai_assistant_enabled,
+    }
+
+
 def default_capabilities_for_role(role):
     """Seed capability defaults for a freshly created employee of ``role``.
 
@@ -243,6 +303,68 @@ def default_capabilities_for_role(role):
         'can_view_analytics': level <= 3,
         'ai_assistant_enabled': True,
     }
+
+
+def user_rank(u):
+    """Position of ``u`` in their company's hierarchy (1 = top, smaller wins).
+
+    Prefers the company-defined ``org_role``; falls back to the legacy fixed
+    ladder for users that were never mapped."""
+    role = getattr(u, 'org_role', None)
+    if role is not None:
+        return role.rank
+    return ROLE_LEVEL.get(normalize_role(u.role), 99)
+
+
+def user_manage_scope(u):
+    """Breadth of the team area for ``u``: 'org' | 'subtree' | 'none'.
+
+    Comes from the company-defined position. Legacy users (no org_role) keep
+    the historical subtree behavior."""
+    role = getattr(u, 'org_role', None)
+    if role is not None:
+        return role.manage_scope
+    return 'subtree'
+
+
+def display_role_label(u, department_label=None):
+    """Human label of ``u``'s position (org_role name, else legacy label)."""
+    role = getattr(u, 'org_role', None)
+    if role is not None:
+        return role.name
+    if department_label is None:
+        department_label = u.company.department_label if u.company_id else ''
+    return role_label(u.role, department_label)
+
+
+def manageable_user_ids(actor, include_self=False):
+    """IDs of every user ``actor`` may see/manage in the team area.
+
+    The reach depends on the actor's position scope:
+      * 'org'     — every company user whose rank is strictly larger
+                    (the manager sees everyone; the head sees everyone except
+                    the manager; a supervisor sees the specialists — exactly
+                    the pyramid, independent of explicit reporting lines);
+      * 'subtree' — only the actor's transitive reports;
+      * 'none'    — nobody.
+    """
+    from .models import PortalUser  # lazy: models imports this module
+    scope = user_manage_scope(actor)
+    if scope == 'none':
+        ids = set()
+    elif scope == 'subtree':
+        ids = subtree_user_ids(actor)
+    else:
+        my_rank = user_rank(actor)
+        ids = {
+            u.id for u in (PortalUser.objects
+                           .filter(company_id=actor.company_id)
+                           .select_related('org_role'))
+            if u.id != actor.id and user_rank(u) > my_rank
+        }
+    if include_self:
+        ids.add(actor.id)
+    return ids
 
 
 def subtree_user_ids(manager, include_self=False):
@@ -275,8 +397,9 @@ def subtree_user_ids(manager, include_self=False):
 def manager_can_target(actor, target):
     """True iff ``actor`` (a manager) may view/manage ``target``.
 
-    Same company, target is inside the actor's reports subtree, and the actor
-    outranks the target. This is the authorization spine for every team write.
+    Same company, actor outranks target, and target falls inside the actor's
+    position scope (org-wide / subtree — see manageable_user_ids). This is the
+    authorization spine for every team write.
     """
     if not actor or not target or not getattr(actor, 'can_manage_team', False):
         return False
@@ -284,9 +407,9 @@ def manager_can_target(actor, target):
         return False
     if actor.company_id != target.company_id:
         return False
-    if not role_can_manage(actor.role, target.role):
+    if user_rank(actor) >= user_rank(target):
         return False
-    return target.id in subtree_user_ids(actor)
+    return target.id in manageable_user_ids(actor)
 
 
 def apply_user_access(user, accesses, override_purchase=False, allow_admin_grants=False):
