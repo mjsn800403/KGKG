@@ -487,6 +487,11 @@ export const adminApi = {
       method: 'POST', body: JSON.stringify({ action: 'check_alerts' }),
     }),
   traffic: (range = 7) => adminFetch(`/api/admin/traffic/?range=${range}`),
+  pipeline: () => adminFetch('/api/admin/pipeline/'),
+  pipelineAction: (payload) =>
+    adminFetch('/api/admin/pipeline/', {
+      method: 'POST', body: JSON.stringify(payload),
+    }),
 };
 
 // --- admin auth (review queue + pin) ---------------------------------------

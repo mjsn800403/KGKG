@@ -7,6 +7,7 @@ urlpatterns = [
     path('api/admin/data-quality/', adminops.admin_data_quality_view, name='admin_data_quality'),
     path('api/admin/system/', adminops.admin_system_view, name='admin_system'),
     path('api/admin/traffic/', adminops.admin_traffic_view, name='admin_traffic'),
+    path('api/admin/pipeline/', adminops.admin_pipeline_view, name='admin_pipeline'),
 
     # Portal auth (company seats issued by the admin).
     path('api/auth/login/', portal.login_view, name='portal_login'),

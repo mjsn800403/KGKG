@@ -200,8 +200,13 @@ class MonitoringTests(TestCase):
         rf = mock.Mock(path='/api/assist/', method='POST',
                        META={'REMOTE_ADDR': '10.0.0.9'})
         # Keep the periodic background flush quiescent — this test flushes
-        # explicitly (a daemon thread would race the in-memory test DB).
+        # explicitly (a daemon thread would race the in-memory test DB) —
+        # and start from empty aggregates (other tests' Client requests feed
+        # the same module-level state through the middleware).
         monitoring._LAST_FLUSH = time.time()
+        with monitoring._LOCK:
+            monitoring._AGG.clear()
+            monitoring._VISITORS.clear()
         monitoring.record_request(rf, 200, 12.5)
         monitoring.record_request(rf, 500, 30.0)
         monitoring.flush_metrics()
