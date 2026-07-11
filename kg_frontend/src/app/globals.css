@@ -1137,3 +1137,178 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   .shimmer::after{animation:none}
   .team-add-fab,.access-chip,.mu-row,.drawer-close{transition:none}
 }
+
+
+/* =========================================================================
+   Team tabs (اعضا / چارت سازمانی / نقش‌ها)
+   ========================================================================= */
+.team-tabs{display:flex;gap:4px;padding:6px;border-radius:14px;margin-bottom:22px;width:fit-content;max-width:100%;overflow-x:auto}
+.team-tab{position:relative;display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:none;background:transparent;
+  color:var(--text-dim);font:inherit;font-size:13.5px;cursor:pointer;border-radius:10px;white-space:nowrap;transition:color .25s}
+.team-tab:hover{color:var(--text)}
+.team-tab.active{color:var(--text)}
+.team-tab .team-tab-ink{position:absolute;inset:0;border-radius:10px;background:color-mix(in srgb,var(--accent) 16%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent);z-index:-1}
+
+/* toasts */
+.toast-stack{position:fixed;bottom:22px;inset-inline-start:50%;transform:translateX(50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:12px;font-size:13.5px;color:var(--text);
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.5)}
+.toast.ok svg{color:var(--teal)}
+.toast.error svg{color:var(--accent)}
+
+/* =========================================================================
+   Org chart
+   ========================================================================= */
+.orgchart-wrap{position:relative}
+.org-move-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;margin-bottom:18px;font-size:13.5px}
+.org-move-banner .btn{margin-inline-start:auto;padding:6px 14px}
+.omb-pulse{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:ombpulse 1.2s ease-in-out infinite}
+@keyframes ombpulse{0%,100%{box-shadow:0 0 0 0 var(--accent-glow)}50%{box-shadow:0 0 0 8px transparent}}
+
+.orgchart-scroll{overflow-x:auto;padding:6px 2px 30px}
+.org-tree{list-style:none;margin:0;padding:0;overflow:hidden}
+.org-tree:not(.org-root){padding-inline-start:34px;position:relative}
+.org-tree:not(.org-root)::before{content:'';position:absolute;inset-inline-start:17px;top:0;bottom:14px;width:1.5px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 45%,transparent),color-mix(in srgb,var(--accent) 12%,transparent))}
+.org-li{position:relative;padding-top:12px}
+.org-tree:not(.org-root) > .org-li::before{content:'';position:absolute;inset-inline-start:-17px;top:38px;width:17px;height:1.5px;
+  background:color-mix(in srgb,var(--accent) 30%,transparent)}
+
+.org-node{position:relative;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;width:fit-content;
+  min-width:300px;max-width:430px;cursor:pointer;--node-accent:var(--accent)}
+.org-node .org-accent{position:absolute;inset-inline-start:0;top:12px;bottom:12px;width:3.5px;border-radius:4px;background:var(--node-accent)}
+.org-node.is-self{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--node-accent) 60%,transparent)}
+.org-node.receivable{box-shadow:0 0 0 2px var(--teal),0 10px 30px -12px var(--teal);cursor:copy}
+.org-node.is-moving{opacity:.55;border-style:dashed}
+.org-avatar{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-weight:700;font-size:15px;color:var(--text);flex:none}
+.org-id{min-width:0}
+.org-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.org-you{font-size:10.5px;padding:2px 8px;border-radius:20px;background:color-mix(in srgb,var(--node-accent) 20%,transparent);color:var(--text)}
+.org-pending{font-size:10.5px;padding:2px 8px;border-radius:20px;background:var(--gold-glow);color:var(--gold)}
+.org-off{font-size:10.5px;padding:2px 8px;border-radius:20px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+.org-role{font-size:12px;margin-top:3px}
+.org-collapse{margin-inline-start:auto;display:inline-flex;align-items:center;gap:5px;border:none;background:transparent;
+  color:var(--text-dim);cursor:pointer;padding:6px;border-radius:8px}
+.org-collapse:hover{color:var(--text);background:color-mix(in srgb,var(--text) 8%,transparent)}
+.org-count{font-size:11px}
+
+.org-menu{position:absolute;top:calc(100% + 8px);inset-inline-start:14px;z-index:40;min-width:230px;border-radius:12px;padding:8px;
+  box-shadow:0 20px 48px -16px rgba(0,0,0,.55)}
+.org-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:9px 10px;border:none;background:transparent;color:var(--text);
+  font:inherit;font-size:13px;border-radius:8px;cursor:pointer;text-align:start}
+.org-menu-item:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.org-menu-label{font-size:11.5px;color:var(--text-dim);padding:8px 10px 4px}
+.org-menu-roles{border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:6px 0;padding:2px 0}
+.org-menu-role{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;background:transparent;color:var(--text);
+  font:inherit;font-size:12.5px;border-radius:8px;cursor:pointer;text-align:start}
+.org-menu-role:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.org-menu-role.current{opacity:.5;cursor:default}
+.org-menu-role .dot{width:9px;height:9px;border-radius:50%;flex:none}
+
+/* =========================================================================
+   Roles panel (نقش‌ها و سطوح دسترسی)
+   ========================================================================= */
+.roles-panel{max-width:860px}
+.roles-intro{display:flex;gap:14px;align-items:flex-start;padding:16px 18px;border-radius:14px;margin-bottom:20px}
+.roles-intro svg{color:var(--accent);flex:none;margin-top:2px}
+.roles-intro b{font-size:14.5px}
+.roles-intro p{margin:6px 0 0;font-size:13px;color:var(--text-dim);line-height:1.9}
+.roles-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.roles-list > div > div{margin-bottom:10px}
+.role-row{border-radius:14px;overflow:visible;position:relative}
+.role-row.locked{display:flex;align-items:center;gap:12px;padding:14px 16px;opacity:.65}
+.role-row-head{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none}
+.role-grip{display:inline-flex;color:var(--text-dim);cursor:grab;padding:4px;touch-action:none}
+.role-grip:active{cursor:grabbing}
+.role-color{width:13px;height:13px;border-radius:50%;flex:none;box-shadow:0 0 10px -2px currentColor}
+.role-name{font-size:14.5px;font-weight:600}
+.role-rank{font-size:11px;color:var(--text-dim);padding:3px 10px;border-radius:20px;border:1px solid var(--border)}
+.role-members{font-size:12px;color:var(--text-dim);margin-inline-start:auto}
+.role-locktag{font-size:11px;color:var(--gold);margin-inline-start:auto}
+.role-chev{display:inline-flex;color:var(--text-dim)}
+.role-body{overflow:hidden}
+.role-body-in{padding:4px 16px 18px;border-top:1px solid var(--border)}
+.role-name-edit{display:flex;gap:8px}
+.role-name-edit input{flex:1}
+.role-swatches{display:flex;gap:8px;flex-wrap:wrap;padding:6px 0}
+.swatch{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.swatch.on{border-color:var(--text);box-shadow:0 0 0 2px var(--bg),0 0 12px -2px currentColor}
+.scope-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px}
+.scope-opt{position:relative;text-align:start;padding:12px 14px;border-radius:12px;border:1px solid var(--border);
+  background:transparent;color:var(--text);font:inherit;cursor:pointer;transition:border-color .25s}
+.scope-opt b{display:block;font-size:13px;margin-bottom:4px}
+.scope-opt span{display:block;font-size:11.5px;color:var(--text-dim);line-height:1.8}
+.scope-opt:hover{border-color:color-mix(in srgb,var(--accent) 50%,transparent)}
+.scope-opt.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.scope-check{position:absolute;top:10px;inset-inline-end:10px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  background:var(--accent);color:#fff}
+.role-hint{font-size:12px;margin:2px 0 8px}
+.role-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.role-delete-confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.role-delete-confirm select{padding:8px 10px}
+.role-add-btn{width:100%;justify-content:center;padding:13px;border-style:dashed}
+.role-add-form{padding:18px;border-radius:14px}
+
+/* analytics PDF button */
+.an-pdf{margin-inline-start:auto;display:inline-flex;align-items:center;gap:8px}
+.an-pdf-ico{display:inline-flex}
+.an-pdf-msg{padding:10px 16px;border-radius:10px;font-size:13px;margin:-8px 0 14px;width:fit-content}
+
+/* =========================================================================
+   Admin hub (میز مدیریت) + admin auth
+   ========================================================================= */
+.shell.hub-mode{grid-template-columns:1fr}
+.crumb-sep{color:var(--text-dim);margin:0 6px}
+.admin-hub{max-width:1060px}
+.hub-hero{margin:6px 0 22px}
+.hub-hero h1{font-size:26px;margin:0 0 6px}
+.hub-hero p{color:var(--text-dim);margin:0;font-size:14px}
+.hub-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:30px}
+.hub-stat{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:16px 18px;border-radius:14px;
+  border:none;color:var(--text);font:inherit;cursor:pointer;text-align:start}
+.hub-stat .hs-val{font-size:24px;font-weight:700;font-family:'Space Grotesk','Vazirmatn',sans-serif}
+.hub-stat .hs-label{font-size:12.5px;color:var(--text-dim)}
+.hub-stat.hot .hs-val{color:var(--accent)}
+.hs-pulse{position:absolute;top:14px;inset-inline-end:14px;width:9px;height:9px;border-radius:50%;background:var(--accent);
+  animation:ombpulse 1.4s ease-in-out infinite}
+.hub-group{margin-bottom:28px}
+.hub-group-head{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.hub-group-head h2{font-size:16px;margin:0}
+.hub-group-head .tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-dim);letter-spacing:.6px}
+.hub-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.hub-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:18px;border-radius:14px;border:none;
+  color:var(--text);font:inherit;cursor:pointer;text-align:start;overflow:hidden}
+.hub-card .hc-ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--accent) 13%,transparent);color:var(--accent);margin-bottom:2px}
+.hub-card .hc-title{font-size:15px;font-weight:600}
+.hub-card .hc-desc{font-size:12px;color:var(--text-dim);line-height:1.8}
+.hub-card .hc-go{position:absolute;bottom:14px;inset-inline-end:14px;color:var(--text-dim);opacity:0;transform:translateX(6px);
+  transition:opacity .25s,transform .25s}
+.hub-card:hover .hc-go{opacity:1;transform:translateX(0);color:var(--accent)}
+
+.admin-auth-card{position:relative}
+.admin-auth-band{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:10px;margin-bottom:16px;
+  background:color-mix(in srgb,var(--gold) 10%,transparent);color:var(--text-dim);font-size:12px;line-height:1.8}
+.admin-auth-band svg{color:var(--gold);flex:none;margin-top:3px}
+.admin-auth-band a{color:var(--accent);cursor:pointer}
+.admin-auth-ok{text-align:center;padding:26px 0}
+.admin-auth-ok h2{margin:14px 0 4px}
+.admin-auth-ok p{color:var(--text-dim);font-size:13.5px;margin:0}
+
+@media (max-width:720px){
+  .org-node{min-width:240px}
+  .org-tree:not(.org-root){padding-inline-start:20px}
+  .org-tree:not(.org-root)::before{inset-inline-start:9px}
+  .org-tree:not(.org-root) > .org-li::before{inset-inline-start:-11px;width:11px}
+  .team-tabs{width:100%}
+  .an-pdf{width:100%;justify-content:center;margin-inline-start:0}
+}
+@media (prefers-reduced-motion:reduce){
+  .omb-pulse,.hs-pulse{animation:none}
+}
+
+/* landing reading-progress bar */
+.scroll-progress{position:fixed;top:0;inset-inline-start:0;inset-inline-end:0;height:2.5px;z-index:90;
+  background:var(--grad-accent);transform-origin:0 50%;pointer-events:none}
+[dir="rtl"] .scroll-progress{transform-origin:100% 50%}

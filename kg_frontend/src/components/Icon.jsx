@@ -208,6 +208,42 @@ const PATHS = {
       <path d="M18 15v6M15 18h6" />
     </>
   ),
+  chevron: <path d="m6 9 6 6 6-6" />,
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1.2" /><circle cx="15" cy="6" r="1.2" />
+      <circle cx="9" cy="12" r="1.2" /><circle cx="15" cy="12" r="1.2" />
+      <circle cx="9" cy="18" r="1.2" /><circle cx="15" cy="18" r="1.2" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12" />
+      <path d="m7 11 5 5 5-5" />
+      <path d="M4 20h16" />
+    </>
+  ),
+  pdf: (
+    <>
+      <path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" />
+      <path d="M14 2v5h5" />
+      <path d="M8.5 16.5v-4h1.4a1.3 1.3 0 0 1 0 2.6H8.5M13 16.5v-4h1a1.6 2 0 0 1 0 4h-1Z" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 12.5 9 5 9-5" />
+      <path d="m3 17 9 5 9-5" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="m4 11 8-7 8 7" />
+      <path d="M6 9.5V20h4.5v-5h3v5H18V9.5" />
+    </>
+  ),
+  back: <path d="m14 6-6 6 6 6" />,
 };
 
 export default function Icon({ name, size = undefined, style = undefined, className = undefined }) {

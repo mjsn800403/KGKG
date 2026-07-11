@@ -29,8 +29,10 @@ from .models import (
 from .access import (
     CONTENT_CATEGORIES, DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL,
     VALID_CATEGORIES, VALID_DOCS, VALID_ROLES,
-    apply_user_access, car_db_ready, category_label, normalize_role, resolve_category,
-    role_label, user_ai_eligible, user_package_set,
+    apply_user_access, car_db_ready, category_label, display_role_label,
+    normalize_role, org_role_for_legacy, resolve_category, role_label,
+    seed_default_org_roles, user_ai_eligible, user_manage_scope,
+    user_package_set, user_rank,
 )
 from .admin_auth import require_admin_token
 from .ratelimit import rate_limited
@@ -102,8 +104,13 @@ def _user_dict(u, with_access=False):
         'id': u.id, 'username': u.username, 'display_name': u.display_name,
         'email': u.email, 'phone': u.phone, 'personnel_code': u.personnel_code,
         'role': normalize_role(u.role),
-        'role_label': role_label(u.role, dept),
-        'role_level': ROLE_LEVEL.get(normalize_role(u.role)),
+        'role_label': display_role_label(u, dept),
+        'role_level': user_rank(u),
+        'org_role': ({'id': u.org_role_id, 'name': u.org_role.name,
+                      'rank': u.org_role.rank, 'color': u.org_role.color,
+                      'manage_scope': u.org_role.manage_scope}
+                     if u.org_role_id and u.org_role else None),
+        'manage_scope': user_manage_scope(u),
         'company_id': u.company_id, 'company': u.company.name,
         'department_label': u.company.department_label,
         'reports_to': reports_to,
@@ -380,6 +387,7 @@ def admin_companies_view(request):
             )
         except IntegrityError:
             return JsonResponse({'error': 'شرکتی با این نام قبلاً ثبت شده است.'}, status=400)
+        seed_default_org_roles(c)
         return JsonResponse({'ok': True, 'company': _company_dict(c, deep=True)})
     return JsonResponse({'items': [_company_dict(c) for c in Company.objects.all()]})
 
@@ -485,6 +493,7 @@ def admin_users_view(request):
                 id=b['reports_to_id'], company=company).first()
         u = PortalUser(
             company=company, username=username, role=role,
+            org_role=org_role_for_legacy(company, role),
             display_name=(str(b.get('display_name') or '')).strip()[:150],
             email=(str(b.get('email') or '')).strip()[:254] or None,
             phone=(str(b.get('phone') or '')).strip()[:40],
@@ -558,6 +567,7 @@ def admin_user_detail_view(request, user_id):
             role = normalize_role(b['role'])
             if role in VALID_ROLES:
                 u.role = role
+                u.org_role = org_role_for_legacy(u.company, role) or u.org_role
         if 'access_expires_at' in b:
             exp = b.get('access_expires_at')
             if not exp:

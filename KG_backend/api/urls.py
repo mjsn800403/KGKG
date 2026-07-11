@@ -21,7 +21,11 @@ urlpatterns = [
     path('api/team/members/<int:user_id>/', team.team_member_detail_view, name='team_member_detail'),
     path('api/team/members/<int:user_id>/access/', team.team_member_access_view, name='team_member_access'),
     path('api/team/org/', team.team_org_view, name='team_org'),
+    path('api/team/roles/', team.team_roles_view, name='team_roles'),
+    path('api/team/roles/reorder/', team.team_roles_reorder_view, name='team_roles_reorder'),
+    path('api/team/roles/<int:role_id>/', team.team_role_detail_view, name='team_role_detail'),
     path('api/team/analytics/', team.team_analytics_view, name='team_analytics'),
+    path('api/team/report/', team.team_report_pdf_view, name='team_report_pdf'),
     path('api/invite/<str:token>/', team.invite_view, name='invite'),
 
     # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).

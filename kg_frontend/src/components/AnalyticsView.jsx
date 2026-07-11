@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, MotionConfig, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/react';
 import Icon from './Icon';
-import { teamApi, portalRefreshMe, getPortalToken } from '../utils/api';
+import { teamApi, portalRefreshMe, getPortalToken, downloadTeamReport } from '../utils/api';
 
 const RANGES = [
   { id: '7', label: '۷ روز' },
@@ -46,6 +46,23 @@ export default function AnalyticsView() {
   const [data, setData] = useState(null);
   const [range, setRange] = useState('30');
   const [memberId, setMemberId] = useState('');
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfMsg, setPdfMsg] = useState('');
+
+  const getPdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    setPdfMsg('');
+    try {
+      await downloadTeamReport(Number(range) || 30);
+      setPdfMsg('گزارش آماده شد و دانلود آغاز شد.');
+    } catch (e) {
+      setPdfMsg(e?.message || 'دریافت گزارش ناموفق بود.');
+    } finally {
+      setPdfBusy(false);
+      setTimeout(() => setPdfMsg(''), 4000);
+    }
+  };
 
   const fetchData = async (r, mid) => {
     const params = { range: r };
@@ -101,7 +118,31 @@ export default function AnalyticsView() {
               <Icon name="x" size={14} /> نمایش همه ({focusedMember.name})
             </button>
           )}
+          <motion.button
+            className="btn btn-accent an-pdf"
+            onClick={getPdf}
+            disabled={pdfBusy}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.96 }}
+          >
+            <motion.span
+              className="an-pdf-ico"
+              animate={pdfBusy ? { rotate: 360 } : { rotate: 0 }}
+              transition={pdfBusy ? { repeat: Infinity, duration: 1, ease: 'linear' } : { duration: 0.2 }}
+            >
+              <Icon name={pdfBusy ? 'refresh' : 'pdf'} size={16} />
+            </motion.span>
+            {pdfBusy ? 'در حال ساخت گزارش…' : 'دریافت گزارش PDF'}
+          </motion.button>
         </div>
+        <AnimatePresence>
+          {pdfMsg && (
+            <motion.div className="an-pdf-msg glass" initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              {pdfMsg}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="an-kpis">
           <Kpi icon="chart" label="کل فعالیت‌ها" value={data.total_events} />

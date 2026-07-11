@@ -383,7 +383,40 @@ export const teamApi = {
     const qs = new URLSearchParams(params).toString();
     return teamFetch(`/api/team/analytics/${qs ? `?${qs}` : ''}`);
   },
+  // Company-defined positions (the configurable hierarchy).
+  roles: () => teamFetch('/api/team/roles/'),
+  createRole: (payload) =>
+    teamFetch('/api/team/roles/', { method: 'POST', body: JSON.stringify(payload) }),
+  updateRole: (id, payload) =>
+    teamFetch(`/api/team/roles/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteRole: (id, reassignTo) =>
+    teamFetch(`/api/team/roles/${id}/`, {
+      method: 'POST', body: JSON.stringify({ delete: true, reassign_to: reassignTo || undefined }),
+    }),
+  reorderRoles: (order) =>
+    teamFetch('/api/team/roles/reorder/', { method: 'POST', body: JSON.stringify({ order }) }),
 };
+
+/** Download the designed PDF team report and trigger a save dialog. */
+export async function downloadTeamReport(rangeDays = 30) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/team/report/?range=${rangeDays}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `دریافت گزارش ناموفق بود: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kgtechvault-team-report-${rangeDays}d.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 // --- employee invite acceptance (public, token-gated) -----------------------
 export async function validateInvite(token) {

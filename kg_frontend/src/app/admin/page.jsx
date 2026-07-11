@@ -15,8 +15,10 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
-import { adminApi, adminLogin, adminLogout, getAdminToken, getAdminUser, setAdminToken } from '@/utils/api';
+import { adminApi, adminLogout, getAdminToken, getAdminUser } from '@/utils/api';
 import { DEPARTMENT_PRESETS, PACKAGES, ROLES, packageLabel, roleWithDepartment } from '@/lib/packages';
 
 const DOCS = PACKAGES.map((p) => ({ id: p.id, label: p.label }));
@@ -37,16 +39,24 @@ const REQ_STATUS = {
 };
 
 const SECTIONS = [
-  { id: 'overview', label: 'نمای کلی', icon: 'catalog' },
-  { id: 'catalog', label: 'فهرست خودروها', icon: 'car' },
-  { id: 'requests', label: 'درخواست‌های خرید', icon: 'cart' },
-  { id: 'companies', label: 'شرکت‌ها و دسترسی‌ها', icon: 'info' },
-  { id: 'users', label: 'کاربران', icon: 'gear' },
-  { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart' },
-  { id: 'activity', label: 'گزارش فعالیت', icon: 'clock' },
-  { id: 'dataquality', label: 'سلامت داده‌ها', icon: 'shield' },
-  { id: 'pipeline', label: 'پردازش داده‌ها', icon: 'refresh' },
-  { id: 'system', label: 'پایش سیستم', icon: 'gear' },
+  { id: 'overview', label: 'نمای کلی', icon: 'catalog', desc: 'خلاصه وضعیت کل پلتفرم در یک نگاه' },
+  { id: 'catalog', label: 'فهرست خودروها', icon: 'car', desc: 'خودروهای ثبت‌شده و وضعیت دیتابیس هرکدام' },
+  { id: 'requests', label: 'درخواست‌های خرید', icon: 'cart', desc: 'درخواست‌های جدید مشتریان و صدور دسترسی' },
+  { id: 'companies', label: 'شرکت‌ها و دسترسی‌ها', icon: 'building', desc: 'تعریف شرکت و دامنه خرید هرکدام' },
+  { id: 'users', label: 'کاربران', icon: 'users', desc: 'صدور و مدیریت حساب‌های شرکتی' },
+  { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart', desc: 'میزان استفاده به تفکیک شرکت و حوزه فنی' },
+  { id: 'activity', label: 'گزارش فعالیت', icon: 'clock', desc: 'ریز رویدادهای کاربران در سامانه' },
+  { id: 'dataquality', label: 'سلامت داده‌ها', icon: 'shield', desc: 'ممیزی کامل بودن و کیفیت مستندات هر خودرو' },
+  { id: 'pipeline', label: 'پردازش داده‌ها', icon: 'refresh', desc: 'ایندکس RAG و پردازش داده‌های جدید' },
+  { id: 'system', label: 'پایش سیستم', icon: 'gear', desc: 'منابع سرور، ترافیک و هشدارهای عملیاتی' },
+];
+
+// The hub groups the sections so the admin lands on a calm "desk", not the
+// full firehose — a section's tools appear only after entering it.
+const SECTION_GROUPS = [
+  { title: 'مشتریان و فروش', tag: '// CUSTOMERS', ids: ['requests', 'companies', 'users'] },
+  { title: 'گزارش و تحلیل', tag: '// INSIGHTS', ids: ['overview', 'analytics', 'activity'] },
+  { title: 'داده و عملیات', tag: '// OPERATIONS', ids: ['catalog', 'dataquality', 'pipeline', 'system'] },
 ];
 
 function fmtDate(iso) {
@@ -55,127 +65,143 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
+const EASE = [0.22, 1, 0.36, 1];
+const SPRING = { type: 'spring', stiffness: 380, damping: 32, mass: 0.75 };
+
+function readHashSection() {
+  if (typeof window === 'undefined') return null;
+  const id = (window.location.hash || '').replace('#', '');
+  return SECTIONS.some((s) => s.id === id) ? id : null;
+}
+
 export default function AdminPage() {
-  const [section, setSection] = useState('overview');
-  const [needToken, setNeedToken] = useState(true);
+  const router = useRouter();
+  // null = the hub (the admin's "desk"); a section id = inside that section.
+  const [section, setSection] = useState(null);
   const [adminUser, setAdminUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [loginBusy, setLoginBusy] = useState(false);
   const [flash, setFlash] = useState('');
   const [companyPrefill, setCompanyPrefill] = useState(null);
 
   useEffect(() => {
-    const token = getAdminToken();
-    setNeedToken(!token);
+    if (!getAdminToken()) { router.replace('/admin/login'); return; }
     setAdminUser(getAdminUser());
+    setSection(readHashSection());
     setAuthReady(true);
+    const onHash = () => setSection(readHashSection());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [router]);
+
+  const go = useCallback((id) => {
+    setSection(id);
+    try {
+      if (id) window.history.replaceState(null, '', `#${id}`);
+      else window.history.replaceState(null, '', window.location.pathname);
+    } catch { /* history unavailable */ }
   }, []);
 
   const guard = useCallback(async (fn) => {
     try {
       return await fn();
     } catch (e) {
-      if (e?.unauthorized) { setNeedToken(true); setAdminUser(null); return null; }
+      if (e?.unauthorized) { adminLogout(); router.replace('/admin/login'); return null; }
       setFlash(e?.message || 'خطای نامشخص');
       setTimeout(() => setFlash(''), 5000);
       return null;
     }
-  }, []);
+  }, [router]);
 
   const handleLogout = () => {
     adminLogout();
-    setNeedToken(true);
-    setAdminUser(null);
+    router.replace('/admin/login');
   };
 
+  if (!authReady) {
+    return <div className="screen fade" id="admin-panel"><div className="empty-state">در حال بارگذاری…</div></div>;
+  }
+
+  const current = SECTIONS.find((s) => s.id === section);
+
   return (
+    <MotionConfig reducedMotion="user">
     <div className="screen fade" id="admin-panel">
-      <div className="shell">
-        <aside className="sidebar">
-          <Link className="sb-brand" href="/admin">
-            <img src="/logo.png" alt="KGtechvault" />
-            <span>پنل مدیریت</span>
-          </Link>
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={`sb-link${section === s.id ? ' active' : ''}`}
-              onClick={() => setSection(s.id)}
+      <div className={`shell${section ? '' : ' hub-mode'}`}>
+        <AnimatePresence>
+          {section && (
+            <motion.aside
+              className="sidebar"
+              initial={{ x: 60, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 60, opacity: 0 }}
+              transition={SPRING}
             >
-              <Icon name={s.icon} /> {s.label}
-            </button>
-          ))}
-          <div style={{ marginTop: 'auto', paddingTop: 30 }}>
-            <Link className="sb-link" href="/">
-              <Icon name="logout" /> بازگشت به سایت
-            </Link>
-          </div>
-        </aside>
+              <a className="sb-brand" onClick={() => go(null)} style={{ cursor: 'pointer' }}>
+                <img src="/logo.png" alt="KGtechvault" />
+                <span>پنل مدیریت</span>
+              </a>
+              <button type="button" className="sb-link" onClick={() => go(null)}>
+                <Icon name="home" /> میز مدیریت
+              </button>
+              {SECTIONS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`sb-link${section === s.id ? ' active' : ''}`}
+                  onClick={() => go(s.id)}
+                >
+                  <Icon name={s.icon} /> {s.label}
+                </button>
+              ))}
+              <div style={{ marginTop: 'auto', paddingTop: 30 }}>
+                <Link className="sb-link" href="/">
+                  <Icon name="logout" /> بازگشت به سایت
+                </Link>
+              </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
         <main className="main">
           <div className="topbar">
-            <div className="breadcrumb"><b>مدیریت سامانه</b></div>
+            <div className="breadcrumb">
+              {section ? (
+                <>
+                  <a onClick={() => go(null)} style={{ cursor: 'pointer' }}>میز مدیریت</a>
+                  <span className="crumb-sep"> / </span>
+                  <b>{current?.label}</b>
+                </>
+              ) : (
+                <b>میز مدیریت سامانه</b>
+              )}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div className="userchip">
                 <div className="avatar">AD</div>
                 {adminUser?.username ? `${adminUser.username} — ادمین` : 'KGTECHVAULT — ادمین'}
               </div>
-              {!needToken && (
-                <button className="btn" onClick={handleLogout}>خروج</button>
-              )}
+              <button className="btn" onClick={handleLogout}>خروج</button>
             </div>
           </div>
 
           {flash && <div className="pform-error" style={{ marginBottom: 16 }}>{flash}</div>}
 
-          {!authReady ? (
-            <div className="empty-state">در حال بارگذاری…</div>
-          ) : needToken ? (
-            <div className="card glass" style={{ maxWidth: 480, padding: 24 }}>
-              <h3 style={{ marginTop: 0 }}>ورود ادمین</h3>
-              <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>
-                نام کاربری و رمز عبور مدیر سامانه (توسعه: admin / admin)
-              </p>
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (loginBusy) return;
-                  setLoginBusy(true);
-                  try {
-                    await adminLogin(loginForm.username.trim(), loginForm.password);
-                    setNeedToken(false);
-                    setAdminUser(getAdminUser());
-                  } catch (err) {
-                    setFlash(err.message || 'ورود ناموفق');
-                  } finally {
-                    setLoginBusy(false);
-                  }
-                }}
-              >
-              <div className="field">
-                <label>نام کاربری</label>
-                <input dir="ltr" placeholder="admin" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>رمز عبور</label>
-                <input type="password" dir="ltr" placeholder="••••••" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} />
-              </div>
-              <button className="btn btn-accent" type="submit" disabled={loginBusy}>
-                {loginBusy ? 'در حال ورود…' : 'ورود'}
-              </button>
-              </form>
-            </div>
-          ) : (
-            <>
-              {section === 'overview' && <Overview guard={guard} go={setSection} />}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={section || 'hub'}
+              initial={{ opacity: 0, y: 18, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -12, filter: 'blur(4px)' }}
+              transition={{ duration: 0.32, ease: EASE }}
+            >
+              {!section && <AdminHub guard={guard} go={go} adminUser={adminUser} />}
+              {section === 'overview' && <Overview guard={guard} go={go} />}
               {section === 'catalog' && <Catalog guard={guard} />}
               {section === 'requests' && (
                 <Requests
                   guard={guard}
                   onCreateCompany={(prefill) => {
                     setCompanyPrefill(prefill);
-                    setSection('companies');
+                    go('companies');
                   }}
                 />
               )}
@@ -192,10 +218,97 @@ export default function AdminPage() {
               {section === 'dataquality' && <DataQuality guard={guard} />}
               {section === 'pipeline' && <Pipeline guard={guard} />}
               {section === 'system' && <SystemMonitor guard={guard} />}
-            </>
-          )}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
+    </div>
+    </MotionConfig>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The hub — the admin's landing "desk". A calm overview + grouped doors into
+// each section, instead of dropping the admin straight into everything.
+// ---------------------------------------------------------------------------
+function AdminHub({ guard, go, adminUser }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { guard(adminApi.overview).then((d) => d && setData(d)); }, [guard]);
+
+  const quickStats = data ? [
+    { label: 'درخواست‌های جدید', value: data.requests_new, to: 'requests', hot: (data.requests_new || 0) > 0 },
+    { label: 'شرکت‌ها', value: data.companies, to: 'companies' },
+    { label: 'کاربران', value: data.users, to: 'users' },
+    { label: 'فعالیت امروز', value: data.activities_today, to: 'activity' },
+  ] : [];
+
+  const container = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
+  const item = {
+    hidden: { opacity: 0, y: 18, scale: 0.97 },
+    show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: EASE } },
+  };
+
+  return (
+    <div className="admin-hub">
+      <motion.div
+        className="hub-hero"
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: EASE }}
+      >
+        <h1>سلام{adminUser?.username ? `، ${adminUser.username}` : ''} 👋</h1>
+        <p>از میز مدیریت وارد هر بخش شوید؛ همه‌چیز سر جای خودش است.</p>
+      </motion.div>
+
+      <motion.div className="hub-stats" variants={container} initial="hidden" animate="show">
+        {quickStats.map((s) => (
+          <motion.button key={s.label} className={`hub-stat glass${s.hot ? ' hot' : ''}`}
+            variants={item} whileHover={{ y: -4 }} whileTap={{ scale: 0.97 }}
+            onClick={() => go(s.to)}>
+            <span className="hs-val">{(s.value ?? 0).toLocaleString('fa-IR')}</span>
+            <span className="hs-label">{s.label}</span>
+            {s.hot && <span className="hs-pulse" />}
+          </motion.button>
+        ))}
+        {!data && [0, 1, 2, 3].map((i) => (
+          <div key={i} className="hub-stat glass shimmer" style={{ height: 86 }} />
+        ))}
+      </motion.div>
+
+      {SECTION_GROUPS.map((group, gi) => (
+        <div className="hub-group" key={group.title}>
+          <motion.div
+            className="hub-group-head"
+            initial={{ opacity: 0, x: 14 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.45, ease: EASE, delay: 0.1 + gi * 0.06 }}
+          >
+            <h2>{group.title}</h2>
+            <span className="tag">{group.tag}</span>
+          </motion.div>
+          <motion.div className="hub-cards" variants={container} initial="hidden"
+            whileInView="show" viewport={{ once: true, amount: 0.15 }}>
+            {group.ids.map((id) => {
+              const s = SECTIONS.find((x) => x.id === id);
+              return (
+                <motion.button
+                  key={id}
+                  className="hub-card glass"
+                  variants={item}
+                  whileHover={{ y: -6 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => go(id)}
+                >
+                  <span className="hc-ico"><Icon name={s.icon} size={22} /></span>
+                  <span className="hc-title">{s.label}</span>
+                  <span className="hc-desc">{s.desc}</span>
+                  <span className="hc-go"><Icon name="back" size={15} /></span>
+                </motion.button>
+              );
+            })}
+          </motion.div>
+        </div>
+      ))}
     </div>
   );
 }
