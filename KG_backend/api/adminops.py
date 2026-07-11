@@ -12,9 +12,10 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .admin_auth import require_admin_token
 from .models import (
-    ActivityLog, Car, DataQualityRun, SystemAlert, TrafficStat, VisitorSeen,
+    ActivityLog, Car, DataQualityRun, PipelineSettings, ProcessingJob,
+    SystemAlert, TrafficStat, VisitorSeen,
 )
-from . import dataquality, monitoring
+from . import dataquality, monitoring, pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -186,4 +187,112 @@ def admin_traffic_view(request):
         'series': series,
         'endpoints': endpoints,
         'feature_usage': feature_usage,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Data-processing pipeline (admin-triggered background workflow)
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@require_admin_token
+def admin_pipeline_view(request):
+    """GET  /api/admin/pipeline/ -> pending work + load + recommendation +
+         active/last job (live progress) + history + settings.
+       POST {action: start | schedule {at} | resume {job_id} | cancel {job_id}
+             | settings {auto_enabled?, load_threshold?, auto_resume?}}
+    """
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body or '{}')
+        except (ValueError, TypeError):
+            body = {}
+        action = body.get('action')
+
+        if action == 'start':
+            job, err = pipeline.start_job(trigger='manual')
+            if err:
+                return JsonResponse({'error': err}, status=409)
+            return JsonResponse({'ok': True, 'job': pipeline.job_dict(job)})
+
+        if action == 'schedule':
+            raw = str(body.get('at') or '')
+            try:
+                at = timezone.datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                if timezone.is_naive(at):
+                    at = timezone.make_aware(at)
+            except (ValueError, TypeError):
+                return JsonResponse({'error': 'زمان نامعتبر است.'}, status=400)
+            if at <= timezone.now():
+                job, err = pipeline.start_job(trigger='manual')
+            else:
+                job, err = pipeline.start_job(trigger='schedule', scheduled_for=at)
+            if err:
+                return JsonResponse({'error': err}, status=409)
+            return JsonResponse({'ok': True, 'job': pipeline.job_dict(job)})
+
+        if action in ('resume', 'cancel'):
+            job = ProcessingJob.objects.filter(id=body.get('job_id')).first()
+            if job is None:
+                return JsonResponse({'error': 'کار یافت نشد.'}, status=404)
+            ok, err = (pipeline.resume_job(job) if action == 'resume'
+                       else pipeline.cancel_job(job))
+            if not ok:
+                return JsonResponse({'error': err}, status=409)
+            job.refresh_from_db()
+            return JsonResponse({'ok': True, 'job': pipeline.job_dict(job)})
+
+        if action == 'settings':
+            st = PipelineSettings.get()
+            if 'auto_enabled' in body:
+                st.auto_enabled = bool(body['auto_enabled'])
+            if 'auto_resume' in body:
+                st.auto_resume = bool(body['auto_resume'])
+            if 'load_threshold' in body:
+                try:
+                    st.load_threshold = min(1.5, max(0.1, float(body['load_threshold'])))
+                except (TypeError, ValueError):
+                    pass
+            st.save()
+            return JsonResponse({'ok': True})
+
+        return JsonResponse({'error': 'unknown action'}, status=400)
+
+    st = PipelineSettings.get()
+    work = pipeline.pending_work()
+    load = pipeline.load_snapshot()
+    est = pipeline.estimate_duration_s(work, st)
+
+    current = pipeline.active_job()
+    if current is None:
+        current = (ProcessingJob.objects.filter(status='scheduled')
+                   .order_by('scheduled_for').first())
+    if current is None:
+        current = (ProcessingJob.objects
+                   .filter(status__in=ProcessingJob.RESUMABLE)
+                   .order_by('-created_at').first())
+    last_done = (ProcessingJob.objects
+                 .filter(status__in=['done', 'failed', 'canceled'])
+                 .order_by('-created_at').first())
+
+    return JsonResponse({
+        'pending': work,
+        'load': load,
+        'estimate_s': est,
+        'recommendation': pipeline.recommendation(work, load, est),
+        'job': pipeline.job_dict(current),
+        'last_job': pipeline.job_dict(last_done),
+        'history': [
+            {'id': j.id, 'status': j.status, 'trigger': j.trigger,
+             'created_at': j.created_at.isoformat(),
+             'finished_at': j.finished_at.isoformat() if j.finished_at else None,
+             'overall_pct': (j.progress or {}).get('overall_pct'),
+             'error': j.error}
+            for j in ProcessingJob.objects.all()[:12]
+        ],
+        'settings': {'auto_enabled': st.auto_enabled,
+                     'auto_resume': st.auto_resume,
+                     'load_threshold': st.load_threshold,
+                     'embed_rate_pps': st.embed_rate_pps,
+                     'diag_secs_per_car': st.diag_secs_per_car},
     })

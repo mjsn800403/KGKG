@@ -87,6 +87,36 @@ Persian (RTL) technical-documentation platform for automotive service teams
   regressions into deduplicated `SystemAlert` rows with auto-resolve.
   Thresholds are env-tunable (`KG_ALERT_*`).
 
+## Data-processing pipeline (api/pipeline.py)
+
+Admin panel → «پردازش داده‌ها»: one button runs every pending server-side
+process (catalog sync → RAG ingest/embed/graph → per-car diagnostics →
+audit refresh) with live per-stage progress, rate and ETA. Designed so a
+non-technical admin can operate it and nothing can half-break:
+
+* The worker is a DETACHED process in its own systemd transient unit
+  (`systemd-run`, Nice 15 / CPUWeight 25 / IO-idle) — closing the browser,
+  restarting the backend, or deploying never interrupts it, and serving
+  traffic always outranks it on CPU/IO.
+* Every stage is incremental and kill-safe: embedding commits per window
+  (`vec_blobs` is always a contiguous prefix), diag sidecars are per-car
+  files, catalog sync is idempotent. A `graph_synced_vectors` marker makes
+  the embed→graph handoff resumable too (after a resumed embed the graph is
+  rebuilt from the persisted int8 vectors — the transient float table is
+  dropped because it would only cover newer blobs).
+* `pipeline_tick` (systemd timer, 5 min) is watchdog + scheduler + autopilot:
+  detects dead workers via heartbeat + pid liveness and relaunches them
+  (bounded attempts), starts jobs whose scheduled time arrived, and — when
+  auto mode is on — starts processing of newly landed vehicle data by itself
+  once server load per core is under the configured threshold.
+* Single-flight everywhere: an atomic DB claim (pending→running exactly
+  once), plus a /proc scan refusing to start on top of a shell-launched
+  build_rag/build_diag.
+* Progress is computed from the artifacts themselves (vector counts, sidecar
+  files), so the panel shows the truth even right after a crash; duration
+  estimates come from this server's observed throughput, persisted in
+  `PipelineSettings`.
+
 ## Scale path (measured triggers, not speculation)
 
 | Pressure signal | Move |
@@ -109,4 +139,6 @@ python manage.py sync_car_catalog [--dry-run]      # register new warehouse DBs
 python manage.py build_rag --add                   # index cars missing from RAG
 python manage.py build_diag                        # diagnostic sidecars
 python manage.py check_alerts                      # alert sweep + retention
+python manage.py pipeline_tick                     # pipeline watchdog/scheduler pass
+python manage.py run_pipeline --job <id>           # pipeline worker (spawned, not manual)
 ```

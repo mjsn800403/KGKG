@@ -358,9 +358,16 @@ def evaluate_alerts():
 
     opened = [_raise_alert(k, sev, msg, ctx) for k, (sev, msg, ctx) in firing.items()]
 
+    # Auto-resolve ONLY the alert keys this evaluator owns. Other subsystems
+    # (e.g. the processing pipeline) manage their own alerts' lifecycles —
+    # closing them here just because this function didn't raise them would
+    # hide real conditions.
+    OWNED_KEYS = ('disk_high', 'memory_high', 'db_down', 'rag_index_missing')
+    OWNED_PREFIXES = ('error_rate:', 'latency:', 'dq_')
     resolved = []
     for alert in SystemAlert.objects.filter(is_open=True):
-        if alert.key not in firing:
+        owned = alert.key in OWNED_KEYS or alert.key.startswith(OWNED_PREFIXES)
+        if owned and alert.key not in firing:
             alert.is_open = False
             alert.resolved_at = timezone.now()
             alert.save(update_fields=['is_open', 'resolved_at'])

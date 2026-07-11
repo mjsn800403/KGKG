@@ -45,6 +45,7 @@ const SECTIONS = [
   { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart' },
   { id: 'activity', label: 'گزارش فعالیت', icon: 'clock' },
   { id: 'dataquality', label: 'سلامت داده‌ها', icon: 'shield' },
+  { id: 'pipeline', label: 'پردازش داده‌ها', icon: 'refresh' },
   { id: 'system', label: 'پایش سیستم', icon: 'gear' },
 ];
 
@@ -189,6 +190,7 @@ export default function AdminPage() {
               {section === 'analytics' && <PlatformAnalytics guard={guard} />}
               {section === 'activity' && <Activity guard={guard} />}
               {section === 'dataquality' && <DataQuality guard={guard} />}
+              {section === 'pipeline' && <Pipeline guard={guard} />}
               {section === 'system' && <SystemMonitor guard={guard} />}
             </>
           )}
@@ -1501,6 +1503,259 @@ function SystemMonitor({ guard }) {
             ))}
             {Object.keys(traffic.feature_usage || {}).length === 0 && <div className="muted">داده‌ای ثبت نشده است.</div>}
           </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Data processing pipeline — one-button server-side processing with live
+// progress, scheduling, auto-mode and resume. The worker runs detached on the
+// server: closing this page never interrupts it.
+// ---------------------------------------------------------------------------
+const JOB_STATUS = {
+  pending: { label: 'در صف اجرا', color: '#3b82f6' },
+  scheduled: { label: 'زمان‌بندی‌شده', color: '#3b82f6' },
+  running: { label: 'در حال اجرا', color: '#22c55e' },
+  paused: { label: 'متوقف‌شده (قابل ادامه)', color: '#eab308' },
+  stalled: { label: 'قطع‌شده (قابل ادامه)', color: '#eab308' },
+  done: { label: 'کامل شد', color: '#22c55e' },
+  failed: { label: 'با خطا تمام شد', color: '#ef4444' },
+  canceled: { label: 'لغو شد', color: '#9ca3af' },
+};
+const STAGE_STATUS = {
+  pending: 'در انتظار', running: 'در حال اجرا', done: 'انجام شد',
+  skipped: 'لازم نبود', failed: 'خطا',
+};
+
+function fmtDur(sec) {
+  if (sec == null || Number.isNaN(sec)) return '—';
+  const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+  if (h > 0) return `${h} ساعت و ${m} دقیقه`;
+  if (m > 0) return `${m} دقیقه`;
+  return 'کمتر از یک دقیقه';
+}
+
+function StageRow({ stage }) {
+  const pct = stage.items_total > 0
+    ? Math.min(100, Math.round((stage.items_done / stage.items_total) * 100))
+    : (stage.status === 'done' || stage.status === 'skipped' ? 100 : 0);
+  const color = stage.status === 'failed' ? '#ef4444'
+    : stage.status === 'running' ? 'var(--acc1, #6366f1)'
+    : stage.status === 'done' ? '#22c55e' : '#9ca3af';
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+        <span>{stage.label}</span>
+        <span style={{ color: 'var(--text-dim)' }}>
+          {stage.items_total > 0 && stage.status !== 'skipped'
+            ? `${(stage.items_done || 0).toLocaleString('fa-IR')} از ${stage.items_total.toLocaleString('fa-IR')} — `
+            : ''}
+          {STAGE_STATUS[stage.status] || stage.status}
+        </span>
+      </div>
+      <div style={{ background: 'rgba(120,120,160,.15)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 6, transition: 'width .6s' }} />
+      </div>
+      {stage.error && (
+        <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }} dir="ltr">{stage.error}</div>
+      )}
+    </div>
+  );
+}
+
+function Pipeline({ guard }) {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [flash, setFlash] = useState('');
+
+  const load = useCallback(() => {
+    guard(adminApi.pipeline).then((d) => d && setData(d));
+  }, [guard]);
+  useEffect(() => { load(); }, [load]);
+
+  const jobActive = data?.job && ['pending', 'running'].includes(data.job.status);
+  useEffect(() => {
+    if (!jobActive) return undefined;
+    const t = setInterval(load, 4000);
+    return () => clearInterval(t);
+  }, [jobActive, load]);
+
+  const act = async (payload, okMsg) => {
+    setBusy(true);
+    setFlash('');
+    try {
+      await guard(() => adminApi.pipelineAction(payload));
+      if (okMsg) setFlash(okMsg);
+      load();
+    } catch (e) {
+      setFlash(e.message || 'خطا');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const job = data?.job;
+  const st = job ? (JOB_STATUS[job.status] || {}) : {};
+  const prog = job?.progress || {};
+  const pending = data?.pending;
+  const loadLevelFa = { low: 'کم', medium: 'متوسط', high: 'زیاد' }[data?.load?.level] || '—';
+
+  return (
+    <>
+      <h1 className="page-title">پردازش داده‌ها</h1>
+      <div className="page-sub">// DATA_PIPELINE — پردازش خودکار داده‌های خودروها روی سرور</div>
+
+      {flash && <div className="pform-error" style={{ margin: '12px 0' }}>{flash}</div>}
+
+      {!data ? <div className="empty-state">در حال بارگذاری…</div> : (
+        <>
+          {/* Recommendation + pending work */}
+          <div className="card glass" style={{ margin: '16px 0' }}>
+            <h3 style={{ marginTop: 0 }}><Icon name="sparkles" size={16} /> وضعیت و توصیه</h3>
+            <p style={{ fontSize: 14, lineHeight: 1.9, margin: '6px 0' }}>{data.recommendation}</p>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-dim)' }}>
+              <span>بار فعلی سرور: <b style={{ color: data.load.level === 'high' ? '#ef4444' : data.load.level === 'medium' ? '#eab308' : '#22c55e' }}>{loadLevelFa}</b> ({data.load.load1} روی {data.load.cores} هسته)</span>
+              {pending?.has_work && <span>زمان تقریبی کل: <b>{fmtDur(data.estimate_s)}</b></span>}
+            </div>
+            {pending?.has_work && (
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, fontSize: 13 }}>
+                {pending.need_catalog.length > 0 && <span className="st-badge st-rev">{pending.need_catalog.length} خودرو خارج از کاتالوگ</span>}
+                {pending.need_rag_ingest.length > 0 && <span className="st-badge st-rev">{pending.need_rag_ingest.length} خودرو بدون ایندکس</span>}
+                {pending.pages_to_embed > 0 && <span className="st-badge st-rev">{pending.pages_to_embed.toLocaleString('fa-IR')} صفحه در انتظار پردازش هوشمند</span>}
+                {pending.need_diag.length > 0 && <span className="st-badge st-rev">{pending.need_diag.length} خودرو بدون موتور عیب‌یابی</span>}
+              </div>
+            )}
+            {!pending?.has_work && !jobActive && (
+              <div style={{ color: '#22c55e', fontSize: 14, marginTop: 6 }}>✓ همه پردازش‌ها انجام شده است.</div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button className="btn btn-accent" disabled={busy || jobActive || !pending?.has_work}
+              onClick={() => act({ action: 'start' }, 'پردازش شروع شد — می‌توانید این صفحه را ببندید؛ اجرا روی سرور ادامه می‌یابد.')}>
+              <Icon name="check" size={14} /> شروع پردازش الان
+            </button>
+            <button className="btn" disabled={busy || jobActive || !pending?.has_work}
+              onClick={() => setShowSchedule((v) => !v)}>
+              زمان‌بندی برای بعد
+            </button>
+            {job?.resumable && (
+              <button className="btn btn-accent" disabled={busy}
+                onClick={() => act({ action: 'resume', job_id: job.id }, 'ادامه پردازش از همان نقطه شروع شد.')}>
+                ادامه از همان نقطه
+              </button>
+            )}
+            {jobActive && (
+              <button className="btn" disabled={busy}
+                onClick={() => act({ action: 'cancel', job_id: job.id }, 'درخواست توقف ثبت شد؛ پیشرفت ذخیره می‌شود و بعداً قابل ادامه است.')}>
+                توقف (با حفظ پیشرفت)
+              </button>
+            )}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-dim)' }}>
+              <input type="checkbox" checked={!!data.settings?.auto_enabled}
+                onChange={(e) => act({ action: 'settings', auto_enabled: e.target.checked })} />
+              پردازش خودکار داده‌های جدید در ساعات کم‌بار
+            </label>
+          </div>
+
+          {showSchedule && (
+            <div className="card glass" style={{ marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 14 }}>اجرا در:</span>
+              <input type="datetime-local" dir="ltr" value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)} />
+              <button className="btn btn-accent" disabled={busy || !scheduleAt}
+                onClick={() => { act({ action: 'schedule', at: scheduleAt }, 'زمان‌بندی ثبت شد؛ در زمان مقرر خودکار اجرا می‌شود.'); setShowSchedule(false); }}>
+                ثبت زمان‌بندی
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                پیشنهاد: ساعات بامداد که ترافیک سایت کم است.
+              </span>
+            </div>
+          )}
+
+          {/* Active / last job */}
+          {job && (
+            <div className="card glass" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+                <h3 style={{ margin: 0 }}>
+                  کار #{job.id}{' '}
+                  <span className="st-badge" style={{ background: `${st.color}22`, color: st.color }}>{st.label}</span>
+                  {job.status === 'running' && job.worker_alive === false && (
+                    <span style={{ color: '#eab308', fontSize: 12, marginRight: 8 }}>(در حال بررسی وضعیت اجرا…)</span>
+                  )}
+                </h3>
+                <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+                  {job.scheduled_for ? `زمان اجرا: ${fmtDate(job.scheduled_for)}` : `شروع: ${job.started_at ? fmtDate(job.started_at) : '—'}`}
+                </span>
+              </div>
+
+              {/* Overall bar */}
+              <div style={{ margin: '14px 0 6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+                  <b>پیشرفت کل: {Math.round(prog.overall_pct || 0)}٪</b>
+                  <span style={{ color: 'var(--text-dim)' }}>
+                    {prog.eta_s != null && job.status === 'running' ? `زمان باقی‌مانده: ~${fmtDur(prog.eta_s)}` : ''}
+                    {prog.rate_pps ? ` — سرعت: ${prog.rate_pps} صفحه/ثانیه` : ''}
+                  </span>
+                </div>
+                <div style={{ background: 'rgba(120,120,160,.15)', borderRadius: 8, height: 14, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.min(100, prog.overall_pct || 0)}%`, height: '100%', background: st.color || 'var(--acc1, #6366f1)', borderRadius: 8, transition: 'width .6s' }} />
+                </div>
+              </div>
+
+              {prog.current_item && job.status === 'running' && (
+                <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 }}>
+                  در حال پردازش: <b dir="ltr">{prog.current_item}</b>
+                </div>
+              )}
+
+              <div style={{ marginTop: 14 }}>
+                {(job.stages || []).map((s) => <StageRow key={s.key} stage={s} />)}
+              </div>
+
+              {job.log_tail && (
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--text-dim)' }}>جزئیات فنی (گزارش اجرا)</summary>
+                  <pre dir="ltr" style={{ fontSize: 11, maxHeight: 220, overflow: 'auto', background: 'rgba(0,0,0,.25)', padding: 10, borderRadius: 8, whiteSpace: 'pre-wrap' }}>{job.log_tail}</pre>
+                </details>
+              )}
+              {job.error && <div style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>خطا در مراحل: {job.error}</div>}
+              {['paused', 'stalled'].includes(job.status) && (
+                <div style={{ color: '#eab308', fontSize: 13, marginTop: 8 }}>
+                  پیشرفت ذخیره شده است — با دکمه «ادامه از همان نقطه» دقیقاً از جای قبلی ادامه می‌یابد (سیستم به‌صورت خودکار هم تلاش می‌کند).
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* History */}
+          {(data.history || []).length > 0 && (
+            <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
+              <table className="adm-table">
+                <thead><tr><th>#</th><th>وضعیت</th><th>نوع شروع</th><th>ایجاد</th><th>پایان</th><th>پیشرفت</th></tr></thead>
+                <tbody>
+                  {data.history.map((h) => {
+                    const hs = JOB_STATUS[h.status] || {};
+                    return (
+                      <tr key={h.id}>
+                        <td>{h.id}</td>
+                        <td><span className="st-badge" style={{ background: `${hs.color}22`, color: hs.color }}>{hs.label || h.status}</span></td>
+                        <td>{{ manual: 'دستی', auto: 'خودکار', schedule: 'زمان‌بندی' }[h.trigger] || h.trigger}</td>
+                        <td>{fmtDate(h.created_at)}</td>
+                        <td>{h.finished_at ? fmtDate(h.finished_at) : '—'}</td>
+                        <td dir="ltr">{h.overall_pct != null ? `${Math.round(h.overall_pct)}%` : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </>

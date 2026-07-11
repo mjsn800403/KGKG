@@ -391,6 +391,82 @@ class VisitorSeen(models.Model):
         unique_together = [('day', 'ip_hash')]
 
 
+class ProcessingJob(models.Model):
+    """One admin-triggered (or automatic) run of the data-processing pipeline.
+
+    The heavy work (RAG embedding, diagnostic sidecars) runs in a DETACHED
+    worker process — its own systemd transient unit when available — so it
+    survives gunicorn restarts, admin browser disconnects, and deploys. This
+    row is the single source of truth the admin panel polls: the worker
+    heartbeats progress into it, and the pipeline_tick watchdog uses it to
+    detect stalls and resume. See api/pipeline.py.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'pending'),        # created, about to be launched
+        ('scheduled', 'scheduled'),    # will start at scheduled_for
+        ('running', 'running'),
+        ('paused', 'paused'),          # stopped gracefully (cancel/SIGTERM); resumable
+        ('stalled', 'stalled'),        # worker died without finishing; resumable
+        ('done', 'done'),
+        ('failed', 'failed'),
+        ('canceled', 'canceled'),
+    ]
+    TRIGGER_CHOICES = [('manual', 'manual'), ('auto', 'auto'), ('schedule', 'schedule')]
+
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', db_index=True)
+    trigger = models.CharField(max_length=16, choices=TRIGGER_CHOICES, default='manual')
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    # Worker identity — used by the watchdog (liveness) and cancel (stop).
+    pid = models.IntegerField(null=True, blank=True)
+    unit_name = models.CharField(max_length=120, blank=True, default='')
+    attempts = models.PositiveIntegerField(default=0)
+    # Per-stage state: [{key, label, status, items_total, items_done, error, ...}]
+    stages = models.JSONField(default=list, blank=True)
+    # Live progress the admin panel renders: {overall_pct, stage, eta_s, rate, ...}
+    progress = models.JSONField(default=dict, blank=True)
+    log_tail = models.TextField(blank=True, default='')
+    error = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    RESUMABLE = ('paused', 'stalled', 'failed')
+    # "Active" = occupying the single execution slot NOW. A job scheduled for
+    # later does not block starting/resuming other work; the scheduler simply
+    # retries it at its time until the slot is free.
+    ACTIVE = ('pending', 'running')
+
+    def __str__(self):
+        return f'job #{self.id} [{self.status}]'
+
+
+class PipelineSettings(models.Model):
+    """Singleton knobs for automatic background processing (row id=1).
+
+    ``auto_enabled``: when new vehicle data lands in the warehouse, the
+    pipeline_tick timer starts processing by itself — but only while the
+    server is quiet (1-min load per core below ``load_threshold``).
+    Observed throughput fields are updated by finished jobs so duration
+    estimates shown to the admin come from THIS server's real history,
+    not guesses.
+    """
+    auto_enabled = models.BooleanField(default=True)
+    load_threshold = models.FloatField(default=0.55)     # load1/cores gate for auto starts
+    auto_resume = models.BooleanField(default=True)      # watchdog relaunches stalled jobs
+    embed_rate_pps = models.FloatField(default=1.5)      # observed pages/second
+    diag_secs_per_car = models.FloatField(default=90.0)  # observed seconds/car
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+
+
 class SystemAlert(models.Model):
     """An operational alert raised by the monitoring checks (api/monitoring.py
     evaluate_alerts / the check_alerts management command).
