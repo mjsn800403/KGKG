@@ -34,7 +34,8 @@ class ServiceCacheTest(unittest.TestCase):
         retrieve.embed_query = lambda q: self._fixed_vec
 
         self.calls = []
-        def fake_assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
+        def fake_assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
+                        allowed_cars=None):
             self.calls.append(query)
             return {'query': query,
                     'scope': {'brand': brand, 'model': model, 'car_stem': car_stem},
@@ -71,6 +72,28 @@ class ServiceCacheTest(unittest.TestCase):
         service.clear_cache()                               # what rate/pin trigger
         service.assist('brake fluid', model='Corolla')
         self.assertEqual(len(self.calls), 2)                # recomputed after clear
+
+    def test_allowed_cars_is_part_of_cache_identity(self):
+        # A restricted caller must never be served an unrestricted (or
+        # differently-restricted) caller's cached answer. Same query+scope but a
+        # different allow-list is a cache MISS -> retrieval runs again.
+        service.assist('brake fluid', model='Corolla')                      # unrestricted
+        service.assist('brake fluid', model='Corolla', allowed_cars={'Corolla'})
+        service.assist('brake fluid', model='Corolla', allowed_cars={'Yaris'})
+        self.assertEqual(len(self.calls), 3)                # three distinct identities
+        # And the allow-list is forwarded to the retriever unchanged.
+        service.clear_cache()
+        seen = {}
+        orig = retrieve.assist
+        def capture(query, **kw):
+            seen['allowed'] = kw.get('allowed_cars')
+            return orig(query, **kw)
+        retrieve.assist = capture
+        try:
+            service.assist('brakes', model='Corolla', allowed_cars={'Corolla', 'Yaris'})
+        finally:
+            retrieve.assist = orig
+        self.assertEqual(seen['allowed'], {'Corolla', 'Yaris'})
 
 
 if __name__ == '__main__':

@@ -64,7 +64,7 @@ def _blob_for_node(index, car_stem, node_id):
     return row['blob_id'] if row else None
 
 
-def _labor_for_node(index, car_stem, node_id):
+def _labor_for_node(index, car_stem, node_id, allowed_cars=None):
     """Labor-time page(s) linked to a procedure node, via labor_time edges."""
     bid = _blob_for_node(index, car_stem, node_id)
     if bid is None:
@@ -74,10 +74,16 @@ def _labor_for_node(index, car_stem, node_id):
         "ORDER BY weight DESC LIMIT 3", (bid,)).fetchall()
     out = []
     for e in edges:
-        occ = index.execute(
+        occs = index.execute(
             "SELECT car_stem, brand, model, variant, year, title, title_path "
-            "FROM occurrences WHERE blob_id=? ORDER BY (car_stem=?) DESC LIMIT 1",
-            (e['dst_blob'], car_stem)).fetchone()
+            "FROM occurrences WHERE blob_id=? ORDER BY (car_stem=?) DESC",
+            (e['dst_blob'], car_stem)).fetchall()
+        # Cite the pinned car's own occurrence first; otherwise only a vehicle
+        # the caller may open (a labor link to a forbidden car dead-ends on the
+        # access-denied page).
+        occ = next((o for o in occs
+                    if o['car_stem'] == car_stem or allowed_cars is None
+                    or o['car_stem'] in allowed_cars), None)
         if occ:
             from .retrieve import _app_url
             url, _ = _app_url(occ)
@@ -85,7 +91,7 @@ def _labor_for_node(index, car_stem, node_id):
     return out
 
 
-def _cross_vehicle_for_node(index, car_stem, node_id):
+def _cross_vehicle_for_node(index, car_stem, node_id, allowed_cars=None):
     bid = _blob_for_node(index, car_stem, node_id)
     if bid is None:
         return []
@@ -95,6 +101,8 @@ def _cross_vehicle_for_node(index, car_stem, node_id):
     from .retrieve import _app_url
     out, seen = [], set()
     for o in occs:
+        if allowed_cars is not None and o['car_stem'] not in allowed_cars:
+            continue          # never surface content of vehicles the user lacks
         key = (o['model'], o['variant'])
         if key in seen:
             continue
@@ -131,7 +139,8 @@ def _repr_blob(diag, index, car_stem, code):
 
 # --- assembling a candidate DTC -------------------------------------------
 def _dtc_payload(diag, index, car_stem, row, reason=None, confidence=None,
-                 blob_id=None, matched_via=None, band=None, explain=None):
+                 blob_id=None, matched_via=None, band=None, explain=None,
+                 allowed_cars=None):
     code = row['code']
     steps = diag.execute(
         "SELECT aspect, app_url, node_id FROM dtc_step WHERE code=? "
@@ -145,7 +154,8 @@ def _dtc_payload(diag, index, car_stem, row, reason=None, confidence=None,
             procedure = {'title': s['aspect'], 'app_url': s['app_url']}
             if index is not None:
                 try:
-                    labor = _labor_for_node(index, car_stem, s['node_id'])
+                    labor = _labor_for_node(index, car_stem, s['node_id'],
+                                            allowed_cars=allowed_cars)
                 except Exception:
                     labor = []
     if desc_node is None and steps:
@@ -158,7 +168,8 @@ def _dtc_payload(diag, index, car_stem, row, reason=None, confidence=None,
     # (folders carry no content, so they are absent from the unified occurrences).
     if index is not None and desc_node is not None:
         try:
-            cross = _cross_vehicle_for_node(index, car_stem, desc_node)
+            cross = _cross_vehicle_for_node(index, car_stem, desc_node,
+                                            allowed_cars=allowed_cars)
         except Exception:
             cross = []
     # representative blob: lets a verdict on this diagnosis feed the same
@@ -199,7 +210,8 @@ def _fts_match(query):
 
 
 # --- main entry ------------------------------------------------------------
-def diagnose(query, brand=None, model=None, car_stem=None, k=None):
+def diagnose(query, brand=None, model=None, car_stem=None, k=None,
+             allowed_cars=None):
     stem = _resolve_stem(brand, model, car_stem)
     if stem is None:
         return {'query': query, 'intent': 'unknown', 'error': 'no_diag_index',
@@ -220,13 +232,15 @@ def diagnose(query, brand=None, model=None, car_stem=None, k=None):
 
         code, known = _detect_code(query, diag)
         if code is not None:
-            return _diagnose_by_code(diag, index, stem, query, code, known)
+            return _diagnose_by_code(diag, index, stem, query, code, known,
+                                     allowed_cars=allowed_cars)
         if _looks_like_repair(query):
             # a "how do I replace / torque / capacity" question is NOT a fault to
             # diagnose -> signal the proxy to fall back to the general repair RAG.
             return {'query': query, 'intent': 'repair', 'car_stem': stem,
                     'candidates': [], 'procedures': [], 'symptoms': []}
-        return _diagnose_by_symptom(diag, index, stem, query, k)
+        return _diagnose_by_symptom(diag, index, stem, query, k,
+                                    allowed_cars=allowed_cars)
     finally:
         diag.close()
         if index is not None:
@@ -270,7 +284,7 @@ def _detect_code(query, diag):
     return None, False
 
 
-def _diagnose_by_code(diag, index, stem, query, code, known):
+def _diagnose_by_code(diag, index, stem, query, code, known, allowed_cars=None):
     row = diag.execute("SELECT * FROM dtc WHERE code=?", (code,)).fetchone()
     if row is None:
         return {'query': query, 'intent': 'dtc', 'car_stem': stem, 'code': code,
@@ -281,13 +295,14 @@ def _diagnose_by_code(diag, index, stem, query, code, known):
     payload = _dtc_payload(diag, index, stem, row, reason='direct_code',
                            confidence=1.0, matched_via='exact_code',
                            band=_band(1.0),
-                           explain={'matched_via': 'exact_code', 'source': 'direct_code'})
+                           explain={'matched_via': 'exact_code', 'source': 'direct_code'},
+                           allowed_cars=allowed_cars)
     return {'query': query, 'intent': 'dtc', 'car_stem': stem, 'known': True,
             'grounded': True, 'top_similarity': 1.0, 'confidence_band': _band(1.0),
             'candidates': [payload], 'symptoms': []}
 
 
-def _diagnose_by_symptom(diag, index, stem, query, k):
+def _diagnose_by_symptom(diag, index, stem, query, k, allowed_cars=None):
     k = k or config.DIAG_FINAL_CANDIDATES
     eng_terms, _ = glossary.expand(query)
     embed_q = f"{query} {eng_terms}".strip() if eng_terms else query
@@ -446,7 +461,7 @@ def _diagnose_by_symptom(diag, index, stem, query, k):
             reason={'kind': info['source'], 'matched_symptom': info['matched_symptom']},
             confidence=conf, blob_id=cand_blob.get(code),
             matched_via=_SOURCE_VIA.get(info['source'], 'diagnostic'),
-            band=_band(conf), explain=explain))
+            band=_band(conf), explain=explain, allowed_cars=allowed_cars))
 
     symptoms, _seen = [], set()
     for sid, _s in top_symptoms:

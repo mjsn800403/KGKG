@@ -7,6 +7,7 @@ import Icon from './Icon';
 import Switch from './Switch';
 import OrgChart from './OrgChart';
 import RolesPanel from './RolesPanel';
+import useEventStream from '../utils/useEventStream';
 import { teamApi, portalRefreshMe, getPortalToken, downloadTeamReport } from '../utils/api';
 
 // ---------------------------------------------------------------------------
@@ -66,9 +67,12 @@ export default function TeamView() {
   const [org, setOrg] = useState(null);
   const [tab, setTab] = useState('members');
 
-  const [drawer, setDrawer] = useState(null);   // null | {mode:'add'} | {mode:'edit', member}
+  const [drawer, setDrawer] = useState(null);   // null | {mode:'add', roleId?} | {mode:'edit', member}
   const [justAddedId, setJustAddedId] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const [query, setQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState(null);
+  const reloadTimer = useRef(null);
 
   const notify = (message, tone = 'ok') => {
     const id = Date.now() + Math.random();
@@ -102,11 +106,43 @@ export default function TeamView() {
     return () => { cancelled = true; };
   }, [router]);
 
+  // Any team change made in ANOTHER session (a second manager, the platform
+  // admin, ...) arrives as a team.* event — refresh so every open view shows
+  // the same hierarchy. Debounced: one reload per burst of changes.
+  useEventStream({
+    enabled: !loading && !error,
+    onEvent: (evt) => {
+      if (!String(evt?.type || '').startsWith('team.')) return;
+      clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => { load().catch(() => {}); }, 600);
+    },
+  });
+  useEffect(() => () => clearTimeout(reloadTimer.current), []);
+
   const stats = useMemo(() => ({
     total: members.length,
     active: members.filter((m) => m.invite_status === 'active' && m.active).length,
     pending: members.filter((m) => m.invite_status === 'invited').length,
   }), [members]);
+
+  const roleCounts = useMemo(() => {
+    const counts = {};
+    members.forEach((m) => {
+      const rid = m.org_role?.id;
+      if (rid) counts[rid] = (counts[rid] || 0) + 1;
+    });
+    return counts;
+  }, [members]);
+
+  const visibleMembers = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return members.filter((m) => {
+      if (roleFilter && m.org_role?.id !== roleFilter) return false;
+      if (!q) return true;
+      return [m.display_name, m.username, m.email, m.role_label]
+        .some((v) => String(v || '').toLowerCase().includes(q));
+    });
+  }, [members, query, roleFilter]);
 
   const onSaved = async (savedId) => {
     await load();
@@ -176,19 +212,58 @@ export default function TeamView() {
               members.length === 0 ? (
                 <EmptyTeam onAdd={() => setDrawer({ mode: 'add' })} />
               ) : (
-                <motion.div className="team-grid" layout>
-                  <AnimatePresence mode="popLayout">
-                    {members.map((m, i) => (
-                      <MemberCard
-                        key={m.id}
-                        member={m}
-                        index={i}
-                        highlight={m.id === justAddedId}
-                        onEdit={() => setDrawer({ mode: 'edit', member: m })}
+                <>
+                  <div className="team-toolbar glass">
+                    <div className="team-search">
+                      <Icon name="search" size={16} />
+                      <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="جستجوی نام، ایمیل یا نام کاربری…"
                       />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
+                      {query && (
+                        <button className="ts-clear" onClick={() => setQuery('')} aria-label="پاک کردن">
+                          <Icon name="x" size={13} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="team-filter-chips">
+                      <button
+                        className={`filter-chip${roleFilter === null ? ' on' : ''}`}
+                        onClick={() => setRoleFilter(null)}
+                      >
+                        همه ({members.length})
+                      </button>
+                      {(meta?.roles || []).filter((r) => roleCounts[r.id]).map((r) => (
+                        <button
+                          key={r.id}
+                          className={`filter-chip${roleFilter === r.id ? ' on' : ''}`}
+                          onClick={() => setRoleFilter(roleFilter === r.id ? null : r.id)}
+                        >
+                          <span className="dot" style={{ background: r.color || 'var(--accent)' }} />
+                          {r.name} ({roleCounts[r.id]})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {visibleMembers.length === 0 ? (
+                    <div className="team-noresult muted">عضوی مطابق این جستجو یافت نشد.</div>
+                  ) : (
+                    <motion.div className="team-grid" layout>
+                      <AnimatePresence mode="popLayout">
+                        {visibleMembers.map((m, i) => (
+                          <MemberCard
+                            key={m.id}
+                            member={m}
+                            index={i}
+                            highlight={m.id === justAddedId}
+                            onEdit={() => setDrawer({ mode: 'edit', member: m })}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </motion.div>
+                  )}
+                </>
               )
             )}
             {tab === 'chart' && (
@@ -196,14 +271,16 @@ export default function TeamView() {
                 data={org}
                 onReload={load}
                 onEditMember={openEditById}
+                onAddWithRole={(roleId) => setDrawer({ mode: 'add', roleId })}
                 notify={notify}
               />
             )}
             {tab === 'roles' && meta && (
               <RolesPanel
-                key={JSON.stringify((meta.roles || []).map((r) => r.id))}
                 meta={meta}
+                members={members}
                 onChanged={() => load()}
+                onAddWithRole={(roleId) => setDrawer({ mode: 'add', roleId })}
                 notify={notify}
               />
             )}
@@ -216,9 +293,11 @@ export default function TeamView() {
               key={drawer.mode + (drawer.member?.id || 'new')}
               mode={drawer.mode}
               member={drawer.member}
+              initialRoleId={drawer.roleId}
               meta={meta}
               onClose={() => setDrawer(null)}
               onSaved={onSaved}
+              notify={notify}
             />
           )}
         </AnimatePresence>
@@ -333,7 +412,7 @@ function TeamSkeleton() {
 // ---------------------------------------------------------------------------
 // Add / edit slide-over drawer
 // ---------------------------------------------------------------------------
-function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
+function MemberDrawer({ mode, member, initialRoleId, meta, onClose, onSaved, notify }) {
   const isEdit = mode === 'edit';
   const [form, setForm] = useState(() => initForm(member, meta));
   const [submitting, setSubmitting] = useState(false);
@@ -345,6 +424,15 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const assignableRoles = (meta.roles || []).filter((r) => r.editable);
+  const me = meta.me || null;
+
+  const selRole = assignableRoles.find((r) => r.id === Number(form.org_role_id)) || null;
+  // The org chart only points upward: a supervisor must hold a strictly
+  // higher position than the member's chosen one. The acting viewer (the
+  // default) always qualifies — they can only assign positions below their own.
+  const supervisorOptions = (meta.managers || []).filter(
+    (m) => m.id !== me?.id && (!selRole || m.rank < selRole.rank),
+  );
 
   // Seed capability defaults from the chosen position (still editable per-user).
   const onRole = (roleIdRaw) => {
@@ -355,6 +443,12 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
       patch.can_manage_team = !!role.can_manage_team;
       patch.can_view_analytics = !!role.can_view_analytics;
       patch.ai_assistant_enabled = !!role.ai_assistant_enabled;
+      // If the currently chosen supervisor no longer outranks the new
+      // position, fall back to the default (the acting viewer).
+      if (form.reports_to_id) {
+        const sup = (meta.managers || []).find((m) => m.id === Number(form.reports_to_id));
+        if (!sup || sup.rank >= role.rank) patch.reports_to_id = '';
+      }
       // Pre-fill the position's access template so the manager SEES what the
       // new member will get (and can still adjust before saving).
       if (!isEdit && Array.isArray(role.default_accesses) && role.default_accesses.length) {
@@ -365,6 +459,13 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
     }
     set(patch);
   };
+
+  // Opened from "add a member to this position" (org chart / roles panel):
+  // pre-apply that position and its defaults.
+  useEffect(() => {
+    if (!isEdit && initialRoleId) onRole(String(initialRoleId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleCar = (carId, docs) => {
     setForm((f) => {
@@ -390,20 +491,24 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
     setSubmitting(true);
     try {
       if (isEdit) {
-        await teamApi.updateMember(member.id, {
+        const res = await teamApi.updateMember(member.id, {
           display_name: form.display_name, phone: form.phone, personnel_code: form.personnel_code,
-          org_role_id: form.org_role_id, reports_to_id: form.reports_to_id || null,
+          org_role_id: Number(form.org_role_id) || null,
+          reports_to_id: form.reports_to_id ? Number(form.reports_to_id) : null,
           can_manage_team: form.can_manage_team, can_view_analytics: form.can_view_analytics,
           ai_assistant_enabled: form.ai_assistant_enabled,
         });
         await teamApi.setMemberAccess(member.id, accessesPayload());
         await onSaved(member.id);
+        if (res?.adjustments?.reparented > 0) {
+          notify?.(`ذخیره شد؛ ${res.adjustments.reparented} خط گزارش‌دهی برای حفظ سازگاری چارت اصلاح شد.`);
+        }
         onClose();
       } else {
         const payload = {
           display_name: form.display_name, email: form.email || undefined, phone: form.phone,
-          personnel_code: form.personnel_code, org_role_id: form.org_role_id,
-          reports_to_id: form.reports_to_id || undefined,
+          personnel_code: form.personnel_code, org_role_id: Number(form.org_role_id),
+          reports_to_id: form.reports_to_id ? Number(form.reports_to_id) : undefined,
           can_manage_team: form.can_manage_team, can_view_analytics: form.can_view_analytics,
           ai_assistant_enabled: form.ai_assistant_enabled,
           accesses: accessesPayload(),
@@ -526,20 +631,30 @@ function MemberDrawer({ mode, member, meta, onClose, onSaved }) {
                   <input dir="ltr" value={form.personnel_code} onChange={(e) => set({ personnel_code: e.target.value })} />
                 </div>
               </div>
+              <div className="drawer-section-title">جایگاه در چارت سازمانی</div>
               <div className="pform-grid">
                 <div className="field">
                   <label>جایگاه سازمانی <span className="req-star">*</span></label>
                   <select value={form.org_role_id} onChange={(e) => onRole(e.target.value)}>
                     <option value="">— انتخاب کنید —</option>
-                    {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {assignableRoles.map((r) => <option key={r.id} value={r.id}>{r.name} (رتبه {r.rank})</option>)}
                   </select>
                 </div>
                 <div className="field">
                   <label>سرپرست مستقیم</label>
                   <select value={form.reports_to_id} onChange={(e) => set({ reports_to_id: e.target.value })}>
-                    <option value="">— شما —</option>
-                    {meta.managers.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.role_label})</option>)}
+                    <option value="">
+                      {me ? `${me.name} — ${me.role_label}` : '— مدیر تیم —'}
+                    </option>
+                    {supervisorOptions.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name} — {m.role_label}</option>
+                    ))}
                   </select>
+                  {selRole && (
+                    <p className="field-hint muted">
+                      فقط جایگاه‌های بالاتر از «{selRole.name}» می‌توانند سرپرست این عضو باشند.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -662,10 +777,14 @@ function initForm(member, meta) {
     const match = meta.roles.find((r) => r.rank === member.role_level);
     roleId = match?.id || '';
   }
+  // Reporting to the acting viewer is the default ('' -> server assigns them);
+  // normalizing avoids a duplicate "me" entry in the supervisor list.
+  const supId = member.reports_to?.id || '';
   return {
     display_name: member.display_name || '', email: member.email || '',
     phone: member.phone || '', personnel_code: member.personnel_code || '',
-    org_role_id: roleId, reports_to_id: member.reports_to?.id || '',
+    org_role_id: roleId,
+    reports_to_id: supId === meta?.me?.id ? '' : supId,
     provision: 'invite', username: '', password: '',
     can_manage_team: !!member.can_manage_team, can_view_analytics: !!member.can_view_analytics,
     ai_assistant_enabled: !!member.ai_assistant_enabled, accesses,

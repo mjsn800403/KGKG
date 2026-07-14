@@ -1,5 +1,5 @@
 from django.urls import path
-from . import adminops, views, portal, team
+from . import adminops, events, recommend, requests_api, views, portal, team
 
 urlpatterns = [
     # Liveness probe (public, cheap, no secrets) + operational admin API.
@@ -8,6 +8,22 @@ urlpatterns = [
     path('api/admin/system/', adminops.admin_system_view, name='admin_system'),
     path('api/admin/traffic/', adminops.admin_traffic_view, name='admin_traffic'),
     path('api/admin/pipeline/', adminops.admin_pipeline_view, name='admin_pipeline'),
+
+    # Real-time event backbone: SSE stream + REST snapshot/history companions.
+    path('api/events/stream/', events.stream_view, name='events_stream'),
+    path('api/events/recent/', events.recent_view, name='events_recent'),
+    path('api/admin/processing-snapshot/', adminops.admin_processing_snapshot_view,
+         name='admin_processing_snapshot'),
+    path('api/admin/dashboard/', adminops.admin_dashboard_view, name='admin_dashboard'),
+
+    # Company requests (manager files, admin actions; both dashboards live-update).
+    path('api/company/requests/', requests_api.company_requests_view, name='company_requests'),
+    path('api/company/requests/<int:req_id>/', requests_api.company_request_detail_view,
+         name='company_request_detail'),
+    path('api/admin/company-requests/', requests_api.admin_company_requests_view,
+         name='admin_company_requests'),
+    path('api/admin/company-requests/<int:req_id>/',
+         requests_api.admin_company_request_detail_view, name='admin_company_request_detail'),
 
     # Portal auth (company seats issued by the admin).
     path('api/auth/login/', portal.login_view, name='portal_login'),
@@ -26,6 +42,10 @@ urlpatterns = [
     path('api/team/roles/<int:role_id>/', team.team_role_detail_view, name='team_role_detail'),
     path('api/team/analytics/', team.team_analytics_view, name='team_analytics'),
     path('api/team/report/', team.team_report_pdf_view, name='team_report_pdf'),
+    path('api/team/insights/', recommend.manager_insights_view, name='team_insights'),
+
+    # Personalised behavioural recommendations for the logged-in portal user.
+    path('api/recommendations/', recommend.recommendations_view, name='recommendations'),
     path('api/invite/<str:token>/', team.invite_view, name='invite'),
 
     # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).
@@ -70,7 +90,10 @@ urlpatterns = [
     path('<str:brand_name>/', views.car_view, name='car_brand'),
 
     # /brand_name/year/
-    path('<str:brand_name>/<int:year>/', views.car_view, name='car_year'),
+    # <str:year>, not <int:year>: legacy generated links can carry a
+    # placeholder year ('unknown'); the view resolves the year tolerantly and
+    # must get the request instead of a router-level 404.
+    path('<str:brand_name>/<str:year>/', views.car_view, name='car_year'),
 
     # /brand_name/year/car_name/                  -> root nodes from car db
     # /brand_name/year/car_name/?seg=A&seg=B&...   -> walk down via repeated
@@ -84,5 +107,5 @@ urlpatterns = [
     #                                                  would otherwise decode
     #                                                  indistinguishably from a
     #                                                  real path separator.
-    path('<str:brand_name>/<int:year>/<str:model_name>/', views.car_view, name='car_root'),
+    path('<str:brand_name>/<str:year>/<str:model_name>/', views.car_view, name='car_root'),
 ]

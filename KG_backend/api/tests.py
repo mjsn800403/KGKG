@@ -167,6 +167,11 @@ class TeamManagementTests(TestCase):
     """Company-manager self-service: invites, scoping, RBAC, analytics."""
 
     def setUp(self):
+        # Every test shares one client IP and the limiter's window is process-
+        # wide — drop hits carried over from earlier test modules so this
+        # class's real login assertions never 429 depending on suite timing.
+        from . import ratelimit
+        ratelimit._HITS.clear()
         self.c = Client()
         self.car1 = Car.objects.create(brand_name='Toyota', car_name='bZ4X', year=2023, db_address='x')
         self.car2 = Car.objects.create(brand_name='Lexus', car_name='NX', year=2022, db_address='y')
@@ -666,3 +671,106 @@ class OrgHierarchyTests(TestCase):
         self.assertEqual(r.status_code, 200, getattr(r, 'content', b'')[:200])
         self.assertEqual(r['Content-Type'], 'application/pdf')
         self.assertTrue(r.content.startswith(b'%PDF'))
+
+
+@override_settings(DEBUG=True)
+class RequestBodyHardeningTests(TestCase):
+    """Every JSON endpoint must tolerate a body that is valid JSON but NOT an
+    object (a bare string / list / number) — it must never 500. Regression for
+    the AttributeError-on-.get() crash."""
+
+    def setUp(self):
+        self.c = Client()
+
+    def _raw(self, url, raw, **kw):
+        return self.c.post(url, raw, content_type='application/json', **kw)
+
+    def test_login_non_object_body_not_500(self):
+        for raw in ('"a string"', '[1,2,3]', '42', 'null'):
+            r = self._raw('/api/auth/login/', raw, REMOTE_ADDR='10.0.0.9')
+            self.assertNotEqual(r.status_code, 500, raw)
+            self.assertEqual(r.status_code, 401, raw)
+
+    def test_admin_login_non_object_body_not_500(self):
+        for raw in ('"x"', '[]', '3.14'):
+            r = self._raw('/api/admin/login/', raw, REMOTE_ADDR='10.0.0.9')
+            self.assertNotEqual(r.status_code, 500, raw)
+
+    def test_purchase_non_object_body_400(self):
+        r = self._raw('/api/purchase-request/', '[1,2,3]', REMOTE_ADDR='10.0.0.9')
+        self.assertEqual(r.status_code, 400)
+
+    def test_assist_non_object_body_not_500(self):
+        # A non-object body collapses to {} -> empty query -> 400 (query required),
+        # or 401 at the auth gate. Either is fine; the point is it must never 500.
+        r = self._raw('/api/assist/', '"hi"', REMOTE_ADDR='10.0.0.9')
+        self.assertIn(r.status_code, (400, 401))
+        self.assertNotEqual(r.status_code, 500)
+
+
+@override_settings(DEBUG=True)
+class AdminCompanyUpdateClampTests(TestCase):
+    """The company PATCH-via-POST path must clamp field lengths like create does
+    (SQLite ignores VARCHAR limits, so an unclamped update could store a blob)."""
+
+    def setUp(self):
+        self.c = Client()
+        self.company = Company.objects.create(name='ClampCo')
+
+    def _post(self, url, payload, **kw):
+        return self.c.post(url, json.dumps(payload), content_type='application/json', **kw)
+
+    def _tok(self):
+        r = self._post('/api/admin/login/', {'username': 'admin', 'password': 'admin'})
+        return r.json()['token']
+
+    def test_company_name_is_clamped_on_update(self):
+        tok = self._tok()
+        huge = 'x' * 5000
+        r = self._post(f'/api/admin/companies/{self.company.id}/', {'name': huge},
+                       HTTP_AUTHORIZATION=f'Bearer {tok}')
+        self.assertEqual(r.status_code, 200)
+        self.company.refresh_from_db()
+        self.assertEqual(len(self.company.name), 200)
+
+
+class ManagedAccessDocClampTests(TestCase):
+    """apply_managed_access: an explicit doc list naming ONLY layers the manager
+    lacks must skip the car, not silently upgrade the employee to every layer."""
+
+    def setUp(self):
+        from .access import seed_default_org_roles
+        self.car = Car.objects.create(brand_name='Toyota', car_name='bZ4X', year=2023, db_address='x')
+        self.company = Company.objects.create(name='DocClampCo')
+        # Company/manager hold only 'manual' for the car.
+        CompanyCarAccess.objects.create(company=self.company, car=self.car, documents=['manual'])
+        seed_default_org_roles(self.company)
+        roles = {r.rank: r for r in self.company.org_roles.all()}
+        self.manager = PortalUser(company=self.company, username='dc_mgr',
+                                  role='after_sales_manager', org_role=roles[1],
+                                  can_manage_team=True)
+        self.manager.set_password('p'); self.manager.save()
+        self.emp = PortalUser(company=self.company, username='dc_emp',
+                              role='after_sales_specialist', org_role=roles[4],
+                              reports_to=self.manager)
+        self.emp.set_password('p'); self.emp.save()
+
+    def test_disallowed_only_docs_skip_the_car(self):
+        from .access import apply_managed_access
+        # Manager tries to grant ONLY 'parts' (which they don't hold) -> car skipped.
+        apply_managed_access(self.manager, self.emp, [{'car_id': self.car.id, 'documents': ['parts']}])
+        self.assertFalse(self.emp.car_accesses.filter(car=self.car).exists())
+
+    def test_omitted_docs_grants_full_ceiling(self):
+        from .access import apply_managed_access
+        # No documents key -> "grant the whole car" -> manager's ceiling ('manual').
+        apply_managed_access(self.manager, self.emp, [{'car_id': self.car.id}])
+        row = self.emp.car_accesses.get(car=self.car)
+        self.assertEqual(set(row.documents), {'manual'})
+
+    def test_mixed_docs_clamp_to_held_layers(self):
+        from .access import apply_managed_access
+        apply_managed_access(self.manager, self.emp,
+                             [{'car_id': self.car.id, 'documents': ['manual', 'parts']}])
+        row = self.emp.car_accesses.get(car=self.car)
+        self.assertEqual(set(row.documents), {'manual'})   # 'parts' clamped away

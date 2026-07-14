@@ -18,6 +18,15 @@ from .models import (
 from . import dataquality, monitoring, pipeline
 
 
+def _json_body(request):
+    """Parsed JSON body, always a dict (non-object JSON collapses to {})."""
+    try:
+        data = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 # ---------------------------------------------------------------------------
 # Public liveness probe (load balancers / uptime monitors; no secrets, cheap)
 # ---------------------------------------------------------------------------
@@ -52,10 +61,7 @@ def admin_data_quality_view(request):
             -> start a background re-scan (returns {started})
     """
     if request.method == 'POST':
-        try:
-            body = json.loads(request.body or '{}')
-        except (ValueError, TypeError):
-            body = {}
+        body = _json_body(request)
         if body.get('refresh'):
             started = dataquality.run_audit_async(fix=bool(body.get('fix')))
             return JsonResponse({'started': started,
@@ -91,10 +97,7 @@ def admin_system_view(request):
     """GET /api/admin/system/ -> live snapshot + open alerts + recent resolved.
        POST {action: 'check_alerts'} -> evaluate alert conditions now."""
     if request.method == 'POST':
-        try:
-            body = json.loads(request.body or '{}')
-        except (ValueError, TypeError):
-            body = {}
+        body = _json_body(request)
         if body.get('action') == 'check_alerts':
             result = monitoring.evaluate_alerts()
             return JsonResponse({'ok': True, **result})
@@ -203,16 +206,14 @@ def admin_pipeline_view(request):
              | settings {auto_enabled?, load_threshold?, auto_resume?}}
     """
     if request.method == 'POST':
-        try:
-            body = json.loads(request.body or '{}')
-        except (ValueError, TypeError):
-            body = {}
+        body = _json_body(request)
         action = body.get('action')
 
         if action == 'start':
             job, err = pipeline.start_job(trigger='manual')
             if err:
                 return JsonResponse({'error': err}, status=409)
+            _emit_pipeline('pipeline.started', job)
             return JsonResponse({'ok': True, 'job': pipeline.job_dict(job)})
 
         if action == 'schedule':
@@ -240,6 +241,7 @@ def admin_pipeline_view(request):
             if not ok:
                 return JsonResponse({'error': err}, status=409)
             job.refresh_from_db()
+            _emit_pipeline('pipeline.resumed' if action == 'resume' else 'pipeline.canceled', job)
             return JsonResponse({'ok': True, 'job': pipeline.job_dict(job)})
 
         if action == 'settings':
@@ -295,4 +297,105 @@ def admin_pipeline_view(request):
                      'load_threshold': st.load_threshold,
                      'embed_rate_pps': st.embed_rate_pps,
                      'diag_secs_per_car': st.diag_secs_per_car},
+    })
+
+
+# ---------------------------------------------------------------------------
+# Real-time: processing snapshot + a single comprehensive dashboard payload
+# ---------------------------------------------------------------------------
+
+def _emit_pipeline(etype, job):
+    """Emit a pipeline lifecycle event to the admin audience, then refresh the
+    'pending processing' fingerprint so the change is reflected immediately."""
+    from . import events
+    try:
+        events.emit(etype, {'job': pipeline.job_dict(job)}, audience='admin')
+        events.detect_and_emit()
+    except Exception:
+        pass
+
+
+@require_admin_token
+def admin_processing_snapshot_view(request):
+    """GET /api/admin/processing-snapshot/ -> the live "what needs processing"
+    picture (unprocessed / needs-RAG / needs-DIAG per vehicle + active job +
+    load). This is the REST snapshot the admin dashboard loads before it
+    switches to the SSE stream for deltas."""
+    from . import events
+    return JsonResponse(events.snapshot_pending())
+
+
+@require_admin_token
+def admin_dashboard_view(request):
+    """GET /api/admin/dashboard/ -> one comprehensive payload for the modern
+    admin dashboard's initial render: KPIs, processing picture, open alerts,
+    open company requests, recent events, and a small traffic sparkline. After
+    this, the dashboard stays current from the SSE stream alone."""
+    from . import events as ev
+    from .models import (
+        ActivityLog, Car, Company, CompanyRequest, Event, PortalUser,
+        PurchaseRequest,
+    )
+
+    now = timezone.now()
+    today = now.date()
+
+    # KPIs
+    kpis = {
+        'companies': Company.objects.filter(active=True).count(),
+        'users': PortalUser.objects.filter(active=True).count(),
+        'vehicles': Car.objects.count(),
+        'activities_today': ActivityLog.objects.filter(created_at__date=today).count(),
+        'open_company_requests': CompanyRequest.objects.filter(
+            status__in=CompanyRequest.OPEN_STATUSES).count(),
+        'open_purchase_requests': PurchaseRequest.objects.filter(status='new').count(),
+        'open_alerts': SystemAlert.objects.filter(is_open=True).count(),
+    }
+
+    # Processing picture (reuses the same snapshot the SSE detector emits).
+    snapshot = ev.snapshot_pending()
+
+    # Open alerts (compact).
+    alerts = [{'id': a.id, 'key': a.key, 'severity': a.severity,
+               'message': a.message, 'last_seen': a.last_seen.isoformat()}
+              for a in SystemAlert.objects.filter(is_open=True)[:20]]
+
+    # Open company requests (most recent first).
+    from .requests_api import _request_dict
+    open_requests = [_request_dict(r, include_company=True) for r in
+                     CompanyRequest.objects.filter(status__in=CompanyRequest.OPEN_STATUSES)
+                     .select_related('company', 'created_by')[:15]]
+
+    # Recent activity feed (cross-company, compact).
+    recent_activity = [{
+        'id': a.id,
+        'user': (a.user.display_name or a.user.username) if a.user_id else '—',
+        'company': a.user.company.name if a.user_id and a.user.company_id else '—',
+        'action': a.action, 'detail': a.detail, 'category': a.category,
+        'car': (f'{a.car.brand_name} {a.car.car_name}' if a.car_id else None),
+        'created_at': a.created_at.isoformat(),
+    } for a in ActivityLog.objects.select_related('user', 'user__company', 'car')
+        .order_by('-id')[:20]]
+
+    # Traffic sparkline (last 14 days of request counts).
+    try:
+        monitoring.flush_metrics()
+    except Exception:
+        pass
+    since = now - timezone.timedelta(days=14)
+    daily = {}
+    for row in (TrafficStat.objects.filter(bucket__gte=since)
+                .values('bucket__date').annotate(n=Sum('requests'))):
+        daily[row['bucket__date'].isoformat()] = row['n']
+    spark = [{'date': d, 'requests': n} for d, n in sorted(daily.items())]
+
+    return JsonResponse({
+        'kpis': kpis,
+        'processing': snapshot,
+        'alerts': alerts,
+        'open_requests': open_requests,
+        'recent_activity': recent_activity,
+        'traffic_spark': spark,
+        'cursor': Event.objects.order_by('-id').values_list('id', flat=True).first() or 0,
+        'ts': now.isoformat(),
     })

@@ -155,7 +155,10 @@ def _app_url(meta, car_stem, chain):
     /{brand}/{year}/{car_stem}/{seg}/... where segs are the breadcrumb titles
     below the vehicle root (chain[0])."""
     segs = [s for s in chain[1:] if s]
-    year = meta['year'] if meta['year'] is not None else ''
+    # A missing year must not collapse into an empty path segment
+    # ("/brand//stem" is a link the frontend router cannot match). 'unknown'
+    # is resolved tolerantly by car_view (brand+name fallback).
+    year = meta['year'] if meta['year'] is not None else 'unknown'
     base = f"/{_enc(meta['brand'])}/{year}/{_enc(car_stem)}"
     if segs:
         base += '/' + '/'.join(_enc(s) for s in segs)

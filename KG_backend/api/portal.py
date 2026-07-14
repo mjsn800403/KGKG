@@ -46,10 +46,18 @@ _DUMMY_PASSWORD_HASH = _make_password('kg-login-timing-equalizer')
 
 
 def _body(request):
+    """Parsed JSON request body, always a dict.
+
+    A body that is valid JSON but not an object (a bare string, list, or
+    number) would otherwise flow into ``.get()`` and raise AttributeError →
+    HTTP 500. Anything that isn't a JSON object collapses to ``{}`` so callers
+    can treat missing fields uniformly.
+    """
     try:
-        return json.loads(request.body or '{}')
+        data = json.loads(request.body or '{}')
     except (ValueError, TypeError):
         return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _bearer(request):
@@ -195,6 +203,14 @@ def login_view(request):
     user.save(update_fields=['last_login_at'])
     token = AuthToken.issue(user)
     ActivityLog.objects.create(user=user, action='login', detail='ورود به سامانه')
+    try:
+        from . import events
+        events.emit_company('activity', user.company_id, {
+            'user_id': user.id, 'user_name': user.display_name or user.username,
+            'action': 'login', 'category': '', 'car': None,
+            'detail': 'ورود به سامانه'}, user_id=user.id)
+    except Exception:
+        pass
     return JsonResponse({'token': token.key, 'user': _user_dict(user, with_access=True)})
 
 
@@ -262,11 +278,38 @@ def activity_view(request):
     car = None
     if b.get('car_id'):
         car = Car.objects.filter(id=b['car_id']).first()
+    elif b.get('brand') and b.get('model'):
+        # Content pages send brand/model names, not the catalog id; resolve so
+        # the activity (and the recommendations built from it) attach to a car.
+        cq = Car.objects.filter(brand_name__iexact=str(b['brand']),
+                                car_name__iexact=str(b['model']))
+        if b.get('year'):
+            try:
+                cq = cq.filter(year=int(b['year']))
+            except (TypeError, ValueError):
+                pass
+        car = cq.first()
     node_title = (str(b.get('node_title') or '')).strip()[:300]
+    app_url = (str(b.get('app_url') or '')).strip()[:600]
     if action:
-        ActivityLog.objects.create(
+        log = ActivityLog.objects.create(
             user=user, action=action, detail=detail,
-            category=category, car=car, node_title=node_title)
+            category=category, car=car, node_title=node_title, app_url=app_url)
+        # Live company activity feed (managers/analytics viewers) + the user's
+        # own stream (drives "continue where you left off" and recommendations).
+        try:
+            from . import events
+            payload = {
+                'activity_id': log.id, 'user_id': user.id,
+                'user_name': user.display_name or user.username,
+                'action': action, 'category': category,
+                'car': ({'id': car.id, 'label': f'{car.brand_name} {car.car_name}'}
+                        if car else None),
+                'node_title': node_title, 'detail': detail,
+            }
+            events.emit_company('activity', user.company_id, payload, user_id=user.id)
+        except Exception:
+            pass
     return JsonResponse({'ok': True})
 
 
@@ -401,9 +444,13 @@ def admin_company_detail_view(request, company_id):
         return JsonResponse({'error': 'not found'}, status=404)
     if request.method == 'POST':
         b = _body(request)
-        for f in ('name', 'reg_no', 'landline', 'mobile', 'note', 'department_label'):
+        # Clamp to the same lengths the create path enforces — SQLite does not
+        # honour VARCHAR limits, so an unclamped update could store a huge blob.
+        _limits = {'name': 200, 'reg_no': 60, 'landline': 40, 'mobile': 40,
+                   'note': 2000, 'department_label': 80}
+        for f, lim in _limits.items():
             if f in b:
-                setattr(c, f, (str(b[f] or '')).strip())
+                setattr(c, f, (str(b[f] or '')).strip()[:lim])
         for f in ('employees_count', 'seats_count'):
             if f in b:
                 setattr(c, f, b[f] or None)
@@ -590,6 +637,12 @@ def admin_user_detail_view(request, user_id):
             u.save()
         except IntegrityError:
             return JsonResponse({'error': 'این ایمیل قبلاً استفاده شده است.'}, status=400)
+        if b.get('role') or 'reports_to_id' in b:
+            # Admin edits obey the same org-chart invariant as the team module:
+            # reporting edges must point strictly upward in rank.
+            from .access import enforce_org_consistency
+            enforce_org_consistency(u.company_id)
+            u.refresh_from_db()
     resp = {'user': _user_dict(u, with_access=True)}
     if new_password:
         resp['password'] = new_password

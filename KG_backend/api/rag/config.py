@@ -110,15 +110,49 @@ CAR_REGISTRY = {
 
 _LEXUS_PREFIXES = ('NX', 'RX', 'ES', 'IS', 'UX', 'GX', 'LX', 'LS', 'RC', 'LC')
 
+_CATALOG_CACHE = None
+
+
+def _catalog_meta(car_stem):
+    """(brand, year) for a stem from the main catalog DB (car_name == car_stem
+    by convention, verified against occurrences). This is what actually makes a
+    generated /brand/year/name link resolvable by car_view, so it outranks any
+    heuristic. Read-only direct sqlite (builds may run without a warm ORM);
+    cached for the process lifetime; never raises."""
+    global _CATALOG_CACHE
+    if _CATALOG_CACHE is None:
+        rows = {}
+        try:
+            import sqlite3
+            con = sqlite3.connect(
+                f"file:{Path(settings.DATABASES['default']['NAME'])}?mode=ro",
+                uri=True)
+            try:
+                for name, brand, year in con.execute(
+                        'SELECT car_name, brand_name, year FROM main_db'):
+                    rows[name] = (brand, year)
+            finally:
+                con.close()
+        except Exception:
+            pass                      # catalog unavailable -> heuristic fallback
+        _CATALOG_CACHE = rows
+    return _CATALOG_CACHE.get(car_stem)
+
 
 def car_meta(car_stem):
-    """Brand/model/variant/year for a car stem, with a conservative heuristic
-    fallback for any DB file not yet in CAR_REGISTRY."""
+    """Brand/model/variant/year for a car stem: explicit registry first, then
+    the main catalog (authoritative brand/year — a wrong or missing year here
+    produces app links car_view cannot resolve), then a conservative heuristic
+    so the build never crashes on an unregistered file."""
     if car_stem in CAR_REGISTRY:
         return dict(CAR_REGISTRY[car_stem], car_stem=car_stem)
     first = car_stem.split()[0] if car_stem.split() else car_stem
     brand = 'Lexus' if first in _LEXUS_PREFIXES else 'Toyota'
     model = car_stem.split(',')[0].strip()
+    cat = _catalog_meta(car_stem)
+    if cat:
+        return dict(brand=cat[0] or brand, model=model, variant='',
+                    year=cat[1], car_stem=car_stem)
     return dict(brand=brand, model=model, variant='', year=None, car_stem=car_stem)
 
 

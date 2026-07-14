@@ -395,7 +395,26 @@ export const teamApi = {
     }),
   reorderRoles: (order) =>
     teamFetch('/api/team/roles/reorder/', { method: 'POST', body: JSON.stringify({ order }) }),
+  // Behavioural insights for the manager dashboard (seat use, idle/top members).
+  insights: (range = 30) => teamFetch(`/api/team/insights/?range=${range}`),
+  // Company requests the manager files for the platform admin to action.
+  requests: (status) => teamFetch(`/api/company/requests/${status ? `?status=${status}` : ''}`),
+  createRequest: (payload) =>
+    teamFetch('/api/company/requests/', { method: 'POST', body: JSON.stringify(payload) }),
+  cancelRequest: (id) =>
+    teamFetch(`/api/company/requests/${id}/`, { method: 'POST', body: JSON.stringify({ cancel: true }) }),
 };
+
+/** Personalised behavioural recommendations for the logged-in portal user. */
+export async function fetchRecommendations(limit = 6) {
+  const token = getPortalToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/recommendations/?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json().catch(() => null);
+}
 
 /** Download the designed PDF team report and trigger a save dialog. */
 export async function downloadTeamReport(rangeDays = 30) {
@@ -525,6 +544,18 @@ export const adminApi = {
     adminFetch('/api/admin/pipeline/', {
       method: 'POST', body: JSON.stringify(payload),
     }),
+  // Real-time: one comprehensive dashboard snapshot + the live processing picture.
+  dashboard: () => adminFetch('/api/admin/dashboard/'),
+  processingSnapshot: () => adminFetch('/api/admin/processing-snapshot/'),
+  // Company requests inbox (managers file these; admin actions them).
+  companyRequests: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/company-requests/${qs ? `?${qs}` : ''}`);
+  },
+  setCompanyRequest: (id, payload) =>
+    adminFetch(`/api/admin/company-requests/${id}/`, {
+      method: 'POST', body: JSON.stringify(payload),
+    }),
 };
 
 // --- admin auth (review queue + pin) ---------------------------------------
@@ -622,4 +653,94 @@ export async function fetchRecentFeedback(limit = 50) {
     console.error('fetchRecentFeedback error:', error);
     return { count: 0, items: [] };
   }
+}
+// ---------------------------------------------------------------------------
+// Real-time event stream (Server-Sent Events over fetch).
+// ---------------------------------------------------------------------------
+// We use fetch()+ReadableStream rather than the native EventSource because
+// EventSource cannot send an Authorization header — this lets us reuse the same
+// Bearer token the rest of the app already holds (portal in localStorage, admin
+// in sessionStorage) instead of putting a token in the URL. Auto-reconnects with
+// Last-Event-ID so no events are missed across the server's periodic recycle.
+
+export function openEventStream({ admin = false, onEvent, onStatus } = {}) {
+  let closed = false;
+  let controller = null;
+  let cursor = 0;
+  let retry = 3000;
+
+  const token = admin ? getAdminToken() : getPortalToken();
+  if (!token) {
+    onStatus?.('unauthorized');
+    return () => {};
+  }
+
+  async function connect() {
+    if (closed) return;
+    controller = new AbortController();
+    onStatus?.('connecting');
+    try {
+      const res = await fetch(`${API_BASE}/api/events/stream/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'text/event-stream',
+          ...(cursor ? { 'Last-Event-ID': String(cursor) } : {}),
+        },
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      if (res.status === 401) { onStatus?.('unauthorized'); return; }
+      if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+      onStatus?.('open');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (!closed) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let sep;
+        while ((sep = buf.indexOf('\n\n')) !== -1) {
+          const raw = buf.slice(0, sep);
+          buf = buf.slice(sep + 2);
+          parseFrame(raw);
+        }
+      }
+    } catch (e) {
+      if (closed) return;
+      onStatus?.('reconnecting');
+    }
+    if (!closed) {
+      setTimeout(connect, retry);   // server recycles ~5min; reconnect with cursor
+    }
+  }
+
+  function parseFrame(raw) {
+    let ev = 'message';
+    let data = '';
+    let id = null;
+    for (const line of raw.split('\n')) {
+      if (line.startsWith(':')) continue;             // comment / heartbeat
+      if (line.startsWith('event:')) ev = line.slice(6).trim();
+      else if (line.startsWith('data:')) data += line.slice(5).trim();
+      else if (line.startsWith('id:')) id = line.slice(3).trim();
+      else if (line.startsWith('retry:')) {
+        const n = parseInt(line.slice(6).trim(), 10);
+        if (!Number.isNaN(n)) retry = n;
+      }
+    }
+    if (id) cursor = parseInt(id, 10) || cursor;
+    if (ev === 'ready') {
+      try { const d = JSON.parse(data || '{}'); if (d.cursor) cursor = d.cursor; } catch {}
+      return;
+    }
+    if (ev === 'reconnect') return;                    // graceful server recycle
+    if (!data) return;
+    let payload = {};
+    try { payload = JSON.parse(data); } catch { return; }
+    onEvent?.({ type: ev, ...payload });
+  }
+
+  connect();
+  return () => { closed = true; try { controller?.abort(); } catch {} };
 }

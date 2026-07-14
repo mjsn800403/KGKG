@@ -35,7 +35,9 @@ export default async function ModelPage({ params }) {
   let nodes = [];
   let loadError = '';
   try {
-    nodes = await fetchModels(brand, parseInt(year), model, token);
+    // Raw year segment on purpose: parseInt turns a legacy 'unknown' year into
+    // NaN; the backend resolves the car by brand+name when the year mismatches.
+    nodes = await fetchModels(brand, year, model, token);
   } catch (e) {
     if (e?.status === 401) redirect('/login');
     else if (e?.status === 403) {

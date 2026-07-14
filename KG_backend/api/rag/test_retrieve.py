@@ -179,6 +179,27 @@ class ScopeAwareRetrievalTest(unittest.TestCase):
         for h in res['hits']:
             self.assertEqual(h['explain']['boosts']['scope'], 1.0)
 
+    def test_allowed_cars_gates_carless_query_to_owned_vehicles(self):
+        # The car-less general assistant must cite ONLY vehicles in the caller's
+        # allow-list. With the whole index reachable, a user granted only the
+        # Corolla must never receive the Lexus (blob 4) as a grounded hit.
+        res = retrieve.assist('brake fluid', allowed_cars={'Corolla'})
+        cited = {h['car_stem'] for h in res['hits']}
+        self.assertEqual(cited, {'Corolla'})
+        self.assertNotIn('NX 350h', cited)
+
+    def test_allowed_cars_none_is_unrestricted(self):
+        # None preserves the legacy behavior: both cars are reachable.
+        res = retrieve.assist('brake fluid', allowed_cars=None)
+        cited = {h['car_stem'] for h in res['hits']}
+        self.assertEqual(cited, {'Corolla', 'NX 350h'})
+
+    def test_empty_allowlist_returns_no_content(self):
+        # A user with zero grants gets nothing grounded — not the whole fleet.
+        res = retrieve.assist('brake fluid', allowed_cars=set())
+        self.assertEqual(res['count'], 0)
+        self.assertFalse(res['grounded'])
+
 
 class CarNotIndexedGateTest(unittest.TestCase):
     """Hard vehicle-scope gate: a query pinned to a car that has NO content in
@@ -217,6 +238,48 @@ class CarNotIndexedGateTest(unittest.TestCase):
         res = retrieve.assist('brake fluid')                 # no car pinned
         self.assertTrue(res['grounded'])
         self.assertIsNone(res.get('out_of_scope'))
+
+
+class AppUrlTest(unittest.TestCase):
+    """The citation URL must round-trip through the frontend router: one
+    breadcrumb title == one percent-encoded path segment, always with a
+    non-empty year segment. These were the exact failure modes behind
+    'assistant links do not open for some vehicles'."""
+
+    @staticmethod
+    def _occ(**kw):
+        base = dict(brand='Toyota', car_stem='4Runner TRD Pro', year=2025,
+                    title_path='Toyota: 2025: 4Runner TRD Pro › Repair › Brakes')
+        base.update(kw)
+        return base
+
+    def test_slash_in_title_is_encoded_not_a_segment_split(self):
+        occ = self._occ(title_path='Toyota: 2025: 4Runner TRD Pro › '
+                                   'Repair › Service Data [11/2022 -  ] › A/C')
+        url, segs = retrieve._app_url(occ)
+        self.assertEqual(segs, ['Repair', 'Service Data [11/2022 -  ]', 'A/C'])
+        # structural separators only: /brand/year/stem/seg/seg/seg
+        self.assertEqual(url.count('/'), 6)
+        from urllib.parse import unquote
+        decoded = [unquote(p) for p in url.split('/')[4:]]
+        self.assertEqual(decoded, ['Repair', 'Service Data [11/2022 -  ]', 'A/C'])
+
+    def test_missing_year_falls_back_to_title_path_year(self):
+        occ = self._occ(year=None)
+        url, _ = retrieve._app_url(occ)
+        self.assertTrue(url.startswith('/Toyota/2025/'), url)
+
+    def test_missing_year_never_collapses_to_empty_segment(self):
+        occ = self._occ(year=None, title_path='weird root › Repair')
+        url, _ = retrieve._app_url(occ)
+        self.assertNotIn('//', url)
+        self.assertTrue(url.startswith('/Toyota/unknown/'), url)
+
+    def test_comma_and_paren_stems_encode_like_encodeURIComponent(self):
+        occ = self._occ(car_stem='Camry LE, 2.5L Eng VIN A (test)',
+                        title_path='Toyota: 2025: Camry › Repair')
+        url, _ = retrieve._app_url(occ)
+        self.assertIn('/Camry%20LE%2C%202.5L%20Eng%20VIN%20A%20%28test%29/', url)
 
 
 if __name__ == '__main__':

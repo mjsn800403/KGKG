@@ -14,6 +14,8 @@ Pipeline for a user question:
 
 Everything here only READS the index. No LLM, no external service.
 """
+import re
+
 from urllib.parse import quote
 
 from . import config, store, embed, glossary, scoring, feedback
@@ -29,6 +31,19 @@ def _fts_match(query):
     return ' OR '.join(toks) if toks else None
 
 
+def _enc(s):
+    """Mirror the frontend's encodeURIComponent (buildNodeHref) EXACTLY: encode
+    every reserved char including '/'. Node titles routinely contain a literal
+    slash ("A/C", "[03/2022 -        ]"); quote's default safe='/' would leave it
+    raw, splitting one breadcrumb title into two URL path segments — a link the
+    frontend can never resolve."""
+    return quote(s or '', safe='')
+
+
+# Vehicle-root title_path prefix looks like "Toyota: 2025: 4Runner TRD Pro".
+_ROOT_YEAR_RE = re.compile(r'^[^›]*?:\s*((?:19|20)\d{2})\s*:')
+
+
 def _app_url(occ):
     """In-app navigation URL, mirroring the frontend's buildNodeHref:
     /{brand}/{year}/{car_stem}/{seg}/{seg}... -- one segment per breadcrumb
@@ -36,11 +51,17 @@ def _app_url(occ):
     segs = [s for s in (occ['title_path'] or '').split(' › ') if s][1:]
     # Frontend route is /{brand}/{year}/{car_stem}/... — year is a real path
     # segment there, so a missing year must not collapse into an empty segment
-    # (`/brand//stem`, a broken link). Fall back to the literal 'unknown'.
-    year = occ['year'] if occ['year'] is not None else 'unknown'
-    base = f"/{quote(occ['brand'] or '')}/{year}/{quote(occ['car_stem'])}"
+    # (`/brand//stem`, a broken link). An occurrence without a year (metadata
+    # gap in older builds) falls back to the year embedded in the vehicle-root
+    # breadcrumb ("Toyota: 2025: <stem>"), then to the literal 'unknown'
+    # (which car_view resolves tolerantly by brand+name).
+    year = occ['year']
+    if year is None:
+        m = _ROOT_YEAR_RE.match(occ['title_path'] or '')
+        year = m.group(1) if m else 'unknown'
+    base = f"/{_enc(occ['brand'])}/{year}/{_enc(occ['car_stem'])}"
     if segs:
-        base += '/' + '/'.join(quote(s) for s in segs)
+        base += '/' + '/'.join(_enc(s) for s in segs)
     return base, segs
 
 
@@ -151,7 +172,18 @@ def _matched_via(kind, sim, bm25_norm, vehicle_boost, pinned=False):
     return 'keyword' if bm25_norm >= sim else 'semantic'
 
 
-def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
+def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
+           allowed_cars=None):
+    """Retrieve grounded manual excerpts for ``query``.
+
+    ``allowed_cars`` (a set/frozenset of car_stems, or None) hard-restricts which
+    vehicles may be CITED. It is the authorization boundary for the car-less
+    general assistant: without it, a logged-in user with access to one vehicle
+    could receive grounded excerpts from any indexed vehicle. When set, every
+    returned hit — including expert-pinned overrides — is cited from an occurrence
+    inside the allow-list; blobs with no allowed occurrence are dropped before
+    ranking. ``None`` preserves the unrestricted behavior (single-car pages, whose
+    access the caller already checked, and internal/eval callers)."""
     if not config.INDEX_DB.exists():
         raise FileNotFoundError(str(config.INDEX_DB))
     # Cached, process-wide read connection (no per-request connect + vec load).
@@ -245,6 +277,11 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
         occs = occ_map.get(bid)
         if not occs:
             continue
+        if allowed_cars is not None:
+            # Authorization gate: cite only from vehicles the caller may open.
+            occs = [o for o in occs if o['car_stem'] in allowed_cars]
+            if not occs:
+                continue
         occ, vboost = _pick_occurrence(occs, brand, model, car_stem)
         boiler = config.BOILERPLATE_PENALTY \
             if (occ['title'] or '').strip().lower() in config.BOILERPLATE_TITLES else 1.0
@@ -290,7 +327,8 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
     hits = []
     for i, (final, sim, bid, occ, occs, explain) in enumerate(ranked[:k_eff]):
         app_url, segs = _app_url(occ)
-        related = _expand(index, bid, brand, model, car_stem) if i < expand_n else []
+        related = _expand(index, bid, brand, model, car_stem,
+                          allowed_cars=allowed_cars) if i < expand_n else []
         cross = _cross_vehicle(occ, occs)
         band = scoring.confidence_band(final, config.CONF_HIGH_MARGIN, _eff_sim(sim, explain),
                                        high_sim=config.CONF_HIGH_SIM,
@@ -311,8 +349,12 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
         })
 
     if pin_bid is not None and not any(h['blob_id'] == pin_bid for h in hits):
-        ph = _pinned_hit(index, pin, brand, model, car_stem)
-        if ph:
+        ph = _pinned_hit(index, pin, brand, model, car_stem,
+                         allowed_cars=allowed_cars)
+        # A pin is an expert override, but it must still respect the caller's
+        # vehicle allow-list — never surface a pinned excerpt from a car the
+        # user cannot open.
+        if ph and (allowed_cars is None or ph.get('car_stem') in allowed_cars):
             hits.insert(0, ph)
 
     top_eff = _eff_sim(top_sim, ranked[0][5]) if ranked else 0.0
@@ -340,9 +382,11 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None):
     return out
 
 
-def _pinned_hit(index, pin, brand, model, car_stem):
+def _pinned_hit(index, pin, brand, model, car_stem, allowed_cars=None):
     """Build a top-of-list hit for an expert-pinned override (by blob_id)."""
     occs = _occurrences(index, pin['blob_id'])
+    if allowed_cars is not None:
+        occs = [o for o in occs if o['car_stem'] in allowed_cars]
     if not occs:
         return None
     occ, _ = _pick_occurrence(occs, brand, model, car_stem)
@@ -358,7 +402,8 @@ def _pinned_hit(index, pin, brand, model, car_stem):
         'confidence_band': 'high', 'confidence_label': scoring._BAND_FA['high'],
         'explain': {'matched_via': 'expert_verified', 'note': pin.get('note') or 'expert-verified'},
         'text': _blob_text(index, pin['blob_id']),
-        'related': _expand(index, pin['blob_id'], brand, model, car_stem),
+        'related': _expand(index, pin['blob_id'], brand, model, car_stem,
+                           allowed_cars=allowed_cars),
         'cross_vehicle': _cross_vehicle(occ, occs),
     }
 
@@ -367,7 +412,7 @@ def _pinned_hit(index, pin, brand, model, car_stem):
 _REL_PRIORITY = {'labor_time': 0, 'crosslink': 1, 'semantic': 2}
 
 
-def _expand(index, blob_id, brand, model, car_stem):
+def _expand(index, blob_id, brand, model, car_stem, allowed_cars=None):
     edges = index.execute(
         "SELECT dst_blob, relation, weight FROM edges WHERE src_blob=?", (blob_id,)
     ).fetchall()
@@ -378,6 +423,10 @@ def _expand(index, blob_id, brand, model, car_stem):
             continue
         seen.add(e['dst_blob'])
         occs = _occurrences(index, e['dst_blob'])
+        if allowed_cars is not None:
+            # Same authorization boundary as the main hit list: never emit a
+            # related-page link that cites a vehicle the caller cannot open.
+            occs = [o for o in occs if o['car_stem'] in allowed_cars]
         if not occs:
             continue
         occ, _ = _pick_occurrence(occs, brand, model, car_stem)

@@ -25,6 +25,17 @@ def require_manager(view):
     return wrapped
 
 
+def user_can_view_company_stream(user):
+    """Whether a portal user may receive company-scoped real-time events.
+
+    Company-audience events carry team-wide signal (member changes, requests,
+    aggregate activity), so they're delivered only to users who already have a
+    team or analytics dashboard — i.e. managers/heads/analytics viewers. A plain
+    specialist still gets their OWN ('user') events."""
+    return bool(getattr(user, 'can_manage_team', False)
+                or getattr(user, 'can_view_analytics', False))
+
+
 def require_analytics(view):
     """Gate a view behind the ``can_view_analytics`` capability."""
     @wraps(view)

@@ -10,14 +10,22 @@ import { logActivity } from '../utils/api';
 // re-render / StrictMode double-invoke doesn't double-count.
 const sent = new Set();
 
-export default function ActivityBeacon({ action, detail = '', segments = [], nodeTitle = '' }) {
+export default function ActivityBeacon({
+  action, detail = '', segments = [], nodeTitle = '',
+  appUrl = '', brand = '', year = '', model = '',
+}) {
   const key = `${action}:${(segments || []).join('/')}:${nodeTitle}`;
   const fired = useRef(false);
   useEffect(() => {
     if (fired.current || sent.has(key)) return;
     fired.current = true;
     sent.add(key);
-    logActivity(action, detail, { segments, node_title: nodeTitle });
-  }, [key, action, detail, segments, nodeTitle]);
+    // app_url + brand/model let the backend attach the activity to a car and
+    // give the recommendation engine exact "continue reading" deep-links.
+    logActivity(action, detail, {
+      segments, node_title: nodeTitle,
+      app_url: appUrl, brand, year, model,
+    });
+  }, [key, action, detail, segments, nodeTitle, appUrl, brand, year, model]);
   return null;
 }

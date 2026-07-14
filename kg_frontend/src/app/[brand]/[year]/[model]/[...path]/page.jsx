@@ -28,7 +28,10 @@ export default async function NodePage({ params }) {
   let denied = false;
 
   try {
-    nodes = await fetchNodes(brand, parseInt(year), model, pathArray, token);
+    // Pass the year segment through verbatim: parseInt would turn a legacy
+    // placeholder year ('unknown') into NaN. The backend resolves the car by
+    // brand+name when the year segment doesn't match, so the raw value works.
+    nodes = await fetchNodes(brand, year, model, pathArray, token);
   } catch (err) {
     if (err?.status === 401) redirect('/login');
     else if (err?.status === 403) denied = true;
@@ -99,6 +102,10 @@ export default async function NodePage({ params }) {
         detail={`${model} — ${currentTitle}`}
         segments={pathArray}
         nodeTitle={currentTitle}
+        appUrl={`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/${pathArray.map(encodeURIComponent).join('/')}`}
+        brand={brand}
+        year={String(year)}
+        model={model}
       />
 
       {isLeafWithContent ? (
