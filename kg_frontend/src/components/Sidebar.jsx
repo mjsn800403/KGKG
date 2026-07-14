@@ -13,9 +13,10 @@ export default function Sidebar() {
   const pathname = usePathname() || '';
   const onSettings = pathname.startsWith('/settings');
   const onAssistant = pathname.startsWith('/assistant');
+  const onRequests = pathname.startsWith('/requests');
   const onTeam = pathname.startsWith('/team') && !pathname.startsWith('/team/analytics');
   const onAnalytics = pathname.startsWith('/team/analytics');
-  const onFleet = !onSettings && !onAssistant && !onTeam && !onAnalytics;
+  const onFleet = !onSettings && !onAssistant && !onTeam && !onAnalytics && !onRequests;
 
   // Capability flags come from the cached portal user (resolved after mount to
   // avoid an SSR hydration mismatch).
@@ -48,6 +49,11 @@ export default function Sidebar() {
       {caps.manage && (
         <Link className={`sb-link${onTeam ? ' active' : ''}`} href="/team" data-tour="nav-team">
           <Icon name="users" /> تیم و کارکنان
+        </Link>
+      )}
+      {caps.manage && (
+        <Link className={`sb-link${onRequests ? ' active' : ''}`} href="/requests" data-tour="nav-requests">
+          <Icon name="cart" /> درخواست‌ها
         </Link>
       )}
       {caps.analytics && (

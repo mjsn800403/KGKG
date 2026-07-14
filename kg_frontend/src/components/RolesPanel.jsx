@@ -8,7 +8,7 @@
 // capability defaults, an accent color, and a default car/package access
 // template that can be pushed to existing members in one tap.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, Reorder, useDragControls } from 'motion/react';
 import Icon from './Icon';
 import Switch from './Switch';
@@ -22,15 +22,37 @@ const SCOPES = [
 ];
 const SWATCHES = ['#e8b04b', '#7c6cf0', '#4bb3e8', '#5ecf8a', '#e86c6c', '#d16cd6', '#6cd6c3', '#a0a8b8'];
 
-export default function RolesPanel({ meta, onChanged, notify }) {
+export default function RolesPanel({ meta, members = [], onChanged, onAddWithRole, notify }) {
   const [roles, setRoles] = useState(meta?.roles || []);
   const [expanded, setExpanded] = useState(null);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // The panel's list stays in step with every other tab (SSE refresh, member
+  // moves, ...) — server responses win over local optimistic state.
+  useEffect(() => { setRoles(meta?.roles || []); }, [meta]);
+
   const myRank = meta?.my_rank ?? 1;
   const locked = useMemo(() => roles.filter((r) => !r.editable), [roles]);
   const editable = useMemo(() => roles.filter((r) => r.editable), [roles]);
+
+  const assignMember = async (memberId, role) => {
+    if (!memberId || busy) return;
+    setBusy(true);
+    try {
+      const res = await teamApi.updateMember(Number(memberId), { org_role_id: role.id });
+      const adj = res?.adjustments || {};
+      let msg = `عضو به جایگاه «${role.name}» منتقل شد.`;
+      if (adj.caps_reseeded) msg += ' دسترسی‌ها مطابق جایگاه جدید تنظیم شد.';
+      if (adj.reparented > 0) msg += ` ${adj.reparented} خط گزارش‌دهی اصلاح شد.`;
+      notify?.(msg);
+      onChanged?.();
+    } catch (e) {
+      notify?.(e?.message || 'انتساب عضو ناموفق بود.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const refresh = (nextRoles) => {
     setRoles(nextRoles);
@@ -87,9 +109,17 @@ export default function RolesPanel({ meta, onChanged, notify }) {
           <div key={r.id} className="role-row glass locked">
             <span className="role-grip muted"><Icon name="shield" size={15} /></span>
             <span className="role-color" style={{ background: r.color || 'var(--accent)' }} />
-            <span className="role-name">{r.name}</span>
+            <span className="role-name">
+              {r.name}
+              {r.rank === myRank && meta?.me && (
+                <span className="role-selftag">{meta.me.name} — جایگاه شما</span>
+              )}
+            </span>
             <span className="role-rank">رتبه {r.rank}</span>
-            <span className="role-locktag">جایگاه شما / بالاتر</span>
+            <span className="role-members">{r.members_count} عضو</span>
+            <span className="role-locktag">
+              {r.rank === myRank ? 'جایگاه شما' : 'بالاتر از جایگاه شما'}
+            </span>
           </div>
         ))}
 
@@ -100,11 +130,14 @@ export default function RolesPanel({ meta, onChanged, notify }) {
               role={role}
               allRoles={roles}
               meta={meta}
+              members={members}
               expanded={expanded === role.id}
               onExpand={() => setExpanded(expanded === role.id ? null : role.id)}
               onCommitOrder={() => commitOrder(roles.filter((r) => r.editable))}
               onPatch={patchRole}
               onDeleted={(res) => { refresh(res.roles); setExpanded(null); }}
+              onAddWithRole={onAddWithRole}
+              onAssignMember={assignMember}
               busy={busy}
               notify={notify}
             />
@@ -139,13 +172,17 @@ export default function RolesPanel({ meta, onChanged, notify }) {
   );
 }
 
-function RoleRow({ role, allRoles, meta, expanded, onExpand, onCommitOrder, onPatch, onDeleted, busy, notify }) {
+function RoleRow({ role, allRoles, meta, members, expanded, onExpand, onCommitOrder,
+                   onPatch, onDeleted, onAddWithRole, onAssignMember, busy, notify }) {
   const controls = useDragControls();
   const [name, setName] = useState(role.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reassignTo, setReassignTo] = useState('');
+  const [assignPick, setAssignPick] = useState('');
 
   const otherRoles = allRoles.filter((r) => r.editable && r.id !== role.id);
+  const holders = (members || []).filter((m) => m.org_role?.id === role.id);
+  const assignables = (members || []).filter((m) => m.org_role?.id !== role.id);
   const accesses = useMemo(() => {
     const map = {};
     (role.default_accesses || []).forEach((a) => { map[a.car_id] = a.documents || []; });
@@ -269,6 +306,42 @@ function RoleRow({ role, allRoles, meta, expanded, onExpand, onCommitOrder, onPa
                 <Switch checked={role.can_view_analytics} onChange={(v) => onPatch(role.id, { can_view_analytics: v })} /></div>
               <div className="cap-row"><div><b>دستیار هوشمند</b><span>چت‌بات فنی خودرو</span></div>
                 <Switch checked={role.ai_assistant_enabled} onChange={(v) => onPatch(role.id, { ai_assistant_enabled: v })} /></div>
+
+              <div className="drawer-section-title">اعضای این جایگاه</div>
+              {holders.length > 0 ? (
+                <div className="role-holder-chips">
+                  {holders.map((m) => (
+                    <span key={m.id} className="holder-chip">
+                      <span className="dot" style={{ background: role.color || 'var(--accent)' }} />
+                      {m.display_name || m.username}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted role-hint">این جایگاه هنوز عضوی ندارد.</p>
+              )}
+              <div className="role-assign-row">
+                <button type="button" className="btn btn-accent" disabled={busy}
+                  onClick={() => onAddWithRole?.(role.id)}>
+                  <Icon name="plus" size={14} /> افزودن عضو جدید با این جایگاه
+                </button>
+                {assignables.length > 0 && (
+                  <div className="role-assign-existing">
+                    <select value={assignPick} onChange={(e) => setAssignPick(e.target.value)}>
+                      <option value="">— انتقال عضو موجود به این جایگاه —</option>
+                      {assignables.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.display_name || m.username} ({m.role_label})
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn" disabled={busy || !assignPick}
+                      onClick={async () => { await onAssignMember?.(assignPick, role); setAssignPick(''); }}>
+                      انتقال
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <div className="drawer-section-title">الگوی دسترسی به خودروها</div>
               <p className="muted role-hint">

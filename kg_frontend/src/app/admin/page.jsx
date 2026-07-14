@@ -18,6 +18,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
+import AdminDashboard from '@/components/AdminDashboard';
+import RequestsInbox from '@/components/RequestsInbox';
 import { adminApi, adminLogout, getAdminToken, getAdminUser } from '@/utils/api';
 import { DEPARTMENT_PRESETS, PACKAGES, ROLES, packageLabel, roleWithDepartment } from '@/lib/packages';
 
@@ -39,9 +41,11 @@ const REQ_STATUS = {
 };
 
 const SECTIONS = [
+  { id: 'dashboard', label: 'داشبورد بلادرنگ', icon: 'chart', desc: 'وضعیت زندهٔ پلتفرم، پردازش و رویدادها' },
   { id: 'overview', label: 'نمای کلی', icon: 'catalog', desc: 'خلاصه وضعیت کل پلتفرم در یک نگاه' },
   { id: 'catalog', label: 'فهرست خودروها', icon: 'car', desc: 'خودروهای ثبت‌شده و وضعیت دیتابیس هرکدام' },
   { id: 'requests', label: 'درخواست‌های خرید', icon: 'cart', desc: 'درخواست‌های جدید مشتریان و صدور دسترسی' },
+  { id: 'company-requests', label: 'درخواست‌های شرکت‌ها', icon: 'cart', desc: 'درخواست‌های مدیران شرکت‌ها و رسیدگی به آن‌ها' },
   { id: 'companies', label: 'شرکت‌ها و دسترسی‌ها', icon: 'building', desc: 'تعریف شرکت و دامنه خرید هرکدام' },
   { id: 'users', label: 'کاربران', icon: 'users', desc: 'صدور و مدیریت حساب‌های شرکتی' },
   { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart', desc: 'میزان استفاده به تفکیک شرکت و حوزه فنی' },
@@ -54,6 +58,7 @@ const SECTIONS = [
 // The hub groups the sections so the admin lands on a calm "desk", not the
 // full firehose — a section's tools appear only after entering it.
 const SECTION_GROUPS = [
+  { title: 'بلادرنگ', tag: '// REALTIME', ids: ['dashboard', 'company-requests'] },
   { title: 'مشتریان و فروش', tag: '// CUSTOMERS', ids: ['requests', 'companies', 'users'] },
   { title: 'گزارش و تحلیل', tag: '// INSIGHTS', ids: ['overview', 'analytics', 'activity'] },
   { title: 'داده و عملیات', tag: '// OPERATIONS', ids: ['catalog', 'dataquality', 'pipeline', 'system'] },
@@ -194,6 +199,8 @@ export default function AdminPage() {
               transition={{ duration: 0.32, ease: EASE }}
             >
               {!section && <AdminHub guard={guard} go={go} adminUser={adminUser} />}
+              {section === 'dashboard' && <AdminDashboard go={go} />}
+              {section === 'company-requests' && <RequestsInbox />}
               {section === 'overview' && <Overview guard={guard} go={go} />}
               {section === 'catalog' && <Catalog guard={guard} />}
               {section === 'requests' && (

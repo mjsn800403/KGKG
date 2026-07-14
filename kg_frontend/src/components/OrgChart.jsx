@@ -44,7 +44,7 @@ function subtreeIds(node, acc = new Set()) {
   return acc;
 }
 
-export default function OrgChart({ data, onReload, onEditMember, notify }) {
+export default function OrgChart({ data, onReload, onEditMember, onAddWithRole, notify }) {
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [moving, setMoving] = useState(null);      // member being re-parented
   const [menuFor, setMenuFor] = useState(null);    // node id with the open menu
@@ -72,8 +72,10 @@ export default function OrgChart({ data, onReload, onEditMember, notify }) {
     return next;
   });
 
+  // A supervisor must hold a STRICTLY higher position — the chart only ever
+  // points upward (matches the server-side rule).
   const canReceive = (node) =>
-    moving && !movingSubtree.has(node.id) && node.rank <= (moving.rank ?? 99);
+    moving && !movingSubtree.has(node.id) && node.rank < (moving.rank ?? 99);
 
   const placeUnder = async (target) => {
     if (!moving || busy) return;
@@ -96,9 +98,14 @@ export default function OrgChart({ data, onReload, onEditMember, notify }) {
     if (busy) return;
     setBusy(true);
     try {
-      await teamApi.updateMember(member.id, { org_role_id: roleId });
+      const res = await teamApi.updateMember(member.id, { org_role_id: roleId });
       setMenuFor(null);
       await onReload?.();
+      const adj = res?.adjustments || {};
+      let msg = `جایگاه «${member.name}» تغییر کرد.`;
+      if (adj.caps_reseeded) msg += ' دسترسی‌ها مطابق جایگاه جدید تنظیم شد.';
+      if (adj.reparented > 0) msg += ` ${adj.reparented} خط گزارش‌دهی اصلاح شد.`;
+      notify?.(msg);
     } catch (e) {
       notify?.(e?.message || 'تغییر نقش ناموفق بود.', 'error');
     } finally {
@@ -108,6 +115,7 @@ export default function OrgChart({ data, onReload, onEditMember, notify }) {
 
   if (!data) return null;
   const assignableRoles = (data.roles || []).filter((r) => r.editable);
+  const emptyRoles = assignableRoles.filter((r) => !r.members_count);
 
   return (
     <div className="orgchart-wrap">
@@ -126,6 +134,18 @@ export default function OrgChart({ data, onReload, onEditMember, notify }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {(data.roles || []).length > 0 && (
+        <div className="org-legend glass">
+          {(data.roles || []).map((r) => (
+            <span key={r.id} className="org-legend-chip">
+              <span className="dot" style={{ background: r.color || 'var(--accent)' }} />
+              {r.name}
+              <b>{r.members_count}</b>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="orgchart-scroll">
         <ul className="org-tree org-root">
@@ -150,6 +170,34 @@ export default function OrgChart({ data, onReload, onEditMember, notify }) {
           ))}
         </ul>
       </div>
+
+      {emptyRoles.length > 0 && (
+        <div className="org-ghosts">
+          <div className="org-ghosts-title">
+            <Icon name="layers" size={15} /> جایگاه‌های بدون عضو
+          </div>
+          <div className="org-ghosts-grid">
+            {emptyRoles.map((r) => (
+              <motion.div
+                key={r.id}
+                className="ghost-card glass"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{ '--node-accent': r.color || 'var(--accent)' }}
+              >
+                <span className="org-accent" />
+                <div className="ghost-id">
+                  <div className="ghost-name">{r.name}</div>
+                  <div className="ghost-rank muted">رتبه {r.rank} — هنوز عضوی ندارد</div>
+                </div>
+                <button className="btn ghost-add" onClick={() => onAddWithRole?.(r.id)}>
+                  <Icon name="plus" size={14} /> افزودن عضو
+                </button>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

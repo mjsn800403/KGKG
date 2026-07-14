@@ -27,7 +27,8 @@ from .models import (
 from .access import (
     CONTENT_CATEGORIES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL, VALID_ROLES,
     apply_managed_access, category_label, default_capabilities_for_org_role,
-    default_capabilities_for_role, display_role_label, legacy_role_for_rank,
+    default_capabilities_for_role, display_role_label, enforce_org_consistency,
+    find_valid_supervisor, legacy_role_for_rank,
     manageable_user_ids, manager_can_target, manager_grantable_cars,
     normalize_role, role_can_manage, role_label, subtree_user_ids,
     user_manage_scope, user_rank,
@@ -40,6 +41,27 @@ from .ratelimit import rate_limited
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _as_id(value):
+    """Coerce a client-supplied id (int or numeric string) to int, else None.
+
+    Form controls serialize ids as strings; every id comparison downstream is
+    against integer sets, so normalize once at the boundary.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _emit_team(event_type, company_id, payload):
+    """Best-effort team event so every open team view stays in sync live."""
+    try:
+        from . import events
+        events.emit_company(event_type, company_id, payload)
+    except Exception:
+        pass
+
 
 def _frontend_base():
     """Public origin of the Next.js frontend (for building invite links)."""
@@ -151,6 +173,12 @@ def _meta_payload(manager):
         'my_rank': my_rank,
         'my_role_id': manager.org_role_id,
         'my_scope': user_manage_scope(manager),
+        # The acting viewer, so the UI can name them ("علی — مدیر خدمات پس از
+        # فروش") instead of an anonymous "شما" placeholder.
+        'me': {'id': manager.id,
+               'name': manager.display_name or manager.username,
+               'role_label': display_role_label(manager, dept),
+               'rank': my_rank},
         'company': {'id': manager.company_id, 'name': manager.company.name,
                     'ai_assistant_enabled': manager.company.ai_assistant_enabled},
     }
@@ -172,7 +200,7 @@ def _resolve_new_role(manager, body):
     below the acting manager.
     """
     my_rank = user_rank(manager)
-    role_id = body.get('org_role_id')
+    role_id = _as_id(body.get('org_role_id')) if body.get('org_role_id') else None
     if role_id:
         role = OrgRole.objects.filter(id=role_id, company_id=manager.company_id).first()
         if role is None:
@@ -255,13 +283,22 @@ def team_members_view(request):
             return JsonResponse({'error': 'رمز عبور باید حداقل ۸ نویسه باشد.'}, status=400)
         password = pw_in or _gen_password()
 
-    # reports_to defaults to the creating manager; if given, must be visible to them.
+    # reports_to defaults to the creating manager; if given, must be visible to
+    # them AND hold a strictly higher position than the new member — the org
+    # chart only ever points upward.
     reports_to = manager
     if b.get('reports_to_id'):
-        rid = b['reports_to_id']
-        if rid not in manageable_user_ids(manager, include_self=True):
+        rid = _as_id(b['reports_to_id'])
+        if rid is None or rid not in manageable_user_ids(manager, include_self=True):
             return JsonResponse({'error': 'سرپرست انتخابی معتبر نیست.'}, status=400)
-        reports_to = PortalUser.objects.filter(id=rid).first() or manager
+        reports_to = (PortalUser.objects.filter(id=rid).select_related('org_role').first()
+                      or manager)
+    new_rank = org_role.rank if org_role else ROLE_LEVEL.get(role, 99)
+    if user_rank(reports_to) >= new_rank:
+        pos_name = org_role.name if org_role else role_label(role, manager.company.department_label)
+        return JsonResponse(
+            {'error': f'سرپرست انتخابی باید جایگاهی بالاتر از «{pos_name}» در چارت سازمانی داشته باشد.'},
+            status=400)
 
     caps = (default_capabilities_for_org_role(org_role) if org_role
             else default_capabilities_for_role(role))
@@ -307,6 +344,14 @@ def team_members_view(request):
 
     ActivityLog.objects.create(user=manager, action='team_add',
                                detail=f'افزودن کارمند: {display_name}')
+    try:
+        from . import events
+        events.emit_company('team.member.added', manager.company_id, {
+            'user_id': u.id, 'name': display_name,
+            'role_label': _user_dict(u).get('role_label'),
+            'by': manager.display_name or manager.username})
+    except Exception:
+        pass
 
     if provision == 'credentials':
         # Hand the one-time credentials back to the manager to deliver.
@@ -363,26 +408,55 @@ def team_member_detail_view(request, user_id):
     for cap in ('can_manage_team', 'can_view_analytics', 'ai_assistant_enabled'):
         if cap in b:
             setattr(u, cap, bool(b[cap]))
+
+    adjustments = {'caps_reseeded': False, 'reparented': 0}
+    role_changed = False
     if b.get('org_role_id') or b.get('role'):
         org_role, role_err = _resolve_new_role(manager, b)
         if role_err is not None:
             return role_err
         if org_role is not None:
+            role_changed = u.org_role_id != org_role.id
             u.org_role = org_role
             u.role = legacy_role_for_rank(org_role.rank)
         else:  # legacy-only fallback (no seeded positions)
-            u.role = normalize_role(b.get('role'))
+            new_legacy = normalize_role(b.get('role'))
+            role_changed = u.role != new_legacy
+            u.role = new_legacy
+        if role_changed and not any(
+                k in b for k in ('can_manage_team', 'can_view_analytics',
+                                 'ai_assistant_enabled')):
+            # Permissions follow the hierarchy: a new position implies its
+            # capability defaults unless the caller set flags explicitly.
+            caps = (default_capabilities_for_org_role(org_role) if org_role
+                    else default_capabilities_for_role(u.role))
+            u.can_manage_team = caps['can_manage_team']
+            u.can_view_analytics = caps['can_view_analytics']
+            u.ai_assistant_enabled = caps['ai_assistant_enabled']
+            adjustments['caps_reseeded'] = True
+
     if 'reports_to_id' in b:
-        rid = b.get('reports_to_id')
+        raw_rid = b.get('reports_to_id')
+        rid = _as_id(raw_rid) if raw_rid else None
+        if raw_rid and rid is None:
+            return JsonResponse({'error': 'سرپرست انتخابی معتبر نیست.'}, status=400)
         if not rid:
             u.reports_to = manager
         else:
-            # Must be visible to the manager, and not this user or one of
-            # their own descendants (no cycles).
+            # Must be visible to the manager, not this user or one of their own
+            # descendants (no cycles), and strictly higher in the org chart.
             forbidden = subtree_user_ids(u, include_self=True)
             if rid in forbidden or rid not in manageable_user_ids(manager, include_self=True):
                 return JsonResponse({'error': 'سرپرست انتخابی معتبر نیست.'}, status=400)
-            u.reports_to = PortalUser.objects.filter(id=rid).first() or u.reports_to
+            target = (PortalUser.objects.filter(id=rid)
+                      .select_related('org_role').first())
+            if target is None:
+                return JsonResponse({'error': 'سرپرست انتخابی معتبر نیست.'}, status=400)
+            if user_rank(target) >= user_rank(u):
+                return JsonResponse(
+                    {'error': 'سرپرست انتخابی باید جایگاهی بالاتر از جایگاه این عضو در چارت سازمانی داشته باشد.'},
+                    status=400)
+            u.reports_to = target
     if 'active' in b:
         u.active = bool(b['active'])
         if not u.active:
@@ -393,7 +467,19 @@ def team_member_detail_view(request, user_id):
         u.save()
     except IntegrityError:
         return JsonResponse({'error': 'به‌روزرسانی ناموفق بود.'}, status=400)
-    return JsonResponse({'user': _user_dict(u, with_access=True)})
+
+    if role_changed:
+        # A rank change can invalidate existing reporting edges (this member's
+        # own supervisor, or reports who now outrank them) — repair the whole
+        # company chart so it always points strictly upward.
+        adjustments['reparented'] = enforce_org_consistency(u.company_id)
+        u.refresh_from_db()
+
+    _emit_team('team.member.updated', u.company_id, {
+        'user_id': u.id, 'name': u.display_name or u.username,
+        'by': manager.display_name or manager.username})
+    return JsonResponse({'user': _user_dict(u, with_access=True),
+                         'adjustments': adjustments})
 
 
 @csrf_exempt
@@ -414,6 +500,9 @@ def team_member_access_view(request, user_id):
         apply_managed_access(manager, u, accesses)
     except ValueError as e:
         return JsonResponse({'error': str(e)}, status=400)
+    _emit_team('team.member.updated', u.company_id, {
+        'user_id': u.id, 'name': u.display_name or u.username,
+        'by': manager.display_name or manager.username})
     return JsonResponse({'user': _user_dict(u, with_access=True)})
 
 
@@ -457,7 +546,9 @@ def team_org_view(request):
     return JsonResponse({
         'members': members,
         'roles': [_role_dict(r, my_rank) for r in _company_roles(manager)],
-        'me': {'id': manager.id, 'rank': my_rank, 'scope': user_manage_scope(manager)},
+        'me': {'id': manager.id, 'rank': my_rank, 'scope': user_manage_scope(manager),
+               'name': manager.display_name or manager.username,
+               'role_label': display_role_label(manager, dept)},
     })
 
 
@@ -540,6 +631,9 @@ def team_roles_view(request):
         default_accesses=_clean_default_accesses(b.get('default_accesses')),
     )
     ActivityLog.objects.create(user=manager, action='role_add', detail=f'ایجاد نقش: {name}')
+    _emit_team('team.role.created', manager.company_id, {
+        'role_id': role.id, 'name': role.name,
+        'by': manager.display_name or manager.username})
     return JsonResponse({'ok': True, 'role': _role_dict(role, my_rank),
                          'roles': [_role_dict(r, my_rank) for r in _company_roles(manager)]})
 
@@ -578,8 +672,12 @@ def team_role_detail_view(request, role_id):
             role.members.update(org_role=target, role=legacy_role_for_rank(target.rank))
         name = role.name
         role.delete()
+        # Members that moved rank may now clash with their reporting lines.
+        reparented = enforce_org_consistency(manager.company_id) if member_ids else 0
         ActivityLog.objects.create(user=manager, action='role_delete', detail=f'حذف نقش: {name}')
-        return JsonResponse({'ok': True,
+        _emit_team('team.role.deleted', manager.company_id, {
+            'name': name, 'by': manager.display_name or manager.username})
+        return JsonResponse({'ok': True, 'reparented': reparented,
                              'roles': [_role_dict(r, my_rank) for r in _company_roles(manager)]})
 
     if 'name' in b:
@@ -627,6 +725,9 @@ def team_role_detail_view(request, role_id):
             user=manager, action='role_apply',
             detail=f'اعمال دسترسی‌های نقش «{role.name}» به {applied} عضو')
 
+    _emit_team('team.role.updated', manager.company_id, {
+        'role_id': role.id, 'name': role.name,
+        'by': manager.display_name or manager.username})
     return JsonResponse({'ok': True, 'applied': applied,
                          'role': _role_dict(role, my_rank),
                          'roles': [_role_dict(r, my_rank) for r in _company_roles(manager)]})
@@ -667,7 +768,11 @@ def team_roles_reorder_view(request):
         if u.role != legacy:
             u.role = legacy
             u.save(update_fields=['role'])
-    return JsonResponse({'ok': True,
+    # Re-ranking positions can invert existing reporting lines — repair them.
+    reparented = enforce_org_consistency(manager.company_id)
+    _emit_team('team.role.reordered', manager.company_id, {
+        'by': manager.display_name or manager.username})
+    return JsonResponse({'ok': True, 'reparented': reparented,
                          'roles': [_role_dict(r, my_rank) for r in _company_roles(manager)]})
 
 

@@ -322,6 +322,9 @@ class ActivityLog(models.Model):
     category = models.CharField(max_length=40, blank=True, default='', db_index=True)
     car = models.ForeignKey(Car, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     node_title = models.CharField(max_length=300, blank=True, default='')
+    # In-app URL of the viewed content (when applicable) so the recommendation
+    # engine can offer exact "continue reading" / "related section" deep-links.
+    app_url = models.CharField(max_length=600, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -543,3 +546,132 @@ class SystemAlert(models.Model):
 
     def __str__(self):
         return f'[{self.severity}] {self.key}'
+
+
+# ---------------------------------------------------------------------------
+# Event-driven backbone
+# ---------------------------------------------------------------------------
+
+class Event(models.Model):
+    """Append-only event log — the spine of the real-time layer.
+
+    Every meaningful state change (new data detected, pipeline progress, a
+    company request opened/closed, an alert, a login, an activity) appends one
+    row here. The SSE endpoint (api/events.py) tails this table and pushes new
+    rows to connected dashboards, so the admin/manager/user UIs update live
+    without polling their individual REST endpoints.
+
+    Why a DB table and not an in-process bus: the app runs as several gunicorn
+    worker processes plus a DETACHED pipeline worker, and there is no Redis. A
+    shared SQLite table (WAL mode) is the one medium every process can both
+    write to and tail, and it gives durability + ``Last-Event-ID`` resume for
+    free. The autoincrement ``id`` is the monotonic cursor clients resume from.
+
+    ``audience`` scopes delivery; ``company_id`` / ``user_id`` are stored as
+    plain integers (not FKs) so an event outlives the row it describes (a
+    deleted user's login still shows in history) and emitting stays a single
+    cheap INSERT with no integrity lookups.
+    """
+    AUDIENCE_CHOICES = [
+        ('admin', 'admin'),        # platform admins only
+        ('company', 'company'),    # everyone in company_id who may see team data
+        ('user', 'user'),          # a single portal user (user_id)
+        ('all', 'all'),            # broadcast (rare — e.g. global maintenance)
+    ]
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    type = models.CharField(max_length=48, db_index=True)   # dotted, e.g. 'request.updated'
+    audience = models.CharField(max_length=12, choices=AUDIENCE_CHOICES, default='admin')
+    company_id = models.IntegerField(null=True, blank=True, db_index=True)
+    user_id = models.IntegerField(null=True, blank=True, db_index=True)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['id']
+        indexes = [
+            models.Index(fields=['audience', 'id']),
+            models.Index(fields=['company_id', 'id']),
+        ]
+
+    def __str__(self):
+        return f'#{self.id} {self.type} [{self.audience}]'
+
+    def to_sse(self):
+        """The wire shape a client receives (kept small and stable)."""
+        return {
+            'id': self.id,
+            'type': self.type,
+            'ts': self.created_at.isoformat(),
+            'payload': self.payload or {},
+        }
+
+
+class SystemState(models.Model):
+    """Tiny key→JSON store for cross-worker singletons that the (per-process)
+    LocMemCache cannot hold — e.g. the last "pending processing" fingerprint the
+    change-detector compares against so it only emits an event when the real
+    picture actually changes. One row per key."""
+    key = models.CharField(max_length=64, primary_key=True)
+    data = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get(cls, key, default=None):
+        row = cls.objects.filter(key=key).first()
+        return row.data if row else (default if default is not None else {})
+
+    @classmethod
+    def put(cls, key, data):
+        cls.objects.update_or_create(key=key, defaults={'data': data})
+
+
+class CompanyRequest(models.Model):
+    """A request a company manager files for the platform admin to action —
+    e.g. "grant us access to vehicle X", "we need 5 more seats", "enable the AI
+    assistant", or free-form support. The whole lifecycle is event-emitting, so
+    the manager's dashboard reflects admin progress (in_progress → completed) in
+    real time, and the admin's dashboard shows new requests the moment they land.
+    """
+    KIND_CHOICES = [
+        ('vehicle_access', 'درخواست دسترسی به خودرو'),
+        ('seats', 'افزایش ظرفیت کاربران'),
+        ('ai_assistant', 'فعال‌سازی دستیار هوشمند'),
+        ('documents', 'افزودن بسته مستندات'),
+        ('support', 'پشتیبانی'),
+        ('other', 'سایر'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'در انتظار بررسی'),
+        ('in_progress', 'در حال انجام'),
+        ('completed', 'انجام شد'),
+        ('rejected', 'رد شد'),
+    ]
+    PRIORITY_CHOICES = [('low', 'کم'), ('normal', 'عادی'), ('high', 'زیاد')]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='requests')
+    created_by = models.ForeignKey(PortalUser, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name='requests_made')
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='support')
+    subject = models.CharField(max_length=200)
+    body = models.TextField(blank=True, default='')
+    # Structured ask (e.g. {"car_ids":[3,4], "documents":["manual"]} or {"seats":5}).
+    payload = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', db_index=True)
+    priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default='normal')
+    admin_note = models.TextField(blank=True, default='')     # admin's reply / resolution
+    handled_by = models.CharField(max_length=100, blank=True, default='')   # admin username
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    OPEN_STATUSES = ('pending', 'in_progress')
+    CLOSED_STATUSES = ('completed', 'rejected')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['status', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'req #{self.id} {self.kind} [{self.status}]'

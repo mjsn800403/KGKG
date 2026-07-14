@@ -198,9 +198,20 @@ def apply_managed_access(manager, employee, accesses):
             if car_id in seen or car_id not in grantable:
                 continue
             allowed = grantable[car_id]
-            docs = [d for d in (a.get('documents') or []) if d in allowed]
-            if not docs:
-                docs = sorted(allowed)  # never store empty (=all) beyond the ceiling
+            requested = a.get('documents')
+            if requested:
+                # An explicit layer list: clamp to what the manager holds. If the
+                # request names ONLY layers the manager lacks, the intersection is
+                # empty — skip the car entirely rather than silently upgrading the
+                # employee to every layer the manager happens to hold.
+                docs = [d for d in requested if d in allowed]
+                if not docs:
+                    continue
+            else:
+                # Omitted/empty documents == "grant this whole car" — default to
+                # the manager's full ceiling (never store empty, which reads as
+                # "all packages" and would exceed that ceiling).
+                docs = sorted(allowed)
             UserCarAccess.objects.create(
                 user=employee, car_id=car_id, documents=docs,
                 admin_granted=(car_id not in company_car_ids))
@@ -392,6 +403,60 @@ def subtree_user_ids(manager, include_self=False):
     if include_self:
         ids.add(manager.id)
     return ids
+
+
+def find_valid_supervisor(start, child_rank, company_id, exclude_ids=()):
+    """Nearest user at/above ``start`` in the reporting chain who strictly
+    outranks ``child_rank`` (may supervise a member of that rank).
+
+    Walks the explicit ``reports_to`` chain upward, cycle-safe. Returns None
+    when the chain holds nobody suitable.
+    """
+    seen = set()
+    cur = start
+    while cur is not None and cur.id not in seen:
+        seen.add(cur.id)
+        if (cur.company_id == company_id and cur.id not in exclude_ids
+                and cur.active and user_rank(cur) < child_rank):
+            return cur
+        cur = cur.reports_to
+    return None
+
+
+def enforce_org_consistency(company_id):
+    """Repair every reporting edge that no longer points strictly upward.
+
+    The org-chart invariant is: a user's supervisor must hold a strictly
+    higher position (smaller rank number). Position changes, re-ranking and
+    role deletion can all invalidate existing edges; this pass re-parents each
+    violating user to the nearest valid ancestor (walking their old chain
+    upward), falling back to the company's top-ranked active user. Returns the
+    number of users re-parented.
+    """
+    from .models import PortalUser  # lazy: models imports this module
+    users = list(PortalUser.objects.filter(company_id=company_id)
+                 .select_related('org_role', 'reports_to', 'reports_to__org_role'))
+    by_id = {u.id: u for u in users}
+    top = min((u for u in users if u.active), key=user_rank, default=None)
+    fixed = 0
+    for u in users:
+        parent = by_id.get(u.reports_to_id)
+        if parent is None:
+            continue
+        my_rank = user_rank(u)
+        if user_rank(parent) < my_rank and parent.id != u.id:
+            continue
+        new_parent = find_valid_supervisor(
+            parent, my_rank, company_id, exclude_ids={u.id})
+        if new_parent is None and top is not None and top.id != u.id \
+                and user_rank(top) < my_rank:
+            new_parent = top
+        if new_parent is not None and new_parent.id == u.reports_to_id:
+            continue
+        u.reports_to = new_parent
+        u.save(update_fields=['reports_to'])
+        fixed += 1
+    return fixed
 
 
 def manager_can_target(actor, target):

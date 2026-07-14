@@ -45,22 +45,35 @@ def _resolve_car(stem, brand=None, year=None):
     return qs.filter(car_name__iexact=stem).first()
 
 
+def _user_allowed_stems(user):
+    """The set of car_stems ``user`` may open — the authorization allow-list the
+    RAG layer cites within. ``car_stem`` equals ``Car.car_name`` in the index
+    (verified against the occurrences table), so we map the user's effective car
+    grants straight to their names."""
+    from .models import Car
+    car_ids = list(user.car_accesses.values_list('car_id', flat=True))
+    if not car_ids:
+        return set()
+    return {c.car_name for c in Car.objects.filter(id__in=car_ids)}
+
+
 def _guard_car_content(request, stem, brand=None, year=None):
     """Auth + per-car access gate for the manual-content endpoints (assist /
-    diagnose / search / car content). Returns (user, None) when allowed, or
-    (None, JsonResponse) with the right 401/403 to return.
+    diagnose / search / car content). Returns (user, allowed_stems, None) when
+    allowed, or (None, None, JsonResponse) with the right 401/403 to return.
 
-    A resolvable car is access-checked; a query with no resolvable car (the
-    general, car-less assistant) requires only a valid login. The RAG index is
-    small (a handful of indexed vehicles); scoping the car-less path to the
-    user's own vehicles is a follow-up."""
+    A resolvable car is access-checked directly. For a query with no resolvable
+    car (the general, car-less assistant) ``allowed_stems`` is the user's own
+    grant set — passed to the RAG layer so it cites ONLY vehicles the user may
+    open, closing the cross-vehicle content leak. A user with no grants gets an
+    empty allow-list (no grounded content, not the whole fleet)."""
     user = portal_user(request)
     if not user:
-        return None, _unauthorized()
+        return None, None, _unauthorized()
     car = _resolve_car(stem, brand=brand, year=year)
     if car is not None and not user_can_open_car(user, car):
-        return None, _forbidden_car()
-    return user, None
+        return None, None, _forbidden_car()
+    return user, _user_allowed_stems(user), None
 
 def brands_list_view(request):
     """GET / -> distinct list of brand names available across all cars."""
@@ -86,10 +99,7 @@ def assist_view(request):
     AI assistant uses this as grounding; it is NOT the language generator.
     """
     if request.method == 'POST':
-        try:
-            body = json.loads(request.body or '{}')
-        except (ValueError, TypeError):
-            body = {}
+        body = _post_body(request)
         query = (body.get('query') or body.get('q') or '').strip()
         brand = body.get('brand') or None
         model = body.get('model') or None
@@ -103,13 +113,14 @@ def assist_view(request):
     if not query:
         return JsonResponse({'error': 'query is required'}, status=400)
 
-    _user, deny = _guard_car_content(request, car or model, brand=brand)
+    _user, allowed_stems, deny = _guard_car_content(request, car or model, brand=brand)
     if deny:
         return deny
 
     try:
         from .rag import service
-        result = service.assist(query, brand=brand, model=model, car_stem=car)
+        result = service.assist(query, brand=brand, model=model, car_stem=car,
+                                allowed_cars=allowed_stems)
         return JsonResponse(result)
     except FileNotFoundError as e:
         return JsonResponse(
@@ -131,10 +142,7 @@ def diagnose_view(request):
     All processing happens here; the language model only phrases the result.
     """
     if request.method == 'POST':
-        try:
-            body = json.loads(request.body or '{}')
-        except (ValueError, TypeError):
-            body = {}
+        body = _post_body(request)
         query = (body.get('query') or body.get('q') or '').strip()
         brand = body.get('brand') or None
         model = body.get('model') or None
@@ -148,13 +156,14 @@ def diagnose_view(request):
     if not query:
         return JsonResponse({'error': 'query is required'}, status=400)
 
-    _user, deny = _guard_car_content(request, car or model, brand=brand)
+    _user, allowed_stems, deny = _guard_car_content(request, car or model, brand=brand)
     if deny:
         return deny
 
     try:
         from .rag import service
-        result = service.diagnose(query, brand=brand, model=model, car_stem=car)
+        result = service.diagnose(query, brand=brand, model=model, car_stem=car,
+                                  allowed_cars=allowed_stems)
         return JsonResponse(result)
     except FileNotFoundError as e:
         return JsonResponse(
@@ -174,10 +183,7 @@ def assist_feedback_view(request):
         return JsonResponse({'error': 'POST only'}, status=405)
     if not portal_user(request):
         return _unauthorized()
-    try:
-        body = json.loads(request.body or '{}')
-    except (ValueError, TypeError):
-        body = {}
+    body = _post_body(request)
     try:
         from .rag import feedback
         feedback.log_click(body.get('query') or '', body.get('blob_id'), body.get('app_url') or '')
@@ -204,6 +210,8 @@ def purchase_request_view(request):
     try:
         body = json.loads(request.body or '{}')
     except (ValueError, TypeError):
+        return JsonResponse({'error': 'بدنه درخواست نامعتبر است.'}, status=400)
+    if not isinstance(body, dict):
         return JsonResponse({'error': 'بدنه درخواست نامعتبر است.'}, status=400)
 
     def _clean(v, limit):
@@ -274,10 +282,12 @@ def purchase_request_view(request):
 
 
 def _post_body(request):
+    """Parsed JSON body, always a dict (non-object JSON collapses to {})."""
     try:
-        return json.loads(request.body or '{}')
+        data = json.loads(request.body or '{}')
     except (ValueError, TypeError):
         return {}
+    return data if isinstance(data, dict) else {}
 
 
 @csrf_exempt
@@ -377,7 +387,7 @@ def search_view(request):
     car = request.GET.get('car') or request.GET.get('car_stem') or None
     if not q:
         return JsonResponse([], safe=False)
-    _user, deny = _guard_car_content(request, car or model, brand=brand)
+    _user, allowed_stems, deny = _guard_car_content(request, car or model, brand=brand)
     if deny:
         return deny
     try:
@@ -387,11 +397,14 @@ def search_view(request):
     limit = max(1, min(limit, 50))
     try:
         from .rag import service
-        results = service.search(q, brand=brand, model=model, car_stem=car, limit=limit)
+        results = service.search(q, brand=brand, model=model, car_stem=car, limit=limit,
+                                 allowed_cars=allowed_stems)
         return JsonResponse(results, safe=False)
     except FileNotFoundError:
         # Index not built yet -> degrade gracefully to the old keyword search so
-        # the box keeps working (English-only, but better than a hard error).
+        # the box keeps working (English-only, but better than a hard error). The
+        # LIKE fallback resolves a single car and is gated above, so it needs no
+        # extra allow-list (a car-less LIKE search returns nothing).
         try:
             return _search_like_fallback(brand, model, car, q, limit)
         except Exception as e:
@@ -544,8 +557,14 @@ def car_view(request, brand_name=None, year=None, model_name=None):
 
     # Case 2: Brand and year. Public catalog, same rationale as Case 1.
     if brand_name and year and not model_name:
+        # A non-numeric year segment (legacy 'unknown' links, junk) must yield
+        # an empty listing, not a ValueError -> 500.
+        try:
+            year_val = int(year)
+        except (TypeError, ValueError):
+            return JsonResponse([], safe=False)
         cars = [
-            c for c in Car.objects.filter(brand_name__iexact=brand_name, year=year).order_by('car_name')
+            c for c in Car.objects.filter(brand_name__iexact=brand_name, year=year_val).order_by('car_name')
             if car_db_ready(c)
         ]
         return JsonResponse([
@@ -556,12 +575,21 @@ def car_view(request, brand_name=None, year=None, model_name=None):
     # Case 3: Brand, year, and car_name
     if brand_name and year and model_name:
         try:
-            # Get the car from main db
-            car = Car.objects.get(
-                brand_name__iexact=brand_name,
-                year=year,
-                car_name__iexact=model_name
-            )
+            # Get the car from main db. Resolve the year TOLERANTLY: links
+            # arrive from several generations of generated URLs (RAG/diag
+            # citation builders, old chat transcripts, bookmarks), and a stale
+            # or placeholder year segment ('unknown') must not break an
+            # otherwise unambiguous /brand/.../car_name link — car_name is the
+            # real identifier. Exact (brand, year, name) first; any year
+            # mismatch falls back to (brand, name).
+            base_qs = Car.objects.filter(
+                brand_name__iexact=brand_name, car_name__iexact=model_name)
+            try:
+                car = base_qs.get(year=int(year))
+            except (ValueError, TypeError, Car.DoesNotExist):
+                car = base_qs.order_by('-year').first()
+            if car is None:
+                raise Car.DoesNotExist
 
             # A specific vehicle's manual is paid content: require a logged-in
             # portal user who has this car in their effective grants — checked

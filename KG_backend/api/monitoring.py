@@ -291,6 +291,14 @@ def _raise_alert(key, severity, message, context=None):
     else:
         SystemAlert.objects.create(key=key, severity=severity,
                                    message=message, context=context or {})
+        # New alert (not a re-touch of an ongoing one) -> push to admin dashboards.
+        try:
+            from . import events
+            events.emit('alert.opened',
+                        {'key': key, 'severity': severity, 'message': message,
+                         'context': context or {}}, audience='admin')
+        except Exception:
+            pass
     return key
 
 
@@ -373,6 +381,12 @@ def evaluate_alerts():
             alert.save(update_fields=['is_open', 'resolved_at'])
             resolved.append(alert.key)
 
+    if resolved:
+        try:
+            from . import events
+            events.emit('alert.resolved', {'keys': resolved}, audience='admin')
+        except Exception:
+            pass
     return {'open': opened, 'resolved': resolved}
 
 

@@ -26,7 +26,7 @@ from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 from django.utils import timezone
 
-from api import dataquality, monitoring, pipeline
+from api import dataquality, events, monitoring, pipeline
 from api.models import PipelineSettings, ProcessingJob
 
 
@@ -75,6 +75,20 @@ class Runner:
     # ---- persisted state --------------------------------------------------
     def save(self, **fields):
         ProcessingJob.objects.filter(id=self.job.id).update(**fields)
+
+    # ---- real-time events -------------------------------------------------
+    def emit(self, etype, force=False):
+        """Push a pipeline event to the admin dashboard. Progress events are
+        throttled to whole-percent moves so the stream carries signal, not spam;
+        lifecycle events (stage change, completion) always send (force=True)."""
+        try:
+            pct = (self.job.progress or {}).get('overall_pct', 0)
+            if not force and abs(pct - getattr(self, '_last_emit_pct', -99)) < 2.0:
+                return
+            self._last_emit_pct = pct
+            events.emit(etype, {'job': pipeline.job_dict(self.job)}, audience='admin')
+        except Exception:
+            pass
 
     def persist_progress(self):
         self.job.progress['updated_at'] = timezone.now().isoformat()
@@ -139,6 +153,7 @@ class Runner:
             prog['embed_total'] = total
         self.update_overall()
         self.persist_progress()
+        self.emit('pipeline.progress')          # throttled to ~2% moves
         # Cooperative cancel (the admin pressed stop but SIGTERM didn't land).
         row = ProcessingJob.objects.filter(id=self.job.id).values_list(
             'status', flat=True).first()
@@ -160,6 +175,7 @@ class Runner:
         s['started_at'] = timezone.now().isoformat()
         self.job.progress['stage'] = key
         self.persist_progress()
+        self.emit('pipeline.progress', force=True)   # stage boundary: always send
         try:
             fn(s)
             s['status'] = 'done'
@@ -347,6 +363,17 @@ class Runner:
                   error='; '.join(failed_stages) if failed_stages else '')
         self.log(f'worker finished: {final}')
         self.save(log_tail=self._log_tail())
+
+        # Terminal event + refreshed "pending processing" picture so the admin
+        # dashboard flips from "processing…" to the new clean/partial state live.
+        self.job.refresh_from_db()
+        _terminal = {'done': 'pipeline.completed', 'failed': 'pipeline.failed',
+                     'paused': 'pipeline.paused'}.get(final, 'pipeline.progress')
+        self.emit(_terminal, force=True)
+        try:
+            events.detect_and_emit()
+        except Exception:
+            pass
 
 
 class Command(BaseCommand):

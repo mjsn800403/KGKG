@@ -39,8 +39,18 @@ def warmup():
     embed.warmup()
 
 
-def _key(query, brand, model, car_stem):
-    return ((query or '').strip().lower(), brand or '', model or '', car_stem or '')
+def _acs(allowed_cars):
+    """Canonical, hashable form of a car allow-list for cache keys/scopes.
+
+    ``None`` (unrestricted) and a concrete set must never collide — a restricted
+    caller must not be served an unrestricted caller's cached answer, and vice
+    versa. Returns None for unrestricted, else a sorted tuple."""
+    return None if allowed_cars is None else tuple(sorted(allowed_cars))
+
+
+def _key(query, brand, model, car_stem, allowed_cars=None):
+    return ((query or '').strip().lower(), brand or '', model or '', car_stem or '',
+            _acs(allowed_cars))
 
 
 def _cache_get(key):
@@ -92,16 +102,20 @@ def _sem_cache_put(qvec, scope, result):
         _SEM_CACHE.append((qvec, scope, result))
 
 
-def assist(query, brand=None, model=None, car_stem=None, k=None):
+def assist(query, brand=None, model=None, car_stem=None, k=None, allowed_cars=None):
     """Cached, thread-safe assist. Same return shape as retrieve.assist, plus an
-    exact-key cache, a semantic (paraphrase) cache, and per-request telemetry."""
-    key = _key(query, brand, model, car_stem)
+    exact-key cache, a semantic (paraphrase) cache, and per-request telemetry.
+
+    ``allowed_cars`` (set of car_stems or None) is the vehicle authorization
+    boundary; it is part of the cache identity so a restricted caller can never
+    be served a broader caller's cached answer."""
+    key = _key(query, brand, model, car_stem, allowed_cars)
     cached = _cache_get(key)
     if cached is not None:
         feedback.log_query(query, cached.get('scope'), cached, cached=True)
         return cached
 
-    scope = (brand or '', model or '', car_stem or '')
+    scope = (brand or '', model or '', car_stem or '', _acs(allowed_cars))
     t0 = time.monotonic()
     with _LOCK:
         # another thread may have populated it while we waited for the lock
@@ -121,7 +135,7 @@ def assist(query, brand=None, model=None, car_stem=None, k=None):
             feedback.log_query(query, sem.get('scope'), sem, cached=True)
             return sem
         result = retrieve.assist(query, brand=brand, model=model, car_stem=car_stem,
-                                 k=k, qvec=qvec)
+                                 k=k, qvec=qvec, allowed_cars=allowed_cars)
         if config.RERANK and result.get('hits'):
             try:
                 _rerank(query, result)
@@ -136,12 +150,18 @@ def assist(query, brand=None, model=None, car_stem=None, k=None):
     return result
 
 
-def diagnose(query, brand=None, model=None, car_stem=None, k=None):
+def diagnose(query, brand=None, model=None, car_stem=None, k=None, allowed_cars=None):
     """Cached, thread-safe diagnostic rule engine. Same lock as assist (MPS/torch
     is not thread-safe; embedding the query is the only GPU step). Returns the
-    structured diagnosis from diag.diagnose."""
+    structured diagnosis from diag.diagnose.
+
+    The engine is inherently single-car (a car-less query resolves no sidecar and
+    returns only an ``available_cars`` name hint). When ``allowed_cars`` is given,
+    that hint is filtered to the caller's own vehicles so the fleet roster is not
+    disclosed. ``allowed_cars`` is part of the cache identity for the same reason
+    as in ``assist``."""
     from . import diag
-    key = (_key(query, brand, model, car_stem))
+    key = _key(query, brand, model, car_stem, allowed_cars)
     item = _DIAG_CACHE.get(key)
     if item and item[0] >= time.monotonic():
         _DIAG_CACHE.move_to_end(key)
@@ -152,7 +172,12 @@ def diagnose(query, brand=None, model=None, car_stem=None, k=None):
         if item and item[0] >= time.monotonic():
             _DIAG_CACHE.move_to_end(key)
             return item[1]
-        result = diag.diagnose(query, brand=brand, model=model, car_stem=car_stem, k=k)
+        result = diag.diagnose(query, brand=brand, model=model, car_stem=car_stem,
+                               k=k, allowed_cars=allowed_cars)
+        if allowed_cars is not None and isinstance(result, dict) and 'available_cars' in result:
+            result = dict(result)
+            result['available_cars'] = [c for c in result['available_cars']
+                                        if c in allowed_cars]
         _DIAG_CACHE[key] = (time.monotonic() + config.DIAG_CACHE_TTL, result)
         _DIAG_CACHE.move_to_end(key)
         while len(_DIAG_CACHE) > config.CACHE_MAX:
@@ -160,7 +185,7 @@ def diagnose(query, brand=None, model=None, car_stem=None, k=None):
     return result
 
 
-def search(query, brand=None, model=None, car_stem=None, limit=30):
+def search(query, brand=None, model=None, car_stem=None, limit=30, allowed_cars=None):
     """Cross-lingual site search, scoped to one car. Rides the same retriever the
     assistant uses (so a Persian query hits the English manual), then maps each
     hit down to the lightweight navigation shape the search UI consumes and
@@ -172,7 +197,7 @@ def search(query, brand=None, model=None, car_stem=None, limit=30):
     fall back to keyword search."""
     if not (query or '').strip():
         return []
-    key = _key(query, brand, model, car_stem) + (limit,)
+    key = _key(query, brand, model, car_stem, allowed_cars) + (limit,)
     item = _SEARCH_CACHE.get(key)
     if item and item[0] >= time.monotonic():
         _SEARCH_CACHE.move_to_end(key)
@@ -187,7 +212,7 @@ def search(query, brand=None, model=None, car_stem=None, limit=30):
         # trigger the view's LIKE fallback) BEFORE embedding, so we let it embed
         # internally rather than loading the model on the fallback path.
         res = retrieve.assist(query, brand=brand, model=model, car_stem=car_stem,
-                              k=limit)
+                              k=limit, allowed_cars=allowed_cars)
         out = []
         for h in res.get('hits', []):
             # per-car search: drop hits whose chosen occurrence is another car's

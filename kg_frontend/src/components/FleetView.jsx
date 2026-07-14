@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { fetchGrantedFleet, getPortalToken, logActivity, portalRefreshMe } from '../utils/api';
+import RecommendationsWidget from './RecommendationsWidget';
 
 const MotionLink = motion.create(Link);
 
@@ -113,6 +114,7 @@ export default function FleetView() {
 
   return (
     <div ref={rootRef}>
+      {cars.length > 0 && <RecommendationsWidget />}
       <div className="picker-row">
         <div className={`dropdown${open === 'brand' ? ' open' : ''}`}>
           <div className="dd-btn" onClick={() => toggle('brand')}>
