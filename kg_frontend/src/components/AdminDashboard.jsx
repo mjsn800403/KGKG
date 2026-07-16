@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import Icon from './Icon';
 import { adminApi } from '../utils/api';
 import useEventStream from '../utils/useEventStream';
+import { reportSignal } from '../guidance/signals';
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -61,6 +62,17 @@ export default function AdminDashboard({ go }) {
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, [load]);
+
+  // Feed the contextual-hint engine: unprocessed vehicle data → "run processing".
+  useEffect(() => {
+    const p = d?.processing?.pending;
+    if (!p) return;
+    const c = p.counts || {};
+    const pending = p.has_work
+      ? Math.max(1, (c.catalog || 0) + (c.rag_ingest || 0) + (c.diag || 0))
+      : 0;
+    reportSignal('admin.pendingWork', pending);
+  }, [d]);
 
   const pulse = useCallback((key) => {
     setFlash((f) => ({ ...f, [key]: Date.now() }));

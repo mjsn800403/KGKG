@@ -2,7 +2,7 @@
 import './globals.css';
 import BackgroundFX from '@/components/BackgroundFX';
 import Modal from '@/components/Modal';
-import SiteTour from '@/components/SiteTour';
+import Guidance from '@/guidance';
 
 export const metadata = {
   title: 'KGtechvault | پلتفرم مستندات فنی خودرو',
@@ -37,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
         {children}
         <Modal />
-        <SiteTour />
+        <Guidance />
       </body>
     </html>
   );
