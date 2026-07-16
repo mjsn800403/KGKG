@@ -177,6 +177,51 @@ export function tourById(id) {
 const REVIEWED = '2026-07-15';
 
 export const ARTICLES = [
+  // ---- Visitor (public pages) ---------------------------------------------
+  {
+    id: 'about-platform', category: 'start', roles: [ROLES.VISITOR],
+    surfaces: [{ path: '/' }], tourId: 'visitor-landing', reviewed: REVIEWED,
+    title: 'KGtechvault چیست؟', keywords: ['درباره', 'معرفی', 'سامانه', 'مستندات', 'خودرو'],
+    summary: 'سامانهٔ مستندات فنی رسمی خودرو برای تعمیرگاه‌ها و شرکت‌های خدمات پس از فروش.',
+    body: [
+      'KGtechvault دسترسی به مستندات فنی رسمی خودرو (تویوتا و لکسوس) را در چهار لایه فراهم می‌کند: فهرست قطعات، منوال تعمیر، زمان استاندارد و ابزار مخصوص.',
+      'هر شرکت اشتراک خود را تهیه می‌کند و برای کارکنانش دسترسی صادر می‌شود؛ سپس تکنسین‌ها می‌توانند مستندات را مرور کنند و از دستیار هوشمند برای پرسش‌های تعمیراتی کمک بگیرند.',
+    ],
+    docRef: 'docs/01-overview.md#what-kgtechvault-is',
+  },
+  {
+    id: 'check-coverage', category: 'start', roles: [ROLES.VISITOR],
+    surfaces: [{ path: '/' }], reviewed: REVIEWED,
+    title: 'بررسی پوشش خودرو', keywords: ['پوشش', 'vin', 'شاسی', 'خودرو', 'موجود'],
+    summary: 'ببینید برای خودروی شما چه مستنداتی موجود است.',
+    body: [
+      'در بخش «بررسی پوشش خودرو» صفحهٔ اصلی، شمارهٔ شاسی (VIN) را وارد کنید تا میزان پوشش مستندات فنی آن خودرو مشخص شود.',
+      'اگر خودروی موردنظر در فهرست نبود، از راه‌های تماس پایین صفحه با کارشناسان ما در ارتباط باشید تا برای گردآوری آن اقدام شود.',
+    ],
+    docRef: 'docs/01-overview.md#core-user-flows',
+  },
+  {
+    id: 'get-access', category: 'start', roles: [ROLES.VISITOR],
+    surfaces: [{ path: '/' }, { path: '/purchase' }], reviewed: REVIEWED,
+    title: 'چطور دسترسی بگیرم؟', keywords: ['خرید', 'سفارش', 'اشتراک', 'دسترسی', 'ثبت‌نام'],
+    summary: 'روند تهیهٔ اشتراک برای شرکت شما.',
+    body: [
+      'برای تهیهٔ مستندات، از صفحهٔ «سفارش / خرید» درخواست خود را ثبت کنید: خودرو، لایه‌های مستند موردنیاز، مشخصات شرکت و تعداد کاربران هر نقش را وارد کنید.',
+      'پس از بررسی درخواست توسط کارشناسان ما، شرکت شما تعریف و برای کارکنان حساب کاربری صادر می‌شود. سپس با نام کاربری/رمز یا لینک دعوت وارد می‌شوید.',
+    ],
+    docRef: 'docs/01-overview.md#core-user-flows',
+  },
+  {
+    id: 'visitor-login', category: 'start', roles: [ROLES.VISITOR],
+    surfaces: [{ path: '/' }], reviewed: REVIEWED,
+    title: 'ورود به حساب کاربری', keywords: ['ورود', 'لاگین', 'حساب', 'رمز', 'دعوت'],
+    summary: 'با نام کاربری یا ایمیل خود وارد شوید.',
+    body: [
+      'اگر شرکت شما مشترک است و برایتان حساب صادر شده، از دکمهٔ «ورود» با نام کاربری یا ایمیل و رمز خود وارد شوید.',
+      'اگر با لینک دعوت آمده‌اید، ابتدا دعوت را بپذیرید و رمز خود را تعیین کنید. رمز را فراموش کرده‌اید؟ با مدیر تیم یا پشتیبانی تماس بگیرید (بازنشانی خودکار هنوز فعال نیست).',
+    ],
+    docRef: 'docs/06-permissions-rbac.md#61-identity-two-separate-auth-systems',
+  },
   // ---- Getting started -----------------------------------------------------
   {
     id: 'welcome', category: 'start', roles: [ROLES.USER, ROLES.ANALYST, ROLES.MANAGER],
