@@ -112,7 +112,11 @@ export default function HelpCenter({
               )}
 
               {grouped.length === 0 && (
-                <div className="guide-empty">نتیجه‌ای یافت نشد. عبارت دیگری را امتحان کنید.</div>
+                <div className="guide-empty">
+                  {q
+                    ? 'نتیجه‌ای یافت نشد. عبارت دیگری را امتحان کنید.'
+                    : 'برای این بخش راهنمای مستقیمی ثبت نشده است. از راهنمای تصویری یا دکمه‌های همین صفحه استفاده کنید.'}
+                </div>
               )}
 
               {grouped.map((cat) => (
