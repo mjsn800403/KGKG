@@ -1510,3 +1510,182 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 .role-assign-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:10px 0 4px}
 .role-assign-existing{display:flex;gap:8px;flex:1;min-width:260px}
 .role-assign-existing select{flex:1;min-width:0}
+
+
+/* ======================================================================== */
+/* Guidance layer — tours, help center, contextual hints.                    */
+/* Reuses the app design tokens (var(--surface|border|accent|text|…)) so it   */
+/* themes light/dark automatically. Namespaced `guide-*` to avoid collisions. */
+/* ======================================================================== */
+
+/* ── Always-available help button (FAB) ─────────────────────────────────── */
+.guide-fab{
+  position:fixed;bottom:22px;left:22px;z-index:60;width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;
+  display:grid;place-items:center;box-shadow:var(--shadow);transition:.25s;
+}
+.guide-fab:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-2px)}
+.guide-fab svg{width:20px;height:20px}
+.guide-fab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── Help center: scrim + slide-over panel ──────────────────────────────── */
+.guide-help-scrim{
+  position:fixed;inset:0;z-index:340;background:rgba(0,0,0,.42);
+  display:flex;justify-content:flex-start;               /* panel hugs the left edge */
+  animation:guideFade .2s ease;
+}
+.guide-help-panel{
+  width:min(400px,100vw);height:100%;background:var(--surface);
+  border-inline-end:1px solid var(--border);box-shadow:var(--shadow);
+  display:flex;flex-direction:column;animation:guideSlideIn .28s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes guideFade{from{opacity:0}to{opacity:1}}
+@keyframes guideSlideIn{from{transform:translateX(-24px);opacity:.4}to{transform:none;opacity:1}}
+
+.guide-help-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px;border-bottom:1px solid var(--border-soft);flex:none;
+}
+.ghh-title{display:flex;align-items:center;gap:9px;font-family:var(--fa);font-weight:700;font-size:16px}
+.ghh-title svg{width:19px;height:19px;color:var(--accent)}
+.guide-icon-btn{
+  width:34px;height:34px;border-radius:8px;border:1px solid transparent;background:none;
+  color:var(--text-dim);cursor:pointer;display:grid;place-items:center;transition:.2s;
+}
+.guide-icon-btn:hover{background:var(--bg-2);color:var(--accent)}
+
+.guide-search{
+  display:flex;align-items:center;gap:8px;margin:14px 16px 4px;padding:9px 12px;
+  background:var(--bg-2);border:1px solid var(--border);border-radius:10px;
+}
+.guide-search svg{width:16px;height:16px;color:var(--text-dim);flex:none}
+.guide-search input{
+  flex:1;background:none;border:none;outline:none;color:var(--text);
+  font-family:var(--fa);font-size:14px;min-width:0;
+}
+.guide-search-clear{background:none;border:none;color:var(--text-dim);cursor:pointer;display:grid;place-items:center}
+.guide-search-clear svg{width:14px;height:14px}
+
+.guide-help-body{flex:1;overflow-y:auto;padding:10px 16px 20px}
+.guide-sec-label{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--text-dim);
+  text-transform:uppercase;margin:16px 2px 8px;
+}
+.guide-ctx-card{
+  display:block;width:100%;text-align:start;background:var(--bg-2);
+  border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;cursor:pointer;
+  transition:.2s;
+}
+.guide-ctx-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.gcc-title{font-family:var(--fa);font-weight:600;font-size:13.5px;color:var(--text);margin-bottom:3px}
+.gcc-sum{font-size:12px;color:var(--text-dim);line-height:1.7}
+
+.guide-art-list{list-style:none;margin:0;padding:0}
+.guide-art-row{
+  display:flex;align-items:center;justify-content:space-between;width:100%;text-align:start;
+  background:none;border:none;border-bottom:1px solid var(--border-soft);
+  padding:11px 2px;cursor:pointer;color:var(--text);font-family:var(--fa);font-size:13.5px;transition:.15s;
+}
+.guide-art-row:hover{color:var(--accent);padding-inline-start:6px}
+.gar-chev{width:15px;height:15px;color:var(--text-dim);transform:scaleX(-1)} /* RTL: point inward */
+.guide-art-row:hover .gar-chev{color:var(--accent)}
+.guide-empty{padding:30px 6px;text-align:center;color:var(--text-dim);font-size:13px}
+
+/* article detail */
+.guide-article{padding-top:14px}
+.guide-back{
+  display:inline-flex;align-items:center;gap:5px;background:none;border:none;cursor:pointer;
+  color:var(--text-dim);font-family:var(--fa);font-size:12.5px;margin-bottom:10px;padding:4px 0;
+}
+.guide-back:hover{color:var(--accent)}
+.guide-back svg{width:15px;height:15px}
+.guide-art-h{font-family:var(--fa);font-size:18px;font-weight:700;margin:2px 0 8px;color:var(--text)}
+.guide-art-sum{font-size:13.5px;color:var(--text-dim);line-height:1.9;margin-bottom:12px;
+  padding-bottom:12px;border-bottom:1px solid var(--border-soft)}
+.guide-art-p{font-size:13.5px;color:var(--text);line-height:2;margin-bottom:12px}
+.guide-art-steps{margin:6px 18px 14px;padding:0;font-size:13.5px;color:var(--text);line-height:2}
+.guide-art-steps li{margin-bottom:6px}
+.guide-tour-launch{margin:6px 0 14px;display:inline-flex;align-items:center;gap:7px}
+.guide-tour-launch svg{width:16px;height:16px}
+.guide-docref{
+  margin-top:6px;padding:8px 10px;background:var(--bg-2);border-radius:8px;
+  font-family:var(--mono);font-size:11px;color:var(--text-dim);word-break:break-all;
+}
+.guide-help-foot{
+  flex:none;padding:10px 18px;border-top:1px solid var(--border-soft);
+  font-size:11.5px;color:var(--text-dim);
+}
+.guide-help-foot kbd{
+  font-family:var(--mono);background:var(--bg-2);border:1px solid var(--border);
+  border-radius:5px;padding:1px 6px;font-size:11px;color:var(--text);
+}
+
+/* ── Guided tour (spotlight) ────────────────────────────────────────────── */
+.guide-tour-layer{position:fixed;inset:0;z-index:320;pointer-events:none}
+.guide-tour-tip,.guide-tour-nav,.guide-tour-nav .btn,.guide-tour-skip{pointer-events:auto}
+.guide-tour-ring{
+  position:absolute;border:2px solid var(--accent);border-radius:12px;pointer-events:none;
+  box-shadow:0 0 0 100vmax rgba(0,0,0,.62),0 0 24px var(--accent-glow);
+  transition:top .4s cubic-bezier(.2,.9,.3,1),left .4s cubic-bezier(.2,.9,.3,1),
+             width .4s cubic-bezier(.2,.9,.3,1),height .4s cubic-bezier(.2,.9,.3,1);
+}
+.guide-tour-tip{
+  position:absolute;width:min(340px,calc(100vw - 32px));background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow);
+  transition:top .4s cubic-bezier(.2,.9,.3,1),left .4s cubic-bezier(.2,.9,.3,1);
+}
+.guide-tour-tip .gt-step{font-family:var(--mono);font-size:10.5px;color:var(--accent);letter-spacing:.14em;margin-bottom:8px}
+.guide-tour-tip h5{font-size:16px;font-weight:700;margin-bottom:8px;font-family:var(--fa)}
+.guide-tour-tip p{font-size:13.5px;color:var(--text-dim);line-height:1.9;margin-bottom:16px}
+.guide-tour-nav{display:flex;align-items:center;gap:10px}
+.guide-tour-nav .btn{padding:8px 18px;font-size:13px}
+.guide-tour-skip{margin-inline-start:auto;background:none;border:none;color:var(--text-faint,var(--text-dim));font-size:12.5px;cursor:pointer;font-family:var(--fa)}
+.guide-tour-skip:hover{color:var(--accent)}
+
+/* ── Contextual hint card ───────────────────────────────────────────────── */
+.guide-hint{
+  position:fixed;bottom:78px;left:22px;z-index:59;width:min(340px,calc(100vw - 32px));
+  display:flex;gap:11px;padding:13px 13px 12px;background:var(--surface);
+  border:1px solid var(--border);border-inline-start:3px solid var(--accent);
+  border-radius:12px;box-shadow:var(--shadow);animation:guideHintIn .3s cubic-bezier(.2,.9,.3,1);
+}
+.guide-hint.closing{animation:guideHintOut .18s ease forwards}
+@keyframes guideHintIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes guideHintOut{to{opacity:0;transform:translateY(8px)}}
+.guide-hint.sev-info{border-inline-start-color:var(--accent)}
+.guide-hint.sev-tip{border-inline-start-color:var(--gold)}
+.guide-hint.sev-warn{border-inline-start-color:#e0a13c}
+.guide-hint-ico{flex:none;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  background:var(--bg-2);color:var(--accent)}
+.guide-hint.sev-tip .guide-hint-ico{color:var(--gold)}
+.guide-hint.sev-warn .guide-hint-ico{color:#e0a13c}
+.guide-hint-ico svg{width:15px;height:15px}
+.guide-hint-main{flex:1;min-width:0}
+.guide-hint-title{font-family:var(--fa);font-weight:700;font-size:13px;color:var(--text);margin-bottom:3px}
+.guide-hint-body{font-size:12px;color:var(--text-dim);line-height:1.8;margin-bottom:9px}
+.guide-hint-actions{display:flex;align-items:center;gap:12px}
+.guide-hint-act{
+  background:var(--accent);color:#fff;border:none;border-radius:7px;padding:5px 12px;
+  font-family:var(--fa);font-size:12px;cursor:pointer;transition:.2s;
+}
+.guide-hint-act:hover{filter:brightness(1.06)}
+.guide-hint-later{background:none;border:none;color:var(--text-dim);font-family:var(--fa);font-size:12px;cursor:pointer}
+.guide-hint-later:hover{color:var(--text)}
+.guide-hint-x{position:absolute;top:8px;inset-inline-end:8px;background:none;border:none;color:var(--text-dim);
+  cursor:pointer;display:grid;place-items:center;width:22px;height:22px;border-radius:6px}
+.guide-hint-x:hover{background:var(--bg-2);color:var(--text)}
+.guide-hint-x svg{width:13px;height:13px}
+
+/* ── Mobile tweaks ──────────────────────────────────────────────────────── */
+@media (max-width:560px){
+  .guide-help-panel{width:100vw}
+  .guide-hint{left:12px;right:12px;width:auto}
+  .guide-fab{bottom:16px;left:16px}
+}
+
+/* ── Reduced motion: drop entrance/spotlight transitions ────────────────── */
+@media (prefers-reduced-motion:reduce){
+  .guide-help-scrim,.guide-help-panel,.guide-hint{animation:none}
+  .guide-tour-ring,.guide-tour-tip{transition:none}
+  .guide-fab:hover{transform:none}
+}

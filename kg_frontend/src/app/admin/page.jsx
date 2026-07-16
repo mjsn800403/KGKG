@@ -58,10 +58,10 @@ const SECTIONS = [
 // The hub groups the sections so the admin lands on a calm "desk", not the
 // full firehose — a section's tools appear only after entering it.
 const SECTION_GROUPS = [
-  { title: 'بلادرنگ', tag: '// REALTIME', ids: ['dashboard', 'company-requests'] },
-  { title: 'مشتریان و فروش', tag: '// CUSTOMERS', ids: ['requests', 'companies', 'users'] },
-  { title: 'گزارش و تحلیل', tag: '// INSIGHTS', ids: ['overview', 'analytics', 'activity'] },
-  { title: 'داده و عملیات', tag: '// OPERATIONS', ids: ['catalog', 'dataquality', 'pipeline', 'system'] },
+  { title: 'بلادرنگ', tag: '// REALTIME', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
+  { title: 'مشتریان و فروش', tag: '// CUSTOMERS', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
+  { title: 'گزارش و تحلیل', tag: '// INSIGHTS', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'activity'] },
+  { title: 'داده و عملیات', tag: '// OPERATIONS', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'system'] },
 ];
 
 function fmtDate(iso) {
@@ -104,6 +104,11 @@ export default function AdminPage() {
       if (id) window.history.replaceState(null, '', `#${id}`);
       else window.history.replaceState(null, '', window.location.pathname);
     } catch { /* history unavailable */ }
+    // Tell the guidance layer which section is open (replaceState fires no
+    // hashchange), so the help panel can offer context-sensitive articles.
+    try {
+      window.dispatchEvent(new CustomEvent('kg:guide-context', { detail: { section: id || null } }));
+    } catch { /* ignore */ }
   }, []);
 
   const guard = useCallback(async (fn) => {
@@ -256,7 +261,7 @@ function AdminHub({ guard, go, adminUser }) {
   };
 
   return (
-    <div className="admin-hub">
+    <div className="admin-hub" data-guide="admin-hub">
       <motion.div
         className="hub-hero"
         initial={{ opacity: 0, y: 14 }}
@@ -283,7 +288,7 @@ function AdminHub({ guard, go, adminUser }) {
       </motion.div>
 
       {SECTION_GROUPS.map((group, gi) => (
-        <div className="hub-group" key={group.title}>
+        <div className="hub-group" data-guide={group.guide} key={group.title}>
           <motion.div
             className="hub-group-head"
             initial={{ opacity: 0, x: 14 }}

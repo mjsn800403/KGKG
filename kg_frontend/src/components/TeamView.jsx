@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { reportSignal } from '../guidance/signals';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from './Icon';
@@ -119,6 +120,12 @@ export default function TeamView() {
   });
   useEffect(() => () => clearTimeout(reloadTimer.current), []);
 
+  // Feed the contextual-hint engine: an empty team triggers a "start by adding
+  // your first employee" nudge.
+  useEffect(() => {
+    if (!loading) reportSignal('team.memberCount', members.length);
+  }, [loading, members.length]);
+
   const stats = useMemo(() => ({
     total: members.length,
     active: members.filter((m) => m.invite_status === 'active' && m.active).length,
@@ -172,7 +179,7 @@ export default function TeamView() {
           <StatTile icon="users" label="کل کارکنان" value={stats.total} />
           <StatTile icon="check" label="فعال" value={stats.active} tone="ok" />
           <StatTile icon="mailplus" label="دعوت‌های در انتظار" value={stats.pending} tone="pending" />
-          <button className="team-add-fab" onClick={() => setDrawer({ mode: 'add' })} aria-label="افزودن کارمند">
+          <button className="team-add-fab" data-guide="team-add" onClick={() => setDrawer({ mode: 'add' })} aria-label="افزودن کارمند">
             <motion.span className="fab-plus" whileHover={{ rotate: 90 }} transition={{ type: 'spring', stiffness: 300, damping: 18 }}>
               <Icon name="plus" size={22} />
             </motion.span>
@@ -182,6 +189,7 @@ export default function TeamView() {
 
         <motion.nav
           className="team-tabs glass"
+          data-guide="team-tabs"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: EASE, delay: 0.06 }}
@@ -214,7 +222,7 @@ export default function TeamView() {
               ) : (
                 <>
                   <div className="team-toolbar glass">
-                    <div className="team-search">
+                    <div className="team-search" data-guide="team-search">
                       <Icon name="search" size={16} />
                       <input
                         value={query}
@@ -421,6 +429,16 @@ function MemberDrawer({ mode, member, initialRoleId, meta, onClose, onSaved, not
   const firstFieldRef = useRef(null);
 
   useEffect(() => { firstFieldRef.current?.focus(); }, []);
+
+  // Contextual hint: creating a member in "invite by e-mail" mode with no
+  // e-mail is a common dead-end (no SMTP configured) — flag it so the hint
+  // engine can suggest the credentials mode. Cleared when the drawer closes.
+  useEffect(() => {
+    const flag = (!isEdit && form.provision === 'invite' && !form.email.trim())
+      ? 'invite-no-email' : null;
+    reportSignal('team.drawer', flag);
+    return () => reportSignal('team.drawer', null);
+  }, [isEdit, form.provision, form.email]);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const assignableRoles = (meta.roles || []).filter((r) => r.editable);
