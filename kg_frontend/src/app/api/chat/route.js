@@ -9,6 +9,9 @@
 // context-only prompt. All processing/logic stays on our side. The API token
 // lives only here (server runtime), never in the browser bundle.
 
+import { faTitle, faTitleBoth, collectPairs, faTermsSet } from '../../../lib/faTerms';
+import { contextualize } from '../../../lib/contextualize';
+
 const METIS_BASE = 'https://api.metisai.ir/api/v1/chat';
 const API_KEY = process.env.METIS_API_KEY;
 const BOT_ID = process.env.METIS_BOT_ID;
@@ -70,72 +73,10 @@ function readCookie(request, name) {
   return m ? decodeURIComponent(m[1]) : '';
 }
 
-// ---- English -> Persian softener for titles/labels ------------------------
-// The manuals are English, so retrieved page titles ("Brake Fluid Replacement")
-// and diagnostic step names ("Monitor Description") are English. We keep the raw
-// English *body text* for grounding, but translate the short, high-frequency
-// title/label vocabulary to Persian before it reaches the prompt and the UI, so
-// the user sees far less English. Unknown tokens are left untouched (safe).
-const EN_FA = [
-  // actions / sections (longest phrases first so they win)
-  ['remove and replace', 'باز و بست'], ['removal and installation', 'باز و بست'],
-  ['on-vehicle inspection', 'بازرسی روی خودرو'], ['how to proceed', 'روند عیب‌یابی'],
-  ['monitor description', 'شرح پایش'], ['circuit description', 'شرح مدار'],
-  ['problem symptoms table', 'جدول علائم مشکل'], ['diagnostic trouble code', 'کد خطای عیب‌یابی'],
-  ['freeze frame data', 'داده فریز فریم'], ['service data', 'داده سرویس'],
-  ['torque specification', 'مشخصات گشتاور'], ['tightening torque', 'گشتاور سفت‌کردن'],
-  ['labor time', 'زمان کار'], ['flat rate', 'زمان استاندارد'],
-  ['wiring diagram', 'نقشه سیم‌کشی'], ['parts catalog', 'کاتالوگ قطعات'],
-  ['special service tool', 'ابزار مخصوص'], ['special tool', 'ابزار مخصوص'],
-  ['replacement', 'تعویض'], ['installation', 'نصب'], ['removal', 'باز کردن'],
-  ['reassembly', 'مونتاژ مجدد'], ['disassembly', 'دمونتاژ'], ['assembly', 'مونتاژ'],
-  ['inspection', 'بازرسی'], ['adjustment', 'تنظیم'], ['diagnosis', 'عیب‌یابی'],
-  ['diagnostic', 'عیب‌یابی'], ['procedure', 'رویه'], ['overhaul', 'اورهال'],
-  ['specifications', 'مشخصات فنی'], ['specification', 'مشخصه'], ['description', 'شرح'],
-  ['precaution', 'احتیاط'], ['operation', 'عملکرد'], ['definition', 'تعریف'],
-  ['calibration', 'کالیبراسیون'], ['initialization', 'مقداردهی اولیه'],
-  ['registration', 'ثبت'], ['maintenance', 'نگهداری'], ['service', 'سرویس'],
-  // systems / components
-  ['brake fluid', 'روغن ترمز'], ['engine oil', 'روغن موتور'],
-  ['transmission fluid', 'روغن گیربکس'], ['power steering', 'فرمان هیدرولیک'],
-  ['spark plug', 'شمع'], ['timing belt', 'تسمه تایم'], ['timing chain', 'زنجیر تایم'],
-  ['drive belt', 'تسمه دینام'], ['water pump', 'واتر پمپ'], ['fuel pump', 'پمپ بنزین'],
-  ['fuel injector', 'انژکتور'], ['cylinder head', 'سرسیلندر'], ['camshaft', 'میل سوپاپ'],
-  ['crankshaft', 'میل لنگ'], ['oil filter', 'فیلتر روغن'], ['air filter', 'فیلتر هوا'],
-  ['cabin air filter', 'فیلتر کابین'], ['fuel filter', 'فیلتر بنزین'],
-  ['shock absorber', 'کمک‌فنر'], ['control arm', 'طبق'], ['ball joint', 'سیبک'],
-  ['wheel bearing', 'بلبرینگ چرخ'], ['wheel alignment', 'تنظیم فرمان'],
-  ['air conditioning', 'کولر'], ['brake pad', 'لنت ترمز'], ['brake rotor', 'دیسک ترمز'],
-  ['brake disc', 'دیسک ترمز'], ['parking brake', 'ترمز دستی'], ['master cylinder', 'سیلندر اصلی'],
-  ['throttle body', 'دریچه گاز'], ['catalytic converter', 'کاتالیزور'],
-  ['oxygen sensor', 'سنسور اکسیژن'], ['coolant temperature', 'دمای خنک‌کننده'],
-  ['high voltage', 'فشار قوی'], ['hybrid battery', 'باتری هیبرید'],
-  ['electric motor', 'موتور برقی'], ['inverter', 'اینورتر'], ['alternator', 'دینام'],
-  ['starter', 'استارت'], ['radiator', 'رادیاتور'], ['thermostat', 'ترموستات'],
-  ['transmission', 'گیربکس'], ['differential', 'دیفرانسیل'], ['driveshaft', 'گاردان'],
-  ['suspension', 'سیستم تعلیق'], ['steering', 'فرمان'], ['clutch', 'کلاچ'],
-  ['coolant', 'مایع خنک‌کننده'], ['battery', 'باتری'], ['sensor', 'سنسور'],
-  ['relay', 'رله'], ['fuse', 'فیوز'], ['airbag', 'ایربگ'], ['engine', 'موتور'],
-  ['brake', 'ترمز'], ['circuit', 'مدار'], ['system', 'سیستم'], ['component', 'قطعه'],
-  ['assembly', 'مجموعه'], ['module', 'ماژول'], ['valve', 'سوپاپ'], ['pump', 'پمپ'],
-  ['filter', 'فیلتر'], ['belt', 'تسمه'], ['sensor', 'سنسور'], ['wheel', 'چرخ'],
-  ['tire', 'لاستیک'], ['lamp', 'چراغ'], ['light', 'چراغ'], ['fluid', 'مایع'],
-  ['front', 'جلو'], ['rear', 'عقب'], ['left', 'چپ'], ['right', 'راست'],
-  ['upper', 'بالا'], ['lower', 'پایین'], ['torque', 'گشتاور'], ['test', 'تست'],
-];
-
-// Word-boundary, case-insensitive, longest-phrase-first replacement. Only whole
-// tokens are translated, so partial words are never mangled.
-function faTitle(s) {
-  if (!s) return s;
-  let out = String(s);
-  for (const [en, fa] of EN_FA) {
-    const re = new RegExp(`(^|[^A-Za-z])(${en.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})(?![A-Za-z])`, 'gi');
-    out = out.replace(re, (_m, pre) => `${pre}${fa}`);
-  }
-  return out;
-}
-
+// ---- English -> Persian titles: served by src/lib/faTerms.js -------------
+// The full terminology dictionary is generated from the backend store
+// (manage.py build_terms --export) and hot-reloaded on change; the lib
+// falls back to the previous small built-in dictionary if it is absent.
 // Persian labels for a confidence band (diagnostic path; the assist path reuses
 // the backend's own label_fa).
 function bandLabel(band) {
@@ -179,6 +120,110 @@ function rateLimited(ip) {
     }
   }
   return false;
+}
+
+// ---- multi-turn plumbing ---------------------------------------------------
+// The client sends its recent thread (localStorage) with each request. It is
+// UNTRUSTED input: hard-cap counts and lengths before it reaches a prompt.
+function sanitizeHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter((h) => h && typeof h === 'object' &&
+      (h.role === 'user' || h.role === 'ai') &&
+      typeof h.content === 'string' && h.content.trim())
+    .slice(-8)
+    .map((h) => ({ role: h.role, content: h.content.slice(0, 600) }));
+}
+
+function sanitizePrevSources(prev) {
+  if (!Array.isArray(prev)) return [];
+  return prev.filter((t) => typeof t === 'string' && t.trim())
+    .slice(0, 3).map((t) => t.slice(0, 160));
+}
+
+// Condensed prior exchanges for the Metis prompt — reference resolution only;
+// the grounding context always belongs to the CURRENT message.
+function historyBlock(hist) {
+  if (!hist || !hist.length) return '';
+  const lines = hist.slice(-6).map((h) =>
+    `${h.role === 'user' ? 'کاربر' : 'دستیار'}: ${h.content.slice(0, 300)}`);
+  return (
+    `گفتگوی پیشین (فقط برای فهم مرجع اشاره‌ها؛ فقط به آخرین پیام کاربر پاسخ بده ` +
+    `و منبع‌ها فقط مالِ همین پاسخ هستند):\n${lines.join('\n')}\n\n`
+  );
+}
+
+// The manual system each hit belongs to — segment 2 of the breadcrumb
+// («Car › Repair and Diagnosis › Brakes › …»). Used to spot ambiguous queries.
+function systemRoots(rag) {
+  const roots = [];
+  for (const h of (rag?.hits || []).slice(0, 4)) {
+    const segs = (h.title_path || '').split(' › ');
+    const root = (segs.length > 2 ? segs[2] : segs[1] || '').trim();
+    if (root && !roots.includes(root)) roots.push(root);
+  }
+  return roots;
+}
+
+// One short Persian clarifying question instead of a generic low-confidence
+// answer, when retrieval scattered across several unrelated systems.
+function buildClarifyPrompt({ message, roots, historyText }) {
+  return (
+    `سؤال کاربر مبهم است: در دفترچهٔ سرویس به چند سیستم مختلف می‌خورد ` +
+    `(${roots.join('، ')}).\n` +
+    `فقط یک سؤال کوتاه، دوستانه و فارسی بپرس تا روشن شود منظور کدام سیستم است. ` +
+    `پاسخ فنی نده، حدس نزن و هیچ دکمهٔ لینکی نساز.\n\n` +
+    (historyText || '') +
+    `پیام کاربر: «${message}»\n\nحالا فقط همان یک سؤال روشن‌کننده را بپرس.`
+  );
+}
+
+function fallbackClarify(roots) {
+  return (
+    `سؤالت به چند بخش مختلف دفترچه می‌خورد: ${roots.join('، ')}. ` +
+    `کدام بخش منظورت است؟ روی یکی از گزینه‌ها بزن یا کمی دقیق‌تر بنویس.`
+  );
+}
+
+// 2-4 follow-up chips from data we already retrieved. Labels are Persian; the
+// underlying queries stay self-contained (mostly English manual titles) so a
+// chip click retrieves precisely without needing the conversation context.
+function buildSuggestions({ mode, rag, diag, clarifyRoots }) {
+  const out = [];
+  if (clarifyRoots?.length) {
+    clarifyRoots.slice(0, 4).forEach((r) =>
+      out.push({ label: faTitle(r), query: `از ${faTitle(r)}` }));
+    return out;
+  }
+  if (mode === 'diagnose' && diag) {
+    const c = diag.candidates?.[0];
+    (c?.sibling_dtcs || []).slice(0, 2).forEach((code) =>
+      out.push({ label: `کد ${code} یعنی چه؟`, query: `${code}` }));
+    if (c?.labor_time?.length) {
+      out.push({ label: 'زمان استاندارد این تعمیر چقدر است؟',
+                 query: `${c.labor_time[0].title} labor time` });
+    }
+    if (c?.procedure && c?.name) {
+      out.push({ label: 'رویهٔ کامل تعمیر را نشان بده',
+                 query: `${c.name} repair procedure` });
+    }
+  } else if (rag?.hits?.length) {
+    const top = rag.hits[0];
+    (top.related || []).filter((r) => r.relation !== 'labor_time').slice(0, 2)
+      .forEach((r) => out.push({ label: `راهنمای «${faTitle(r.title)}»`, query: r.title }));
+    const labor = (top.related || []).find((r) => r.relation === 'labor_time');
+    if (labor) {
+      out.push({ label: 'زمان استاندارد این کار چقدر است؟',
+                 query: `${top.title} labor time flat rate` });
+    }
+    if (top.cross_vehicle?.length) {
+      const v = top.cross_vehicle[0];
+      out.push({ label: `همین رویه در ${v.model} ${v.variant || ''}`.trim(),
+                 query: `${top.title} ${v.model}` });
+    }
+  }
+  const seen = new Set();
+  return out.filter((s) => !seen.has(s.label) && seen.add(s.label)).slice(0, 4);
 }
 
 // ---- no-LLM fallback (resilience: Metis is the only external dependency) ----
@@ -258,9 +303,11 @@ function buildContext(rag) {
   const blocks = [];
   rag.hits.forEach((h, i) => {
     const n = i + 1;
-    // Persian-softened title for the UI/prompt; keep the English body for grounding.
-    const titleFa = faTitle(h.title);
-    sources.push({ n, title: titleFa, path: faTitle(h.title_path), url: h.app_url,
+    // Bilingual «فارسی (English)» title for the UI/prompt; keep the English
+    // body for grounding and the raw English title for future UI surfaces.
+    const titleFa = faTitleBoth(h.title);
+    sources.push({ n, title: titleFa, title_en: h.title,
+                   path: faTitle(h.title_path), url: h.app_url,
                    model: h.model, variant: h.variant, blob_id: h.blob_id,
                    band: h.confidence_band, band_label: h.confidence_label,
                    matched_via: h.matched_via, similarity: h.similarity });
@@ -284,9 +331,21 @@ function buildContext(rag) {
   return { sources, contextText: blocks.join('\n---\n') };
 }
 
-function buildPrompt({ message, contextText, hasContext }) {
+// The official-terminology block: the EN<->FA pairs that actually occur in the
+// retrieved context, so the phraser translates every recurring technical term
+// the same way our UI does (consistency beats ad-hoc synonyms).
+function termsBlock(pairs) {
+  if (!pairs || !pairs.length) return '';
+  return (
+    `واژه‌نامهٔ رسمی (این معادل‌ها را همیشه به‌کار ببر و در اولین اشاره نام انگلیسی را داخل پرانتز بیاور):\n` +
+    pairs.map(([en, fa]) => `- ${en} = ${fa}`).join('\n') + `\n\n`
+  );
+}
+
+function buildPrompt({ message, contextText, hasContext, terminology, historyText }) {
   if (!hasContext) {
     return (
+      (historyText || '') +
       `سؤال کاربر: «${message}»\n\n` +
       `در دفترچه‌های سرویس ما هیچ مطلب مرتبطی پیدا نشد. ` +
       `صادقانه به کاربر بگو این مورد در داده‌های ما موجود نیست و از خودت اطلاعات فنی نساز.`
@@ -294,6 +353,7 @@ function buildPrompt({ message, contextText, hasContext }) {
   }
   return (
     `تو دستیار تعمیراتی هستی و فقط بر اساس «متن‌های دفترچهٔ سرویس» زیر پاسخ می‌دهی.\n` +
+    termsBlock(terminology) +
     `قوانین:\n` +
     `1) فقط از همین متن‌ها استفاده کن؛ اگر چیزی در آن‌ها نبود، بگو در داده‌ها نیست و حدس نزن.\n` +
     `2) پاسخ را کاملاً فارسی، روان، مرحله‌به‌مرحله و کاربردی بنویس. اصطلاحات فنی را به فارسی بنویس؛ ` +
@@ -314,6 +374,7 @@ function buildPrompt({ message, contextText, hasContext }) {
     `   اگر سؤال فقط یک «مقدار/مشخصه» می‌خواهد (مثل گشتاور یا ظرفیت روغن)، کوتاه و مستقیم همان عدد را بده.\n` +
     `7) اگر اطلاعات برای خودروی دقیق کاربر نبود ولی برای تایپ/مدل مشابه هست، شفاف بگو از کدام خودرو نقل می‌کنی.\n\n` +
     `=== متن‌های دفترچهٔ سرویس ===\n${contextText}\n=== پایان متن‌ها ===\n\n` +
+    (historyText || '') +
     `سؤال کاربر: «${message}»\n\nحالا پاسخ بده.`
   );
 }
@@ -344,7 +405,7 @@ function buildDiagnosisContext(d) {
     // Enriched source row so the evidence panel shows the SAME signals the assist
     // path does (band, how it matched, a confidence bar, the blob it maps to).
     sources.push({
-      n, title: `DTC ${c.code} — ${faTitle(c.name)}`, url: c.app_url,
+      n, title: `DTC ${c.code} — ${faTitleBoth(c.name)}`, title_en: c.name, url: c.app_url,
       blob_id: c.blob_id ?? null,
       band: c.confidence_band || null,
       band_label: c.confidence_label || null,
@@ -375,7 +436,7 @@ function buildDiagnosisContext(d) {
 
   (d.procedures || []).slice(0, 3).forEach((p) => {
     n += 1;
-    sources.push({ n, title: faTitle(p.title), url: p.app_url });
+    sources.push({ n, title: faTitleBoth(p.title), title_en: p.title, url: p.app_url });
     blocks.push(`[رویهٔ تشخیص کارخانه] ${faTitle(p.title)}\nلینک: ${p.app_url}` +
       (p.matched_symptom ? `\nمرتبط با علامت: ${faTitle(p.matched_symptom)}` : ''));
   });
@@ -388,9 +449,10 @@ function buildDiagnosisContext(d) {
   return { sources, contextText: blocks.join('\n---\n') };
 }
 
-function buildDiagnosisPrompt({ message, d, contextText }) {
+function buildDiagnosisPrompt({ message, d, contextText, terminology, historyText }) {
   if (d.intent === 'dtc' && !d.candidates?.length) {
     return (
+      (historyText || '') +
       `کاربر کد خطای «${message}» را وارد کرده ولی این کد در دادهٔ این خودرو موجود نیست. ` +
       `مؤدبانه و فارسی بگو این کد برای این خودرو در داده‌های ما نیست و از خودت اطلاعات نساز. ` +
       `پیشنهاد بده علامت مشکل را به‌جای کد توضیح دهد.`
@@ -403,6 +465,7 @@ function buildDiagnosisPrompt({ message, d, contextText }) {
   return (
     `تو یک کارشناس فنی خودرو هستی و فقط بر اساس «دادهٔ تشخیصی» زیر پاسخ می‌دهی.\n` +
     `${header}\n` +
+    termsBlock(terminology) +
     `قوانین:\n` +
     `1) فقط از همین داده استفاده کن؛ چیزی از خودت اضافه/حدس نزن. اگر داده کافی نبود، صادقانه بگو.\n` +
     `2) پاسخ کاملاً فارسی، ساختارمند و عملی باشد. اصطلاحات فنی را فارسی بنویس و در صورت نبودِ معادل، ` +
@@ -415,6 +478,7 @@ function buildDiagnosisPrompt({ message, d, contextText }) {
     `6) اگر «رویهٔ تشخیص» (How to Proceed) موجود بود، آن را به‌عنوان نقطهٔ شروع عیب‌یابی پیشنهاد بده.\n` +
     `7) در پایان یک جمله بگو که این تشخیص اولیه بر پایهٔ دفترچهٔ کارخانه است و تأیید نهایی با تست عملی است.\n\n` +
     `=== دادهٔ تشخیصی ===\n${contextText}\n=== پایان داده ===\n\n` +
+    (historyText || '') +
     `ورودی کاربر: «${message}»\n\nحالا تشخیص بده.`
   );
 }
@@ -452,21 +516,33 @@ export async function POST(request) {
         { status: 403 });
     }
 
-    const { message, sessionId, userId, brand, model, car } = await request.json();
+    const { message, sessionId, userId, brand, model, car,
+            history, prevSources } = await request.json();
     if (!message || !message.trim()) {
       return Response.json({ error: 'پیام خالی است.' }, { status: 400 });
     }
     const metisConfigured = !!(API_KEY && BOT_ID);
+
+    // Multi-turn: sanitize the client-sent thread, then resolve short
+    // anaphoric follow-ups into a self-contained RETRIEVAL query (the prompt
+    // still shows the user's original message, plus a history block).
+    const hist = sanitizeHistory(history);
+    const prevTitles = sanitizePrevSources(prevSources);
+    const historyText = historyBlock(hist);
+    const { query: retrievalQuery, contextualized } =
+      contextualize(message, hist, prevTitles, faTermsSet());
 
     // 1) Ground the answer. With a car in context, try the diagnostic engine
     //    first; fall back to general RAG retrieval.
     let prompt, sources, grounded, mode = 'assist';
     let confidence = null;     // {band, label} surfaced to the user (transparency)
     let diag = null;
+    let rag = null;
+    let clarifyRoots = null;   // set => ask ONE clarifying question instead
     let allowedHrefs = new Set();   // hrefs we actually retrieved (link validation)
     if (car || model) {
       try {
-        diag = await backend('/api/diagnose/', { query: message, brand, model, car }, token);
+        diag = await backend('/api/diagnose/', { query: retrievalQuery, brand, model, car }, token);
       } catch (e) {
         console.error('diagnose error (will fall back to assist):', e);
       }
@@ -490,11 +566,16 @@ export async function POST(request) {
         confidence = band ? { band, label: bandLabel(band) } : null;
       }
       allowedHrefs = collectAllowedHrefsDiag(diag);
-      prompt = buildDiagnosisPrompt({ message, d: diag, contextText: ctx.contextText });
+      const terminology = collectPairs([
+        ...(diag.candidates || []).flatMap((c) => [c.name, ...(c.steps || []).map((s) => s.aspect)]),
+        ...(diag.procedures || []).map((p) => p.title),
+        ...(diag.symptoms || []).map((s) => `${s.text || ''} ${s.suspected || ''}`),
+      ]);
+      prompt = buildDiagnosisPrompt({ message, d: diag, contextText: ctx.contextText,
+                                      terminology, historyText });
     } else {
-      let rag;
       try {
-        rag = await backend('/api/assist/', { query: message, brand, model, car }, token);
+        rag = await backend('/api/assist/', { query: retrievalQuery, brand, model, car }, token);
       } catch (e) {
         console.error('RAG retrieve error:', e);
         return Response.json(
@@ -511,7 +592,25 @@ export async function POST(request) {
       const cb = rag?.confidence_band;
       confidence = cb ? { band: cb.band, label: cb.label_fa } : null;
       if (hasContext) allowedHrefs = collectAllowedHrefs(rag);
-      prompt = buildPrompt({ message, contextText: built.contextText, hasContext });
+      const terminology = hasContext ? collectPairs(
+        (rag.hits || []).flatMap((h) => [h.title, h.title_path, (h.text || '').slice(0, 1800),
+                                         ...(h.related || []).map((r) => r.title)])) : [];
+
+      // Ambiguity gate: a weakly-confident answer whose top hits scatter over
+      // 3+ unrelated systems is better served by ONE clarifying question. The
+      // grounding math is untouched — only the phrasing changes.
+      if (hasContext && confidence?.band === 'low') {
+        const roots = systemRoots(rag);
+        if (roots.length >= 3) clarifyRoots = roots.slice(0, 3);
+      }
+      if (clarifyRoots) {
+        mode = 'clarify';
+        prompt = buildClarifyPrompt({ message, roots: clarifyRoots.map((r) => faTitle(r)),
+                                      historyText });
+      } else {
+        prompt = buildPrompt({ message, contextText: built.contextText, hasContext,
+                               terminology, historyText });
+      }
     }
 
     // 2) Let Metis phrase the grounded context. Metis is the ONLY external
@@ -545,7 +644,9 @@ export async function POST(request) {
 
     if (degraded || !rawReply || !rawReply.trim()) {
       degraded = true;
-      rawReply = fallbackReply({ mode, sources, grounded });
+      rawReply = mode === 'clarify'
+        ? fallbackClarify(clarifyRoots.map((r) => faTitle(r)))
+        : fallbackReply({ mode, sources, grounded });
     }
 
     // Faithfulness gate: drop any link the model invented that we didn't
@@ -563,6 +664,8 @@ export async function POST(request) {
       confidence,                                    // {band, label} or null
       degraded,                                      // true => no-LLM fallback used
       llm: !degraded,
+      suggestions: buildSuggestions({ mode, rag, diag, clarifyRoots }),
+      contextualized,                                // true => follow-up was expanded
       topBlobs: (sources || []).map((s) => s.blob_id).filter((b) => b != null),
     });
   } catch (err) {

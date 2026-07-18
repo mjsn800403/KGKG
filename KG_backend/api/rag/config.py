@@ -28,6 +28,12 @@ WAREHOUSE_DIR = BASE_DIR / 'Database_warehouse'
 RAG_DIR = WAREHOUSE_DIR / '_rag'              # all output (deletable)
 INDEX_DB = RAG_DIR / 'index.rag.db'           # the single unified index
 
+# Bilingual terminology store (terms + generation queue) and the en->fa display
+# artifact generated from it (consumed by the Next chat route). Both live under
+# _rag/ like every other derived artefact. See api/rag/terms.py.
+TERMS_DB = RAG_DIR / 'terms.db'
+TERMS_JSON = RAG_DIR / 'terms_en_fa.json'
+
 # Per-car diagnostic sidecars (the DTC / symptom rule-engine layer). One small,
 # self-contained DB per car under _rag/diag/, derived from that car's `nodes`
 # tree (DTC subtrees + Problem Symptoms Tables) plus the unified index's edges.
