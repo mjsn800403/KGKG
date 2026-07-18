@@ -144,6 +144,214 @@ def translation_prompt(examples, batch):
     )
 
 
+def adjudication_prompt(items):
+    """items: [(en, [fa candidates])]. The judge only CHOOSES among existing
+    candidates (it cannot introduce a new translation), which keeps this pass
+    hallucination-free by construction."""
+    lines = []
+    for i, (en, cands) in enumerate(items):
+        lines.append(f'{i + 1}. "{en}"')
+        for j, fa in enumerate(cands):
+            lines.append(f'   {j + 1}) {fa}')
+    body = '\n'.join(lines)
+    return (
+        'You are the terminology arbiter for a Toyota/Lexus Persian service manual. '
+        'For each English term below, CHOOSE the candidate that professional Iranian '
+        'mechanics would use as the standard label (prefer established terminology and '
+        'accepted transliterations; prefer the most natural, compact label).\n'
+        f'Reply with ONLY a JSON array, one object per term, SAME ORDER, format '
+        '[{"n": <term number>, "choice": <candidate number>}] and nothing else:\n'
+        f'{body}'
+    )
+
+
+def parse_choices(reply, items):
+    """[{'n','choice'}] -> list of 0-based choice indices; None on violations."""
+    m = _JSON_ARR.search(reply or '')
+    if not m:
+        return None
+    try:
+        arr = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(arr, list) or len(arr) != len(items):
+        return None
+    out = []
+    for k, item in enumerate(arr):
+        if not isinstance(item, dict) or 'choice' not in item:
+            return None
+        try:
+            c = int(item['choice']) - 1
+        except (TypeError, ValueError):
+            return None
+        if not 0 <= c < len(items[k][1]):
+            return None
+        out.append(c)
+    return out
+
+
+def ask_choices(client, sid, items, retries=2):
+    reply = client.send(sid, adjudication_prompt(items))
+    parsed = parse_choices(reply, items)
+    tries = 0
+    while parsed is None and tries < retries:
+        tries += 1
+        reply = client.send(
+            sid, 'Your reply was not a valid JSON array of {"n", "choice"} objects '
+                 'covering every term. Reply again with ONLY the JSON array.')
+        parsed = parse_choices(reply, items)
+    return parsed
+
+
+def run_adjudication(con, client, encode, opts, out=print):
+    """Resolve state='review' rows by judge-vote among their existing candidate
+    phrasings + the usual back-translation gate. Rows failing any gate stay in
+    review (nothing unverified is ever published)."""
+    batch_size = opts.get('batch_size', 20)
+    limit = opts.get('limit')
+    backtrans_min = opts.get('backtrans_min', 0.82)
+    stats = {'accepted': 0, 'kept_review': 0, 'processed': 0, 'batches': 0}
+
+    j1 = client.new_session('judge-a')
+    j2 = client.new_session('judge-b')
+    j3 = None
+
+    processed = 0
+    seen_rids = set()      # gate-failed rows stay 'review' — never refetch in this run
+    while True:
+        if opts.get('pipeline_check') and opts['pipeline_check']():
+            out('pipeline job active — yielding (rerun to resume)')
+            break
+        take = batch_size if limit is None else min(batch_size, limit - processed)
+        if take <= 0:
+            break
+        exclude = f"AND id NOT IN ({','.join(map(str, seen_rids))}) " if seen_rids else ''
+        rows = con.execute(
+            "SELECT id, en, samples_json FROM gen_queue WHERE state='review' "
+            "AND samples_json IS NOT NULL AND samples_json != '[]' "
+            f'{exclude}'
+            'ORDER BY freq DESC, id LIMIT ?', (take,)).fetchall()
+        if not rows:
+            break
+        seen_rids.update(r[0] for r in rows)
+        items, meta = [], []
+        for rid, en, sj in rows:
+            try:
+                raw = json.loads(sj)
+            except json.JSONDecodeError:
+                raw = []
+            cands, seen = [], set()
+            for fa in raw:
+                fa_d = terms.clean_fa_display(fa)
+                key = terms.norm_fa(fa_d)
+                if fa_d and key and key not in seen:
+                    seen.add(key)
+                    cands.append(fa_d)
+            if cands:
+                items.append((en, cands))
+                meta.append(rid)
+        if not items:
+            break
+        stats['batches'] += 1
+
+        # only multi-candidate terms need judging; a collapsed single form is
+        # its own winner (it still faces the back-translation gate below)
+        multi = [i for i, (_, cands) in enumerate(items) if len(cands) > 1]
+        c1 = c2 = None
+        if multi:
+            try:
+                judged = [items[i] for i in multi]
+                c1 = ask_choices(client, j1, judged)
+                c2 = ask_choices(client, j2, judged)
+            except BudgetExhausted as e:
+                out(f'STOP: {e}')
+                break
+        pos = {i: k for k, i in enumerate(multi)}
+
+        picks = {}          # rid -> (fa, judge_conf)
+        needs_third = []    # (idx, rid)
+        for i, rid in enumerate(meta):
+            en, cands = items[i]
+            if len(cands) == 1:
+                picks[rid] = (cands[0], 1.0)     # samples collapsed to one form
+                continue
+            a = c1[pos[i]] if c1 else None
+            b = c2[pos[i]] if c2 else None
+            if a is not None and a == b:
+                picks[rid] = (cands[a], 1.0)
+            elif a is not None or b is not None:
+                needs_third.append((i, rid))
+            # both judges unparseable -> term silently stays review this round
+
+        if needs_third:
+            if j3 is None:
+                try:
+                    j3 = client.new_session('judge-c')
+                except BudgetExhausted:
+                    j3 = None
+            third = None
+            if j3 is not None:
+                try:
+                    third = ask_choices(client, j3, [items[i] for i, _ in needs_third])
+                except BudgetExhausted:
+                    third = None
+            for k, (i, rid) in enumerate(needs_third):
+                en, cands = items[i]
+                votes = [v for v in (c1[pos[i]] if c1 else None,
+                                     c2[pos[i]] if c2 else None,
+                                     third[k] if third else None) if v is not None]
+                counts = {}
+                for v in votes:
+                    counts[v] = counts.get(v, 0) + 1
+                best, n_votes = max(counts.items(), key=lambda kv: kv[1]) if counts else (None, 0)
+                if best is not None and n_votes >= 2:
+                    picks[rid] = (cands[best], 0.7)
+
+        # back-translation gate on the picked candidates
+        picked = [(rid, items[meta.index(rid)][0], fa, jc) for rid, (fa, jc) in picks.items()]
+        back_sims = {}
+        if picked:
+            try:
+                back = ask_batch(client, j1, backtranslation_prompt(
+                    [fa for _, _, fa, _ in picked]), len(picked), 'fa', 'en')
+            except BudgetExhausted:
+                back = None
+            if back:
+                ov = encode([en for _, en, _, _ in picked])
+                bv = encode([b[1] for b in back])
+                for k, (rid, en, fa, jc) in enumerate(picked):
+                    back_sims[rid] = (cosine(ov[k], bv[k]), back[k][1])
+
+        for i, rid in enumerate(meta):
+            processed += 1
+            stats['processed'] += 1
+            en, _ = items[i]
+            pick = picks.get(rid)
+            sim, back_en = back_sims.get(rid, (None, None))
+            if pick and sim is not None and sim >= backtrans_min:
+                fa, jc = pick
+                conf = round(0.5 * jc + 0.5 * sim, 3)
+                terms.upsert_term(con, en, fa, domain='part', source='generated',
+                                  confidence=conf, status='active',
+                                  notes=f'adjudicated jc={jc} back={sim:.2f}')
+                con.execute(
+                    "UPDATE gen_queue SET state='accepted', fa_result=?, agreement=?,"
+                    " backtrans_en=?, backtrans_sim=?, confidence=?,"
+                    " updated_at=datetime('now') WHERE id=?",
+                    (fa, jc, back_en, sim, conf, rid))
+                stats['accepted'] += 1
+            else:
+                # keep in review; bump attempts so repeated passes can be spotted
+                con.execute("UPDATE gen_queue SET attempts=attempts+1,"
+                            " updated_at=datetime('now') WHERE id=?", (rid,))
+                stats['kept_review'] += 1
+        con.commit()
+        out(f"adjudicate batch {stats['batches']}: accepted={stats['accepted']} "
+            f"kept_review={stats['kept_review']} metis_calls={client.calls}")
+        _log(f'adjudicate batch done: {stats} calls={client.calls}')
+    return stats
+
+
 def backtranslation_prompt(fa_terms):
     items = '\n'.join(f'{i + 1}. {t}' for i, t in enumerate(fa_terms))
     return (
@@ -373,24 +581,29 @@ class Command(BaseCommand):
         parser.add_argument('--env-file', default=None,
                             help='Env file holding METIS_API_KEY/METIS_BOT_ID '
                                  '(default: <root>/kg_frontend/.env.production).')
+        parser.add_argument('--adjudicate', action='store_true',
+                            help="Resolve state='review' rows by judge-voting among their "
+                                 'EXISTING candidate phrasings (choice-only, so nothing new '
+                                 'can be hallucinated) + the back-translation gate.')
 
     def handle(self, *args, **opts):
+        state = 'review' if opts['adjudicate'] else 'queued'
         con = terms.connect()
         try:
             queued = con.execute(
-                "SELECT COUNT(*) FROM gen_queue WHERE state='queued'").fetchone()[0]
+                'SELECT COUNT(*) FROM gen_queue WHERE state=?', (state,)).fetchone()[0]
             n = min(queued, opts['limit']) if opts['limit'] else queued
             est = (n // max(1, opts['batch_size']) + 1) * 3 + 2
             if opts['dry_run']:
-                self.stdout.write(f'queued={queued}, would process n={n}, '
-                                  f'~{est} Metis messages (2 samples + ~0.2 third + backtrans)')
-                rows = con.execute("SELECT en, freq FROM gen_queue WHERE state='queued' "
-                                   'ORDER BY freq DESC, id LIMIT 10').fetchall()
+                self.stdout.write(f'{state}={queued}, would process n={n}, '
+                                  f'~{est} Metis messages')
+                rows = con.execute('SELECT en, freq FROM gen_queue WHERE state=? '
+                                   'ORDER BY freq DESC, id LIMIT 10', (state,)).fetchall()
                 for en, freq in rows:
                     self.stdout.write(f'   {freq:>8,}  {en}')
                 return
             if not n:
-                self.stdout.write('gen_queue has no queued terms — run build_terms --mine first')
+                self.stdout.write(f"gen_queue has no {state} terms — nothing to do")
                 return
 
             # lock
@@ -424,7 +637,8 @@ class Command(BaseCommand):
                     except Exception:
                         return False
 
-                stats = run_translation(
+                runner = run_adjudication if opts['adjudicate'] else run_translation
+                stats = runner(
                     con, client, encode,
                     dict(batch_size=opts['batch_size'], limit=opts['limit'],
                          backtrans_min=opts['backtrans_min'],

@@ -9,7 +9,8 @@ import sqlite3
 from django.test import SimpleTestCase
 
 from api.management.commands.translate_terms import (
-    BudgetExhausted, parse_env_file, parse_json_array, run_translation,
+    BudgetExhausted, parse_choices, parse_env_file, parse_json_array,
+    run_adjudication, run_translation,
 )
 from . import terms
 
@@ -185,6 +186,87 @@ class RunTest(SimpleTestCase):
         queued = con.execute(
             "SELECT COUNT(*) FROM gen_queue WHERE state='queued'").fetchone()[0]
         self.assertEqual(queued, 1)
+
+
+def _review_store(rows):
+    """rows: [(en, [fa candidates])] pre-seeded in state='review'."""
+    con = sqlite3.connect(':memory:')
+    terms.ensure_schema(con)
+    terms.upsert_term(con, 'BRAKE PAD', 'لنت ترمز', source='curated')
+    for i, (en, cands) in enumerate(rows):
+        con.execute(
+            "INSERT INTO gen_queue(en, en_norm, freq, state, samples_json)"
+            " VALUES(?,?,?,'review',?)",
+            (en, terms.norm_en(en), 100 - i, json.dumps(cands, ensure_ascii=False)))
+    con.commit()
+    return con
+
+
+def choices(pairs):
+    return json.dumps([{'n': i + 1, 'choice': c} for i, c in enumerate(pairs)])
+
+
+class AdjudicateTest(SimpleTestCase):
+    def test_parse_choices_bounds(self):
+        items = [('Restraints', ['الف', 'ب'])]
+        self.assertEqual(parse_choices(choices([2]), items), [1])
+        self.assertIsNone(parse_choices(choices([3]), items))     # out of range
+        self.assertIsNone(parse_choices(choices([1, 1]), items))  # wrong count
+        self.assertIsNone(parse_choices('nope', items))
+
+    def test_judges_agree_and_publish(self):
+        con = _review_store([('Restraints', ['سیستم‌های ایمنی', 'سیستم مهار'])])
+        fake = FakeMetis([
+            choices([2]),                                   # judge A
+            choices([2]),                                   # judge B agrees
+            arr([('سیستم مهار', 'restraint system')], 'fa', 'en'),
+        ])
+        stats = run_adjudication(con, fake, fake_encode_same,
+                                 dict(batch_size=10), out=lambda s: None)
+        self.assertEqual(stats['accepted'], 1)
+        row = con.execute("SELECT fa, status FROM terms WHERE en='Restraints'").fetchone()
+        self.assertEqual(row, ('سیستم مهار', 'active'))
+        self.assertEqual(con.execute('SELECT state FROM gen_queue').fetchone()[0],
+                         'accepted')
+
+    def test_disagreement_third_judge(self):
+        con = _review_store([('Restraints', ['سیستم‌های ایمنی', 'سیستم مهار'])])
+        fake = FakeMetis([
+            choices([1]),
+            choices([2]),
+            choices([2]),                                   # third judge -> majority 2
+            arr([('سیستم مهار', 'restraint system')], 'fa', 'en'),
+        ])
+        stats = run_adjudication(con, fake, fake_encode_same,
+                                 dict(batch_size=10), out=lambda s: None)
+        self.assertEqual(stats['accepted'], 1)
+        conf = con.execute("SELECT confidence FROM terms WHERE en='Restraints'"
+                           ).fetchone()[0]
+        self.assertLess(conf, 0.9)                          # 0.5*0.7 + 0.5*1.0
+
+    def test_backtrans_fail_stays_review_no_loop(self):
+        con = _review_store([('Widget', ['الف واژه', 'ب واژه'])])
+        fake_encode_orthogonal.n = 0
+        fake = FakeMetis([
+            choices([1]), choices([1]),
+            arr([('الف واژه', 'unrelated')], 'fa', 'en'),
+        ])
+        stats = run_adjudication(con, fake, fake_encode_orthogonal,
+                                 dict(batch_size=10), out=lambda s: None)
+        self.assertEqual(stats['accepted'], 0)
+        self.assertEqual(stats['kept_review'], 1)
+        self.assertEqual(stats['batches'], 1)               # no refetch loop
+        self.assertEqual(con.execute('SELECT state FROM gen_queue').fetchone()[0],
+                         'review')
+
+    def test_single_candidate_skips_judges(self):
+        con = _review_store([('Widget', ['تنها گزینه'])])
+        fake = FakeMetis([
+            arr([('تنها گزینه', 'widget')], 'fa', 'en'),    # only backtrans needed
+        ])
+        stats = run_adjudication(con, fake, fake_encode_same,
+                                 dict(batch_size=10), out=lambda s: None)
+        self.assertEqual(stats['accepted'], 1)
 
 
 class EnvParseTest(SimpleTestCase):
