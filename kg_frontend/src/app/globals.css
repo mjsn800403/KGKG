@@ -1689,3 +1689,12 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   .guide-tour-ring,.guide-tour-tip{transition:none}
   .guide-fab:hover{transform:none}
 }
+
+/* Follow-up suggestion chips under the latest assistant reply */
+.chat-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chat-suggestion-chip{
+  padding:7px 14px;background:transparent;color:var(--accent);
+  border:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);
+  border-radius:999px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.25s;
+}
+.chat-suggestion-chip:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);border-style:solid}

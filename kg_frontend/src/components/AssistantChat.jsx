@@ -126,11 +126,24 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
     }
   }, [messages, loading]);
 
-  async function send() {
-    const text = input.trim();
+  // overrideText: a suggestion chip's underlying query; displayText: the chip
+  // label shown as the user's bubble (falls back to the sent text).
+  async function send(overrideText, displayText) {
+    const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     setInput('');
-    setMessages((m) => [...m, { role: 'user', content: text }]);
+    // Multi-turn context: recent thread + the last answer's source titles let
+    // the server resolve follow-ups («و گشتاورش چقدره؟») into a real query.
+    const historyPayload = messages
+      .filter((m) => !m.error && m.content)
+      .slice(-6)
+      .map((m) => ({ role: m.role === 'user' ? 'user' : 'ai',
+                     content: String(m.content).slice(0, 400) }));
+    const lastAi = [...messages].reverse()
+      .find((m) => m.role === 'ai' && m.sources?.length);
+    const prevSources = (lastAi?.sources || []).slice(0, 3)
+      .map((s) => s.title_en || s.title).filter(Boolean);
+    setMessages((m) => [...m, { role: 'user', content: (displayText ?? text) }]);
     setLoading(true);
     try {
       const res = await fetch('/api/chat', {
@@ -139,6 +152,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
         body: JSON.stringify({
           message: text, sessionId, userId: userIdRef.current,
           brand, model, car: carName,
+          history: historyPayload, prevSources,
         }),
       });
       const data = await res.json();
@@ -149,6 +163,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
         sources: data.sources || [], confidence: data.confidence || null,
         grounded: data.grounded, mode: data.mode, topBlobs: data.topBlobs || [],
         degraded: data.degraded || false, rated: false,
+        suggestions: data.suggestions || [],
       }]);
     } catch (err) {
       setMessages((m) => [
@@ -203,7 +218,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
             {msg.role === 'ai' && <div className="chat-avatar">AI</div>}
             <div className={`chat-bubble${msg.error ? ' error' : ''}`}>
               {msg.role === 'ai' ? <RenderReply text={msg.content} /> : msg.content}
-              {msg.role === 'ai' && !msg.error && msg.query && (
+              {msg.role === 'ai' && !msg.error && msg.query && msg.mode !== 'clarify' && (
                 <>
                   <EvidencePanel
                     sources={msg.sources}
@@ -216,6 +231,21 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
                     ? <FeedbackBar onRate={(v) => rate(msg, i, v)} />
                     : <div className="fb-bar fb-done">ممنون از بازخوردت 🙏</div>}
                 </>
+              )}
+              {msg.role === 'ai' && !msg.error && i === messages.length - 1 &&
+                !loading && (msg.suggestions?.length > 0) && (
+                <div className="chat-suggestions">
+                  {msg.suggestions.map((s, k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      className="chat-suggestion-chip"
+                      onClick={() => send(s.query, s.label)}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>

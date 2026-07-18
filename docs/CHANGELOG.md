@@ -3,6 +3,26 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## 2026-07-18
+- **Bilingual terminology store shipped** (`_rag/terms.db`, `api/rag/terms.py`,
+  `manage.py build_terms`): Book1.csv + translation.sql unified and cleaned (1,602 part
+  pairs + 107 curated service terms); `Book1.csv` and the new `terms_en_fa.json` display
+  dictionary are now GENERATED artifacts (hot-reload, atomic, dated backups). (doc 14)
+- **Professional bilingual chat display**: chat source titles/buttons render
+  «فارسی (English)» via `src/lib/faTerms.js` (token-index matcher, 1,644 entries,
+  60s hot-reload, built-in fallback); Metis prompt gains a mandatory TERMINOLOGY block.
+  (doc 08 §8.5)
+- **Conversational assistant**: client sends recent thread; deterministic follow-up
+  contextualizer (`src/lib/contextualize.js`, no LLM cost) joins anaphoric follow-ups
+  for retrieval; HISTORY block in the prompt; 2-4 follow-up suggestion chips per answer;
+  clarify mode (one Persian clarifying question + system chips) for ambiguous
+  low-confidence queries; hardened history validation. (doc 08 §8.5)
+- **QA-gated machine translation** (`manage.py translate_terms`): 2-sample
+  self-consistency + bge-m3 back-translation gate, budget caps, lockfile, pipeline
+  yielding, review CSV workflow; mining/report/fa-gap commands in `build_terms`. (doc 14)
+- Backend tests 221 green (28 new); frontend node tests 4 suites green; sandbox E2E
+  batteries (phase 1: bilingual display; phase 2: multi-turn/clarify/chips) all pass.
+
 ## 2026-07-15
 - **Documentation suite created** (`docs/01…13`, this changelog). Source of truth going
   forward; maintenance protocol in `docs/README.md`.

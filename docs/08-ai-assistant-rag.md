@@ -39,7 +39,9 @@ Car metadata resolution (`config.car_meta`): explicit `CAR_REGISTRY` → **catal
 
 - Hybrid: vector + FTS + glossary expansion (Book1.csv EN↔FA part names, so a Persian query
   matches English manual text), rescored (`scoring.py`), graph-expanded (related sections,
-  cross-vehicle occurrences, labor links).
+  cross-vehicle occurrences, labor links). Since 2026-07-18 `Book1.csv` is **generated**
+  from the terminology store (`terms.db`, doc 14) — same format, same hot-reload; don't
+  hand-edit the CSV anymore.
 - **Scope gates:**
   - a query pinned to an un-indexed car hard-fails to a "car not indexed" result rather
     than leaking another car's manual (`_car_indexed` gate);
@@ -67,15 +69,32 @@ links respect `allowed_cars`.
 ## 8.5 Chat flow (`kg_frontend/src/app/api/chat/route.js`)
 
 1. Validate: portal token → backend `/api/auth/me/`; require `ai_eligible`. Per-IP rate
-   limit (real client IP via `x-real-ip`).
-2. Ground: with car context call `/api/diagnose/` first; if it yields nothing (or no car),
-   `/api/assist/`.
-3. Phrase: Metis (api.metisai.ir, paid) with a strict context-only Persian prompt. A
-   **faithfulness gate** ensures buttons/links in the reply are exactly the retrieved ones
-   (the model cannot invent or alter URLs).
-4. Fallback: if Metis errors/times out, a deterministic Persian renderer produces the same
-   grounded content without an LLM. The assistant never goes down with the vendor.
-5. The Metis API key + bot id live only in the frontend server env (`.env.production`).
+   limit (real client IP via `x-real-ip`). The client-sent thread (`history`,
+   `prevSources`) is untrusted: hard-capped counts/lengths (`sanitizeHistory`).
+2. **Contextualize** (2026-07-18, `src/lib/contextualize.js`): a deterministic heuristic
+   detects short anaphoric follow-ups («و گشتاورش چقدره؟», a bare «از ترمز» clarify
+   answer) and joins them with the previous user message + top previous source title to
+   form the RETRIEVAL query. No LLM call; response carries `contextualized: true`;
+   cache keys stay correct because the augmented string IS the query.
+3. Ground: with car context call `/api/diagnose/` first; if it yields nothing (or no car),
+   `/api/assist/` — both receive the contextualized query.
+4. Phrase: Metis (api.metisai.ir, paid) with a strict context-only Persian prompt, now
+   fed three extra blocks: a **TERMINOLOGY block** (the EN↔FA pairs from `terms_en_fa.json`
+   found in the retrieved context — mandates consistent official equivalents), a
+   **HISTORY block** (last exchanges, reference-resolution only), and bilingual
+   «فارسی (English)» source titles rendered by `src/lib/faTerms.js`. A **faithfulness
+   gate** ensures buttons/links in the reply are exactly the retrieved ones.
+5. **Clarify mode**: an assist answer with `low` confidence whose top hits scatter over
+   3+ manual systems returns `mode:'clarify'` — one short Persian clarifying question +
+   system chips instead of a generic answer. Grounding math is untouched.
+6. **Suggestions**: every answer carries 2-4 follow-up chips (`suggestions[]`) derived
+   from data already retrieved (related pages, labor time, sibling DTCs, cross-vehicle);
+   labels Persian, underlying queries self-contained English titles.
+7. Fallback: if Metis errors/times out, a deterministic Persian renderer produces the same
+   grounded content without an LLM (including a deterministic clarify question). The
+   assistant never goes down with the vendor.
+8. The Metis API key + bot id live only in the frontend server env (`.env.production`),
+   alongside `TERMS_JSON_PATH` (the display-dictionary artifact path).
 
 ## 8.6 Human-in-the-loop feedback
 
@@ -96,5 +115,8 @@ links respect `allowed_cars`.
    threads (already configured).
 5. HF is fully offline (`HF_HUB_OFFLINE=1`); the model cache lives at
    `/root/.cache/huggingface` — losing it means re-downloading ~4.3GB out-of-band.
-6. Persian queries rely on the glossary; if part-name coverage feels weak, extend
-   `Book1.csv` (EN,FA rows) and rebuild the glossary, not the prompt.
+6. Persian queries rely on the glossary; if part-name coverage feels weak, add pairs to
+   the **terminology store** (`manage.py build_terms --import-review file.csv`, then
+   `--export`) — never hand-edit `Book1.csv`, it is a generated artifact now (doc 14).
+7. `feedback.db` logs the contextualized (joined) query string for follow-ups — the
+   fa-gap miner (`build_terms --fa-gaps`) filters the ` — ` joiner before analysis.
