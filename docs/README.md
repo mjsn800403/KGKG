@@ -29,6 +29,8 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [11 — Operations & deployment](11-operations-deployment.md) | Server layout, systemd, nginx, env vars, pipeline, monitoring, alerts, backups, deploy process |
 | [12 — Security](12-security.md) | Auth details, enforced guarantees, hardening history, known limitations |
 | [13 — User guidance system](13-guidance-system.md) | Role-based tours, help center, contextual hints — and how they stay in sync with these docs |
+| [14 — Terminology & bilingual display](14-terminology.md) | terms.db store, bilingual chat display, QA-gated translation |
+| [15 — Vehicle schema & ingestion pipeline](15-vehicle-schema.md) | download/parse pipeline stages, ZIP inbox, multi-year stems, schema.org vehicle specs |
 | [CHANGELOG](CHANGELOG.md) | Dated log of shipped changes, newest first |
 
 ## Quick facts (verified 2026-07-15)

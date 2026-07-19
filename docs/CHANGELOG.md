@@ -3,6 +3,24 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## 2026-07-18 (b) — ingestion pipeline + vehicle schema
+- **Pipeline front half shipped** (commit 8e5c4ba): new `download` and `parse` stages ahead
+  of catalog/rag/diag/audit; `DownloadRequest` + `ZipPackage` queues (migration 0013);
+  `manage.py scan_zips` inbox scanner with LEMON filename normalization and a
+  stem-level duplicate guard; disk guard (pause < 20 GB free). (doc 15)
+- **LeMon downloader integrated**: importable by the worker, `--filter` flag, output
+  renamed to the `LEMON <year> <brand> <model>.zip` convention. (doc 15)
+- **Multi-year stems**: non-2025 model years get a `" (YYYY)"` stem suffix
+  (`htmlparser_logical.warehouse_stem`); suffix-aware `car_meta`/`display_name`;
+  dataquality treats a year suffix as NOT a copy marker. (doc 15 §3)
+- **schema.org vehicle specs** (`api/vehicleschema.py`, `VehicleSpec`, `schema` pipeline
+  stage): per-field provenance (catalog/stem/manual/curated), strict leave-null policy;
+  surfaced via `?spec=1`, public JSON-LD on catalog pages, chatbot SPECS grounding block,
+  admin «مشخصات خودروها» section. (doc 15 §4–5)
+- **Backlog queued**: 216 inbox ZIPs scanned → 164 new vehicles queued, 52 duplicates
+  skipped; ~45 GB extraction residue purged; Corolla Cross 2023 (9) + 2024 (10) download
+  requests queued; pipeline job #3 started. Tests 259 green (33 new).
+
 ## 2026-07-18
 - **Bilingual terminology store shipped** (`_rag/terms.db`, `api/rag/terms.py`,
   `manage.py build_terms`): Book1.csv + translation.sql unified and cleaned (1,602 part
