@@ -3,6 +3,16 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## 2026-07-19 — parallel parsing + max-power toggle
+- **Parse stage parallelised** (commit 8fc1ff1): one ZIP per subprocess
+  (`ProcessPoolExecutor` spawn, `api/parse_worker.py`) so the GIL-bound html5lib
+  crawl uses many cores instead of one. ~1 → ~14 effective cores. (doc 15 §6b)
+- **Max-power toggle** (`PipelineSettings.max_power`, migration 0014; admin
+  switch «حداکثر توان پردازش»): normal = half cores at low priority (site stays
+  responsive) vs max = cores-1 at full priority. `pipeline.power_plan` +
+  `launch_worker` set worker counts + Nice/IO/CPUWeight; `apply_power` action
+  restarts the active job to apply immediately. 268 tests green. (doc 15 §6b)
+
 ## 2026-07-18 (b) — ingestion pipeline + vehicle schema
 - **Pipeline front half shipped** (commit 8e5c4ba): new `download` and `parse` stages ahead
   of catalog/rag/diag/audit; `DownloadRequest` + `ZipPackage` queues (migration 0013);
