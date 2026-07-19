@@ -6,6 +6,7 @@ ABS Pump Motor Actuator Stuck,گیرکردن عملگر موتور پمپ ABS
 "ABSORBER SET, SHOCK, FRONT RH",کمک ‌فنر جلو (راست)
 "ABSORBER SET, SHOCK, REAR RH",کمک ‌فنر عقب (راست)
 ACC Circuit Short to Ground,اتصال کوتاه مدار ACC به بدنه
+Accelerator Pedal,پدال گاز
 Accessories & Equipment,لوازم جانبی و تجهیزات
 Accessory,متعلقات
 ACCESSORY ASSY AIR CONDITIONER,لوازم جانبی تهویه مطبوع
@@ -20,6 +21,7 @@ Acoustic Vehicle Alerting System - Diagnostic Codes & Symptom Tests,سیستم �
 Acoustic Vehicle Alerting System - Diagnostics - Introduction,سیستم هشدار صوتی خودرو - عیب‌یابی - مقدمه
 Acoustic Vehicle Alerting System - Service Information,سیستم هشدار صوتی خودرو - اطلاعات سرویس
 Acoustics,صوت شناسی (علم تولید، انتقال و تاثیرات صدا)
+"Active Grille Air Shutter ""A"" Missing Message","پیام مفقود کرکره فعال هوای جلوپنجره ""A"""
 Active Noise Control System,سیستم کنترل نویز فعال
 Active Noise Control System - Diagnostic Codes & Circuit Tests,سیستم کنترل نویز فعال - کدهای عیب‌یابی و آزمون‌های مدار
 Active Noise Control System (W/ Stereo Amp) - Diagnostic Codes & Circuit Tests,سیستم کنترل فعال نویز (با آمپلی‌فایر استریو) - کدهای عیب‌یابی و تست مدار
@@ -51,6 +53,7 @@ Advanced Driver Assistance System,سیستم کمک‌راننده پیشرفت�
 Advanced Driver Assistance System DTCS,کدهای عیب‌یابی سیستم کمک‌راننده پیشرفته
 Advanced Driver Assistance System (Preparation),سیستم کمک‌راننده پیشرفته (آماده‌سازی)
 Advanced Driver Assistance System - Service Information,سیستم پیشرفته کمک‌راننده - اطلاعات سرویس
+Advanced Parking System - Service Information & Diagnostics,سیستم پارک پیشرفته - اطلاعات سرویس و عیب‌یابی
 AIR BAG ASSY INSTRUMENT PANEL PASSENGER W/O DOOR,ایربگ داشبورد (راست)
 "Air Bag, SRS",ایربگ، SRS
 Air Conditioning,تهویه ی مطبوع
@@ -70,24 +73,42 @@ Air Conditioning Unit,یونیت تهویه مطبوع
 Air Fuel Ratio Sensor (For Sensor 1),سنسور نسبت هوا به سوخت (برای سنسور ۱)
 Air Strut,استرات (کمک فنر) بادی
 Air Suspension,تعلیق بادی
+Airbag Signal Plausibility Failure,خرابی اعتبار سیگنال ایربگ
 Airbag System,سیستم ایربگ
+Airbag System - Diagnostic Codes (02 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۲ از ۱۲)
+Airbag System - Diagnostic Codes (03 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۳ از ۱۲)
+Airbag System - Diagnostic Codes (04 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۴ از ۱۲)
+Airbag System - Diagnostic Codes (05 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۵ از ۱۲)
+Airbag System - Diagnostic Codes (06 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۶ از ۱۲)
+Airbag System - Diagnostic Codes (07 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۷ از ۱۲)
+Airbag System - Diagnostic Codes (08 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۸ از ۱۲)
+Airbag System - Diagnostic Codes (09 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۰۹ از ۱۲)
+Airbag System - Diagnostic Codes (10 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۱۰ از ۱۲)
+Airbag System - Diagnostic Codes (11 Of 12),سیستم ایربگ - کدهای عیب‌یابی (۱۱ از ۱۲)
+Airbag System - Diagnostic Codes (12 Of 12) & Symptom Tests,سیستم ایربگ - کدهای عیب‌یابی (12 از 12) و آزمون‌های نشانه‌ای
 Airbag System - Diagnostic Codes (B0001-B0004),سیستم ایربگ - کدهای عیب‌یابی (B0001-B0004)
 Airbag System - Diagnostic Codes (B0004-B0028),سیستم ایربگ - کدهای عیب‌یابی (B0004-B0028)
 Airbag System - Diagnostic Codes (B0028-B0073),سیستم ایربگ - کدهای عیب‌یابی (B0028-B0073)
 Airbag System - Diagnostic Codes (B0073-B009E),سیستم ایربگ - کدهای عیب‌یابی (B0073-B009E)
+Airbag System - Diagnostic Codes (B009E-U0129) & Symptom Tests,سیستم ایربگ - کدهای عیب‌یابی (B009E-U0129) و آزمون‌های نشانه‌ای
 Airbag System - Diagnostic Codes (1 Of 4),سیستم ایربگ - کدهای عیب‌یابی (1 از 4)
+Airbag System - Diagnostic Codes (4 Of 4) & Symptom Tests,سیستم ایربگ - کدهای عیب‌یابی (4 از 4) و آزمون‌های نشانه‌ای
 Airbag System - Diagnostics - Introduction,سیستم ایربگ - عیب‌یابی - مقدمه
 Airbag System - Service Information,سیستم ایربگ - اطلاعات سرویس
 Airbag System - Service Information (1 Of 2),سیستم ایربگ - اطلاعات سرویس (1 از 2)
 Al80E / Al80F Automatic Transmission / Transaxle,گیربکس اتوماتیک / ترنس‌اکسل AL80E / AL80F
 Alignment / Handling Diagnosis,عیب‌یابی هم‌راستایی / هندلینگ
 Alignment / Handling Diagnosis (Service Specifications),عیب‌یابی هم‌راستایی / هندلینگ (مشخصات سرویس)
+All Door Entry Lock/Unlock Functions and Wireless Functions do not Operate,همه عملکردهای قفل/باز کردن درب‌ها و عملکردهای بی‌سیم کار نمی‌کنند
+All Doors LOCK/UNLOCK Functions do not Operate Via Door Control Switch,عملکردهای قفل/بازکردن همه درب‌ها از طریق کلید کنترل درب کار نمی‌کنند
+All Doors LOCK/UNLOCK Functions do not Operate Via Door Key Cylinder,عملکردهای قفل/بازکردن همه درب‌ها از طریق سیلندر کلید درب کار نمی‌کنند
 All Metal,تمام فلزی
 All Wheel Drive,همه چرخ محرک
 Alloy,آلیاژ (فلزی که از افزودن چند عنصر به فلز مبنا حاصل می شود)
 alternator,دینام
 "ALTERNATOR ASSY, W/REGULATOR",دینام کامل
 Aluminizing,آلومینیوم کاری
+Ambient Illumination Light Circuit,مدار چراغ نورپردازی محیطی
 Ambient Temperature Display System,سیستم نمایش دمای محیط
 Ambient Temperature Sensor,سنسور دمای محیط
 Ambient Temperature Sensor Circuit Short to Battery or Open,اتصال کوتاه مدار سنسور دمای محیط به باتری یا مدار باز
@@ -135,6 +156,7 @@ AUDIO AND VISUAL SYSTEM (for 14 Inch Display),سیستم صوتی و تصویر�
 AUDIO AND VISUAL SYSTEM (for 8 Inch Display),سیستم صوتی و تصویری (برای نمایشگر ۸ اینچ)
 Audio / Video,صوتی / تصویری
 Audio / Video System - Diagnostic Codes (1 Of 2),سیستم صوتی / تصویری - کدهای عیب‌یابی (1 از 2)
+Audio / Video System - Diagnostic Codes (2 Of 2) & Symptom Tests,سیستم صوتی / تصویری - کدهای عیب‌یابی (2 از 2) و آزمون‌های نشانه‌ای
 Audio / Video System - Diagnostic Codes & Symptom Tests (1 Of 2),سیستم صوتی / تصویری - کدهای عیب‌یابی و تست علائم (1 از 2)
 Audio / Video System - Diagnostics - Introduction,سیستم صوتی / تصویری - عیب‌یابی - مقدمه
 Audio / Video System - Diagnostics - Introduction (1 Of 2),سیستم صوتی / تصویری - عیب‌یابی - مقدمه (۱ از ۲)
@@ -184,11 +206,16 @@ Axle Shaft,پلوس
 Axle Shafts,شفت‌های اکسل
 Back Door,درب عقب
 Back Door Closer does not Operate,کلوزر درب عقب کار نمی‌کند
+Back Door Closer General Electrical Failure,خرابی عمومی برقی آرام‌بند درب عقب
+Back Door Closer Switch General Electrical Failure,خرابی عمومی برقی کلید آرام‌بند درب عقب
 Back Door Control Switch,کلید کنترل درب عقب
+Back Door Entry Lock and Unlock Functions do not Operate,عملکردهای قفل و باز کردن درب عقب کار نمی‌کنند
 Back Door Entry Lock Function does not Operate,عملکرد قفل‌کردن درب عقب کار نمی‌کند
+Back Door Entry Unlock Function does not Operate,عملکرد باز کردن درب عقب کار نمی‌کند
 Back Door Lock,قفل درب عقب
 Back Door Motor Internal Electronic Failure,خرابی الکترونیکی داخلی موتور درب عقب
 Back Door Outside Garnish,زه بیرونی درب عقب
+Back Power Window Switch,کلید شیشه‌بالابر برقی عقب
 Back-Up Battery,باتری پشتیبان
 Back-up Light Circuit,مدار چراغ دنده‌عقب
 Backlash,لقی
@@ -222,6 +249,7 @@ Battery / Charging System - Service Information,باتری / سیستم شارژ
 Battery Circuit or Ground Circuit Energization Malfunction,خرابی برق‌دار شدن مدار باتری یا مدار بدنه
 Battery Current Sensor,سنسور جریان باتری
 Battery Management Systems,سیستم‌های مدیریت باتری
+Battery Trays And Hold Down Hardware,سینی باتری و یراق مهار
 Battery Voltage Sensor,سنسور ولتاژ باتری
 Bead Breaker,لق کن تایر
 Bead Of Tire,لبه ی تایر (لبه ی برآمده ی تایر در مجاورت رینگ)
@@ -256,12 +284,15 @@ Blind Spot Monitor Sensor,سنسور مانیتور نقطه کور
 Blind Spot Monitor Sensor Communication Stop Mode,حالت توقف ارتباط سنسور مانیتور نقطه کور
 Blind Spot Monitor System,سیستم مانیتور نقطه کور
 Blind Spot Monitor System - Diagnostic Codes & Circuit Tests,سیستم مانیتور نقطه کور - کدهای عیب‌یابی و تست مدار
+Blind Spot Monitor System - Diagnostic Codes & Symptom Tests,سیستم مانیتور نقطه کور - کدهای عیب‌یابی و آزمون‌های نشانه‌ای
+"Blind Spot Monitor System - Diagnostic Codes, Symptom Tests & Circuit Tests",سیستم مانیتور نقطه کور - کدهای عیب‌یابی، آزمون‌های نشانه‌ای و آزمون‌های مدار
 Blind Spot Monitor System - Diagnostics - Introduction,سیستم مانیتور نقطه کور - عیب‌یابی - مقدمه
 "BLOCK ASSY, FUSE",جعبه فیوز
 "BLOCK ASSY, SHORT",نیم موتور( شامل پوسته موتور+میل لنگ +یاتاقان+پیستون+شاتون)
 "BLOCK SUB-ASSY, CYLINDER",بلوک سیلندر
 Blower Assembly Screw,پیچ مجموعه دمنده
 Blower Motor Circuit,مدار موتور بلوئر
+Blower Unit,واحد دمنده
 "Blowers, Superchargers & Turbochargers",بلوئرها، سوپرشارژرها و توربوشارژرها
 "BOARD, COWL SIDE TRIM, LH",قاب پلاستیکی رکاب داخلی (چپ)
 "BOARD, COWL SIDE TRIM, RH",قاب پلاستیکی رکاب داخلی(راست)
@@ -272,6 +303,7 @@ BOARD SUB-ASSY REAR DOOR TRIM RH,تودری درب عقب (راست)
 Body,بدنه، اتاق
 BODY ASSY THROTTLE W/THROTTLE POSITION SENSOR,دریچه گاز کامل( با سنسور موقعیت دریچه)
 "BODY ASSY, TRANSMISSION VALVE",ساعت گیربکس
+Body Control System,سیستم کنترل بدنه
 Body Electrical,برق بدنه
 Body & Frame,بدنه و شاسی
 Bolt,پیچ
@@ -400,6 +432,7 @@ Brake Actuator,عملگر ترمز
 Brake Booster,بوستر ترمز
 Brake Booster (For Gasoline Model),بوستر ترمز (برای مدل بنزینی)
 "Brake Booster Motor ""A"" Performance",عملکرد موتور بوستر ترمز «A»
+"Brake Booster Motor ""A"" Supply Voltage Circuit Short to Ground or Open",اتصال کوتاه به بدنه یا مدار باز مدار ولتاژ تغذیه موتور بوستر ترمز «A»
 Brake Caliper,کالیپر ترمز
 Brake Control / Dynamic Control System (Preparation),سیستم کنترل ترمز / کنترل دینامیکی (آماده‌سازی)
 Brake Control / Dynamic Control System (Service Specifications),سیستم کنترل ترمز / کنترل دینامیکی (مشخصات سرویس)
@@ -415,7 +448,12 @@ brake pad,لنت ترمز
 Brake Pedal (For Gasoline Model),پدال ترمز (برای مدل بنزینی)
 "Brake Pedal Position Sensor ""A""",سنسور موقعیت پدال ترمز «A»
 "Brake Pedal Position Sensor ""A"" Supply Voltage Malfunction",خرابی ولتاژ تغذیه سنسور موقعیت پدال ترمز «A»
+Brake Pressure Control solenoid Supply Voltage Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار ولتاژ تغذیه سلونوئید کنترل فشار ترمز
+Brake Pressure Sensor / Brake Pedal Position Sensor Signal Compare Failure,عدم تطابق سیگنال سنسور فشار ترمز / سنسور موقعیت پدال ترمز
+"Brake Pressure Sensor ""A"" Circuit Voltage Above Threshold",ولتاژ مدار سنسور فشار ترمز «A» از حد مجاز بالاتر است
+"Brake Switch ""A"" Circuit Short to Battery",اتصال کوتاه مدار کلید ترمز «A» به باتری
 Brake System,سیستم ترمز
+Brake System Control Module Power Supply Voltage Circuit Voltage Above Threshold,ولتاژ مدار تغذیه ماژول کنترل سیستم ترمز از حد مجاز بالاتر است
 Brake System (Front) - Service Information,سیستم ترمز (جلو) - اطلاعات سرویس
 Brake System (Hydraulic) - Service Information,سیستم ترمز (هیدرولیکی) - اطلاعات سرویس
 Brake System (Hydraulic) (Service Specifications),سیستم ترمز (هیدرولیکی) (مشخصات سرویس)
@@ -425,6 +463,7 @@ Brake Systems,سیستم‌های ترمز
 Brakes,ترمزها
 Braking System Information System Programming Failure,خرابی برنامه‌ریزی سیستم اطلاعات سیستم ترمز
 Break Down,اشکال فنی، نقص فنی، عیب فنی
+Break-In Procedure,روش آب‌بندی
 Breaker Strip (Of Tire),نوار بار شکن (تایر چرخ)
 Brittle,شکننده، ترد
 Buffer,ضربه گیر
@@ -464,20 +503,32 @@ CABLE ASSY REAR DOOR LOCK REMOTE CONTROL LH,سیم موتور شیشه بالا�
 CABLE SUB-ASSY FUEL LID LOCK CONTROL,سیم قفل درب باک
 CABLE SUB-ASSY LUGGAGE DOOR LOCK CONTROL,کابل قفل دربازکن صندوق عقب
 Calibration,تنظیم، کالیبراسیون، واسنجی
+CALIFORNIA,کالیفرنیا
 Camber,کمبر
+"Camera ""A"" Heater Control Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز مدار کنترل گرم‌کن دوربین «A»
+"Camera ""A"" Heater Control Circuit Short to Ground",اتصال کوتاه به بدنه مدار کنترل گرم‌کن دوربین «A»
 Camera Malfunction System Internal Failure,خرابی داخلی سیستم خرابی دوربین
 Camshaft,میل بادامک
 camshaft,میل سوپاپ
 CAMSHAFT,میل سوپاپ هوا (ورودی)
 Camshaft Oil Control Solenoid,سلونوئید کنترل روغن میل‌سوپاپ
 Camshaft Oil Control Valve,شیر کنترل روغن میل‌سوپاپ
+"Camshaft Position ""A"" Actuator Bank 1 General Electrical Failure",خرابی عمومی برقی عملگر موقعیت میل‌سوپاپ «A» ردیف 1
 Camshaft Position Sensor,سنسور موقعیت میل‌سوپاپ
+"Camshaft Position Signal Output ""A"" General Electrical Failure",خرابی عمومی برقی خروجی سیگنال موقعیت میل‌سوپاپ «A»
+"Camshaft Position ""A"" - Timing Over-Advanced or System Performance Bank 1",موقعیت میل‌سوپاپ «A» - زمان‌بندی بیش‌ازحد پیش‌افتاده یا عملکرد سیستم ردیف 1
+"Camshaft Position ""A"" - Timing Over-Retarded Bank 1",موقعیت میل‌سوپاپ «A» - زمان‌بندی بیش‌ازحد عقب‌افتاده ردیف 1
 Camshaft Timing Control Motor,موتور کنترل زمان‌بندی میل‌سوپاپ
 Can Communication System,سیستم ارتباط CAN
+Can Communication System - Circuit Tests (1 Of 3) & Diagnostic Codes,سیستم ارتباط CAN - آزمون‌های مدار (1 از 3) و کدهای عیب‌یابی
+Can Communication System (Except HV) - Circuit Tests (2 Of 8),سیستم ارتباط CAN (به‌جز HV) - آزمون‌های مدار (2 از 8)
+Can Communication System (Except HV) - Circuit Tests (1 Of 8) & Diagnostic Codes,سیستم ارتباط CAN (به‌جز HV) - آزمون‌های مدار (1 از 8) و کدهای عیب‌یابی
 CAN COMMUNICATION SYSTEM (for 1Motor-HEV Model),سیستم ارتباطی CAN (برای مدل 1Motor-HEV)
 CAN COMMUNICATION SYSTEM (for Gasoline Model),سیستم ارتباطی CAN (برای مدل بنزینی)
 CAN COMMUNICATION SYSTEM (for HEV Model),سیستم ارتباطی CAN (برای مدل HEV)
 CAN COMMUNICATION SYSTEM (for HV Model),سیستم ارتباط CAN (برای مدل HV)
+Can Communication System (HEV) - Circuit Tests (2 Of 5),سیستم ارتباط CAN (HEV) - آزمون‌های مدار (2 از 5)
+Can Communication System (HEV) - Circuit Tests (1 Of 5) & Diagnostic Codes,سیستم ارتباط CAN (HEV) - آزمون‌های مدار (1 از 5) و کدهای عیب‌یابی
 CANADIAN Model Cross-Reference,ارجاع متقابل مدل کانادایی
 "CANISTER ASSY, CHARCOAL",کنیستر سوخت
 "CAP, AIR CLEANER",درپوش بالایی فیلتر هوا
@@ -508,7 +559,9 @@ Carcase,اسکلت
 Casing,منجید، بدنه، پوسته، پوشینه
 Caster,کستر
 Catalyst Location,محل کاتالیزور
+Catalyst System Efficiency Below Threshold Bank 1,راندمان سیستم کاتالیزور زیر حد مجاز ردیف 1
 Caution / Notice / Hint,احتیاط / توجه / نکته
+Cellular Communication,ارتباط سلولی
 Cellular Communication System - Service Information,سیستم ارتباط سلولی - اطلاعات سرویس
 Cellular Rubber,لاستیک اسفنجی
 Center Airbag Sensor Assembly,مجموعه سنسور ایربگ مرکزی
@@ -517,6 +570,8 @@ Certification Ecu,ECU تایید
 Certification ECU Communication Stop Mode,حالت توقف ارتباط ECU تایید
 CHAIN SUB-ASSY,زنجیر تایم
 Characteristic,مشخصه، خصوصیت
+Charge Air Cooler Temperature Sensor Bank 1 Circuit Short to Battery or Open,اتصال کوتاه به باتری یا مدار باز مدار سنسور دمای اینترکولر ردیف 1
+Charge Air Cooler Temperature Sensor Bank 1 Circuit Short to Ground,اتصال کوتاه به بدنه مدار سنسور دمای اینترکولر ردیف 1
 Charging System,سیستم شارژ
 CHARGING SYSTEM (for 1Motor-HEV Model with Auxiliary Switch System),سیستم شارژ (برای مدل 1Motor-HEV با سیستم کلید کمکی)
 CHARGING SYSTEM (For 1Motor-HEV Model Without Auxiliary Switch System),سیستم شارژ (برای مدل 1Motor-HEV بدون سیستم کلید کمکی)
@@ -621,11 +676,13 @@ Collapsible Spare,زاپاس جمع شو
 Collar,طوقه، بست حلقوی
 "COLLAR, BRAKE ACTUATOR CASE","پیچ ,پایه نگهدارنده بلوک ABS"
 COLLAR(FOR AIR CLEANER),یقه فیلتر هوا
+Collision/Avoidance,تصادف / جلوگیری از تصادف
 Combination Meter,متر ترکیبی
 Combination Meter ECU Communication Stop Mode,حالت توقف ارتباط ECU متر ترکیبی
 Combination Switch,کلید ترکیبی
 Common Specs & Procedures,مشخصات و روش‌های مشترک
 Commonly Used Abbreviations - General Information,اختصارات رایج - اطلاعات عمومی
+Communication between ECUs connected by LIN Bus off,قطع ارتباط بین ECUهای متصل به باس LIN
 Communication Devices,دستگاه‌های ارتباطی
 Compact Spare,زاپاس فشرده
 Component Operating Range,محدوده عملکرد قطعه
@@ -651,6 +708,7 @@ Control Arm Bushing,بوش طبق
 Control Module Processor (Brake Override System Input Signal) Component Failure,خرابی قطعه پردازنده ماژول کنترل (سیگنال ورودی سیستم لغو ترمز)
 Control Module Processor (Brake Override System Output Signal) Component Failure,خرابی قطعه پردازنده ماژول کنترل (سیگنال خروجی سیستم لغو ترمز)
 Control Module Processor Unexpected Operation,عملکرد غیرمنتظره پردازنده ماژول کنترل
+Control Module Processor Watchdog/Safety MCU Failure,خرابی واچ‌داگ پردازنده ماژول کنترل / MCU ایمنی
 Control Modules,ماژول‌های کنترل
 "CONVERTER ASSY, TORQUE",توربین گیربکس
 CONVERTER SUB-ASSY EXHAUST MANIFOLD,منیفولد دود
@@ -731,12 +789,15 @@ COVER SUB-ASSY FRONT SEAT CUSHION RH,روکش صندلی جلو (راست)
 COVER SUB-ASSY INSTRUMENT PANEL UNDER,کاور زیر داشبورد (راست)
 COVER SUB-ASSY TIMING CHAIN OR BELT,مجموعه کامل پوسته زنجیر تایم (شامل زنجیر تایم+ سفت کن زنجیر تایم)
 "COVER, TRANSMITTER HOUSING",درپوش باتری کلید ایموبلایزر
+"Crankcase Pressure Sensor ""A"" Circuit High Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز مدار پرولتاژ سنسور فشار کارتر «A»
+"Crankcase Pressure Sensor ""A"" Circuit Low Circuit Short to Ground",اتصال کوتاه به بدنه مدار کم‌ولتاژ سنسور فشار کارتر «A»
 "Crankcase Ventilation System - Hose ""A"" Disconnected",سیستم تهویه کارتر - شیلنگ «A» جدا شده است
 crankshaft,میل لنگ
 Crankshaft & Main Bearings,میل‌لنگ و یاتاقان‌های اصلی
 Crankshaft Position - Camshaft Position Correlation Bank 1 Sensor A,همبستگی موقعیت میل‌لنگ - موقعیت میل‌سوپاپ بانک 1 سنسور A
 Crankshaft Position Sensor,سنسور موقعیت میل‌لنگ
 "Crankshaft Position Sensor ""A"" No Signal",عدم دریافت سیگنال از سنسور موقعیت میل‌لنگ «A»
+"Crankshaft Position Sensor ""A"" Signal Compare Failure",خرابی مقایسه سیگنال سنسور موقعیت میل‌لنگ «A»
 Cross Section,سطح مقطع
 CROSSMEMBER SUB-ASSY FRONT SUSPENSION,رام جلو
 Cruise Control Input Processor,پردازنده ورودی کروز کنترل
@@ -781,6 +842,7 @@ Damping,میرایی، استهلاک
 Damping Constant,ضریب میرایی
 Dashpot,ضربه گیر، کمک فنر
 Data List / Active Test,فهرست داده‌ها / تست فعال
+Daytime Running Light Circuit,مدار چراغ روشنایی روز
 DC/DC Converter Enable Circuit Short to Battery,اتصال کوتاه مدار فعال‌سازی مبدل DC/DC به باتری
 DC/DC Converter Enable Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار فعال‌سازی مبدل DC/DC
 DC/DC Converter Enable Component Internal Failure,خرابی داخلی قطعه فعال‌ساز مبدل DC/DC
@@ -814,6 +876,7 @@ Digital Key System,سیستم کلید دیجیتال
 Digital Key System - Diagnostic Codes & Symptom Tests,سیستم کلید دیجیتال - کدهای عیب‌یابی و تست علائم
 Digital Key System - Diagnostics - Introduction,سیستم کلید دیجیتال - عیب‌یابی - مقدمه
 Digital Rear-View Mirror System,سیستم آینه دید عقب دیجیتال
+Digital Rear-View Mirror System - Diagnostics & Symptom Tests,سیستم آینه دید عقب دیجیتال - عیب‌یابی و آزمون‌های نشانه‌ای
 Disassembly [02/2024 - ]: Procedure,بازکردن‌ قطعات [02/2024 - ]: روش کار
 Disassembly [04/2024 - ]: Procedure,بازکردن‌ قطعات [04/2024 - ]: روش کار
 Disassembly [09/2021 - 11/2022]: Procedure,بازکردن قطعات [09/2021 - 11/2022]: روش کار
@@ -831,15 +894,18 @@ Disposal [12/2024 - ]: Procedure,امحا [12/2024 - ]: روش کار
 Distortion,اعوجاج، از شکل افتادگی، واپیچش
 Door Control Receiver,گیرنده کنترل درب
 Door Control Switch,کلید کنترل درب
+Door Control Transmitter,فرستنده کنترل درب
 "DOOR, GLOVE COMPARTMENT, OUTER",درب داشبورد
 Door / Hatch,درب / هاچ
 Door / Hatch - Service Information,درب / هاچ - اطلاعات سرویس
 Door / Hatch - Service Information (1 Of 2),درب / در عقب - اطلاعات سرویس (1 از 2)
+Door LIN Bus off,قطع شدن باس LIN درب
 Door Lock,قفل درب
 Door Lock System (Service Specifications),سیستم قفل درب (مشخصات سرویس)
 Door Locks,قفل‌های درب
 D-Door P/W Motor Component Internal Failure,خرابی داخلی قطعه موتور شیشه بالابر درب D
 DOOR SUB-ASSY CONSOLE COMPARTMENT,مجموعه درب کنسول
+Door Unlock Detection Switch Circuit,مدار کلید تشخیص باز شدن درب
 Drive,گرداننده، محرک
 Drive Axle,اکسل محرک
 Drive Axle - Noise Diagnosis,محور محرک - عیب‌یابی صدا
@@ -848,22 +914,43 @@ Drive Axle Noise Diagnosis - General Information,عیب‌یابی صدای مح
 "Drive Motor ""A"" Control Module Performance Unexpected Operation",عملکرد غیرمنتظره ماژول کنترل موتور محرک «A»
 "Drive Motor ""B"" Control Module Unexpected Operation",عملکرد غیرمنتظره ماژول کنترل موتور محرک «B»
 "Drive Motor ""A"" Execution Torque Performance",عملکرد گشتاور اجرایی موتور محرک «A»
+"Drive Motor ""A"" Inverter Actuator Stuck Closed",عملگر اینورتر موتور محرک «A» در حالت بسته گیر کرده است
+"Drive Motor ""A"" Inverter Actuator Stuck Open",عملگر اینورتر موتور محرک «A» در حالت باز گیر کرده است
+"Drive Motor ""A"" Inverter Voltage Sensor(VH) Circuit Voltage Above Threshold",ولتاژ مدار سنسور ولتاژ اینورتر موتور محرک «A» (VH) از حد مجاز بالاتر است
 "Drive Motor ""A"" Performance",عملکرد موتور محرک «A»
+Drive Shaft / Propeller Shaft (Preparation),میل‌گاردان / شفت پروانه‌ای (آماده‌سازی)
 Drive Start Control,کنترل استارت رانندگی
 Driveability,راندن پذیری، کیفیت سواری
 Drivelines & Axles,محورها و اکسل‌ها
+Driver Frontal Stage 1 Deployment Control Circuit Open,مدار باز مدار کنترل فعال‌سازی مرحله 1 ایربگ جلو راننده
+Driver Frontal Stage 1 Deployment Control Circuit Short to Battery,اتصال کوتاه به باتری مدار کنترل فعال‌سازی مرحله 1 ایربگ جلو راننده
+Driver Frontal Stage 1 Deployment Control Circuit Short to Ground,اتصال کوتاه به بدنه مدار کنترل فعال‌سازی مرحله 1 ایربگ جلو راننده
+Driver Knee Bolster Deployment Control Circuit Open,مدار باز مدار کنترل فعال‌سازی ایربگ زانویی راننده
+Driver Knee Bolster Deployment Control Circuit Short to Battery,اتصال کوتاه به باتری مدار کنترل فعال‌سازی ایربگ زانویی راننده
+Driver Knee Bolster Deployment Control Circuit Short to Ground,اتصال کوتاه به بدنه مدار کنترل فعال‌سازی ایربگ زانویی راننده
 Driver Monitor Camera System,سیستم دوربین پایش راننده
+Driver Monitor Camera System - Diagnostic Codes & Symptom Tests,سیستم دوربین پایش راننده - کدهای عیب‌یابی و آزمون‌های نشانه‌ای
 "DRIVER, SCREW",پیچ‌گوشتی
+"Driver Seat Belt Pretensioner ""A"" Deployment Control Circuit Open",مدار باز مدار کنترل فعال‌سازی پیش‌کشنده کمربند ایمنی راننده «A»
+"Driver Seat Belt Pretensioner ""A"" Deployment Control Circuit Short to Battery",اتصال کوتاه به باتری مدار کنترل فعال‌سازی پیش‌کشنده کمربند ایمنی راننده «A»
+"Driver Seat Belt Pretensioner ""A"" Deployment Control Circuit Short to Ground",اتصال کوتاه به بدنه مدار کنترل فعال‌سازی پیش‌کشنده کمربند ایمنی راننده «A»
+Driver Side Door Entry Lock and Unlock Functions do not Operate,عملکردهای قفل و باز کردن درب سمت راننده کار نمی‌کنند
+Driver Side Door Entry Lock Function does not Operate,عملکرد قفل درب سمت راننده کار نمی‌کند
 Driver Side Electrical Antenna Circuit Open,مدار باز آنتن الکتریکی سمت راننده
 Driver Side Power Mirror cannot be Adjusted with Power Mirror Switch,آینه برقی سمت راننده با کلید آینه برقی قابل تنظیم نیست
 Driver Side Power Window does not Operate with Power Window Master Switch,شیشه‌بالابر برقی سمت راننده با کلید اصلی شیشه‌بالابر کار نمی‌کند
 Driver Side Seat Belt Warning Light does not Operate,چراغ هشدار کمربند ایمنی سمت راننده کار نمی‌کند
 Drivers Assistance Systems - ADAS,سیستم‌های کمک‌راننده - ADAS
 Driveshaft,پلوس
+Drivetrain And Transmission,سامانه انتقال نیرو و گیربکس
 Driving Adjustment,تنظیم رانندگی
+DRIVING ADJUSTMENT (W/ Lift kit),تنظیم رانندگی (با کیت لیفت)
+DRIVING ADJUSTMENT (W/ Lift kit) [12/2024 - ]: Procedure,تنظیم رانندگی (با کیت لیفت) [12/2024 - ]: روش کار
 Drum Brake,ترمز کاسه ای
 "DRUM SUB-ASSY, REAR BRAKE",دیسک چرخ عقب
 "DRYER, COOLER",فیلتر خشک کن گاز کولر
+DTC B1403-7F: Front Air Outlet Damper Control Servo Motor Actuator Stuck Off,DTC B1403-7F: عملگر موتور سروو کنترل دمپر خروجی هوای جلو در حالت خاموش گیر کرده است
+DTC B1406-7F: Front Air Mix Damper Control Servo Motor Actuator Stuck Off,DTC B1406-7F: عملگر موتور سروو کنترل دمپر اختلاط هوای جلو در حالت خاموش گیر کرده است
 DTC B143B-7F: Air Inlet Damper Control Servo Motor Actuator Stuck Off,DTC B143B-7F: عملگر موتور سروو کنترل دمپر ورودی هوا در حالت خاموش گیر کرده است
 DTC B2784-1C: Antenna Coil Circuit Voltage Out of Range,DTC B2784-1C: ولتاژ مدار کویل آنتن خارج از محدوده است
 DTC C0500-1F: Left Front Wheel Speed Sensor Circuit Intermittent,DTC C0500-1F: مدار سنسور سرعت چرخ جلو چپ متناوب
@@ -873,17 +960,25 @@ DTC C0512-1F: Right Rear Wheel Speed Sensor Circuit Intermittent,DTC C0512-1F: �
 DTC C0526-2A: Steering Angle Sensor Module Signal Stuck In Range,DTC C0526-2A: سیگنال ماژول سنسور زاویه فرمان در محدوده گیر کرده است
 DTC C060E-2A: Left Electric Parking Brake Actuator Signal Stuck In Range,DTC C060E-2A: سیگنال عملگر ترمز پارک برقی چپ در محدوده گیر کرده است
 DTC C0613-2A: Right Electric Parking Brake Actuator Signal Stuck In Range,DTC C0613-2A: سیگنال عملگر ترمز پارک برقی راست در محدوده گیر کرده است
+"Dtc C137B-A2: Brake System Control Module ""A"" System Voltage System Voltage Low",DTC C137B-A2: ولتاژ سیستم ماژول کنترل سیستم ترمز «A» - ولتاژ سیستم پایین
+"Dtc C137B-A3: Brake System Control Module ""A"" System Voltage System Voltage High",DTC C137B-A3: ولتاژ سیستم ماژول کنترل سیستم ترمز «A» - ولتاژ سیستم بالا
 Dtc C1380-7E: Stop Lamp Relay Actuator Stuck On,Dtc C1380-7E: عملگر رله چراغ ترمز در حالت روشن گیر کرده است
 Dtc C1380-7F: Stop Lamp Relay Actuator Stuck Off,Dtc C1380-7F: عملگر رله چراغ ترمز در حالت خاموش گیر کرده است
 DTC Check / Clear,بررسی / پاک‌کردن DTC
+DTC P0110-2A: Intake Air Temperature Sensor 1 Bank 1 Signal Stuck in Range,DTC P0110-2A: سیگنال سنسور دمای هوای ورودی ۱ ردیف ۱ در محدوده گیر کرده است
 DTC P0115-2A: Engine Coolant Temperature Sensor 1 Signal Stuck in Range,DTC P0115-2A: سیگنال سنسور دمای مایع خنک‌کننده موتور ۱ در محدوده گیر کرده است
 "DTC P0460-2A: Fuel Level Sensor ""A"" Signal Stuck In Range",DTC P0460-2A: سیگنال سنسور سطح سوخت «A» در محدوده گیر کرده است
+DTC P0534-7A: Refrigerant Gas Fluid Leak or Seal Failure,DTC P0534-7A: نشتی گاز مبرد یا خرابی آب‌بند
+"DTC P0657-9E: Actuator Supply Voltage ""A"" Stuck On",DTC P0657-9E: ولتاژ تغذیه عملگر «A» در حالت روشن گیر کرده است
 DTC P0740-7F: Torque Converter Clutch Actuator Stuck Off,DTC P0740-7F: عملگر کلاچ مبدل گشتاور در حالت خاموش گیر کرده است
+"DTC P08D5-7E: Shift Solenoid ""K"" Control Actuator Stuck On",DTC P08D5-7E: عملگر کنترل شیر برقی تعویض دنده «K» در حالت روشن گیر کرده است
 DTC P0A1B-1F: Generator Control Module Circuit Intermittent,DTC P0A1B-1F: مدار ماژول کنترل ژنراتور متناوب
 "DTC P0BFF-1D: Drive Motor ""A"" Circuit Current Out of Range",DTC P0BFF-1D: جریان مدار موتور محرک «A» خارج از محدوده است
 "DTC P0D2D-1C: Drive Motor ""A"" Inverter Voltage Sensor Voltage Out of Range",DTC P0D2D-1C: ولتاژ سنسور ولتاژ اینورتر موتور محرک «A» خارج از محدوده است
 DTC P12D4-1D: Fuel Pump Control Circuit Current Out of Range,DTC P12D4-1D: جریان مدار کنترل پمپ سوخت خارج از محدوده است
 DTC P148D-7E: Purge One Way Valve Stuck Open,DTC P148D-7E: شیر یک‌طرفه تخلیه در حالت باز گیر کرده است
+DTC P16B0-9F: Actuator Cut Circuit Stuck Off,DTC P16B0-9F: مدار قطع عملگر در وضعیت خاموش گیر کرده است
+"DTC P1C6A-9F: Drive Motor ""A"" Inverter Shutdown Stuck Off",DTC P1C6A-9F: خاموش‌سازی اینورتر موتور محرک «A» در حالت خاموش گیر کرده است
 "DTC P1CB6-9E: Drive Motor ""A"" Inverter Voltage Sensor(VH) Stuck On",DTC P1CB6-9E: سنسور ولتاژ اینورتر موتور محرک «A» (VH) در حالت روشن گیر کرده است
 DTC P2182-2A: Engine Coolant Temperature Sensor 2 Signal Stuck In Range,DTC P2182-2A: سیگنال سنسور دمای مایع خنک‌کننده موتور ۲ در محدوده گیر کرده است
 "DUCT ASSY, AIR",داکت تهویه (کاناال هوا)
@@ -902,17 +997,21 @@ ECM,ECM
 ECM Communication Stop Mode,حالت توقف ارتباط ECM
 ECM Power Source Circuit,مدار منبع تغذیه ECM
 ECU Internal Error,خطای داخلی ECU
+ECU Malfunction (Starter Circuit),خرابی ECU (مدار استارت)
 ECU Power Source Circuit,مدار منبع تغذیه ECU
 ECU Power Source Circuit [12/2024 - ]: Procedure,مدار منبع تغذیه ECU [12/2024 - ]: روش کار
 ECU Power Source Circuit [12/2024 - ]: Wiring Diagram,مدار منبع تغذیه ECU [12/2024 - ]: نقشه سیم‌کشی
 Efficiency,بازدهی، کارآیی، راندمان
+EGR Cooler,خنک‌کننده EGR
 EGR Valve,شیر EGR
 Elasticity,کشسانی، ارتجاع، الاستیسیته
+ELECTONICALLY Controlled Brake System (Except HEV) - Diagnostic Codes (1 Of 2),سیستم ترمز کنترل الکترونیکی (به‌جز HEV) - کدهای عیب‌یابی (1 از 2)
 ELECTONICALLY Controlled Brake System (HEV) - Diagnostic Codes (1 Of 5),سیستم ترمز کنترل‌شونده الکترونیکی (HEV) - کدهای عیب‌یابی (1 از 5)
 Electric Converters and Controllers,مبدل‌ها و کنترلرهای برقی
 Electric Motor Systems,سیستم‌های موتور برقی
 Electric Parking Brake Actuator,عملگر ترمز پارک برقی
 Electric Parking Brake Switch,کلید ترمز پارک برقی
+Electric Parking Brake Switch Signal Compare Failure,خرابی مقایسه سیگنال کلید ترمز پارک برقی
 Electric Parking Brake System,سیستم ترمز پارک برقی
 Electric Parking Brake System AUTO Function Circuit,مدار عملکرد AUTO سیستم ترمز پارک برقی
 "Electric Parking Brake System - Diagnostic Codes, Symptom Tests & Circuit Tests",سیستم ترمز پارک برقی - کدهای عیب‌یابی، آزمون‌های نشانه‌ای و آزمون‌های مدار
@@ -920,7 +1019,12 @@ ELECTRIC PARKING BRAKE SYSTEM (except Gasoline Model),سیستم ترمز پار
 ELECTRIC PARKING BRAKE SYSTEM (for Gasoline Model),سیستم ترمز پارک برقی (برای مدل بنزینی)
 ELECTRIC PARKING BRAKE SYSTEM (for HEV Model),سیستم ترمز پارک برقی (برای مدل HEV)
 Electric Parking Brake System - Service Information,سیستم ترمز پارک برقی - اطلاعات سرویس
+ELECTRIC PARKING BRAKE SYSTEM (w/ Vacuum Brake Booster),سیستم ترمز پارک برقی (با بوستر ترمز خلا)
 Electrical,برقی
+ELECTRICAL KEY OSCILLATOR (for Front Floor),نوسان‌ساز کلید الکتریکی (برای کف جلو)
+ELECTRICAL KEY OSCILLATOR (for Luggage Compartment),نوسان‌ساز کلید الکتریکی (برای محفظه بار)
+Electrical Key Oscillator (For Outside Luggage Compartment),نوسان‌ساز کلید الکتریکی (برای خارج از محفظه بار)
+ELECTRICAL KEY OSCILLATOR (for Rear Floor),نوسان‌ساز کلید الکتریکی (برای کف عقب)
 Electrical Systems,سیستم‌های برقی
 Electromagnetic Oil Pump Component Internal Failure,خرابی داخلی قطعه پمپ روغن الکترومغناطیسی
 Electronic Circuit Inspection Procedure,روش بازرسی مدار الکترونیکی
@@ -935,6 +1039,7 @@ ELECTRONICALLY CONTROLLED BRAKE SYSTEM (for Gasoline Model),سیستم ترمز 
 Electronically Controlled Brake System (For Hev Model),سیستم ترمز کنترل‌شونده الکترونیکی (برای مدل HEV)
 ELECTRONICALLY CONTROLLED BRAKE SYSTEM (for HV Model),سیستم ترمز کنترل‌شونده الکترونیکی (برای مدل HV)
 Electronically Controlled Brake System (HEV) - Diagnostic Codes (1 Of 3),سیستم ترمز کنترل‌شونده الکترونیکی (HEV) - کدهای عیب‌یابی (1 از 3)
+ELECTRONICALLY CONTROLLED BRAKE SYSTEM (w/ Vacuum Brake Booster),سیستم ترمز کنترل الکترونیکی (با بوستر ترمز خلا)
 ELEMENT SUB-ASSY AIR CLEANER FILTER,فیلتر هوای موتور
 "EMBLEM, LUGGAGE COMPARTMENT DOOR",آرم تویوتا روی درب صندوق
 EMBLEM RADIATOR GRILLE (OR FRONT PANEL),آرم تویوتا بالای جلو پنجره
@@ -952,6 +1057,7 @@ Engine Assembly,مجموعه موتور
 Engine Control Module Unexpected Operation,عملکرد غیرمنتظره ماژول کنترل موتور
 Engine Control System (A25A-FKS) - Diagnostic Codes (1 Of 9),سیستم کنترل موتور (A25A-FKS) - کدهای عیب‌یابی (1 از 9)
 Engine Control System - Diagnostic Codes (1 Of 7),سیستم کنترل موتور - کدهای عیب‌یابی (1 از 7)
+Engine Control System - Diagnostic Codes (6 Of 6) & Circuit Tests,سیستم کنترل موتور - کدهای عیب‌یابی (6 از 6) و آزمون‌های مدار
 Engine Control System - Diagnostic Codes (P0010-P0069),سیستم کنترل موتور - کدهای عیب‌یابی (P0010-P0069)
 Engine Control System - Diagnostic Codes (P0010-P0087),سیستم کنترل موتور - کدهای عیب‌یابی (P0010-P0087)
 Engine Control System - Diagnostic Codes (P0069-P0110),سیستم کنترل موتور - کدهای عیب‌یابی (P0069-P0110)
@@ -986,8 +1092,10 @@ Engine Control System (Except HEV) - Diagnostic Codes (P0420-P0500),سیستم �
 Engine Control System (Except HEV) - Diagnostic Codes (P0504-P0604),سیستم کنترل موتور (به‌جز HEV) - کدهای عیب‌یابی (P0504-P0604)
 Engine Control System (Except HEV) - Diagnostic Codes (P0606-P1378),سیستم کنترل موتور (به‌جز HEV) - کدهای عیب‌یابی (P0606-P1378)
 Engine Control System (Except HEV) - Diagnostic Codes (P148D-P21CF),سیستم کنترل موتور (به‌جز HEV) - کدهای عیب‌یابی (P148D-P21CF)
+Engine Control System (HEV) - Circuit Tests (2 Of 2) & Symptom Tests (2 Of 2),سیستم کنترل موتور (HEV) - آزمون‌های مدار (2 از 2) و آزمون‌های نشانه‌ای (2 از 2)
 Engine Control System (HEV) - Diagnostic Codes (01 Of 12),سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (۰۱ از ۱۲)
 Engine Control System (HEV) - Diagnostic Codes (02 Of 12),سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (۰۲ از ۱۲)
+Engine Control System (HEV) - Diagnostic Codes (06 Of 12),سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (06 از 12)
 Engine Control System (HEV) - Diagnostic Codes (07 Of 12),سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (۰۷ از ۱۲)
 Engine Control System (HEV) - Diagnostic Codes (08 Of 12),سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (۰۸ از ۱۲)
 Engine Control System (HEV) - Diagnostic Codes (09 Of 12),سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (۰۹ از ۱۲)
@@ -1007,6 +1115,7 @@ Engine Control System (M20A-FKS) - Diagnostic Codes (1 Of 6),سیستم کنتر
 Engine Control System (M20A-FKS) - Diagnostics - Introduction (1 Of 2),سیستم کنترل موتور (M20A-FKS) - عیب‌یابی - مقدمه (۱ از ۲)
 Engine Control System (M20A-FKS) - Service Information,سیستم کنترل موتور (M20A-FKS) - اطلاعات سرویس
 Engine Control System (M20A-FXS) - Diagnostic Codes (1 Of 6),سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (1 از 6)
+Engine Control System (M20A-FXS) - Diagnostic Codes (6 Of 6) & Circuit Tests,سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (6 از 6) و آزمون‌های مدار
 Engine Control System (M20A-FXS) - Service Information,سیستم کنترل موتور (M20A-FXS) - اطلاعات سرویس
 Engine Control System - Service Information,سیستم کنترل موتور - اطلاعات سرویس
 Engine Control System (Service Specifications),سیستم کنترل موتور (مشخصات سرویس)
@@ -1023,10 +1132,19 @@ Engine Coolant Pump Actuator Stuck,گیرکردن عملگر پمپ مایع خ�
 Engine Coolant Pump Circuit Short to Battery,اتصال کوتاه مدار پمپ مایع خنک‌کننده موتور به باتری
 Engine Coolant Pump Circuit Short to Ground or Open,اتصال کوتاه مدار پمپ مایع خنک‌کننده موتور به بدنه یا مدار باز
 Engine Coolant Pump No Signal,عدم دریافت سیگنال از پمپ مایع خنک‌کننده موتور
+Engine Coolant Pump Overspeed,سرعت بیش‌ازحد پمپ مایع خنک‌کننده موتور
+Engine Coolant Temperature/Engine Oil Temperature Signal Compare Failure,عدم تطابق سیگنال دمای مایع خنک‌کننده موتور / دمای روغن موتور
+Engine Coolant Temperature Receiver Gauge Malfunction,خرابی نشانگر دمای مایع خنک‌کننده موتور
 Engine Coolant Temperature Sensor,سنسور دمای مایع خنک‌کننده موتور
+Engine Coolant Temperature Sensor 1 Circuit Short to Battery or Open,اتصال کوتاه به باتری یا مدار باز در مدار سنسور ۱ دمای مایع خنک‌کننده موتور
+Engine Coolant Temperature Sensor 1 Circuit Short to Ground,اتصال کوتاه به بدنه در مدار سنسور ۱ دمای مایع خنک‌کننده موتور
 Engine Cooling System - Service Information,سیستم خنک‌کاری موتور - اطلاعات سرویس
+Engine Difficult to Start,استارت موتور دشوار است
 Engine does not Start,موتور استارت نمی‌خورد
+Engine Hood Courtesy Switch,کلید روشنایی درب موتور
+Engine Hood Courtesy Switch Circuit,مدار کلید روشنایی درب موتور
 Engine Hood Moulding,زه درب موتور
+Engine Immobiliser System Circuit Short to Battery,اتصال کوتاه مدار سیستم ایموبلایزر موتور به باتری
 Engine Immobiliser System Incorrect Assembly,مونتاژ نادرست سیستم ایموبلایزر موتور
 Engine Intake / Exhaust System (M20A-FKS) - Service Information,سیستم ورودی / خروجی موتور (M20A-FKS) - اطلاعات سرویس
 Engine Intake / Exhaust System - Service Information,سیستم ورودی / خروجی موتور - اطلاعات سرویس
@@ -1035,27 +1153,39 @@ Engine Lubrication System - Service Information,سیستم روغن‌کاری �
 Engine Mechanical,مکانیکی موتور
 Engine Mechanical System (M20A-FKS) - Service Information (1 Of 4),سیستم مکانیکی موتور (M20A-FKS) - اطلاعات سرویس (۱ از ۴)
 Engine Mechanical System - Service Information (1 Of 3),سیستم مکانیکی موتور - اطلاعات سرویس (1 از 3)
+"Engine Mount ""A"" Control Circuit High Circuit Short to Battery",اتصال کوتاه به باتری مدار پرولتاژ کنترل دسته‌موتور «A»
+"Engine Mount ""A"" Control Circuit Low Circuit Short to Ground or Open",اتصال کوتاه به بدنه یا مدار باز مدار کم‌ولتاژ کنترل دسته‌موتور «A»
 Engine Oil Level Sensor Circuit,مدار سنسور سطح روغن موتور
 Engine Oil Pressure Control Circuit Open,مدار باز کنترل فشار روغن موتور
 Engine Oil Pressure Too Low,فشار روغن موتور خیلی پایین است
 Engine Oil Replacement Reminder,یادآور تعویض روغن موتور
+Engine Oil Replacement Reminder Reset - Procedure 01,ریست یادآور تعویض روغن موتور - روش 01
 Engine Oil Temperature Sensor Circuit Short to Battery or Open,اتصال کوتاه مدار سنسور دمای روغن موتور به باتری یا مدار باز
 Engine Oil Temperature Sensor Circuit Short to Ground,اتصال کوتاه مدار سنسور دمای روغن موتور به بدنه
 Engine Overhaul Procedures - General Information,روش‌های اورهال موتور - اطلاعات عمومی
 Engine Performance,عملکرد موتور
 Engine Performance And Maintenance,عملکرد و نگهداری موتور
+"Engine Performance › Emissions › Emission Control Abbreviations › ""A""",عملکرد موتور › آلایندگی › مخفف‌های کنترل آلایندگی › «A»
+Engine/Power Switch Signal Compare Failure,عدم تطابق سیگنال کلید استارت/پاور
 Engine Stalls,موتور خاموش می‌شود
 Engine Starting System (M20A-FKS) - Service Information,سیستم استارت موتور (M20A-FKS) - اطلاعات سرویس
 Engine Starting System - Service Information,سیستم استارت موتور - اطلاعات سرویس
 Engine Starting System (Service Specifications),سیستم استارت موتور (مشخصات سرویس)
+Engine Switch,کلید استارت موتور
 Engine Unit,یونیت موتور
 Entertainment Systems,سیستم‌های سرگرمی
+Entry Exterior Alarm and Answer-back Buzzer do not Sound,آلارم خارجی ورود و بیزر پاسخ‌دهی صدا نمی‌کنند
+Entry Interior Alarm does not Sound,آلارم داخلی ورود صدا نمی‌کند
 EPS Warning Light Circuit,مدار چراغ هشدار EPS
 Equipment,تجهیزات
 EVAP System,سیستم EVAP
 EVAP System Tank Vapor Line Restricted/Blocked,محدود/مسدود شدن لوله بخار باک سیستم EVAP
+"Evaporative Emission System Pressure Sensor/Switch ""D"" Circuit Short to Ground",اتصال کوتاه به بدنه مدار سنسور / کلید فشار سیستم بخارات سوخت «D»
+"Evaporative Emission System Purge Control Valve ""A"" Circuit Open",مدار باز شیر کنترل تخلیه بخارات سوخت «A»
 Evaporator Temperature Sensor Circuit Short to Battery or Open,اتصال کوتاه مدار سنسور دمای اواپراتور به باتری یا مدار باز
 Evaporator Temperature Sensor Circuit Short to Ground,اتصال کوتاه مدار سنسور دمای اواپراتور به بدنه
+Even though Headlights are Turned on Head-unit does not Dim the Display,با وجود روشن بودن چراغ‌های جلو، هدیونیت نمایشگر را کم‌نور نمی‌کند
+Excessive Time to Enter Closed Loop Air/Fuel Ratio Control,زمان بیش‌ازحد برای ورود به کنترل حلقه‌بسته نسبت هوا/سوخت
 Exhaust,اگزوز
 Exhaust Manifold Nut,مهره کلکتور اگزوز)
 Exhaust Pipe,لوله اگزوز
@@ -1065,7 +1195,13 @@ EXTENSION REAR FLOOR SIDE PANEL LH,امتداد پنل کناری کف عقب (�
 EXTENSION REAR FLOOR SIDE PANEL RH,امتداد پنل کناری کف عقب (راست)
 EXTENSION SUB-ASSY FRONT FENDER APRON RH,نگهدارنده گلگیر جلو (راست)
 Exterior Body Panels,پنل‌های بدنه بیرونی
+Exterior/Interior Trim,تریم خارجی/داخلی
 Exterior Lights,چراغ‌های بیرونی
+Exterior Panels / Trim,پنل‌های خارجی / تریم
+Exterior Panels / Trim (Preparation),پنل‌های بدنه / تزئینات بیرونی (آماده‌سازی)
+Exterior Panels / Trim - Service Information,پنل‌های خارجی / تریم - اطلاعات سرویس
+Exterior Panels / Trim - Service Information (1 Of 2),پنل‌ها/تریم خارجی - اطلاعات سرویس (۱ از ۲)
+Exterior Panels / Trim (Service Specifications),پنل‌های خارجی / تریم (مشخصات سرویس)
 External BBC Circuit,مدار BBC خارجی
 External Pages,صفحات خارجی
 Eyesight System,سیستم Eyesight
@@ -1087,6 +1223,7 @@ Flat Tire,تایر پنچر شده
 Fluid Circute,مدار هیدرولیکی
 Flywheel,فلایویل
 Fog Light Assembly,مجموعه چراغ مه‌شکن
+Four Wheel Drive (4WD) Low Switch Circuit Short to Ground,اتصال کوتاه مدار کلید دنده سبک چهارچرخ محرک (4WD) به بدنه
 Fracture,شکست، ترک، شکستگی
 Frame,فریم، شاسی، قاب، چارچوب، اسکلت بندی
 Frame Angle,زاویه ی فریم
@@ -1097,8 +1234,11 @@ FRAME SUB-ASSY FRONT DOOR REAR LOWER LH,لبه فلزی پایینی درب جل
 FRAME SUB-ASSY FRONT DOOR REAR LOWER RH,لبه فلزی پایینی درب جلو (راست)
 Frame Wire,سیم‌کشی شاسی
 Friction,اصطکاک
+Front Acceleration Sensor (For LH Side),سنسور شتاب‌سنج جلو (برای سمت چپ)
+Front Acceleration Sensor (For RH Side),سنسور شتاب‌سنج جلو (برای سمت راست)
 Front Air Conditioning Panel,پنل تهویه مطبوع جلو
 Front Air Conditioning Unit,یونیت تهویه مطبوع جلو
+Front Airbag Sensor,سنسور ایربگ جلو
 Front Axle Hub,توپی محور جلو
 Front Axle Hub Bolt,پیچ توپی محور جلو
 Front Axle Hub (For 2WD),توپی محور جلو (برای 2WD)
@@ -1134,8 +1274,12 @@ Front Drive Shaft Assembly (For M20A-FKS AWD),مجموعه شفت محرک جل�
 Front Drive Shaft Assembly (For M20A-FXS),مجموعه شفت محرک جلو (برای M20A-FXS)
 Front Evaporator Temperature Sensor,سنسور دمای اواپراتور جلو
 Front Fender,گلگیر جلو
+Front Floor Electrical Key Oscillator Circuit Open,مدار باز نوسان‌ساز کلید الکتریکی کف جلو
 Front Fog Light Circuit,مدار چراغ مه‌شکن جلو
 Front Left Speaker Cable Actuator Stuck,گیرکردن عملگر کابل بلندگوی جلو چپ
+Front Lower Suspension Arm,بازوی پایینی تعلیق جلو
+Front Passenger Side Door Entry Lock and Unlock Functions do not Operate,عملکردهای قفل و باز کردن درب سمت سرنشین جلو کار نمی‌کنند
+Front Passenger Side Door Entry Lock Function does not Operate,عملکرد قفل درب سمت سرنشین جلو کار نمی‌کند
 Front Passenger Side Electrical Antenna Circuit Open,مدار باز آنتن الکتریکی سمت سرنشین جلو
 Front Passenger Side Power Mirror cannot be Adjusted with Power Mirror Switch,آینه برقی سمت سرنشین جلو با کلید آینه برقی قابل تنظیم نیست
 Front Passenger Side Power Window Switch,کلید شیشه‌بالابر برقی سمت سرنشین جلو
@@ -1146,6 +1290,7 @@ FRONT POWER SEAT CONTROL SYSTEM (w/ Memory),سیستم کنترل صندلی ب�
 Front Power Seat Control System (W/ Memory) - Diagnostic Codes & Symptom Tests,سیستم کنترل صندلی برقی جلو (با حافظه) - کدهای عیب‌یابی و تست علائم
 Front Power Seat Control System (W/ Memory) - Diagnostics - Introduction,سیستم کنترل صندلی برقی جلو (با حافظه) - عیب‌یابی - مقدمه
 Front Power Seat Control System (W/O Memory) - Inspection,سیستم کنترل صندلی برقی جلو (بدون حافظه) - بازرسی
+Front Power Seat does not Operate with Front Power Seat Switch,صندلی برقی جلو با کلید صندلی برقی جلو عمل نمی‌کند
 Front Power Seat Motor Assembly,مجموعه موتور صندلی برقی جلو
 Front Propeller Shaft Assembly,مجموعه میل‌گاردان جلو
 Front Radar Sensor Optical Axis Misalignment Malfunction,خرابی ناهمراستایی محور نوری سنسور رادار جلو
@@ -1156,6 +1301,8 @@ Front Recognition Camera Optical Axis Misalignment Malfunction,خرابی ناه
 Front Right Speaker Cable Actuator Stuck,گیرکردن عملگر کابل بلندگوی جلو راست
 Front Seat Assembly (For Manual Seat),مجموعه صندلی جلو (برای صندلی دستی)
 Front Seat Assembly (For Power Seat),مجموعه صندلی جلو (برای صندلی برقی)
+FRONT SEAT CUSHION HEATER (for Manual Seat),گرم‌کن کفی صندلی جلو (برای صندلی دستی)
+FRONT SEAT CUSHION HEATER (for Power Seat),گرم‌کن کفی صندلی جلو (برای صندلی برقی)
 Front Seat Inner Belt Assembly,مجموعه کمربند داخلی صندلی جلو
 FRONT SEAT INNER BELT ASSEMBLY (for Manual Seat),مجموعه کمربند داخلی صندلی جلو (برای صندلی دستی)
 FRONT SEAT INNER BELT ASSEMBLY (for Power Seat),مجموعه کمربند داخلی صندلی جلو (برای صندلی برقی)
@@ -1168,20 +1315,32 @@ Front Side Radar Sensor,سنسور رادار جانبی جلو
 Front Side Radar Sensor System,سیستم سنسور رادار جانبی جلو
 Front Side Radar Sensor System - Diagnostic Codes,سیستم سنسور رادار جانبی جلو - کدهای عیب‌یابی
 Front Speed Sensor,سنسور سرعت جلو
+Front Spoiler,اسپویلر جلو
+Front Stabilizer Bar (W/ Disconnection Mechanism),میل تعادل جلو (به‌همراه مکانیزم قطع اتصال)
 Front Suspension,تعلیق جلو
 Front Turn Signal Light Bulb,لامپ چراغ راهنمای جلو
 Front Wheel Drive Car,خودروی چرخ جلو محرک، خودروی دیفرانسیل جلو
 Front Wiper Motor,موتور برف‌پاک‌کن جلو
+Front Wiper Rubber,لاستیک تیغه برف‌پاک‌کن جلو
+Fuel Delivery,تامین سوخت
 fuel injector,انژکتور
+Fuel Injector (For Direct Injection),انژکتور سوخت (برای پاشش مستقیم)
+Fuel Injector (For Port Injection),انژکتور سوخت (برای پاشش در مانیفولد)
 Fuel Lid Opener System,سیستم بازکننده درپوش باک سوخت
 Fuel Main Valve,شیر اصلی سوخت
 Fuel Pressure Sensor,سنسور فشار سوخت
 Fuel Pressure Sensor (For High Pressure),سنسور فشار سوخت (برای فشار بالا)
 Fuel Pump Control Circuit,مدار کنترل پمپ سوخت
+"Fuel Pump ""A"" Control Circuit Short to Battery",اتصال کوتاه به باتری مدار کنترل پمپ سوخت «A»
+"Fuel Pump ""A"" Control Circuit Short to Ground or Open",اتصال کوتاه به بدنه یا مدار باز مدار کنترل پمپ سوخت «A»
+Fuel Pump Control General Electrical Failure,خرابی عمومی برقی کنترل پمپ سوخت
 Fuel Pump Control Module Internal Electronic Failure,خرابی الکترونیکی داخلی ماژول کنترل پمپ سوخت
 Fuel Pump Ecu,ECU پمپ سوخت
 FUEL PUMP (for AWD),پمپ سوخت (برای AWD)
 Fuel Pump (For High Pressure),پمپ سوخت (برای فشار بالا)
+"Fuel Rail Pressure Sensor ""A"" Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز مدار سنسور فشار ریل سوخت «A»
+"Fuel Rail Pressure Sensor ""A"" Circuit Short to Ground",اتصال کوتاه به بدنه مدار سنسور فشار ریل سوخت «A»
+Fuel Receiver Gauge Malfunction,خرابی گیج گیرنده سوخت
 Fuel Run Out,تمام شدن سوخت
 Fuel System,سیستم سوخت
 Fuel System (A25A-FKS) - Service Information (1 Of 2),سیستم سوخت‌رسانی (A25A-FKS) - اطلاعات سرویس (۱ از ۲)
@@ -1247,6 +1406,7 @@ GASKET INTAKE MANIFOLD TO HEAD,واشر منیفولد هوا به سرسیلن�
 "GASKET, WATER INLET HOUSING",واشر پوسته ورودی آب
 "GASKET, WATER PUMP",واشر پمپ آب
 Gauges,گیج‌ها
+Gauges & Instrument Panels,گیج‌ها و صفحه‌ابزار
 "GEAR ASSY, CAMSHAFT TIMING",مجموعه چرخ دنده تایمینگ میل سوپاپ
 GEAR ASSY CAMSHAFT TIMING EXHAUST,مجموعه چرخ دنده تایمینگ میل سوپاپ دود
 "GEAR ASSY, STEERING",جعبه فرمان
@@ -1257,6 +1417,7 @@ General Cooling System Service - General Information,سرویس عمومی سی�
 General Information,اطلاعات عمومی
 General Information › Brakes › Map - Brake Systems › Reason Code Explanation,اطلاعات عمومی › ترمزها › نقشه - سیستم‌های ترمز › توضیح کد علت
 General Maintenance,نگهداری عمومی
+General Motors,جنرال موتورز
 General Servicing,سرویس عمومی
 Generator Control Circuit Internal Electronic Failure,خرابی الکترونیکی داخلی مدار کنترل ژنراتور
 Generator(For Gasoline Model),ژنراتور (برای مدل بنزینی)
@@ -1322,12 +1483,17 @@ Head Gasket,واشر سرسیلندر
 "HEADLAMP ASSY, LH",مجموعه کامل چراغ جلو (چپ)
 "HEADLAMP ASSY, RH",مجموعه کامل چراغ جلو (راست)
 Headlight Assembly,مجموعه چراغ جلو
+Headlight Assembly (For Bulb Type Clearance Light),مجموعه چراغ جلو (برای چراغ کوچک لامپی)
+Headlight Assembly (For Led Type Clearance Light),مجموعه چراغ جلو (برای چراغ کوچک LED)
+Headlight Dimmer Switch,کلید دیمر چراغ جلو
+Headlight Dimmer Switch Circuit,مدار کلید دیمر چراغ جلو
 Headlight LH Circuit; DTC B243A-00: Headlight RH Circuit,مدار چراغ جلو چپ؛ DTC B243A-00: مدار چراغ جلو راست
 Headlights,چراغ‌های جلو
 "HEADLINING, ROOF",نمدی سقف
 "HEADREST ASSY, FRONT SEAT",تکیه‌گاه سر صندلی جلو
 "HEADREST ASSY, REAR SEAT, CENTER",تکیه‌گاه سر صندلی عقب وسط
 HEADUP Display,نمایشگر هدآپ
+Heated Glass/Defoggers,شیشه گرم‌کن / بخارزداها
 Heated Steering Wheel System,سیستم فرمان گرم‌شونده
 Heated Steering Wheel System - Diagnostics & Symptom Tests,سیستم فرمان گرم‌شونده - عیب‌یابی و آزمون‌های نشانه‌ای
 HEATER WATER PUMP (except Gasoline Model),پمپ آب بخاری (به‌جز مدل بنزینی)
@@ -1341,8 +1507,10 @@ Heating / Air Conditioning System - Service Information (2 Of 2),سیستم گر
 "Heating, Ventilation & Air Conditioning Systems",سیستم‌های گرمایش، تهویه و تهویه مطبوع
 "Heating, Ventilation And Air Conditioning Systems",سیستم‌های گرمایش، تهویه و تهویه مطبوع
 Height Control Sensor,سنسور کنترل ارتفاع
+High Beam Headlight Circuit,مدار نوربالای چراغ جلو
 High Mounted Stop Light Assembly,مجموعه چراغ ترمز سوم
 High Pressure Fuel Pump Circuit Open,مدار باز پمپ سوخت پرفشار
+High Voltage Fuse Accumulated Load History,سابقه بار تجمعی فیوز ولتاژ بالا
 High Voltage Power Resource Circuit Short during Pre-Charge,اتصال کوتاه مدار منبع تغذیه ولتاژ بالا هنگام پیش‌شارژ
 High Voltage Power Resource Circuit Short during Ready ON,اتصال کوتاه مدار منبع تغذیه ولتاژ بالا در حالت READY ON
 High Voltage Power Resource Circuit Voltage Sensor after Boosting Malfunction,خرابی سنسور ولتاژ مدار منبع تغذیه ولتاژ بالا پس از بوست
@@ -1362,6 +1530,7 @@ Hoist/Jack,بالابر / جک
 "HOLDER, INSTRUMENT PANEL CUP",پنل نگهدارنده لیوان سمت راننده
 "HOLDER, REAR SEAT BACK",نگهدارنده پشت صندلی عقب
 "HOLDER, VISOR",نگهدارنده آفتابگیر
+Hood Lock Control Cable Assembly,مجموعه کابل کنترل قفل درب موتور
 HOOD SUB-ASSY,درب موتور
 "HOOK ASSY, FRONT",قلاب جلو( جز مجموعه زاپاس)
 HOOK ASSY-rear,مجموعه قلاب عقب
@@ -1405,6 +1574,14 @@ Housing,محفظه، پوسته
 "HOUSING ASSY, STARTER DRIVE",هوزینگ استارت
 "HOUSING, STEERING COLUMN",واشر نگهدارنده ستون فرمان
 "HOUSING SUB-ASSY, CAMSHAFT",پوسته روی میل لنگ
+How To Proceed With Troubleshooting,روش عیب‌یابی
+How To Proceed With Troubleshooting [02/2024 - ]: Procedure,نحوه ادامه عیب‌یابی [02/2024 - ]: روش کار
+How To Proceed With Troubleshooting [05/2022 - ]: Procedure,نحوه ادامه عیب‌یابی [05/2022 - ]: روش کار
+How To Proceed With Troubleshooting [09/2021 - 11/2022]: Procedure,نحوه ادامه عیب‌یابی [09/2021 - 11/2022]: روش کار
+How To Proceed With Troubleshooting [11/2021 - ]: Procedure,نحوه ادامه عیب‌یابی [11/2021 - ]: روش کار
+How To Proceed With Troubleshooting [11/2022 - ]: Procedure,نحوه ادامه عیب‌یابی [11/2022 - ]: روش کار
+How To Proceed With Troubleshooting [11/2023 - ]: Procedure,نحوه ادامه عیب‌یابی [11/2023 - ]: روش کار
+How To Proceed With Troubleshooting [12/2024 - ]: Procedure,نحوه ادامه عیب‌یابی [12/2024 - ]: روش کار
 How To Troubleshoot Ecu Controlled Systems,نحوه عیب‌یابی سیستم‌های کنترل‌شده توسط ECU
 Hub,توپی
 "HUB & BEARING ASSY, REAR AXLE, RH, LH",توپی چرخ عقب (چپ و راست)
@@ -1422,13 +1599,20 @@ Hybrid Battery Control System - Service Information,سیستم کنترل بات
 Hybrid Battery Control System - Service Information (1 Of 2),سیستم کنترل باتری هیبرید - اطلاعات سرویس (1 از 2)
 Hybrid / Battery Control System (Service Specifications),سیستم کنترل هیبرید / باتری (مشخصات سرویس)
 Hybrid Battery System,سیستم باتری هیبرید
+Hybrid Battery System - Diagnostic Codes (2 Of 2) & Circuit Tests,سیستم باتری هیبرید - کدهای عیب‌یابی (2 از 2) و آزمون‌های مدار
+"Hybrid Battery System - Diagnostic Codes (2 Of 2), Symptom Tests & Circuit Tests",سیستم باتری هیبرید - کدهای عیب‌یابی (2 از 2)، آزمون‌های نشانه‌ای و آزمون‌های مدار
 HYBRID BATTERY SYSTEM (for LITHIUM-ION BATTERY),سیستم باتری هیبرید (برای باتری لیتیوم-یون)
 Hybrid Control System,سیستم کنترل هیبرید
 HYBRID CONTROL SYSTEM (w/ Auxiliary Switch System),سیستم کنترل هیبرید (با سیستم کلید کمکی)
+Hybrid Control System - Circuit Tests (2 Of 2),سیستم کنترل هیبرید - آزمون‌های مدار (2 از 2)
 Hybrid Control System - Diagnostic Codes (1 Of 3),سیستم کنترل هیبرید - کدهای عیب‌یابی (1 از 3)
+Hybrid Control System - Diagnostic Codes (5 Of 5) & Circuit Tests,سیستم کنترل هیبرید - کدهای عیب‌یابی (5 از 5) و آزمون‌های مدار
 HYBRID CONTROL SYSTEM (for AWD with NICKEL METAL HYDRIDE BATTERY),سیستم کنترل هیبرید (برای AWD با باتری نیکل-متال هیدرید)
 HYBRID CONTROL SYSTEM (for LITHIUM-ION BATTERY),سیستم کنترل هیبرید (برای باتری لیتیوم-یون)
+Hybrid/Electric Powertrain,سامانه قوای محرکه هیبرید / برقی
 Hybrid/EV Battery Cell Low Voltage,ولتاژ سلول باتری هیبرید/EV پایین است
+Hybrid/EV Battery Control System Circuit Voltage Below Threshold,ولتاژ مدار سیستم کنترل باتری هیبرید/EV کمتر از حد مجاز است
+Hybrid/EV Battery Discharge Control Malfunction,خرابی کنترل تخلیه باتری هیبرید/EV
 Hybrid/EV Battery Negative Contactor Actuator Stuck Closed,عملگر کنتاکتور منفی باتری هیبرید/EV در حالت بسته گیر کرده است
 Hybrid/EV Battery Negative Contactor Circuit Short to Auxiliary Battery or Open,اتصال کوتاه مدار کنتاکتور منفی باتری هیبرید/EV به باتری کمکی یا مدار باز
 Hybrid/EV Battery Negative Contactor Circuit Short to Ground,اتصال کوتاه مدار کنتاکتور منفی باتری هیبرید/EV به بدنه
@@ -1440,7 +1624,9 @@ Hybrid/EV Battery Precharge Contactor Actuator Stuck Closed,عملگر کنتا�
 Hybrid/EV Battery Precharge Contactor Circuit Short to Auxiliary Battery or Open,اتصال کوتاه مدار کنتاکتور پیش‌شارژ باتری هیبرید/EV به باتری کمکی یا مدار باز
 Hybrid/EV Battery Precharge Contactor Circuit Short to Ground,اتصال کوتاه مدار کنتاکتور پیش‌شارژ باتری هیبرید/EV به بدنه
 Hybrid/EV Battery Sensor Module Internal Electronic Failure,خرابی الکترونیکی داخلی ماژول سنسور باتری هیبرید/EV
+Hybrid/EV Battery System Discharge Time Too Long,زمان تخلیه سیستم باتری هیبرید/EV بیش‌ازحد طولانی است
 Hybrid/EV Battery Voltage High,ولتاژ باتری هیبرید/EV بالا است
+"Hybrid/EV Battery Voltage Sensor ""A"" Circuit Short to Ground or Open","اتصال کوتاه به بدنه یا مدار باز مدار سنسور ولتاژ باتری هیبرید/EV ""A"""
 Hybrid Transaxle Fluid,روغن ترنس‌اکسل هیبرید
 Hybrid Transaxle System (L580F) (Service Specifications),سیستم ترنس‌اکسل هیبرید (L580F) (مشخصات سرویس)
 Hybrid Transaxle System (PB10) - Service Information,سیستم ترنس‌اکسل هیبرید (PB10) - اطلاعات سرویس
@@ -1448,6 +1634,7 @@ Hybrid Transaxle System / Rear Traction Motor (Q810) - Service Information,سی�
 Hybrid Transmission System,سیستم انتقال قدرت هیبرید
 Hybrid Transmission System - Diagnostic Codes (1 Of 3),سیستم گیربکس هیبرید - کدهای عیب‌یابی (۱ از ۳)
 Hybrid Transmission System (L4A0F) - Diagnostic Codes (1 Of 4),سیستم گیربکس هیبرید (L4A0F) - کدهای عیب‌یابی (۱ از ۴)
+Hybrid Transmission System (L580F) - Diagnostic Codes (1 Of 3),سیستم انتقال قدرت هیبریدی (L580F) - کدهای عیب‌یابی (۱ از ۳)
 Hybrid Transmission System (L580F) - Service Information (1 Of 2),سیستم گیربکس هیبرید (L580F) - اطلاعات سرویس (۱ از ۲)
 Hybrid Vehicle Control Ecu,ECU کنترل خودروی هیبرید
 Hydraulic Accumulator,انباره ی هیدرولیکی
@@ -1460,6 +1647,8 @@ Hydraulic Shock Absorber,کمک فنر هیدرولیکی، کمک فنر روغ
 Hydrostatics,هیدروستاتیک (علم مطالعه ی تعادل مایعات و فشار اعمال شده بر آنها)
 ID-BOX Calibration / Parameter Memory Failure,خرابی حافظه کالیبراسیون / پارامتر ID-BOX
 ID-BOX Component Internal Failure,خرابی داخلی قطعه ID-BOX
+ID-BOX Missing Message,پیام مفقود ID-BOX
+Id Code Box,جعبه کد شناسه
 Identification,شناسایی
 Idle Control System,سیستم کنترل دور آرام
 IG Circuit Short to Ground,اتصال کوتاه مدار IG به بدنه
@@ -1467,11 +1656,20 @@ IG Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مد
 Ignition Circuit,مدار احتراق
 Ignition Coil,کوئل
 Ignition Coil And Spark Plug,کوئل احتراق و شمع
+Ignition Switch Circuit Short To Ground Or Open,اتصال کوتاه به بدنه یا مدار باز مدار سوئیچ احتراق
+Ignition Switch On/Start Position Circuit Low Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار کم‌ولتاژ موقعیت ON/START سوئیچ احتراق
+Ignition Switch On/Start Position Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار موقعیت ON/START سوئیچ احتراق
+Ignition Switch On/Start Position Malfunction,خرابی موقعیت ON/START سوئیچ احتراق
+Ignition Switch Run Position Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار موقعیت RUN سوئیچ احتراق
+Ignition Switch Run Position Malfunction,خرابی موقعیت RUN سوئیچ احتراق
 Ignition Switch Screw w/Washer,پیچ سوئیچ احتراق همراه واشر
 Ignition System,سیستم احتراق
+Image from Camera for Panoramic View Monitor is Abnormal,تصویر دوربین مانیتور نمای پانوراما غیرعادی است
 Image from Camera for Parking Assist Monitor is Abnormal,تصویر دوربین برای مانیتور کمک پارک غیرعادی است
 "Image Processing Module ""B"" Video Signal Missing Message",پیام مفقود از سیگنال ویدئویی ماژول پردازش تصویر «B»
 Immobiliser System does not Operate Properly,سیستم ایموبلایزر به‌درستی کار نمی‌کند
+Immobiliser System (W/O Smart Key) - Diagnostics - Introduction,سیستم ایموبلایزر (بدون کلید هوشمند) - عیب‌یابی - مقدمه
+IMMOBILISER SYSTEM (w/o Smart Key System),سیستم ایموبلایزر (بدون سیستم کلید هوشمند)
 Impact Detection Sensor Circuit Malfunction,خرابی مدار سنسور تشخیص ضربه
 Indicator,اندیکاتور، نشانگر، شاخص
 Infotainment,سیستم اطلاعات و سرگرمی
@@ -1480,6 +1678,7 @@ Injection Moulding (Molding),قالب گیری تزریقی
 "INJECTOR ASSY, FUEL",انژکتور سوخت
 "INLET, AIR CLEANER",لوله ورودی فیلتر هوا
 "INLET SUB-ASSY, WASHER",گلویی مخزن شیشه شور
+Inner Rear View Mirror(W/ EC Mirror),آینه دید عقب داخلی (به‌همراه آینه الکتروکرومیک)
 "INSERT, CONSOLE BOX, FRONT",درب جلویی کنسول وسط شماره 2
 Inspection [02/2024 - ]: Procedure,بازرسی [02/2024 - ]: روش کار
 Inspection [04/2024 - ]: Procedure,بازرسی [04/2024 - ]: روش کار
@@ -1487,6 +1686,7 @@ Inspection [05/2022 - ]: Procedure,بازرسی [05/2022 - ]: روش کار
 Inspection [09/2021 - 11/2022]: Procedure,بازرسی [09/2021 - 11/2022]: روش کار
 Inspection [09/2021 - ]: Procedure,بازرسی [09/2021 - ]: روش کار
 Inspection [11/2018 - ]: Procedure,بازرسی [11/2018 - ]: روش کار
+Inspection [11/2021 - 05/2022]: Procedure,بازرسی [11/2021 - 05/2022]: روش کار
 Inspection [11/2021 - ]: Procedure,بازرسی [11/2021 - ]: روش کار
 Inspection [11/2022 - ]: Procedure,بازرسی [11/2022 - ]: روش کار
 Inspection [12/2019 - ]: Procedure,بازرسی [12/2019 - ]: روش کار
@@ -1514,6 +1714,7 @@ Installation [12/2019 - ]: Procedure,نصب [12/2019 - ]: روش کار
 Installation [12/2021 - ]: Procedure,نصب [12/2021 - ]: روش کار
 Installation [12/2024 - ]: Procedure,نصب [12/2024 - ]: روش کار
 Instrument Panel Fusible Link,دستگاه فیوز لینک پنل
+Instrument Panel Illumination does not Turn On,روشنایی صفحه کیلومتر روشن نمی‌شود
 Instrument Panel Safety Pad,پد ایمنی داشبورد
 Instrument Panel Speaker,بلندگوی داشبورد
 Insufficient Coolant Temperature for Closed Loop Fuel Control,دمای مایع خنک‌کننده برای کنترل سوخت حلقه‌بسته کافی نیست
@@ -1528,17 +1729,25 @@ INSULATOR SUB-ASSY ENGINE MOUNTING LH,پایه لرزش گیر موتور(چپ)
 INSULATOR SUB-ASSY ENGINE MOUNTING RH,پایه لرزش گیر موتور (راست)
 Intake Manifold,مانیفولد ورودی
 INTERCOOLER,اینترکولر
+Interior/Exterior Trim,تریم داخلی/خارجی
 Interior/Illumination Lights,چراغ‌های داخلی / روشنایی
+Interior Light Auto Cut Circuit,مدار قطع خودکار چراغ داخلی
 Interior Light Circuit,مدار چراغ داخلی
 Interior Panels / Trim,پنل‌های داخلی / تریم
+Interior Panels / Trim (Preparation),پنل‌ها / تریم داخلی (آماده‌سازی)
+Interior Panels / Trim - Service Information,پنل‌ها/تریم داخلی - اطلاعات سرویس
 Interior Panels / Trim - Service Information (1 Of 2),پنل‌های داخلی / تریم - اطلاعات سرویس (۱ از ۲)
 Interior Panels / Trim (Service Specifications),پنل‌های داخلی / تریم (مشخصات سرویس)
 Internal Control Module EEPROM Data Memory Failure,خرابی حافظه داده EEPROM ماژول کنترل داخلی
+Internal Control Module EEPROM Data Memory Failure [12/2024 - ]: Description,خرابی حافظه داده EEPROM ماژول کنترل داخلی [12/2024 - ]: شرح
+Internal Control Module EEPROM Data Memory Failure [12/2024 - ]: Procedure,خرابی حافظه داده EEPROM ماژول کنترل داخلی [12/2024 - ]: روش کار
 Internal Control Module Random Access Memory (RAM) Error Data Memory Failure,خرابی حافظه داده خطای حافظه دسترسی تصادفی (RAM) ماژول کنترل داخلی
 Internal Control Module Read Only Memory (ROM) Error Program Memory Failure,خرابی حافظه برنامه خطای حافظه فقط‌خواندنی (ROM) ماژول کنترل داخلی
 Introduction - General Information,مقدمه - اطلاعات عمومی
 Intuitive Parking Assist System,سیستم کمک پارک هوشمند
+Intuitive Parking Assist System - Diagnostic Codes & Circuit Tests,سیستم کمک پارک هوشمند - کدهای عیب‌یابی و تست‌های مدار
 Intuitive Parking Assist System - Diagnostics - Introduction,سیستم کمک پارک هوشمند - عیب‌یابی - مقدمه
+"Inverter ""A"" Cooling System Performance",عملکرد سیستم خنک‌کننده اینورتر «A»
 Inverter Main Switch,کلید اصلی اینورتر
 Inverter With Converter,اینورتر با مبدل
 Is A Lab Scope Necessary?,آیا اسکوپ آزمایشگاهی لازم است؟
@@ -1555,9 +1764,11 @@ KEY(FOR CRANKSHAFT TIMING GEAR),خار چرخ دنده تایمینگ میل ل�
 Key Reminder Warning System,سیستم هشدار یادآور کلید
 Key Reminder Warning System - Diagnostics & Symptom Tests,سیستم هشدار یادآور کلید - عیب‌یابی و آزمون‌های نشانه‌ای
 Keyless Access System - Diagnostic Codes (1 Of 2),سیستم دسترسی بدون کلید - کدهای عیب‌یابی (۱ از ۲)
+Keyless Access System With Push Button Start,سیستم ورود بدون کلید با استارت دکمه‌ای
 King Pin,میل سگدست
 "KNOB SUB-ASSY, SHIFT LEVER",سردنده
 Knock Sensor,سنسور ناک
+Knock Sensor 1 Bank 1 or Single Sensor Circuit Short to Battery or Open,اتصال کوتاه به باتری یا مدار باز مدار سنسور ناک 1 ردیف 1 یا سنسور تکی
 Knuckle,سگدست
 "KNUCKLE, STEERING, LH",سگدست چرخ عقب (چپ)
 "KNUCKLE, STEERING, RH",سگدست چرخ عقب (راست)
@@ -1567,6 +1778,7 @@ L580F Hybrid Transmission / Transaxle,گیربکس / ترنس‌اکسل هیب�
 "LABEL, TIRE PRESSURE INFORMATION",برچسب، اطلاعات فشار باد لاستیک
 Labor Times,زمان‌های اجرت
 Labor Times: Other Variant,زمان‌های اجرت: واریانت دیگر
+Lack of Power,کاهش قدرت
 "LAMP ASSY, LICENSE PLATE, LH",چراغ پلاک (چپ)
 "LAMP ASSY, MAP",چراغ مطالعه سقف
 "LAMP ASSY, REAR COMBINATION, LH",چراغ خطر عقب روی گلگیر(چپ)
@@ -1590,14 +1802,22 @@ Left Electric Parking Brake Actuator Control Circuit Short to Battery,اتصال
 Left Front Wheel Speed Sensor Circuit Short to Battery,اتصال کوتاه مدار سنسور سرعت چرخ جلو چپ به باتری
 Left Front Wheel Speed Sensor Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار سنسور سرعت چرخ جلو چپ
 Left Front Wheel Speed Sensor Incorrect Component Installed,قطعه نادرست روی سنسور سرعت چرخ جلو چپ نصب شده است
+Left Front Wheel Speed Sensor Internal Electronic Failure,خرابی الکترونیکی داخلی سنسور سرعت چرخ جلو چپ
 Left Front Wheel Speed Sensor Signal Stuck Low,سیگنال سنسور سرعت چرخ جلو چپ در حالت پایین گیر کرده است
 Left Front Wheel Speed Sensor Supply Voltage Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار ولتاژ تغذیه سنسور سرعت چرخ جلو چپ
+Left Frontal Restraints Sensor Component Internal Failure,خرابی داخلی قطعه سنسور مهارکننده جلوی چپ
+Left Frontal Restraints Sensor Signal Above Allowable Range,سیگنال سنسور مهارکننده جلوی چپ بالاتر از محدوده مجاز
 Left Rear Wheel Speed Sensor Circuit Short to Battery,اتصال کوتاه مدار سنسور سرعت چرخ عقب چپ به باتری
 Left Rear Wheel Speed Sensor Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار سنسور سرعت چرخ عقب چپ
 Left Rear Wheel Speed Sensor Incorrect Component Installed,قطعه نادرست روی سنسور سرعت چرخ عقب چپ نصب شده است
+Left Rear Wheel Speed Sensor Internal Electronic Failure,خرابی داخلی الکترونیکی سنسور سرعت چرخ عقب چپ
 Left Rear Wheel Speed Sensor Signal Stuck Low,سیگنال سنسور سرعت چرخ عقب چپ در حالت پایین گیر کرده است
 Left Rear Wheel Speed Sensor Supply Voltage Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار ولتاژ تغذیه سنسور سرعت چرخ عقب چپ
+Left Side Airbag Deployment Control Circuit Open,مدار باز مدار کنترل فعال‌سازی ایربگ جانبی چپ
+Left Side Airbag Deployment Control Circuit Short to Battery,اتصال کوتاه به باتری مدار کنترل فعال‌سازی ایربگ جانبی چپ
+Left Side Airbag Deployment Control Circuit Short to Ground,اتصال کوتاه به بدنه مدار کنترل فعال‌سازی ایربگ جانبی چپ
 Left Side Restraints Sensor 2 Component Internal Failure,خرابی داخلی قطعه سنسور مهارکننده سمت چپ ۲
+Left Side Restraints Sensor 2 Missing Message,پیام مفقود سنسور مهارکننده سمت چپ ۲
 Left Side Restraints Sensor 2 Signal Above Allowable Range,سیگنال سنسور مهارکننده سمت چپ ۲ بالاتر از محدوده مجاز
 Left Side Restraints Sensor 2 Value of Signal Protection Calculation Incorrect,مقدار محاسبه حفاظت سیگنال سنسور مهارکننده سمت چپ ۲ نادرست است
 "LENS AND BODY, REAR LAMP, LH",پوسته چراغ خطر عقب روی درب صندوق چپ(بدون متعلقات)
@@ -1623,14 +1843,18 @@ Lighting System,سیستم روشنایی
 LIGHTING SYSTEM (w/ AFS),سیستم روشنایی (با AFS)
 Lighting System (W/ AFS) - Diagnostic Codes & Circuit Tests,سیستم روشنایی (با AFS) - کدهای عیب‌یابی و تست مدار
 Lighting System (W/O AFS) - Diagnostics - Introduction,سیستم روشنایی (بدون AFS) - عیب‌یابی - مقدمه
+Lighting System (Ext) - Diagnostic Codes & Circuit Tests,سیستم روشنایی (خارجی) - کدهای عیب‌یابی و تست‌های مدار
 Lighting System (Ext) - Diagnostics - Introduction,سیستم روشنایی (خارجی) - عیب‌یابی - مقدمه
 Lighting System (Ext) - Service Information,سیستم روشنایی (خارجی) - اطلاعات سرویس
 Lighting System (Ext) (Service Specifications),سیستم روشنایی (خارجی) (مشخصات سرویس)
 LIGHTING SYSTEM (w/ Headlight ECU),سیستم روشنایی (با ECU چراغ جلو)
+Lighting System (Int) - Diagnostics & Circuit Tests (1 Of 2),سیستم روشنایی (داخلی) - عیب‌یابی و تست مدار (۱ از ۲)
 Lighting System (Int) - Service Information,سیستم روشنایی (داخلی) - اطلاعات سرویس
+LIN Communication Circuit,مدار ارتباط LIN
 Lin Communication System,سیستم ارتباط LIN
 Lin Communication System - Diagnostic Codes,سیستم ارتباط LIN - کدهای عیب‌یابی
 Lin Communication System - Diagnostics - Introduction,سیستم ارتباط LIN - عیب‌یابی - مقدمه
+Linear Solenoid Valve Offset Learning,یادگیری آفست شیر برقی خطی
 "LINER, FRONT FENDER, LH",شلگیر چرخ جلو( چپ)
 "LINER, FRONT FENDER, RH",شلگیر چرخ جلو( راست)
 "LINER, REAR WHEEL HOUSE, LH",شلگیر گلگیر عقب قسمت انتهایی (چپ)
@@ -1643,6 +1867,7 @@ Live Axle,اکسل محرک، اکسل چرخان
 Load,بار، نیرو
 Load Carrying Capacity,ظرفیت حمل بار، ظرفیت باربری
 Load Sensor for Occupant Detection System Circuit Short to Battery,اتصال کوتاه مدار سنسور بار سیستم تشخیص سرنشین به باتری
+Load Sensor for Occupant Detection System Circuit Voltage Above Threshold,ولتاژ مدار سنسور بار سیستم تشخیص سرنشین از حد مجاز بالاتر است
 Load Sensor for Occupant Detection System Circuit Voltage Below Threshold,ولتاژ مدار سنسور بار سیستم تشخیص سرنشین کمتر از حد مجاز است
 "LOCK ASSY, FRONT DOOR, LH",مکانیزم قفل درب جلو( چپ)
 "LOCK ASSY, FRONT DOOR, RH",مکانیزم قفل درب جلو (راست)
@@ -1657,6 +1882,7 @@ LOCK SUB-ASSY FUEL FILLER OPENING LID,مکانیزم قفل درب باک
 Longitudinal Force,نیروی طولی
 Lost Communication with Air Inlet Damper Control Servo Motor LIN Missing Message,قطع ارتباط با موتور سروو کنترل دمپر ورودی هوا LIN - پیام مفقود
 Lost Communication with Airbag System Control Module Circuit Short to Ground,قطع ارتباط با ماژول کنترل سیستم ایربگ - اتصال کوتاه مدار به بدنه
+Lost Communication with Airbag System Control Module Signal Plausibility Failure,قطع ارتباط با ماژول کنترل سیستم ایربگ - خطای اعتبار سیگنال
 Lost Communication with Alternator Missing Message,قطع ارتباط با آلترناتور - پیام مفقود
 Lost Communication with Battery Monitor Module Missing Message,قطع ارتباط با ماژول مانیتور باتری - پیام مفقود
 Lost Communication With Brake System Control Module Missing Message,قطع ارتباط با ماژول کنترل سیستم ترمز - پیام مفقود
@@ -1671,8 +1897,10 @@ Lost Communication with Four-Wheel Drive Clutch Control Module Missing Message,�
 Lost Communication with Front Panel LIN Missing Message,قطع ارتباط با LIN پنل جلو - پیام مفقود
 Lost Communication with Hybrid/EV Battery Sensor Module Missing Message,قطع ارتباط با ماژول سنسور باتری هیبرید/EV - پیام مفقود
 Lost Communication with Starter / Generator Control Module Missing Message,قطع ارتباط با ماژول کنترل استارتر / ژنراتور - پیام مفقود
+Lost Communication with Stop and Start Control Module Missing Message,قطع ارتباط با ماژول کنترل استاپ-استارت - پیام مفقود
 Lost Communication with TCM (ch2) Missing Message,قطع ارتباط با TCM (ch2) - پیام مفقود
 Lost Communication with TCM Missing Message,قطع ارتباط با TCM - پیام مفقود
+Lost Communication With Trailer Brake Control Module Missing Message,قطع ارتباط با ماژول کنترل ترمز تریلر - پیام مفقود
 LOUVER SUB-ASSY COWL TOP VENTILATOR,دریچه تهویه بالای درب موتور
 Low Pressure Fuel System Pressure - Too High,فشار سیستم سوخت کم‌فشار - خیلی بالا
 Low Pressure Fuel System Pressure - Too Low,فشار سیستم سوخت کم‌فشار - خیلی پایین
@@ -1682,12 +1910,16 @@ Lumbar Support Adjuster Assembly,مجموعه تنظیم‌کننده تکیه�
 Macpherson Strut,مک فرسون استرات (کمک فنر جلو)
 Macpherson Strut Suspension,تعلیق مک فرسون استرات
 "MAGNET, OIL CLEANER(CVT)",آهنربا تمیزکننده روغن (گیربکس CVT)
+Main Body Ecu,ECU بدنه اصلی
 Main Body ECU Communication Stop Mode,حالت توقف ارتباط ECU بدنه اصلی
 Main Body Ecu - Service Information,ECU بدنه اصلی - اطلاعات سرویس
 Maintenance,نگهداری (سرویس و تنظیم)
 Maintenance Manual,کتاب سرویس و نگهداری
+Maintenance Overview,نمای کلی تعمیر و نگهداری
 Maintenance Reminder Light (Reset Procedures),چراغ یادآور نگهداری (روش‌های ریست)
 Maintenance - Service Information,نگهداری - اطلاعات سرویس
+Maintenance - Service Information (1 Of 2),تعمیر و نگهداری - اطلاعات سرویس (1 از 2)
+Maintenance - Service Specifications,تعمیر و نگهداری - مشخصات سرویس
 Manifold Absolute Pressure - Barometric Pressure Correlation,همبستگی فشار مطلق مانیفولد - فشار بارومتریک
 Manifold Absolute Pressure / Barometric Pressure Sensor Circuit Short to Ground,اتصال کوتاه مدار سنسور فشار مطلق مانیفولد / فشار بارومتریک به بدنه
 "MANIFOLD, INTAKE",منیفولد ورودی هوا
@@ -1698,8 +1930,10 @@ Map - Engine Performance & Maintenance,نقشه - عملکرد و نگهداری
 Map - Exhaust Systems,نقشه - سیستم‌های اگزوز
 "Map - Heating, Ventilation, & Air Conditioning",نقشه - گرمایش، تهویه و تهویه مطبوع
 Map - Routine Inspection Reference Guide,نقشه - راهنمای مرجع بازرسی دوره‌ای
+Map Standards Of Service,استانداردهای سرویس MAP
 "Map - Steering, Suspension, Wheel Alignment, Wheels & Tires",نقشه - فرمان، تعلیق، تنظیم زوایای چرخ، چرخ‌ها و تایرها
 Mass Air Flow Sensor Screw,پیچ سنسور جریان هوای ورودی
+"Mass or Volume Air Flow Sensor ""A"" Signal Plausibility Failure",خرابی اعتبار سیگنال سنسور جریان هوای جرمی یا حجمی «A»
 Master Reservoir Level Malfunction,خرابی سطح مخزن اصلی
 MASTER SWITCH ASSY POWER WINDOW REGULATOR,کلید شیشه بالابر جلو چپ (بدون کلید آینه)
 Mechanical,مکانیکی
@@ -1724,6 +1958,8 @@ MEMBER SUB-ASSY REAR FLOOR CROSS CENTER,رام عرضی کف شاسی مرکزی
 MEMBER SUB-ASSY REAR FLOOR SIDE LH,شاسی عقب (چپ)
 MEMBER SUB-ASSY REAR FLOOR SIDE RH,شاسی عقب(راست)
 "METER ASSY, COMBINATION",کیلومتر شمار
+Meter / Gauge System,سیستم نشانگرها و گیج‌ها
+METER / GAUGE SYSTEM (for 12.3 Inch Display),سیستم کیلومترشمار / نشانگرها (برای نمایشگر ۱۲.۳ اینچ)
 "METER SUB-ASSY, INTAKE AIR FLOW",مجموعه کنتور جریان هوای ورودی
 Metric Conversions,تبدیل‌های متریک
 Microphone,میکروفون
@@ -1739,6 +1975,7 @@ Millimeter Wave Radar Sensor Communication Stop Mode,حالت توقف ارتب�
 "MIRROR ASSY, OUTER REAR VIEW, RH",مجموعه آینه بغل کامل بدون قاب پشت(راست)
 Mirror (Ext),آینه (خارجی)
 Mirror (Ext) - Service Information,آینه (خارجی) - اطلاعات سرویس
+Mirror Heater does not Operate with Rear Defogger Switch,گرم‌کن آینه با کلید بخارزدای عقب کار نمی‌کند
 Mirror (Int),آینه (داخلی)
 "MIRROR, OUTER REAR VIEW, LH",شیشه آینه بغل چپ(بدون موتور)
 "MIRROR, OUTER REAR VIEW, RH",شیشه آینه بغل بدون موتور (راست)
@@ -1757,6 +1994,7 @@ Motor Cable,کابل موتور
 "Motor Electronics Coolant Pump ""A"" Component Internal Failure",خرابی داخلی قطعه پمپ مایع خنک‌کننده الکترونیک موتور «A»
 "Motor Electronics Coolant Pump ""A"" No Signal",عدم دریافت سیگنال از پمپ مایع خنک‌کننده الکترونیک موتور «A»
 Motor Generator Control System,سیستم کنترل موتور ژنراتور
+MOTOR GENERATOR CONTROL SYSTEM (for AWD with NICKEL METAL HYDRIDE BATTERY),سیستم کنترل موتور-ژنراتور (برای AWD با باتری نیکل-متال هیدرید)
 MOTOR GENERATOR CONTROL SYSTEM (for LITHIUM-ION BATTERY),سیستم کنترل موتور-ژنراتور (برای باتری لیتیوم-یون)
 "MOTOR & PUMP ASSY, WASHER",موتور پمپ مخزن شیشه‌شوی
 Motor Resolver Circuit,مدار رزولور موتور
@@ -1774,6 +2012,12 @@ MOULDING ROOF DRIP SIDE FINISH LH,زه طولی تزیینی روی سقف (چپ
 MOULDING ROOF DRIP SIDE FINISH RH,زه طولی تزیینی روی سقف (راست)
 "MOULDING, WINDSHIELD, OUTSIDE",لاستیک دور شیشه جلو
 "Multi-axis Acceleration Sensor Module ""A""",ماژول سنسور شتاب چندمحوره «A»
+Multi Flow Control Valve Motor Circuit Current Above Threshold,جریان مدار موتور شیر کنترل چندجریانه از حد مجاز بالاتر است
+Multi Flow Control Valve Sensor Circuit Short to Battery or Open,اتصال کوتاه به باتری یا مدار باز مدار سنسور شیر کنترل چندجریانه
+W/ Multi-Information Display,با نمایشگر چنداطلاعاتی
+Multi-Terrain Monitor System,سیستم مانیتور چندمنظوره زمین
+"Multi-Terrain Monitor System - Diagnostic Codes, Symptom Tests & Circuit Tests",سیستم مانیتور چندمنظوره زمین - کدهای عیب‌یابی، آزمون‌های نشانه‌ای و آزمون‌های مدار
+Multi-Terrain Monitor System - Diagnostics - Introduction,سیستم مانیتور چندمنظوره زمین - عیب‌یابی - مقدمه
 Multileaf Spring,فنر چند برگی
 My Settings System,سیستم تنظیمات من
 My Settings System - Diagnostics & Symptom Tests,سیستم تنظیمات من - عیب‌یابی و آزمون‌های نشانه‌ای
@@ -1818,6 +2062,9 @@ NUT (FOR TRANSMISSION CONTROL CABLE),مهره کابل کنترل گیربکس
 "Nut, Wire Adjusting",مهره تنظیم سیم
 NVRAM Supply Voltage Circuit Open,مدار باز ولتاژ تغذیه NVRAM
 Occupant Classification System,سیستم تشخیص سرنشین
+Occupant Classification System - Diagnostic Codes (1 Of 2),سیستم تشخیص سرنشین - کدهای عیب‌یابی (۱ از ۲)
+Occupant Classification System - Diagnostic Codes (2 Of 2) & Symptom Tests,سیستم تشخیص سرنشین - کدهای عیب‌یابی (2 از 2) و آزمون‌های نشانه‌ای
+"Occupant Classification System - Diagnostic Codes, Symptom Tests & Circuit Tests",سیستم تشخیص سرنشین - کدهای عیب‌یابی، آزمون‌های نشانه‌ای و آزمون‌های مدار
 Occupant Classification System - Diagnostics - Introduction,سیستم تشخیص سرنشین - عیب‌یابی - مقدمه
 OEM General Information,اطلاعات عمومی OEM
 Off Rod Tire,تایر برای مسیرهای خارج از جاده اصلی، تایر راه سازی
@@ -1834,13 +2081,20 @@ On-Vehicle Inspection [11/2021 - ]: Procedure,بازرسی روی خودرو [11
 On-Vehicle Inspection [11/2022 - ]: Procedure,بازرسی روی خودرو [11/2022 - ]: روش کار
 On-Vehicle Inspection [12/2024 - ]: Procedure,بازرسی روی خودرو [12/2024 - ]: روش کار
 Only Back Door cannot be Opened,فقط درب عقب قابل بازکردن نیست
+Only Wireless Control Function is Inoperative,فقط عملکرد کنترل بی‌سیم از کار افتاده است
+Operating Light Control Rheostat does not Change Light Brightness,رئوستات کنترل چراغ کارکردی شدت روشنایی را تغییر نمی‌دهد
 Operation Check,بررسی عملکرد
+Operation not Accepted Even If Air Conditioning Switch is Operated,عملکرد حتی با زدن کلید تهویه‌مطبوع پذیرفته نمی‌شود
 "ORNAMEN,T INSTRUMENT CLUSTER FINISH PANEL",براکت پایین سیستم صوتی و تصویری
 "ORNAMENT, STEERING WHEEL",قاب تزئینی روی غربیلک فرمان
 Oscillation,نوسان
 Out Of Round,غیر استوانه ای، غیر مدور، غیر مستدیر
+"Outer Mirror Indicator (Module ""B"" Side) Circuit Open",مدار باز نشانگر آینه بیرونی (سمت ماژول «B»)
+"Outer Mirror Indicator (Module ""B"" Side) Circuit Short to Battery",اتصال کوتاه به باتری مدار نشانگر آینه بیرونی (سمت ماژول «B»)
+"Outer Mirror Indicator (Module ""B"" Side) Circuit Short to Ground",اتصال کوتاه به بدنه مدار نشانگر آینه بیرونی (سمت ماژول «B»)
 Outer Mirror Switch,کلید آینه بیرونی
 Outer Rear View Mirror,آینه بیرونی دید عقب
+Outer Rear View Mirror Cover,قاب آینه بیرونی دید عقب
 Outer Rear View Mirror Glass,شیشه آینه بیرونی دید عقب
 Outside Luggage Compartment (Back Door) Electrical key Antenna Circuit Open,مدار باز آنتن کلید الکتریکی محفظه بار بیرونی (درب عقب)
 Overall Height,ارتفاع کل، ارتفاع سراسری، ارتفاع خارجی
@@ -1943,7 +2197,9 @@ Panoramic View Monitor Switch,کلید مانیتور نمای پانوراما
 Panoramic View Monitor System,سیستم مانیتور نمای پانوراما
 Panoramic View Monitor System - Diagnostics - Introduction,سیستم مانیتور نمای پانوراما - عیب‌یابی - مقدمه
 PANORAMIC VIEW MONITOR SYSTEM (for Gasoline Model),سیستم مانیتور نمای پانوراما (برای مدل بنزینی)
+Parasitic Load Explanation & Test Procedures - General Information,توضیحات و روش‌های آزمون بار پارازیتی - اطلاعات عمومی
 Park Assist / Monitoring,کمک پارک / مانیتورینگ
+Park Assist / Monitoring DTCS,کدهای عیب‌یابی سیستم کمک‌پارک / مانیتورینگ
 Parking Assist Ecu,ECU کمک پارک
 Parking Assist Monitor,مانیتور کمک پارک
 Parking Assist Monitor System,سیستم مانیتور کمک پارک
@@ -1957,19 +2213,37 @@ Parking Support Brake System - Diagnostic Codes,سیستم ترمز کمکی پ�
 Parking Support Brake System - Diagnostics - Introduction,سیستم ترمز کمکی پارک - عیب‌یابی - مقدمه
 Parking Support Brake System - Inspection,سیستم ترمز کمکی پارک - بازرسی
 Parts Location,محل قطعات
+Parts Location [02/2024 - ]: Illustration,محل قطعات [02/2024 - ]: تصویر
+Parts Location [04/2024 - ]: Illustration,محل قطعات [04/2024 - ]: تصویر
+Parts Location [09/2021 - 11/2022]: Illustration,محل قطعات [09/2021 - 11/2022]: تصویر
+Parts Location [09/2021 - ]: Illustration,محل قطعات [09/2021 - ]: تصویر
+Parts Location [11/2021 - ]: Illustration,محل قطعات [11/2021 - ]: تصویر
+Parts Location [11/2022 - 11/2023]: Illustration,محل قطعات [11/2022 - 11/2023]: تصویر
+Parts Location [11/2022 - ]: Illustration,محل قطعات [11/2022 - ]: تصویر
+Parts Location [11/2023 - ]: Illustration,محل قطعات [11/2023 - ]: تصویر
 Parts Location [12/2024 - ]: Illustration,محل قطعات [12/2024 - ]: تصویر
 Passenger Compartment,اتاق، قسمت مسافر، کابین سرنشین
+Passenger Frontal Stage 1 Deployment Control Circuit Open,مدار باز مدار کنترل فعال‌سازی مرحله 1 ایربگ جلو سرنشین
+Passenger Frontal Stage 1 Deployment Control Circuit Short to Battery,اتصال کوتاه به باتری مدار کنترل فعال‌سازی مرحله 1 ایربگ جلو سرنشین
+Passenger Frontal Stage 1 Deployment Control Circuit Short to Ground,اتصال کوتاه به بدنه مدار کنترل فعال‌سازی مرحله 1 ایربگ جلو سرنشین
+"Passenger Seat Belt Pretensioner ""A"" Deployment Control Circuit Open",مدار باز مدار کنترل فعال‌سازی پیش‌کشنده کمربند ایمنی سرنشین «A»
+"Passenger Seat Belt Pretensioner ""A"" Deployment Control Circuit Short to Battery",اتصال کوتاه به باتری مدار کنترل فعال‌سازی پیش‌کشنده کمربند ایمنی سرنشین «A»
+"Passenger Seat Belt Pretensioner ""A"" Deployment Control Circuit Short to Ground",اتصال کوتاه به بدنه مدار کنترل فعال‌سازی پیش‌کشنده کمربند ایمنی سرنشین «A»
 Passenger Seat Belt Sensor Circuit Open,مدار باز مدار سنسور کمربند ایمنی سرنشین
 Passenger Seat Belt Sensor Circuit Short to Battery,اتصال کوتاه مدار سنسور کمربند ایمنی سرنشین به باتری
 Passenger Seat Belt Sensor Circuit Short to Ground,اتصال کوتاه مدار سنسور کمربند ایمنی سرنشین به بدنه
 Passenger Seat Belt Sensor Circuit Undetermined Failure,خرابی نامشخص مدار سنسور کمربند ایمنی سرنشین
+"Passenger Seat Occupant Classification Sensor ""A"" Component Internal Failure",خرابی داخلی قطعه سنسور تشخیص سرنشین صندلی سرنشین «A»
 Passive Restraints,سیستم‌های مهار غیرفعال
 Patent,حق امتیاز، حق ثبت نوآوری، حق ثبت اختراع
 Pattern,مدل الگو
 PBD Touch Sensor LH Circuit Circuit Open,مدار باز مدار سنسور لمسی PBD سمت چپ
 PBD Touch Sensor RH Circuit Circuit Open,مدار باز مدار سنسور لمسی PBD سمت راست
+PBD Unit Pulse Sensor LH Circuit No Signal,عدم دریافت سیگنال از مدار سنسور پالس واحد PBD (چپ)
+PBD Unit Pulse Sensor RH Circuit No Signal,عدم دریافت سیگنال از مدار سنسور پالس واحد PBD (راست)
 PCV Valve,شیر PCV
 "PEDAL SUB-ASSY, BRAKE",پدال ترمز
+Personal Light,چراغ مطالعه
 "Piece, Front Bumper",قطعه سپر جلو
 "PILLAR, FRONT BODY, OUTER LH",پوسته ستون جلو بیرونی(چپ)
 "PILLAR, FRONT BODY, OUTER RH",ستون جلو بیرونی (راست)
@@ -2040,6 +2314,9 @@ Ply (Of Tire),لایه، لایی (تایر چرخ)
 Pneumatic,بادی، پنوماتیک، نیوماتیک، کمپرسی، با هوای فشرده
 Pneumatic Brake,ترمز بادی
 "POCKET, CONSOLE BOX",پنل بالایی جعبه جلویی کنسول
+Poor Engine Power; DTC P3191-00: Engine does not Start,قدرت موتور ضعیف است؛ DTC P3191-00: موتور استارت نمی‌خورد
+Power Back Door cannot be Operated Frequently,درب عقب برقی را نمی‌توان به‌طور مکرر عمل داد
+Power Back Door cannot be Operated Using Any Switch,درب عقب برقی با هیچ کلیدی عمل نمی‌کند
 Power Back Door does not Operate Using Cabin Switch,درب عقب برقی با کلید کابین کار نمی‌کند
 Power Back Door does not Operate Using Outside Switch,درب عقب برقی با کلید بیرونی کار نمی‌کند
 Power Back Door ECU Communication Stop Mode,حالت توقف ارتباط ECU درب عقب برقی
@@ -2053,6 +2330,8 @@ Power Distribution,توزیع برق
 Power Distribution Box System Internal Failure,خرابی داخلی سیستم جعبه توزیع برق
 Power Distribution (Service Specifications),توزیع برق (مشخصات سرویس)
 Power Distribution System - Service Information,سیستم توزیع برق - اطلاعات سرویس
+Power Door Lock Control System - Diagnostic Codes & Symptom Tests,سیستم کنترل قفل درب برقی - کدهای عیب‌یابی و آزمون‌های نشانه‌ای
+Power Door Lock Control System - Diagnostics & Circuit Tests,سیستم کنترل قفل درب برقی - عیب‌یابی و آزمون‌های مدار
 Power Door Lock Control System - Diagnostics - Introduction,سیستم کنترل قفل درب برقی - عیب‌یابی - مقدمه
 Power Integration System,سیستم یکپارچه‌سازی برق
 Power Integration System - Diagnostic Codes,سیستم یکپارچه‌سازی برق - کدهای عیب‌یابی
@@ -2069,6 +2348,7 @@ Power Outlets (Ext) - Service Information,پریزهای برق (خارجی) - �
 Power Running Board,رکاب برقی
 Power Running Board Switch,کلید رکاب برقی
 Power Running Board System,سیستم رکاب برقی
+Power Running Board System - Diagnostic Codes & Circuit Tests,سیستم رکاب برقی - کدهای عیب‌یابی و آزمون‌های مدار
 Power Running Board System - Diagnostics - Introduction,سیستم رکاب برقی - عیب‌یابی - مقدمه
 Power Seat Control Ecu,ECU کنترل صندلی برقی
 Power Seat does not Return to Memorized Position,صندلی برقی به موقعیت ذخیره‌شده برنمی‌گردد
@@ -2091,20 +2371,32 @@ Power Steering System - Diagnostic Codes & Symptom Tests,سیستم فرمان �
 "Power Steering System - Diagnostic Codes, Symptom Tests & Circuit Tests",سیستم فرمان برقی - کدهای عیب‌یابی، آزمون‌های نشانه‌ای و آزمون‌های مدار
 Power Steering System - Diagnostics - Introduction,سیستم فرمان برقی - عیب‌یابی - مقدمه
 POWER STEERING SYSTEM (for Type A),سیستم فرمان برقی (برای نوع A)
+"Power Steering Torque Sensor ""A"" Supply Voltage Circuit Voltage Above Threshold",ولتاژ مدار تغذیه سنسور گشتاور فرمان برقی «A» از حد مجاز بالاتر است
 Power Switch,کلید پاور
+Power Tail Gate System,سیستم درب صندوق برقی
+Power Tilt And Power Telescopic Steering Column System,سیستم ستون فرمان برقی با تنظیم شیب و طول
 Power Window Control System,سیستم کنترل شیشه بالابر برقی
 Power Window Control System - Diagnostic Codes & Symptom Tests,سیستم کنترل شیشه بالابر برقی - کدهای عیب‌یابی و تست علائم
 Power Window Control System - Diagnostics - Introduction,سیستم کنترل شیشه بالابر برقی - عیب‌یابی - مقدمه
 Power Window Master Switch,کلید اصلی شیشه‌بالابر برقی
 Power Window Regulator Motor (For Front Door),موتور رگولاتور شیشه‌بالابر برقی (برای درب جلو)
 Power Window Regulator Motor (For Rear Door),موتور رگولاتور شیشه‌بالابر برقی (برای درب عقب)
+Power Window Switch Malfunction,خرابی کلید شیشه‌بالابر برقی
 Power Window Switch (Roof Position),کلید شیشه‌بالابر برقی (موقعیت سقف)
 Pre-Collision System,سیستم پیش‌تصادف
 Pre-Collision System - Diagnostic Codes,سیستم پیش‌تصادف - کدهای عیب‌یابی
+"Pressure Control Solenoid ""B"" Actuator Stuck",عملگر شیر برقی کنترل فشار «B» گیر کرده است
+"Pressure Control Solenoid ""B"" Actuator Stuck [12/2024 - ]: Description",عملگر شیر برقی کنترل فشار «B» گیر کرده است [12/2024 - ]: توضیحات
+"Pressure Control Solenoid ""B"" Actuator Stuck [12/2024 - ]: Procedure",عملگر شیر برقی کنترل فشار «B» گیر کرده است [12/2024 - ]: روش کار
+"Pressure Control Solenoid ""G"" Control Circuit High Circuit Short to Battery",اتصال کوتاه به باتری مدار ولتاژ بالای کنترل شیر برقی کنترل فشار «G»
 "Pressure Control Solenoid ""L"" Control Circuit Open",مدار باز سلونوئید کنترل فشار «L»
+"Pressure Control Solenoid ""L"" Control Circuit Open [12/2024 - ]: Description",مدار کنترل شیر برقی کنترل فشار «L» باز است [12/2024 - ]: توضیحات
+"Pressure Control Solenoid ""L"" Control Circuit Open [12/2024 - ]: Procedure",مدار کنترل شیر برقی کنترل فشار «L» باز است [12/2024 - ]: روش کار
+"Pressure Control Solenoid ""L"" Control Circuit Open [12/2024 - ]: Wiring Diagram",مدار کنترل شیر برقی کنترل فشار «L» باز است [12/2024 - ]: نقشه سیم‌کشی
 "Pressure Control Solenoid ""A"" Control Circuit Short to Battery",اتصال کوتاه به باتری در مدار کنترل سلونوئید کنترل فشار «A»
 "Pressure Control Solenoid ""L"" Control Circuit Short to Ground",اتصال کوتاه به بدنه در مدار کنترل سلونوئید کنترل فشار «L»
 "Pressure Control Solenoid ""L"" Control Internal Electronic Failure",خرابی الکترونیکی داخلی سلونوئید کنترل فشار «L»
+"Pressure Control Solenoid ""J"" Performance/Stuck Off Actuator Stuck",عملکرد / خاموش ماندن شیر برقی کنترل فشار «J» - عملگر گیر کرده است
 Pressure Reducing Valve,شیر فشار شکن
 Pressure Reliefe Valve,سوپاپ اطمینان فشار
 Pressurizing Valve,سوپاپ کنترل فشار، شیر تنظیم فشار
@@ -2120,6 +2412,7 @@ PROTECTOR FRONT SEAT CUSHION EDGE LH,فریم تزیینی تگیه گاه صن�
 "PROTECTOR, RADIATOR GRILLE",زه پلاستیکی دور جلو پنجره
 "Protector, Radiator Grille",محافظ شبکه رادیاتور (محافظ گریل)
 PROTECTOR SEAT TRACK LOWER RAIL,محافظ ریل پایینی صندلی
+PTC Heater Assembly,مجموعه بخاری PTC
 "PULLER, FUSE",گیره (انبر) فیوز
 "PULLEY, ALTERNATOR",پولی دینام
 "PULLEY, CRANKSHAFT",پولی سر میل لنگ
@@ -2138,7 +2431,10 @@ Radial Tire,تایر رادیال
 RADIATOR ASSY,رادیاتور آب
 Radiator Coolant Temperature Sensor Circuit Short to Battery or Open,اتصال کوتاه مدار سنسور دمای مایع خنک‌کننده رادیاتور به باتری یا مدار باز
 Radiator Coolant Temperature Sensor Circuit Short to Ground,اتصال کوتاه مدار سنسور دمای مایع خنک‌کننده رادیاتور به بدنه
+Radiator Coolant Temperature Sensor Signal Compare Failure,عدم تطابق سیگنال سنسور دمای مایع خنک‌کننده رادیاتور
 Radiator Support Splash Shield Screw,پیچ محافظ پاشنه رادیاتور (پیچ گلگیرک داخلی رادیاتور)
+RADIO ANTENNA CORD (for Instrument Panel),کابل آنتن رادیو (برای داشبورد)
+Radio Antenna Cord (For Roof),کابل آنتن رادیو (برای سقف)
 Radio Receiver,گیرنده رادیو
 Radio Receiver Assembly Communication Stop Mode,حالت توقف ارتباط مجموعه گیرنده رادیو
 "RAIL ASSY, ROOF SIDE, LH",نگهدارنده گلگیر جلو( چپ)
@@ -2164,6 +2460,9 @@ Rear Bumper (Except Sport Package),سپر عقب (به‌جز پکیج اسپر�
 Rear Bumper (For Sport Package),سپر عقب (برای پکیج اسپرت)
 Rear Camera Circuit Short to Ground,اتصال کوتاه مدار دوربین عقب به بدنه
 Rear Camera Image Signal Missing Message,پیام مفقود از سیگنال تصویر دوربین عقب
+REAR CENTER SEAT INNER BELT ASSEMBLY (for Rear No. 1 Seat),مجموعه کمربند داخلی صندلی عقب وسط (برای صندلی عقب شماره ۱)
+Rear Center Seat Outer Belt Assembly,مجموعه کمربند بیرونی صندلی مرکزی عقب
+REAR CENTER SEAT OUTER BELT ASSEMBLY (for Rear No. 1 Seat),مجموعه کمربند بیرونی صندلی عقب وسط (برای صندلی عقب شماره ۱)
 Rear Combination Light Assembly,مجموعه چراغ ترکیبی عقب
 Rear Console Box,باکس کنسول عقب
 Rear Differential Carrier Assembly,مجموعه پوسته دیفرانسیل عقب
@@ -2183,6 +2482,7 @@ Rear Door Window Frame Moulding,زه قاب شیشه درب عقب
 Rear Drive Shaft Assembly,مجموعه شفت محرک عقب
 Rear Drive Shaft Assembly (For M20A-FKS),مجموعه شفت محرک عقب (برای M20A-FKS)
 Rear Drive Shaft Assembly (For M20A-FXS),مجموعه شفت محرک عقب (برای M20A-FXS)
+Rear Floor Electrical Key Oscillator Circuit Open,مدار باز نوسان‌ساز کلید الکتریکی کف عقب
 Rear Light Assembly,مجموعه چراغ عقب
 Rear No. 2 Seat Assembly,مجموعه صندلی عقب شماره ۲
 REAR NO. 1 SEAT ASSEMBLY (for LH Side),مجموعه صندلی عقب شماره ۱ (برای سمت چپ)
@@ -2191,6 +2491,7 @@ Rear No. 2 Seat Inner Belt Assembly,مجموعه کمربند داخلی صند�
 REAR NO. 1 SEAT INNER BELT ASSEMBLY (for LH Side),مجموعه کمربند داخلی صندلی عقب شماره ۱ (برای سمت چپ)
 REAR NO. 1 SEAT INNER BELT ASSEMBLY (for RH Side),مجموعه کمربند داخلی صندلی عقب شماره ۱ (برای سمت راست)
 Rear No. 2 Seat Outer Belt Assembly,مجموعه کمربند بیرونی صندلی عقب شماره ۲
+Rear No. 1 Seat Outer Belt Assembly With Pre-TENSIONER,مجموعه کمربند بیرونی صندلی عقب شماره ۱ به‌همراه پیش‌کشنده
 Rear Power Window LH does not Operate with Rear Power Window Switch LH,شیشه‌بالابر برقی عقب چپ با کلید شیشه‌بالابر عقب چپ کار نمی‌کند
 Rear Power Window RH does not Operate with Rear Power Window Switch RH,شیشه‌بالابر برقی عقب راست با کلید شیشه‌بالابر عقب راست کار نمی‌کند
 Rear Seat Assembly,مجموعه صندلی عقب
@@ -2201,7 +2502,10 @@ Rear Seat Outer Belt Assembly With Pre-TENSIONER,مجموعه کمربند بی�
 Rear Seat Reminder System,سیستم یادآور صندلی عقب
 Rear Seat Reminder System - Inspection,سیستم یادآور صندلی عقب - بازرسی
 Rear Shock Absorber,کمک‌فنر عقب
+"Rear Side Radar Sensor (Module ""B"") Beam Axis Misalignment (Horizontal)",عدم هم‌راستایی محور پرتو سنسور رادار جانبی عقب (ماژول «B») (افقی)
 "Rear Side Radar Sensor (Module ""B"") System Internal Failure",خرابی داخلی سیستم سنسور رادار جانبی عقب (ماژول «B»)
+Rear Speed Sensor,سنسور سرعت عقب
+Rear Speed Sensor (For AWD),سنسور سرعت عقب (برای AWD)
 Rear Spoiler,اسپویلر عقب
 Rear Stabilizer Bar,میل تعادل عقب
 Rear Suspension,تعلیق عقب
@@ -2219,6 +2523,7 @@ Refrigerant Pressure Sensor Circuit Short to Ground,اتصال کوتاه مدا
 "REGISTER ASSY, CONSOLE BOX",دریچه عقب کنسول
 REGISTER ASSY INSTRUMENT PANEL,دریچه تهویه سمت راننده
 REGISTER ASSY INSTRUMENT PANEL CENTER,دریچه تهویه وسط
+Registration [11/2022 - ]: Procedure,ثبت [11/2022 - ]: روش کار
 Registration [12/2024 - ]: Procedure,ثبت [12/2024 - ]: روش کار
 "REGULATOR ASSY, GENERATOR",رگولاتور دینام
 REGULATOR ASSY REAR DOOR WINDOW LH,ریل شیشه بالابر درب جلو (چپ)
@@ -2246,6 +2551,7 @@ REINFORCEMENT SUB-ASSY FRONT FENDER APRON REAR LH,تقویت‌کننده گلگ
 REINFORCEMENT SUB-ASSY FRONT FENDER APRON REAR RH,تقویت‌کننده گلگیر عقب (راست)
 REINFORCEMENT SUB-ASSY FRONT PILLAR LOWER RH,تقویتی ستون جلو (راست)
 REINFORCEMENT SUB-ASSY ROOF PANEL REAR,نگهدارنده تقویتی عقب سقف
+Related DTCS,DTCهای مرتبط
 "RELAY ASSY, STARTER",رله استارتر
 "RELAY, INTEGRATION",رله چند منظوره داخل اتاق(مرکزی)
 Remote Engine Starter does not Operate,استارتر موتور از راه دور کار نمی‌کند
@@ -2283,11 +2589,13 @@ Repair and Diagnosis,تعمیر و عیب‌یابی
 Repair and Diagnosis (Single Page),تعمیر و عیب‌یابی (تک‌صفحه‌ای)
 Repair Instruction,دستورالعمل تعمیر
 Replacement [04/2024 - ]: Procedure,تعویض [04/2024 - ]: روش کار
+Replacement [09/2021 - 11/2022]: Procedure,تعویض [09/2021 - 11/2022]: روش کار
 Replacement [09/2021 - ]: Procedure,تعویض [09/2021 - ]: روش کار
 Replacement [11/2021 - ]: Procedure,تعویض [11/2021 - ]: روش کار
 Replacement [11/2022 - ]: Procedure,تعویض [11/2022 - ]: روش کار
 Replacement [12/2024 - ]: Procedure,تعویض [12/2024 - ]: روش کار
 RESERVOIR ASSY BRAKE MASTER CYLINDER,مخزن روغن بوستر ترمز
+Restraints,سیستم‌های مهار
 Restraints Control Systems,سیستم‌های کنترل مهار
 RETAINER CENTER FLOOR CROSSMEMBER,مجموعه نگهدارنده کف مرکزی
 "RETAINER, CONSOLE BOX",نگهدارنده جعبه کنسول
@@ -2316,14 +2624,22 @@ Right Electric Parking Brake Actuator Control Circuit Short to Battery,اتصا�
 Right Front Wheel Speed Sensor Circuit Short to Battery,اتصال کوتاه مدار سنسور سرعت چرخ جلو راست به باتری
 Right Front Wheel Speed Sensor Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار سنسور سرعت چرخ جلو راست
 Right Front Wheel Speed Sensor Incorrect Component Installed,قطعه نادرست روی سنسور سرعت چرخ جلو راست نصب شده است
+Right Front Wheel Speed Sensor Internal Electronic Failure,خرابی الکترونیکی داخلی سنسور سرعت چرخ جلو راست
 Right Front Wheel Speed Sensor Signal Stuck Low,سیگنال سنسور سرعت چرخ جلو راست در حالت پایین گیر کرده است
 Right Front Wheel Speed Sensor Supply Voltage Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار ولتاژ تغذیه سنسور سرعت چرخ جلو راست
+Right Frontal Restraints Sensor Component Internal Failure,خرابی داخلی قطعه سنسور مهارکننده جلوی راست
+Right Frontal Restraints Sensor Signal Above Allowable Range,سیگنال سنسور مهارکننده جلوی راست بالاتر از محدوده مجاز
 Right Rear Wheel Speed Sensor Circuit Short to Battery,اتصال کوتاه مدار سنسور سرعت چرخ عقب راست به باتری
 Right Rear Wheel Speed Sensor Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار سنسور سرعت چرخ عقب راست
 Right Rear Wheel Speed Sensor Incorrect Component Installed,قطعه نادرست روی سنسور سرعت چرخ عقب راست نصب شده است
+Right Rear Wheel Speed Sensor Internal Electronic Failure,خرابی داخلی الکترونیکی سنسور سرعت چرخ عقب راست
 Right Rear Wheel Speed Sensor Signal Stuck Low,سیگنال سنسور سرعت چرخ عقب راست در حالت پایین گیر کرده است
 Right Rear Wheel Speed Sensor Supply Voltage Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار ولتاژ تغذیه سنسور سرعت چرخ عقب راست
+Right Side Airbag Deployment Control Circuit Open,مدار باز مدار کنترل فعال‌سازی ایربگ جانبی راست
+Right Side Airbag Deployment Control Circuit Short to Battery,اتصال کوتاه به باتری مدار کنترل فعال‌سازی ایربگ جانبی راست
+Right Side Airbag Deployment Control Circuit Short to Ground,اتصال کوتاه به بدنه مدار کنترل فعال‌سازی ایربگ جانبی راست
 Right Side Restraints Sensor 2 Component Internal Failure,خرابی داخلی قطعه سنسور مهارکننده سمت راست ۲
+Right Side Restraints Sensor 2 Missing Message,پیام مفقود سنسور مهارکننده سمت راست ۲
 Right Side Restraints Sensor 2 Signal Above Allowable Range,سیگنال سنسور مهارکننده سمت راست ۲ بالاتر از محدوده مجاز
 Right Side Restraints Sensor 2 Value of Signal Protection Calculation Incorrect,مقدار محاسبه حفاظت سیگنال سنسور مهارکننده سمت راست ۲ نادرست است
 "RING, O",اورینگ
@@ -2348,6 +2664,7 @@ RING SHAFT SNAP (FOR FRONT DRIVE INNER RH),خار رینگی پلوس داخلی
 "RING, SNAP",خار
 "RING, SNAP (FOR COMPRESSOR)",خار کمپرسور کولر
 RL-Door P/W Motor Component Internal Failure,خرابی داخلی قطعه موتور شیشه بالابر درب عقب چپ
+Road Sign Assist System,سیستم کمک‌تابلوخوان
 Road Test,تست جاده
 Rocker Panel Moulding,زه رکاب
 "ROD, ANTENNA",میله آنتن
@@ -2360,11 +2677,13 @@ ROD ASSY ACCELERATOR PEDAL(W/SENSOR),میله پدال گاز با سنسور
 ROD SUB-ASSY ENGINE MOVING CONTROL,میله کنترلی حرکت موتور(پایه محرک موتور)
 Roll,غلتش
 Roof Antenna,آنتن سقفی
+Roof Drip Side Finish Moulding,زه آبگیر سقف
 Roof Headlining,روکش سقف
 Roof Rack,باربند
 Room Temperature Sensor,سنسور دمای اتاق
 "ROTOR ASSY, ALTERNATOR",آلترناتور دینام
 "ROTOR SUB-ASSY, MAGNET CLUTCH",پولی کمپرسور کولر
+Rough Idling,دور آرام ناصاف
 Routine Inspection Reference Guide,راهنمای مرجع بازرسی دوره‌ای
 Routine Inspection - UICS,بازرسی دوره‌ای - UICS
 RR-Door P/W Motor Component Internal Failure,خرابی داخلی قطعه موتور شیشه بالابر درب عقب راست
@@ -2384,6 +2703,7 @@ Safety Connect System,سیستم Safety Connect
 "Safety Connect System - Diagnostic Codes, Symptom Tests & Circuit Tests",سیستم Safety Connect - کدهای عیب‌یابی، تست علائم و تست مدار
 Safety Connect System - Diagnostics - Introduction,سیستم Safety Connect - عیب‌یابی - مقدمه
 Safety Valve,سوپاپ اطمینان،دریچه ی اطمینان، شیر اطمینان
+Satellite Radio Broadcast cannot be Received,پخش رادیوی ماهواره‌ای قابل دریافت نیست
 SCREW,پیچ
 "Screw, Binding TAPPI",پیچ خودکار TAPPI
 "Screw, CROSSRECESS H",پیچ سرمته‌ای
@@ -2450,13 +2770,18 @@ Section 15 (Hybrid Battery Control System - Service Information (1 Of 2)),بخش
 Section 15 (Hybrid Control System - Diagnostic Codes (1 Of 3)),بخش ۱۵ (سیستم کنترل هیبرید - کدهای عیب‌یابی (۱ از ۳))
 Section 16 (Hybrid Control System - Diagnostic Codes (2 Of 3)),بخش ۱۶ (سیستم کنترل هیبرید - کدهای عیب‌یابی (۲ از ۳))
 Section 18 (Engine Control System (HEV) - Diagnostic Codes (P050A-O09A0)),بخش 18 (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P050A-O09A0))
+Section 18 (Hybrid Battery System - Diagnostic Codes (1 Of 2)),بخش ۱۸ (سیستم باتری هیبرید - کدهای عیب‌یابی (۱ از ۲))
 Section 18 (Hybrid Control System - Diagnostic Codes (1 Of 3)),بخش ۱۸ (سیستم کنترل هیبرید - کدهای عیب‌یابی (۱ از ۳))
 Section 19 (Hybrid Control System - Diagnostic Codes (2 Of 3)),بخش ۱۹ (سیستم کنترل هیبرید - کدهای عیب‌یابی (۲ از ۳))
+Section 19 (Hybrid Transmission System (L580F) - Diagnostic Codes (2 Of 3)),بخش ۱۹ (سیستم انتقال قدرت هیبریدی (L580F) - کدهای عیب‌یابی (۲ از ۳))
+Section 20 (Hybrid Transmission System (L580F) - Diagnostic Codes (1 Of 3)),بخش ۲۰ (سیستم انتقال قدرت هیبریدی (L580F) - کدهای عیب‌یابی (۱ از ۳))
 Section 21 (Engine Control System (HEV) - Diagnostic Codes (P2237-U1107)),بخش ۲۱ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P2237-U1107))
+Section 21 (Hybrid Battery System - Diagnostic Codes (1 Of 2)),بخش ۲۱ (سیستم باتری هیبرید - کدهای عیب‌یابی (۱ از ۲))
 Section 22 (Engine Control System (HEV) - Diagnostic Codes (P0010-P00D5)),بخش ۲۲ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P0010-P00D5))
 Section 23 (Engine Control System (HEV) - Diagnostic Codes (P0171-P0325)),بخش ۲۳ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P0171-P0325))
 Section 24 (Engine Control System (HEV) - Diagnostic Codes (P0100-P016A)),بخش ۲۴ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P0100-P016A))
 Section 25 (Engine Control System (M20A-FXS) - Diagnostic Codes (1 Of 6)),بخش ۲۵ (سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (۱ از ۶))
+Section 25 (Motor Generator Control System - Diagnostic Codes (3 Of 4)),بخش ۲۵ (سیستم کنترل موتور ژنراتور - کدهای عیب‌یابی (۳ از ۴))
 Section 26 (Engine Control System (M20A-FKS) - Service Information),بخش ۲۶ (سیستم کنترل موتور (M20A-FKS) - اطلاعات سرویس)
 Section 26 (Engine Control System (M20A-FXS) - Diagnostic Codes (2 Of 6)),بخش ۲۶ (سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (۲ از ۶))
 Section 27 (Engine Control System (M20A-FXS) - Diagnostic Codes (3 Of 6)),بخش ۲۷ (سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (۳ از ۶))
@@ -2464,10 +2789,13 @@ Section 28 (Engine Control System (M20A-FXS) - Diagnostic Codes (4 Of 6)),بخش
 "Section 28 (Smart Key System (For Start, HEV) - Diagnostic Codes)",بخش ۲۸ (سیستم کلید هوشمند (برای استارت، HEV) - کدهای عیب‌یابی)
 Section 29 (Engine Control System (M20A-FXS) - Diagnostic Codes (5 Of 6)),بخش ۲۹ (سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (۵ از ۶))
 Section 30 (Engine Control System (M20A-FXS) - Diagnostic Codes (3 Of 6)),بخش ۳۰ (سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (۳ از ۶))
+Section 31 (Engine Control System (Except HEV) - Diagnostic Codes (08 Of 11)),بخش 31 (سیستم کنترل موتور (به‌جز HEV) - کدهای عیب‌یابی (08 از 11))
 Section 31 (Engine Control System (M20A-FXS) - Diagnostic Codes (4 Of 6)),بخش ۳۱ (سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (۴ از ۶))
 Section 32 (Engine Control System (M20A-FXS) - Diagnostic Codes (5 Of 6)),بخش ۳۲ (سیستم کنترل موتور (M20A-FXS) - کدهای عیب‌یابی (۵ از ۶))
 Section 32 (Fuel System (M20A-FKS) - Service Information (1 Of 2)),بخش ۳۲ (سیستم سوخت‌رسانی (M20A-FKS) - اطلاعات سرویس (۱ از ۲))
 Section 33 (Fuel System (M20A-FKS) - Service Information (2 Of 2)),بخش ۳۳ (سیستم سوخت‌رسانی (M20A-FKS) - اطلاعات سرویس (۲ از ۲))
+Section 33 (Hybrid Battery Control System - Service Information),بخش 33 (سیستم کنترل باتری هیبرید - اطلاعات سرویس)
+Section 36 (Hybrid Battery Control System - Service Information),بخش 36 (سیستم کنترل باتری هیبرید - اطلاعات سرویس)
 Section 42 (Engine Control System (HEV) - Diagnostic Codes (P14D2-P2226)),بخش ۴۲ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P14D2-P2226))
 Section 43 (Engine Control System (HEV) - Diagnostic Codes (P14D2-P2226)),بخش ۴۳ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P14D2-P2226))
 Section 52 (Engine Control System (A25A-FXS) - Diagnostic Codes (P008B-P0110)),بخش ۵۲ (سیستم کنترل موتور (A25A-FXS) - کدهای عیب‌یابی (P008B-P0110))
@@ -2476,8 +2804,12 @@ Section 53 (Engine Control System (HEV) - Diagnostic Codes (P0325-P0505)),بخش
 Section 53 (Engine Control System (HEV) - Diagnostic Codes (P0A0A-P14D2)),بخش ۵۳ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P0A0A-P14D2))
 Section 54 (Engine Control System (HEV) - Diagnostic Codes (P0A0A-P14D2)),بخش ۵۴ (سیستم کنترل موتور (HEV) - کدهای عیب‌یابی (P0A0A-P14D2))
 Section 57 (Engine Control System (M20A-FKS) - Diagnostic Codes (4 Of 6)),بخش ۵۷ (سیستم کنترل موتور (M20A-FKS) - کدهای عیب‌یابی (۴ از ۶))
+Section 58 (Engine Control System (A25A-FXS) - Diagnostic Codes (P0325-P0400)),بخش 58 (سیستم کنترل موتور (A25A-FXS) - کدهای عیب‌یابی (P0325-P0400))
+Section 59 (Can Communication System (HEV) - Circuit Tests (4 Of 5)),بخش 59 (سیستم ارتباط CAN (HEV) - آزمون‌های مدار (4 از 5))
 Section 60 (Engine Control System (M20A-FKS) - Diagnostic Codes (2 Of 6)),بخش ۶۰ (سیستم کنترل موتور (M20A-FKS) - کدهای عیب‌یابی (۲ از ۶))
 Section 61 (Engine Control System (M20A-FKS) - Diagnostic Codes (1 Of 6)),بخش ۶۱ (سیستم کنترل موتور (M20A-FKS) - کدهای عیب‌یابی (۱ از ۶))
+Section 62 (Can Communication System (HEV) - Circuit Tests (4 Of 5)),بخش 62 (سیستم ارتباط CAN (HEV) - تست‌های مدار (4 از 5))
+Section 62 (Stop And Start System - Diagnostic Codes (2 Of 3)),بخش ۶۲ (سیستم استاپ-استارت - کدهای عیب‌یابی (۲ از ۳))
 Section 66 (Engine Control System (A25A-FXS) - Diagnostic Codes (P0110-P0125)),بخش ۶۶ (سیستم کنترل موتور (A25A-FXS) - کدهای عیب‌یابی (P0110-P0125))
 Section 67 (Engine Control System (M20A-FKS) - Diagnostic Codes (6 Of 6)),بخش ۶۷ (سیستم کنترل موتور (M20A-FKS) - کدهای عیب‌یابی (۶ از ۶))
 Section 68 (Engine Control System (M20A-FKS) - Diagnostic Codes (5 Of 6)),بخش ۶۸ (سیستم کنترل موتور (M20A-FKS) - کدهای عیب‌یابی (۵ از ۶))
@@ -2488,6 +2820,9 @@ Section 5 (Engine Control System (M20A-FXS) - Service Information),بخش ۵ (س
 Section 3 (Engine Mechanical System (M20A-FKS) - Service Information (2 Of 4)),بخش ۳ (سیستم مکانیکی موتور (M20A-FKS) - اطلاعات سرویس (۲ از ۴))
 Section 6 (Hybrid Battery Control System - Service Information (7 Of 7)),بخش ۶ (سیستم کنترل باتری هیبرید - اطلاعات سرویس (۷ از ۷))
 Section 3 (Hybrid Transmission System (L580F) - Service Information (2 Of 2)),بخش ۳ (سیستم گیربکس هیبرید (L580F) - اطلاعات سرویس (۲ از ۲))
+Section 2 (Transfer Case System (GF1A) - Service Information),بخش 2 (سیستم ترنسفر کیس (GF1A) - اطلاعات سرویس)
+Security Horn Assembly,مجموعه بوق ضدسرقت
+Security Horn Circuit,مدار بوق دزدگیر
 Security Indicator Light Does not Blink,چراغ نشانگر امنیتی چشمک نمی‌زند
 Self Adjuster,تنظیم کننده ی خودکار
 Self Sealing Tire,تایر ضد پنچری
@@ -2512,6 +2847,7 @@ Service Data [12/2024 - ]: Relay,داده‌های سرویس [12/2024 - ]: رل
 Service Plug Grip,دسته دوشاخه سرویس
 Servo Motor LIN Communication Bus off,قطع شدن باس ارتباطی LIN موتور سروو
 SFI System,سیستم SFI
+SFI SYSTEM (for 1Motor-HEV Model),سیستم SFI (برای مدل هیبریدی تک‌موتوره)
 SFI SYSTEM (for Gasoline Model),سیستم SFI (برای مدل بنزینی)
 SFI SYSTEM (for HEV Model),سیستم SFI (برای مدل HEV)
 SFI SYSTEM (for K121),سیستم SFI (برای K121)
@@ -2533,12 +2869,18 @@ SHIELD FRONT SEAT CUSHION INNER RH,ضربه گیر کنار ی (داخلی ) ص�
 Shift Lever,اهرم تعویض دنده
 Shift Lever Knob,سر دنده
 Shift Lever Position Sensor,سنسور موقعیت اهرم تعویض دنده
+"Shift Solenoid ""H"" Control Circuit High Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز مدار پرولتاژ کنترل شیر برقی تعویض دنده «H»
+"Shift Solenoid ""H"" Control Circuit Low Circuit Short to Ground",اتصال کوتاه به بدنه مدار کم‌ولتاژ کنترل شیر برقی تعویض دنده «H»
+"Shift Solenoid ""J"" Control Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز مدار کنترل شیر برقی تعویض دنده «J»
+"Shift Solenoid ""J"" Control Circuit Short to Ground",اتصال کوتاه به بدنه مدار کنترل شیر برقی تعویض دنده «J»
+"Shift Solenoid ""G"" Performance/Stuck Off Actuator Stuck",عملکرد / خاموش ماندن شیر برقی تعویض دنده «G» - عملگر گیر کرده است
 "SHIM KIT, ANTI SQUEAL, FRONT",کیت پد صداگیر روی لنت جلو
 shock absorber,کمک‌فنر
 Shock Absorber,کمک فنر، ضربه گیر
 "SHOE KIT, REAR BRAKE",کفشک ترمز عقب
 "SHROUD, FAN",کاور فن رادیاتور
 Shut Down Signal Circuit,مدار سیگنال خاموش‌سازی
+Side Airbag Sensor (For Front Door),سنسور ایربگ جانبی (برای درب جلو)
 Side Camera (Left) Circuit Short to Ground,اتصال کوتاه مدار دوربین جانبی (چپ) به بدنه
 Side Camera (Right) Circuit Short to Ground,اتصال کوتاه مدار دوربین جانبی (راست) به بدنه
 Side Shield Bolt,پیچ محافظ کناری (آرکبال / محافظ زیربندی)
@@ -2547,9 +2889,12 @@ Side Turn Signal Light Assembly,مجموعه چراغ راهنمای جانبی
 "SILENCER, FRONT FLOOR",عایق صدا گیر کف اتاق جلو
 Single Leaf Spring,فنر تک برگی
 Slide Joint,مفصل لغزان، مفصل کشویی
+Sliding Roof Housing,محفظه سانروف کشویی
 Sliding Roof System,سیستم سانروف کشویی
+Sliding Roof System - Diagnostic Codes & Symptom Tests,سیستم سقف کشویی - کدهای عیب‌یابی و آزمون‌های نشانه‌ای
 Sliding Roof System - Diagnostics - Introduction,سیستم سانروف کشویی - عیب‌یابی - مقدمه
 Sliding Roof System - Service Information,سیستم سانروف کشویی - اطلاعات سرویس
+Smart Access System (For Start) - Diagnostic Codes & Symptom Tests (1 Of 2),سیستم دسترسی هوشمند (برای استارت) - کدهای عیب‌یابی و آزمون‌های نشانه‌ای (1 از 2)
 "SMART ACCESS SYSTEM WITH PUSH-BUTTON START (for Entry Function, Gasoline Model)",سیستم دسترسی هوشمند با استارت دکمه‌ای (برای عملکرد ورود، مدل بنزینی)
 "SMART ACCESS SYSTEM WITH PUSH-BUTTON START (for Entry Function, HEV Model)",سیستم دسترسی هوشمند با استارت دکمه‌ای (برای عملکرد ورود، مدل HEV)
 "SMART ACCESS SYSTEM WITH PUSH-BUTTON START (for Start Function, Gasoline Model)",سیستم دسترسی هوشمند با استارت دکمه‌ای (برای عملکرد استارت، مدل بنزینی)
@@ -2614,6 +2959,7 @@ SPRING SUB-ASSY FRONT SEAT CUSHION LH,فنر نشیمنگاه صندلی جلو 
 Sprung Weight,وزن فنر بندی شده، وزن فنر سوار
 SRS Warning Light does not Come ON,چراغ هشدار SRS روشن نمی‌شود
 SRS Warning Light Remains ON,چراغ هشدار SRS روشن می‌ماند
+SST,ابزار ویژه سرویس
 Stabilizer Bar,میله ی موج گیر
 Stabilizer With Disconnection Mechanism System,سیستم میل تعادل با مکانیزم قطع اتصال
 Stabilizer With Disconnection Mechanism System - Diagnostics - Introduction,سیستم میل تعادل با مکانیزم قطع اتصال - عیب‌یابی - مقدمه
@@ -2640,10 +2986,12 @@ Steering Angle,زاویه ی فرمان
 Steering Angle Sensor,سنسور زاویه فرمان
 Steering Angle Sensor Communication Stop Mode,حالت توقف ارتباط سنسور زاویه فرمان
 Steering Angle Sensor Module Component Internal Failure,خرابی داخلی قطعه ماژول سنسور زاویه فرمان
+Steering Angle Sensor Supply Voltage Circuit Short to Ground or Open,اتصال کوتاه به بدنه یا مدار باز مدار ولتاژ تغذیه سنسور زاویه فرمان
 Steering Arm,شغالدست
 Steering Axis,محور فرمان
 Steering Column,لوله ی فرمان
 Steering Column Assembly,مجموعه ستون فرمان
+Steering Column Assembly (For Power Tilt And Power Telescopic Steering Column),مجموعه ستون فرمان (برای ستون فرمان برقی با تنظیم شیب و طول)
 Steering Column - Service Information,ستون فرمان - اطلاعات سرویس
 Steering Gear,جعبه فرمان
 Steering Gear / Linkage,جعبه فرمان / لینک فرمان
@@ -2651,6 +2999,7 @@ Steering Gear / Linkage (Preparation),جعبه فرمان / لینک فرمان 
 Steering Gear / Linkage (Service Specifications),جعبه فرمان / لینک فرمان (مشخصات سرویس)
 Steering Gear - Service Information,جعبه فرمان - اطلاعات سرویس
 Steering Knuckle,سگدست فرمان
+Steering Knuckle (For 2WD),سگ‌دست فرمان (برای 2WD)
 Steering Offset,انحراف زمان
 Steering Pad,پد فرمان
 Steering Pad Switch,کلید پد فرمان
@@ -2663,6 +3012,10 @@ Stereo Component Amplifier,آمپلی‌فایر سیستم استریو
 Stereo Jack Adapter Assembly,مجموعه آداپتور جک استریو
 Stiffener,لایی تایر
 Stop And Start System,سیستم توقف و استارت
+Stop And Start System - Diagnostic Codes (1 Of 3),سیستم توقف و استارت - کدهای عیب‌یابی (۱ از ۳)
+"Stop And Start System - Diagnostic Codes (2 Of 2), Circuit Tests & Symptom Tests",سیستم استارت/استاپ - کدهای عیب‌یابی (2 از 2)، آزمون‌های مدار و آزمون‌های نشانه‌ای
+Stop And Start System - Diagnostics - Introduction (1 Of 2),سیستم استاپ-استارت - عیب‌یابی - مقدمه (۱ از ۲)
+Stop And Start System - Service Information,سیستم استاپ-استارت - اطلاعات سرویس
 Stop Light Switch,کلید چراغ ترمز
 "STOPPER, BACK WINDOW GLASS",پایه نگهدارنده شیشه درب صندوق
 "STOPPER, SPARE WHEEL",نگهدارنده (استاپر) چرخ یدکی
@@ -2677,6 +3030,7 @@ Strut,استرات (نوعی کمک فنر)
 Studded Tire,تایر یخ شکن (تایر گل میخ دار)
 Sub Radiator,رادیاتور فرعی
 Sub Woofer Speaker Cable Actuator Stuck,گیرکردن عملگر کابل بلندگوی ساب‌ووفر
+Sun Roof/T-Top/Convertible Top,سانروف/تی‌تاپ/سقف کانورتیبل
 Supplemental Restraint Systems,سیستم‌های مهار تکمیلی
 "SUPPORT ASSY, FRONT SEAT HEADREST",پایه تکیه گاه سری صندلی جلو
 SUPPORT ASSY FRONT SEAT HEADREST LH,پایه تکیه گاه سری صندلی جلو (چپ)
@@ -2730,6 +3084,7 @@ SWITCH ASSY POWER WINDOW REGULATOR,کلید شیشه بالابر جلو راس�
 "SWITCH ASSY, STOP LAMP",سوییچ استاپر چراغ ها
 "SWITCH ASSY, WINDSHIELD WIPER",دسته برف پاک کن کنار غربیلک فرمان
 "SWITCH, COURTESY LAMP",زغالی (سوییچ)لامپ روی گلگیر عقب
+Symptom Check List Worksheet - General Information,برگه چک‌لیست علائم - اطلاعات عمومی
 Synchro Rings,دنده‌های برنجی
 Synthetic,مصنوعی، ترکیبی
 System Diagram,نقشه سیستم
@@ -2754,6 +3109,7 @@ Technical Service Bulletins,بولتن‌های خدمات فنی
 Telematics System,سیستم تله‌ماتیک
 Telematics System - Diagnostic Codes & Symptom Tests,سیستم تلماتیک - کدهای عیب‌یابی و آزمون‌های نشانه‌ای
 Telematics System - Diagnostics - Introduction,سیستم تلماتیک - عیب‌یابی - مقدمه
+Telematics Transceiver Missing Message,پیام مفقود از ترنسیور تلماتیک
 TELEVISION CAMERA (for Front),دوربین تلویزیونی (جلو)
 TELEVISION CAMERA (for Rear),دوربین تلویزیونی (عقب)
 TELEVISION CAMERA (for Side),دوربین تلویزیونی (جانبی)
@@ -2763,7 +3119,11 @@ Terminals Of ECM,ترمینال‌های ECM
 Terminals Of Ecu,ترمینال‌های ECU
 Testing and Diagnosis,تست و عیب‌یابی
 Testing & Diagnosis,تست و عیب‌یابی
+Testing For Parasitic Load,آزمون مصرف‌جریان پارازیتی
+The Map Process - Overview,فرایند MAP - نمای کلی
+The Map Process - Overview Of Service Requirements And Suggestions,فرایند MAP - نمای کلی الزامات و پیشنهادهای سرویس
 Theft Deterrent / Keyless Entry,ضدسرقت / ورود بدون کلید
+Theft Deterrent / Keyless Entry DTCS,کدهای عیب‌یابی سیستم ضدسرقت / ورود بدون کلید
 Theft Deterrent / Keyless Entry System (Service Specifications),سیستم ضدسرقت / ورود بدون کلید (مشخصات سرویس)
 Theft Deterrent System,سیستم ضدسرقت
 Theft Deterrent System - Diagnostics & Circuit Tests,سیستم ضدسرقت - عیب‌یابی و تست مدار
@@ -2772,10 +3132,16 @@ There is No Sound Made,هیچ صدایی تولید نمی‌شود
 THERMISTOR COOLER (AMBIENT TEMP. SENSOR),سنسور دمای محیط
 Thermostats And Housings,ترموستات‌ها و محفظه‌ها
 THIS PART IS NOTSUPPLIED,این قطعه تامین نمی شود
+"Throttle/Pedal Position Sensor ""A"" Minimum Stop Performance",عملکرد حداقل توقف سنسور موقعیت دریچه گاز / پدال «A»
+"Throttle/Pedal Position Sensor/Switch ""D"" Circuit Short to Battery",اتصال کوتاه به باتری مدار سنسور / کلید موقعیت دریچه گاز / پدال «D»
+"Throttle/Pedal Position Sensor/Switch ""B"" Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز در مدار سنسور/کلید موقعیت پدال گاز «B»
+"Throttle/Pedal Position Sensor/Switch ""B"" Circuit Short to Ground",اتصال کوتاه به بدنه در مدار سنسور/کلید موقعیت پدال گاز «B»
 Tie Rod,میل فرمان، میل تعادل
 Tie Rod End,سیبک فرمان
 Tightening,آچارکشی
 timing belt,تسمه تایم
+Timing Belts,تسمه‌تایم
+Timing Gears,چرخ‌دنده‌های تایم
 Tire,تایر، لاستیک
 Tire And Wheel,لاستیک و چرخ
 Tire Bead,لبه ی تایر (لبه ی ضخیم دیواره ی تایر که در پشت رینگ افتاده و با آن درگیر می شود)
@@ -2799,26 +3165,35 @@ Tire Valve,سوپاپ (والو) تایر
 Toe In,تقارب، همگرایی
 Toe Out,تباعد، واگرایی
 Torque Converter,مبدل گشتاور
+Torque Converter Clutch Circuit Short to Battery or Open,اتصال کوتاه به باتری یا مدار باز مدار کلاچ مبدل گشتاور
+Torque Converter Clutch Circuit Short to Ground,اتصال کوتاه به بدنه مدار کلاچ مبدل گشتاور
+Torque Converter Clutch Pressure Control Solenoid Control Actuator Stuck,عملگر کنترل شیر برقی کنترل فشار کلاچ مبدل گشتاور گیر کرده است
 Torque Specifications,مشخصات گشتاور
 Torsion Bar Spring,فنر پیچشی، فنر میله پیچشی، فنر موج گیر
+Touch Select 2-4 And High-Low System,سیستم انتخاب لمسی 2-4 و دنده سبک-سنگین
 Touching Unlock Sensor for Certain Period of Time does not Unlock All Doors,لمس سنسور بازکردن برای مدت معین همه درب‌ها را باز نمی‌کند
 Towing,یدک‌کشی
 Towing Converter Relay,رله مبدل یدک‌کشی
 Towing Converter System,سیستم مبدل یدک‌کشی
 Towing Converter System - Inspection,سیستم مبدل یدک‌کشی - بازرسی
+TPMS Reminder Reset - Procedure 15,بازنشانی یادآور TPMS - روش 15
+TPMS Reminder Reset - Procedure 20,بازنشانی یادآور TPMS - روش 20
 "TRACK ASSY, FRONT SEAT, OUTER LH",ریل کامل صندلی جلو(چپ)
 "TRACK ASSY, LH SEAT, INNER",ریل کامل صندلی جلو(چپ)
 TRACK ASSY RH SEAT INNER (FOR SEPARATE SEAT),ریل کامل صندلی جلو (راست)
 TRACK ASSY RH SEAT OUTER (FOR SEPARATE SEAT),ریل کامل صندلی جلو (راست)
 Traction,کشش
 Traction Control,کنترل کشش
+Traffic Jam Assist System - Service Information,سیستم کمک رانندگی در ترافیک - اطلاعات سرویس
 Trailer Backup Guide Switch,کلید راهنمای دنده عقب تریلر
+Trailer Brake Control Ecu,ECU کنترل ترمز تریلر
 Trailer Brake Control System,سیستم کنترل ترمز تریلر
 Trailer Brake Control System - Diagnostic Codes & Symptom Tests,سیستم کنترل ترمز تریلر - کدهای عیب‌یابی و تست علائم
 Trailer Brake Control System - Diagnostics - Introduction,سیستم کنترل ترمز تریلر - عیب‌یابی - مقدمه
 Trailing Arm,میله ی پیچشی عقب
 TRANSAXLE ASSY CONTINUOUSLY VARIABLE,گیربکس (بدون توربین)
 Transfer Assembly,مجموعه ترانسفر
+Transfer Case,جعبه‌تقسیم
 Transfer Case System (VF2DM) - Service Information,سیستم ترانسفر کیس (VF2DM) - اطلاعات سرویس
 Transfer Oil,روغن ترانسفر
 Transfer System,سیستم ترانسفر
@@ -2826,6 +3201,9 @@ transmission,گیربکس
 Transmission Control Cable,کابل کنترل گیربکس
 Transmission Control Switch Circuit,مدار کلید کنترل گیربکس
 Transmission Control Systems,سیستم‌های کنترل گیربکس
+"Transmission Fluid Temperature Sensor ""A"" Circuit Range/Performance",محدوده / عملکرد مدار سنسور دمای روغن گیربکس «A»
+"Transmission Fluid Temperature Sensor ""A"" Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز مدار سنسور دمای روغن گیربکس «A»
+"Transmission Fluid Temperature Sensor ""A"" Circuit Short To Ground",اتصال کوتاه به بدنه مدار سنسور دمای روغن گیربکس «A»
 Transmission Wire,سیم گیربکس
 "TRANSMITTER ASSY, DOOR CONTROL",مجموعه فرستنده کنترل درب
 Tread Of Tire,آج تایر
@@ -2849,6 +3227,9 @@ TUBE SUB-ASSY FUEL TANK TO CANISTER,شیلنگ مخزن باک به کنیستر
 Tubeless Tire,تایر بدون تیوب (تویی)، تایر تیوب لس
 "TUNER ASSY, STEREO COMPONENT",یونیت رادیو(بدون مانیتور)
 Turbocharger,توربوشارژر
+"Turbocharger/Supercharger Boost Sensor ""A"" Circuit Short to Battery or Open",اتصال کوتاه به باتری یا مدار باز مدار سنسور فشار بوست توربوشارژر / سوپرشارژر «A»
+"Turbocharger/Supercharger Boost Sensor ""A"" Circuit Short to Ground",اتصال کوتاه به بدنه مدار سنسور فشار بوست توربوشارژر / سوپرشارژر «A»
+"Turbocharger/Supercharger ""A"" Overboost Condition",وضعیت بوست بیش‌ازحد توربوشارژر / سوپرشارژر «A»
 Turn Signal Light Circuit Current Below Threshold,جریان مدار چراغ راهنما کمتر از حد مجاز است
 Turn Signal Switch Circuit,مدار کلید راهنما
 Turning Angle,زاویه ی گردش
@@ -2859,15 +3240,19 @@ Ultrasonic,فراصوتی، اولتراسونیک، ماوراء صوت
 ULTRASONIC SENSOR (for Front),سنسور اولتراسونیک (جلو)
 ULTRASONIC SENSOR (for Rear),سنسور اولتراسونیک (عقب)
 Ultrasonic Sensor (Front Left Center) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (مرکز جلو چپ)
+Ultrasonic Sensor (Front Left Center) Missing Message,پیام مفقود از سنسور اولتراسونیک (مرکز چپ جلو)
 Ultrasonic Sensor (Front Left Corner) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (گوشه جلو چپ)
 Ultrasonic Sensor (Front Left Corner) Missing Message,پیام مفقود از سنسور اولتراسونیک (گوشه جلو چپ)
 Ultrasonic Sensor (Front Right Center) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (مرکز جلو راست)
+Ultrasonic Sensor (Front Right Center) Missing Message,پیام مفقود از سنسور اولتراسونیک (مرکز راست جلو)
 Ultrasonic Sensor (Front Right Corner) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (گوشه جلو راست)
 Ultrasonic Sensor (Front Right Corner) Missing Message,پیام مفقود از سنسور اولتراسونیک (گوشه جلو راست)
 Ultrasonic Sensor (Rear Left Center) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (مرکز عقب چپ)
+Ultrasonic Sensor (Rear Left Center) Missing Message,پیام مفقود از سنسور اولتراسونیک (مرکز چپ عقب)
 Ultrasonic Sensor (Rear Left Corner) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (گوشه عقب چپ)
 Ultrasonic Sensor (Rear Left Corner) Missing Message,پیام مفقود از سنسور اولتراسونیک (گوشه عقب چپ)
 Ultrasonic Sensor (Rear Right Center) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (مرکز عقب راست)
+Ultrasonic Sensor (Rear Right Center) Missing Message,پیام مفقود از سنسور اولتراسونیک (مرکز راست عقب)
 Ultrasonic Sensor (Rear Right Corner) Component Internal Failure,خرابی داخلی قطعه سنسور اولتراسونیک (گوشه عقب راست)
 Ultrasonic Sensor (Rear Right Corner) Missing Message,پیام مفقود از سنسور اولتراسونیک (گوشه عقب راست)
 Unified IC Malfunction,خرابی IC یکپارچه
@@ -2880,6 +3265,8 @@ Upper Quarter Trim Bolt,پیچ پانل داخلی یک‌چهارم بالای�
 USB Audio System Recognition/Play Error,خطای شناسایی/پخش سیستم صوتی USB
 Using lemon2025'S System Wiring Diagrams,استفاده از نقشه‌های سیم‌کشی سیستم lemon2025
 Using lemon2025'S System Wiring Diagrams: Introduction,استفاده از نقشه‌های سیم‌کشی سیستم lemon2025: مقدمه
+Using Multi-information Display (Color Display),استفاده از نمایشگر چنداطلاعاتی (نمایشگر رنگی)
+Using Trip Meter (Monochrome Display),استفاده از سفرسنج (نمایشگر تک‌رنگ)
 Vacuum Hoses,شیلنگ‌های وکیوم
 Vacuum Sensor,سنسور وکیوم
 valve,سوپاپ
@@ -2888,6 +3275,7 @@ VALVE ASSY CAMSHAFT TIMING OIL CONTROL,شیر کنترل روغن میل لنگ
 "VALVE ASSY, PURGE CONTROL",شیر تخلیه بخار بنزین
 VALVE ASSY VACUUM SWITCHING,شیر برقی کنیستر
 Valve Body Assembly,مجموعه بلوک سوپاپ
+Valve Body Assembly (For Transmission Side),مجموعه بلوک سوپاپ (سمت گیربکس)
 "VALVE, COOLER EXPANSION",شیر انبساط کولر
 Valve Core,سوزن سوپاپ (والو)
 "VALVE, EXHAUST",سوپاپ دود
@@ -2898,6 +3286,7 @@ Valve Stem,ساق سوپاپ، تنه ی سوپاپ
 VALVE SUB-ASSY TIRE PRESSURE MONITOR,سوپاپ سنسور فشار لاستیک
 "VALVE SUB-ASSY, VENTILATION",شیر سوپاپ تهویه هوا موتور
 "VALVE, WINDSHIELD WASHER HOSE",رابط شیلنگ شیشه شوی جلو
+Valves & Valve Seats,سوپاپ‌ها و سیت سوپاپ
 Variable Damping Strut,کمک فنر ضریب متغیر
 VC Output Circuit,مدار خروجی VC
 Vehicle Approaching Speaker Ecu,ECU بلندگوی هشدار نزدیک‌شدن خودرو
@@ -2906,7 +3295,11 @@ Vehicle Approaching Speaker (For Rear Side),بلندگوی هشدار نزدیک
 Vehicle Behavior Chart,نمودار رفتار خودرو
 Vehicle Control History,تاریخچه کنترل خودرو
 VEHICLE CONTROL HISTORY (RoB),تاریخچه کنترل خودرو (RoB)
+Vehicle Identification And Serial Numbers,شناسه و شماره‌سریال خودرو
+Vehicle Lift And Support Locations,محل‌های بالابری و تکیه‌گاه خودرو
 "Vehicle Speed Sensor ""A"" No Signal",عدم دریافت سیگنال از سنسور سرعت خودرو «A»
+"Vehicle Speed Sensor ""A"" No Signal [12/2024 - ]: Description","عدم وجود سیگنال سنسور سرعت خودرو ""A"" [12/2024 - ]: شرح"
+"Vehicle Speed Sensor ""A"" No Signal [12/2024 - ]: Procedure",سنسور سرعت خودرو «A» بدون سیگنال [12/2024 - ]: روش کار
 Vehicle Speed Signal Circuit Open,مدار باز سیگنال سرعت خودرو
 VIN Not Programmed,VIN برنامه‌ریزی نشده است
 "VISOR ASSY, LH",آفتابگیر (چپ)
@@ -2946,6 +3339,7 @@ Wheel Aligner,دستگاه میزان چرخ
 Wheel Alignment,میزان کردن چرخ، تنظیمات چرخ
 Wheel Alignment Theory & Operation - General Information,تئوری و عملکرد تنظیم زوایای چرخ - اطلاعات عمومی
 Wheel And Tire,چرخ و لاستیک
+Wheel Attachment Hardware,متعلقات نصب چرخ
 Wheel Balancer,دستگاه بالانس چرخ
 Wheel Base,فاصله ی دو محور چرخ
 "Wheel Bearings, Races And Seals",بلبرینگ‌های چرخ، ریس‌ها و کاسه‌نمدها
@@ -2955,6 +3349,7 @@ WHEEL OPENING MOULDING (for Front),زه دور گلگیر (جلو)
 WHEEL OPENING MOULDING (for Rear),زه دور گلگیر (عقب)
 "WHEEL SUB-ASSY, STEERING",غربیلک فرمان (بدون متعلقات)
 Wheel & Tire Supplement,ضمیمه چرخ و لاستیک
+Wheel & Tire - UICS,چرخ و تایر - UICS
 Wheel Weight,وزنه ی بالانس چرخ
 "WINDOW ASSY, QUARTER, LH",شیشه مثلثی روی گلگیر عقب( چپ)
 "WINDOW ASSY, QUARTER, RH",شیشه مثلثی روی گلگیر عقب (راست)
@@ -2965,6 +3360,7 @@ Window / Glass (Preparation),شیشه / پنجره (آماده‌سازی)
 Window / Glass - Service Information,شیشه / پنجره - اطلاعات سرویس
 Window / Glass - Service Information (1 Of 2),شیشه / پنجره - اطلاعات سرویس (۱ از ۲)
 Window / Glass (Service Specifications),شیشه / پنجره (مشخصات سرویس)
+Window Motors & Regulators,موتورهای شیشه‌بالابر و رگولاتورها
 Windows,شیشه‌ها
 Windshield Deicer System,سیستم یخ‌زدای شیشه جلو
 Windshield Deicer System - Diagnostics & Symptom Tests,سیستم یخ‌زدای شیشه جلو - عیب‌یابی و آزمون‌های نشانه‌ای
@@ -2973,6 +3369,8 @@ Windshield Outside Moulding,زه بیرونی شیشه جلو
 Wiper And Washer System,سیستم برف‌پاک‌کن و شیشه‌شوی
 Wiper System / Washer System - Diagnostic Codes & Circuit Tests,سیستم برف‌پاک‌کن / شیشه‌شور - کدهای عیب‌یابی و آزمون‌های مدار
 Wiper System / Washer System - Diagnostics - Introduction,سیستم برف‌پاک‌کن / شیشه‌شور - عیب‌یابی - مقدمه
+Wiper System / Washer System - Service Information,سیستم برف‌پاک‌کن/شیشه‌شوی - اطلاعات سرویس
+Wiper/Washer Systems,سیستم‌های برف‌پاک‌کن/شیشه‌شوی
 "WIRE, AIR BAG REPAIR",سیم فعال کننده ایربگ فرمان
 "WIRE,AIR CONDITIONER",دسته سیم کندانسور کولر
 "WIRE, ENGINE",سیم موتور
@@ -2997,12 +3395,16 @@ Wireless Charging System,سیستم شارژ بی‌سیم
 Wireless Charging System - Diagnostics & Circuit Tests,سیستم شارژ بی‌سیم - عیب‌یابی و تست مدار
 Wireless Door Lock Buzzer,بیزر قفل درب بی‌سیم
 Wireless Door Lock Control System,سیستم کنترل قفل درب بی‌سیم
+Wireless Door Lock Control System - Diagnostic Codes & Symptom Tests,سیستم کنترل قفل درب بی‌سیم - کدهای عیب‌یابی و آزمون‌های نشانه‌ای
 Wireless Door Lock Control System - Diagnostics - Introduction,سیستم کنترل قفل درب بی‌سیم - عیب‌یابی - مقدمه
+Wireless Door Lock Control System (W/O Smart Key) - Diagnostics & Symptom Tests,سیستم کنترل قفل درب بی‌سیم (بدون اسمارت کی) - عیب‌یابی و آزمون‌های نشانه‌ای
+WIRELESS DOOR LOCK CONTROL SYSTEM (w/ Smart Key System),سیستم کنترل قفل درب بی‌سیم (با سیستم اسمارت کی)
 Wireless Door Lock Tuner Component Internal Failure,خرابی داخلی قطعه تیونر قفل درب بی‌سیم
 Wireless Starter Component Internal Failure,خرابی داخلی قطعه استارتر بی‌سیم
 Wiring Diagram Color Abbreviations,اختصارات رنگ در نقشه سیم‌کشی
 Wiring Diagram Component Locations,محل قطعات در نقشه سیم‌کشی
 Wiring Diagram Features And Controls,ویژگی‌ها و کنترل‌های نقشه سیم‌کشی
+Wiring Diagram Ground Number Locations,محل شماره‌های اتصال بدنه در نقشه سیم‌کشی
 Wiring Diagram Symbols,نمادهای نقشه سیم‌کشی
 Wiring Diagrams,نقشه‌های سیم‌کشی
 Wiring Harnesses And Connectors,دسته‌سیم‌ها و کانکتورها
