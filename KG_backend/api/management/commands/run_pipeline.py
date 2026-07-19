@@ -30,6 +30,25 @@ from api import dataquality, events, monitoring, pipeline
 from api.models import PipelineSettings, ProcessingJob
 
 
+def parse_worker_count():
+    """How many ZIPs to parse concurrently.
+
+    Each crawl pins one core, so serial parsing wastes a multi-core box. Use
+    KG_PARSE_WORKERS when set; otherwise cores minus a serving reserve, capped
+    so the live site always keeps headroom. The worker unit's Nice/idle-IO
+    properties mean these only claim otherwise-idle CPU."""
+    env = os.environ.get('KG_PARSE_WORKERS')
+    if env:
+        try:
+            return max(1, int(env))
+        except ValueError:
+            pass
+    # Fallback when launched outside launch_worker (which normally sets the env
+    # from pipeline.power_plan): the gentle default — about half the cores.
+    cores = os.cpu_count() or 4
+    return max(2, cores // 2)
+
+
 class _Canceled(Exception):
     pass
 
@@ -259,48 +278,109 @@ class Runner:
                 raise RuntimeError('every download request failed')
 
     def stage_parse(self, s):
+        """Parse pending ZIPs into the warehouse, in parallel PROCESSES.
+
+        The crawl is html5lib (pure Python, GIL-bound) — a thread pool can't use
+        more than one core for it, so we run one ZIP per subprocess (spawn, not
+        fork: the parent is multithreaded). ``parse_worker_count`` bounds the
+        pool (cores minus a serving reserve, or KG_PARSE_WORKERS). The worker
+        unit keeps Nice=15/idle-IO/low-CPUWeight, so live traffic still outranks
+        this under contention; the pool only claims otherwise-idle cores. Per-ZIP
+        extraction dirs, crawl DBs and the WAL + IMMEDIATE + 20s-timeout main DB
+        make concurrent parsing safe.
+
+        Cancel/crash-safe: cancel (systemctl stop) SIGTERMs the whole cgroup;
+        children die and the parser's incremental crawl checkpoints keep each ZIP
+        resumable. Any ZIP left 'parsing' by a killed run is re-queued at the
+        start of the next run, and finished ZIPs are skipped via their status.
+        """
+        import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        from concurrent.futures.process import BrokenProcessPool
         from api import ingest
         from api.models import ZipPackage
+        from api import parse_worker
+
+        # Re-queue anything a killed prior run left mid-parse (resumable via the
+        # crawl checkpoints); then take the work list.
+        ZipPackage.objects.filter(status='parsing').update(status='pending')
         todo = list(ZipPackage.objects.filter(status='pending')
                     .order_by('id').values_list('id', flat=True))
-        errors = []
-        parsed = 0
-        for i, pkg_id in enumerate(todo):
-            self.check_cancel()
-            ingest.check_disk_guard()
-            pkg = ZipPackage.objects.filter(id=pkg_id).first()
-            if pkg is None or pkg.status != 'pending':
-                s['items_done'] = i + 1
-                continue
-            self.job.progress['current_item'] = pkg.zip_name
-            self.persist_progress()
-            t0 = time.monotonic()
-            outcome = ingest.parse_zip_package(
-                pkg, cancel_event=self.cancel, log=self.log)
-            if outcome == 'paused':
-                raise _Canceled()
-            if outcome == 'done':
-                parsed += 1
-                dt = time.monotonic() - t0
-                # Learn this server's real per-zip cost for future estimates.
-                prev = getattr(self.settings_row, 'parse_secs_per_zip', None) or dt
-                self.settings_row.parse_secs_per_zip = round(0.7 * prev + 0.3 * dt, 1)
-            elif outcome == 'failed':
-                pkg.refresh_from_db()
-                errors.append(f'{pkg.zip_name}: {(pkg.error or "?")[:120]}')
-            s['items_done'] = i + 1
-            self.update_overall()
-            self.persist_progress()
+        if not todo:
+            return
         try:
-            self.settings_row.save(update_fields=['parse_secs_per_zip', 'updated_at'])
-        except Exception:
-            pass
+            ingest.check_disk_guard()
+        except Exception as e:
+            self.log(f'disk guard tripped before parse: {e}')
+            raise _Canceled()      # low disk => resumable pause, not a failure
+        workers = min(parse_worker_count(), len(todo))
+        self.log(f'parse stage: {len(todo)} zip(s) with {workers} parallel process(es)')
+
+        parsed = done = 0
+        errors = []
+        aborted = False
+        t_start = time.monotonic()
+        ctx = mp.get_context('spawn')
+        ex = ProcessPoolExecutor(max_workers=workers, mp_context=ctx,
+                                 initializer=parse_worker.worker_init)
+        try:
+            futures = [ex.submit(parse_worker.parse_one, pid) for pid in todo]
+            for fut in as_completed(futures):
+                try:
+                    r = fut.result()
+                except BrokenProcessPool:
+                    aborted = True       # children SIGTERMed (cancel) -> stop
+                    break
+                except Exception as e:
+                    done += 1
+                    errors.append(f'worker: {e.__class__.__name__}: {e}')
+                    continue
+                done += 1
+                s['items_done'] = done
+                self.job.progress['current_item'] = r['name']
+                if r['outcome'] == 'done':
+                    parsed += 1
+                elif r['outcome'] == 'failed':
+                    errors.append(f"{r['name']}: {r['error'] or '?'}")
+                self.update_overall()
+                self.persist_progress()
+                if self.cancel.is_set():
+                    aborted = True
+                    break
+                if done % workers == 0:      # periodic disk-floor check
+                    try:
+                        ingest.check_disk_guard()
+                    except Exception as e:
+                        self.log(f'disk guard tripped: {e}')
+                        aborted = True
+                        break
+        finally:
+            ex.shutdown(wait=not (aborted or self.cancel.is_set()),
+                        cancel_futures=True)
+
+        # Effective (parallel) per-zip wall time — what ETA math wants at the
+        # same worker count.
+        if parsed:
+            eff = (time.monotonic() - t_start) / parsed
+            prev = getattr(self.settings_row, 'parse_secs_per_zip', None) or eff
+            self.settings_row.parse_secs_per_zip = round(0.7 * prev + 0.3 * eff, 1)
+            try:
+                self.settings_row.save(update_fields=['parse_secs_per_zip', 'updated_at'])
+            except Exception:
+                pass
+
         self.job.progress.pop('current_item', None)
+        s['items_done'] = done
+        self.update_overall()
+        self.persist_progress()
         self.log(f'parse stage: {parsed} parsed, {len(errors)} failed, '
-                 f'{len(todo) - parsed - len(errors)} skipped')
+                 f'{len(todo) - parsed - len(errors)} skipped/remaining')
+
+        if aborted or self.cancel.is_set():
+            raise _Canceled()
         if errors:
             s['error'] = ' | '.join(errors)[:800]
-            if todo and len(errors) == len(todo):
+            if len(errors) == len(todo):
                 raise RuntimeError('every zip parse failed')
 
     def stage_schema(self, s):

@@ -113,6 +113,35 @@ downloaded/ingested flags) · `download {…}` (creates DownloadRequest) ·
 `skip_zip/requeue_zip {zip_id}`. GET payload gained `download_requests`,
 `zip_queue{counts,rows}`, queue fields in `pending`/`settings`.
 
+## 6b. Parse parallelism & the max-power toggle
+
+The HTML crawl uses **html5lib** (pure Python, GIL-bound — lxml is avoided
+because it mis-nests the manuals' unclosed `<li>` tags). A thread pool can't
+use more than one core for it, so the parse stage runs **one ZIP per
+subprocess** via `ProcessPoolExecutor` with the **spawn** start method
+(`api/parse_worker.py`; spawn, not fork, because the worker is multithreaded).
+Each subprocess boots Django in `worker_init`, parses one queued ZIP, returns a
+small result dict. Cancel/crash-safe: `systemctl stop` SIGTERMs the whole
+cgroup; children die and the parser's incremental crawl checkpoints keep each
+ZIP resumable, and any ZIP left `parsing` is re-queued at the next run's start.
+
+**Max-power toggle** (`PipelineSettings.max_power`, migration 0014; admin
+switch «حداکثر توان پردازش» in the pipeline panel):
+
+| mode | parse processes | embed OMP threads | priority (systemd) |
+|------|----------------|-------------------|--------------------|
+| normal (default) | `cores // 2` (8/16) | 12 | Nice 15, IO idle, CPUWeight 25 |
+| **max** | `cores - 1` (15/16) | `cores - 1` | Nice 0, IO best-effort, CPUWeight 100 |
+
+`pipeline.power_plan(max_power)` computes the budget; `launch_worker` applies it
+(env `KG_PARSE_WORKERS`/`OMP_NUM_THREADS` + systemd Nice/IO/CPUWeight props). An
+explicit `KG_PARSE_WORKERS` env still overrides. Toggling the switch while a job
+runs calls the `apply_power` admin action, which cancel→resumes the active job
+(resumable, nothing lost) so the new budget takes effect immediately. Measured:
+normal ≈1 effective core (old serial) → max ≈14 cores (~95% box utilisation,
+load ~13/16); the site stayed responsive (~3 ms) because web requests are tiny
+and the scheduler services them instantly even against Nice-0 parsing.
+
 ## 7. Gotchas
 
 * `requests` had to be added to the backend venv (downloader dependency);

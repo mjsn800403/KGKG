@@ -513,6 +513,11 @@ class PipelineSettings(models.Model):
     auto_enabled = models.BooleanField(default=True)
     load_threshold = models.FloatField(default=0.55)     # load1/cores gate for auto starts
     auto_resume = models.BooleanField(default=True)      # watchdog relaunches stalled jobs
+    # Max-power mode: run the pipeline worker at normal OS priority and use
+    # (almost) all CPU cores for parallel ZIP parsing + embedding — much faster,
+    # but competes with live serving. Off (default) keeps the worker low-priority
+    # (Nice/idle-IO) and reserves cores so the site always stays responsive.
+    max_power = models.BooleanField(default=False)
     embed_rate_pps = models.FloatField(default=1.5)      # observed pages/second
     diag_secs_per_car = models.FloatField(default=90.0)  # observed seconds/car
     parse_secs_per_zip = models.FloatField(default=180.0)        # observed seconds/zip (parse stage)

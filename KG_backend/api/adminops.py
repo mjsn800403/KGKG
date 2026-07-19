@@ -296,13 +296,40 @@ def admin_pipeline_view(request):
                 st.auto_enabled = bool(body['auto_enabled'])
             if 'auto_resume' in body:
                 st.auto_resume = bool(body['auto_resume'])
+            if 'max_power' in body:
+                st.max_power = bool(body['max_power'])
             if 'load_threshold' in body:
                 try:
                     st.load_threshold = min(1.5, max(0.1, float(body['load_threshold'])))
                 except (TypeError, ValueError):
                     pass
             st.save()
-            return JsonResponse({'ok': True})
+            return JsonResponse({'ok': True, 'plan': pipeline.power_plan(st.max_power)})
+
+        if action == 'apply_power':
+            # Restart the active job so the new CPU budget (max-power toggle)
+            # takes effect now. No active job => the setting applies to the next
+            # run. Parsing is incremental/resumable, so nothing is lost.
+            import time as _time
+            job = pipeline.active_job()
+            if job is None:
+                return JsonResponse({'ok': True, 'restarted': False,
+                                     'detail': 'کار در حال اجرایی نیست؛ تنظیم برای اجرای بعدی اعمال می‌شود.'})
+            ok, err = pipeline.cancel_job(job)
+            if not ok:
+                return JsonResponse({'error': err}, status=409)
+            for _ in range(20):
+                job.refresh_from_db()
+                if job.status in ('paused', 'canceled', 'failed', 'done'):
+                    break
+                _time.sleep(0.5)
+            ok2, err2 = pipeline.resume_job(job)
+            if not ok2:
+                return JsonResponse({'error': err2 or 'ازسرگیری ناموفق بود'}, status=409)
+            job.refresh_from_db()
+            _emit_pipeline('pipeline.resumed', job)
+            return JsonResponse({'ok': True, 'restarted': True,
+                                 'job': pipeline.job_dict(job)})
 
         if action == 'list_source':
             # Synchronous dry-run listing of a LEMON Brand/Year page, annotated
@@ -410,11 +437,13 @@ def admin_pipeline_view(request):
         },
         'settings': {'auto_enabled': st.auto_enabled,
                      'auto_resume': st.auto_resume,
+                     'max_power': getattr(st, 'max_power', False),
                      'load_threshold': st.load_threshold,
                      'embed_rate_pps': st.embed_rate_pps,
                      'diag_secs_per_car': st.diag_secs_per_car,
                      'parse_secs_per_zip': getattr(st, 'parse_secs_per_zip', None),
                      'download_secs_per_vehicle': getattr(st, 'download_secs_per_vehicle', None)},
+        'power_plan': pipeline.power_plan(getattr(st, 'max_power', False)),
     })
 
 

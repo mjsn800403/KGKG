@@ -1,6 +1,7 @@
 """Tests for the pipeline's download/parse/schema extension: inbox scanning,
 ZIP normalization + registration, the duplicate guard, queue-aware pending
 work, and legacy-job stage tolerance."""
+import contextlib
 import os
 import tempfile
 import zipfile
@@ -12,6 +13,15 @@ from django.test import TestCase
 from . import ingest, pipeline
 from .models import Car, DownloadRequest, ProcessingJob, ZipPackage
 from .rag import config
+
+
+@contextlib.contextmanager
+def contextlib_stack(cms):
+    """Enter a list of context managers together (order preserved)."""
+    with contextlib.ExitStack() as st:
+        for cm in cms:
+            st.enter_context(cm)
+        yield
 
 
 def _make_zip(dirpath, zip_name, inner_dir, payload=b'x' * 64):
@@ -181,6 +191,183 @@ class LegacyJobToleranceTest(TestCase):
         self.assertIn('schema', keys)
         parse_stage = next(s for s in job.stages if s['key'] == 'parse')
         self.assertEqual(parse_stage['items_total'], 1)
+
+
+class PowerPlanTest(TestCase):
+    def _clean_env(self):
+        return {k: v for k, v in os.environ.items()
+                if k not in ('KG_PARSE_WORKERS', 'KG_PIPELINE_THREADS')}
+
+    def test_normal_reserves_cores_and_low_priority(self):
+        with mock.patch.dict(os.environ, self._clean_env(), clear=True), \
+             mock.patch('os.cpu_count', return_value=16):
+            p = pipeline.power_plan(max_power=False)
+        self.assertEqual(p['parse_workers'], 8)       # cores // 2
+        self.assertEqual(p['nice'], 15)
+        self.assertEqual(p['io_class'], 'idle')
+        self.assertEqual(p['cpu_weight'], 25)
+
+    def test_max_uses_almost_all_cores_full_priority(self):
+        with mock.patch.dict(os.environ, self._clean_env(), clear=True), \
+             mock.patch('os.cpu_count', return_value=16):
+            p = pipeline.power_plan(max_power=True)
+        self.assertEqual(p['parse_workers'], 15)      # 16 - 1
+        self.assertEqual(p['omp_threads'], 15)
+        self.assertEqual(p['nice'], 0)
+        self.assertEqual(p['io_class'], 'best-effort')
+        self.assertEqual(p['cpu_weight'], 100)
+
+    def test_env_override_wins(self):
+        with mock.patch.dict(os.environ, {'KG_PARSE_WORKERS': '3'}), \
+             mock.patch('os.cpu_count', return_value=16):
+            self.assertEqual(pipeline.power_plan(max_power=True)['parse_workers'], 3)
+
+    def test_reads_setting_when_unspecified(self):
+        from .models import PipelineSettings
+        st = PipelineSettings.get()
+        st.max_power = True
+        st.save()
+        with mock.patch.dict(os.environ, self._clean_env(), clear=True), \
+             mock.patch('os.cpu_count', return_value=16):
+            self.assertTrue(pipeline.power_plan()['max_power'])
+
+
+class ParseWorkerCountTest(TestCase):
+    def test_env_override(self):
+        from .management.commands.run_pipeline import parse_worker_count
+        with mock.patch.dict(os.environ, {'KG_PARSE_WORKERS': '6'}):
+            self.assertEqual(parse_worker_count(), 6)
+        with mock.patch.dict(os.environ, {'KG_PARSE_WORKERS': 'nonsense'}):
+            self.assertGreaterEqual(parse_worker_count(), 2)   # falls back
+
+    def test_core_based_default_reserves_serving(self):
+        from .management.commands.run_pipeline import parse_worker_count
+        env = {k: v for k, v in os.environ.items() if k != 'KG_PARSE_WORKERS'}
+        with mock.patch.dict(os.environ, env, clear=True), \
+             mock.patch('os.cpu_count', return_value=16):
+            self.assertEqual(parse_worker_count(), 8)           # cores // 2
+        with mock.patch.dict(os.environ, env, clear=True), \
+             mock.patch('os.cpu_count', return_value=4):
+            self.assertEqual(parse_worker_count(), 2)           # floor
+
+
+class _FakePkg:
+    def __init__(self, i):
+        self.id, self.status = i, 'pending'
+        self.zip_name, self.stem, self.error = f'p{i}.zip', f'S{i}', ''
+    def save(self, **k):
+        pass
+    def refresh_from_db(self):
+        pass
+
+
+class _FakeQS(list):
+    def order_by(self, *a):
+        return self
+    def values_list(self, *a, **k):
+        return [p.id for p in self]
+    def first(self):
+        return self[0] if self else None
+    def update(self, **kw):
+        for p in self:
+            for k, v in kw.items():
+                setattr(p, k, v)
+        return len(self)
+
+
+class _FakeManager:
+    """Stands in for ZipPackage.objects so stage_parse's queries and the
+    subprocess worker (run synchronously in tests) work without a shared DB."""
+    def __init__(self, pkgs):
+        self._by_id = {p.id: p for p in pkgs}
+    def filter(self, **kw):
+        if 'status' in kw:
+            return _FakeQS([p for p in self._by_id.values() if p.status == kw['status']])
+        if 'id' in kw:
+            p = self._by_id.get(kw['id'])
+            return _FakeQS([p] if p else [])
+        return _FakeQS([])
+
+
+class _SyncExecutor:
+    """Runs submitted callables synchronously in-process so stage_parse's
+    ProcessPoolExecutor logic is testable without real subprocesses (the real
+    spawn/multi-core path is covered by the staging smoke)."""
+    def __init__(self, max_workers=None, mp_context=None, initializer=None):
+        if initializer:
+            initializer()
+    def submit(self, fn, *args):
+        from concurrent.futures import Future
+        f = Future()
+        try:
+            f.set_result(fn(*args))
+        except BaseException as e:      # noqa: BLE001
+            f.set_exception(e)
+        return f
+    def shutdown(self, wait=True, cancel_futures=False):
+        pass
+
+
+class ParallelParseStageTest(TestCase):
+    """Exercises Runner.stage_parse's orchestration (counting, cancel, disk
+    abort, errors) with the process pool replaced by a synchronous executor and
+    parse_zip_package / the model manager faked."""
+
+    def _runner(self):
+        from .management.commands.run_pipeline import Runner
+        job = ProcessingJob.objects.create(stages=[
+            {'key': 'parse', 'label': 'x', 'status': 'running',
+             'items_total': 0, 'items_done': 0, 'error': ''}])
+        return Runner(job)
+
+    def _patches(self, mgr):
+        # worker_init is a no-op in-process (django is already up; don't touch
+        # the test runner's signal handlers).
+        return [
+            mock.patch('concurrent.futures.ProcessPoolExecutor', _SyncExecutor),
+            mock.patch('api.parse_worker.worker_init', lambda: None),
+            mock.patch('api.models.ZipPackage.objects', mgr),
+        ]
+
+    def test_all_parsed_in_parallel(self):
+        runner = self._runner()
+        mgr = _FakeManager([_FakePkg(i) for i in range(20)])
+        seen = []
+
+        def fake_parse(pkg, cancel_event=None, log=None):
+            seen.append(pkg.id)
+            return 'done'
+
+        with contextlib_stack(self._patches(mgr) + [
+                mock.patch.dict(os.environ, {'KG_PARSE_WORKERS': '5'}),
+                mock.patch('api.ingest.parse_zip_package', side_effect=fake_parse),
+                mock.patch('api.ingest.check_disk_guard', return_value=100.0)]):
+            runner.stage_parse(runner.stage('parse'))
+        self.assertEqual(sorted(seen), list(range(20)))
+        self.assertEqual(runner.stage('parse')['items_done'], 20)
+
+    def test_cancel_raises(self):
+        runner = self._runner()
+        mgr = _FakeManager([_FakePkg(i) for i in range(10)])
+        from .management.commands.run_pipeline import _Canceled
+        runner.cancel.set()             # stop requested before the pass
+        with contextlib_stack(self._patches(mgr) + [
+                mock.patch.dict(os.environ, {'KG_PARSE_WORKERS': '3'}),
+                mock.patch('api.ingest.parse_zip_package', return_value='done'),
+                mock.patch('api.ingest.check_disk_guard', return_value=100.0)]):
+            with self.assertRaises(_Canceled):
+                runner.stage_parse(runner.stage('parse'))
+
+    def test_disk_abort_pauses_stage(self):
+        runner = self._runner()
+        mgr = _FakeManager([_FakePkg(i) for i in range(8)])
+        from .management.commands.run_pipeline import _Canceled
+        with contextlib_stack(self._patches(mgr) + [
+                mock.patch.dict(os.environ, {'KG_PARSE_WORKERS': '4'}),
+                mock.patch('api.ingest.check_disk_guard',
+                           side_effect=RuntimeError('disk free 5GB below floor'))]):
+            with self.assertRaises(_Canceled):
+                runner.stage_parse(runner.stage('parse'))
 
 
 class ParseZipPackageTest(TestCase):

@@ -288,30 +288,68 @@ def _pid_alive(pid):
         return False
 
 
+def power_plan(max_power=None):
+    """Compute the CPU budget for a worker launch from the max-power setting.
+
+    Returns {max_power, parse_workers, omp_threads, nice, cpu_weight, io_class}.
+    * max power  -> (almost) all cores, normal priority: fastest, but competes
+      with live serving.
+    * normal     -> reserve cores + low priority (Nice/idle-IO): the site always
+      stays responsive; the pipeline only uses otherwise-idle CPU.
+    An explicit KG_PARSE_WORKERS / KG_PIPELINE_THREADS env still overrides the
+    computed counts (ops escape hatch)."""
+    if max_power is None:
+        from .models import PipelineSettings
+        max_power = bool(getattr(PipelineSettings.get(), 'max_power', False))
+    cores = os.cpu_count() or 4
+    if max_power:
+        # Full send: almost every core, normal OS priority. Fastest; competes
+        # with live serving.
+        parse_workers = max(2, cores - 1)
+        omp = max(2, cores - 1)
+        nice, weight, io = 0, 100, 'best-effort'
+    else:
+        # Gentle: about half the cores at low priority + idle IO, so serving
+        # always outranks the pipeline and the site stays responsive.
+        parse_workers = max(2, cores // 2)
+        omp = int(os.environ.get('KG_PIPELINE_THREADS', '12'))
+        nice, weight, io = 15, 25, 'idle'
+    env_workers = os.environ.get('KG_PARSE_WORKERS')
+    if env_workers and env_workers.isdigit():
+        parse_workers = int(env_workers)
+    return {'max_power': max_power, 'parse_workers': parse_workers,
+            'omp_threads': omp, 'nice': nice, 'cpu_weight': weight, 'io_class': io}
+
+
 def launch_worker(job):
     """Start the detached worker for ``job``. systemd-run when available (own
-    cgroup => survives backend restarts, kernel-enforced low priority);
-    otherwise a setsid-detached subprocess. Records how it was started."""
+    cgroup => survives backend restarts); otherwise a setsid-detached
+    subprocess. CPU budget (parallelism + priority) comes from ``power_plan``
+    (the admin max-power toggle). Records how it was started."""
     from .models import ProcessingJob
     base = settings.BASE_DIR
     attempt = job.attempts + 1
     unit = f'kgkg-pipeline-job{job.id}-a{attempt}'
     argv = [PYTHON, 'manage.py', 'run_pipeline', '--job', str(job.id)]
 
+    plan = power_plan()
     env_pairs = {
         'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
         'TOKENIZERS_PARALLELISM': 'false',
         'RAG_EMBED_MODEL': os.environ.get('RAG_EMBED_MODEL', 'bge-m3'),
-        'OMP_NUM_THREADS': os.environ.get('KG_PIPELINE_THREADS', '12'),
+        'OMP_NUM_THREADS': str(plan['omp_threads']),
+        # Parallel ZIP parsing needs PROCESSES (the html5lib crawl is GIL-bound);
+        # this count bounds the process pool (see run_pipeline.stage_parse).
+        'KG_PARSE_WORKERS': str(plan['parse_workers']),
     }
 
     launched_via = ''
     if shutil.which('systemd-run'):
         cmd = ['systemd-run', '--collect', f'--unit={unit}',
                f'--working-directory={base}',
-               '--property=Nice=15',
-               '--property=IOSchedulingClass=idle',
-               '--property=CPUWeight=25',
+               f'--property=Nice={plan["nice"]}',
+               f'--property=IOSchedulingClass={plan["io_class"]}',
+               f'--property=CPUWeight={plan["cpu_weight"]}',
                f'--property=EnvironmentFile={base}/.env.prod']
         for k, v in env_pairs.items():
             cmd.append(f'--setenv={k}={v}')

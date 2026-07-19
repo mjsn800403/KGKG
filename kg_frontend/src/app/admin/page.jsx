@@ -1877,6 +1877,60 @@ function ZipQueueCard({ data, act, busy }) {
   );
 }
 
+// Max-power toggle — one switch to run the pipeline flat-out on (almost) all
+// cores at full priority, or gently so the site stays responsive. Flipping it
+// while a job runs restarts that job with the new budget (resumable, nothing
+// lost).
+function PowerToggle({ data, act, busy, jobActive }) {
+  const on = !!data.settings?.max_power;
+  const plan = data.power_plan || {};
+  const cores = plan.parse_workers ? plan.parse_workers + (on ? 1 : 4) : null;
+  const toggle = async (next) => {
+    if (jobActive) {
+      await act({ action: 'settings', max_power: next });
+      await act({ action: 'apply_power' },
+        next ? 'حالت حداکثر توان فعال شد و بلافاصله روی پردازش جاری اعمال گشت.'
+             : 'حالت عادی فعال شد و روی پردازش جاری اعمال گشت.');
+    } else {
+      await act({ action: 'settings', max_power: next },
+        next ? 'حالت حداکثر توان فعال شد؛ در اجرای بعدی از همهٔ هسته‌ها استفاده می‌شود.'
+             : 'حالت عادی فعال شد.');
+    }
+  };
+  return (
+    <div className="card glass" style={{ marginBottom: 16, borderInlineStart: `3px solid ${on ? '#f97316' : 'transparent'}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="sparkles" size={16} /> حداکثر توان پردازش
+            {on && <span className="st-badge" style={{ background: '#f9731622', color: '#f97316' }}>فعال</span>}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.9 }}>
+            {on
+              ? 'از تقریباً همهٔ هسته‌های پردازنده با اولویت کامل استفاده می‌شود — سریع‌ترین حالت. ممکن است هنگام ترافیک زیاد، سایت کمی کند شود.'
+              : 'با اولویت پایین و نگه‌داشتن چند هسته برای سرویس‌دهی اجرا می‌شود تا سایت همیشه روان بماند (کندتر).'}
+            {cores ? ` — ${Number(plan.parse_workers).toLocaleString('fa-IR')} پردازش هم‌زمان روی حدود ${Number(cores).toLocaleString('fa-IR')} هسته.` : ''}
+          </div>
+        </div>
+        <button type="button" role="switch" aria-checked={on} disabled={busy}
+          onClick={() => toggle(!on)}
+          title={on ? 'خاموش کردن حالت حداکثر توان' : 'روشن کردن حالت حداکثر توان'}
+          style={{
+            position: 'relative', width: 64, height: 34, borderRadius: 999, border: 'none',
+            cursor: busy ? 'wait' : 'pointer', flexShrink: 0,
+            background: on ? '#f97316' : 'rgba(120,120,160,.3)', transition: 'background .25s',
+          }}>
+          <span style={{
+            position: 'absolute', top: 3, insetInlineStart: on ? 33 : 3, width: 28, height: 28,
+            borderRadius: '50%', background: '#fff', transition: 'inset-inline-start .25s',
+            boxShadow: '0 1px 4px rgba(0,0,0,.3)',
+          }} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Pipeline({ guard }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -1977,6 +2031,9 @@ function Pipeline({ guard }) {
               پردازش خودکار داده‌های جدید در ساعات کم‌بار
             </label>
           </div>
+
+          {/* Max-power toggle: full-speed (all cores) vs gentle (site stays responsive) */}
+          <PowerToggle data={data} act={act} busy={busy} jobActive={jobActive} />
 
           {showSchedule && (
             <div className="card glass" style={{ marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
