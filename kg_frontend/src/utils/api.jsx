@@ -544,6 +544,9 @@ export const adminApi = {
     adminFetch('/api/admin/pipeline/', {
       method: 'POST', body: JSON.stringify(payload),
     }),
+  // Structured schema.org vehicle specs (read-only coverage + per-car detail).
+  vehicleSpecs: (carId) =>
+    adminFetch(`/api/admin/vehicle-specs/${carId ? `?car_id=${carId}` : ''}`),
   // Real-time: one comprehensive dashboard snapshot + the live processing picture.
   dashboard: () => adminFetch('/api/admin/dashboard/'),
   processingSnapshot: () => adminFetch('/api/admin/processing-snapshot/'),

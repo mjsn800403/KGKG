@@ -121,6 +121,20 @@ def assist_view(request):
         from .rag import service
         result = service.assist(query, brand=brand, model=model, car_stem=car,
                                 allowed_cars=allowed_stems)
+        if car and isinstance(result, dict):
+            # Attach the structured vehicle facts for the pinned car so the
+            # chat layer can ground spec questions (fuel type, drivetrain,
+            # fluid capacities, tire sizes...) without a manual lookup.
+            try:
+                from .models import Car as CarModel, VehicleSpec
+                from . import vehicleschema
+                _car_row = CarModel.objects.filter(car_name=car).first()
+                sp = (VehicleSpec.objects.filter(car=_car_row).first()
+                      if _car_row else None)
+                if sp and sp.data:
+                    result['vehicle_specs'] = vehicleschema.compact_block(sp.data)
+            except Exception:
+                pass
         return JsonResponse(result)
     except FileNotFoundError as e:
         return JsonResponse(
@@ -531,6 +545,26 @@ def read_page_content(cur, car_name, filename):
     content = rewrite_image_urls(main.decode_contents(), car_name)
     return {'title': title, 'content': content}
 
+def _public_car_list(cars):
+    """Public catalog entries: identity only, plus the schema.org identity
+    subset (for JSON-LD markup on the public catalog pages)."""
+    from .models import VehicleSpec
+    from .rag import config as ragconfig
+    from . import vehicleschema
+    specs = {s.car_id: s.data for s in
+             VehicleSpec.objects.filter(car__in=[c.id for c in cars])}
+    out = []
+    for c in cars:
+        entry = {'brand_name': c.brand_name, 'car_name': c.car_name,
+                 'display_name': ragconfig.display_name(c.car_name),
+                 'year': c.year}
+        data = specs.get(c.id)
+        if data:
+            entry['spec'] = vehicleschema.public_jsonld(data)
+        out.append(entry)
+    return out
+
+
 def car_view(request, brand_name=None, year=None, model_name=None):
     """
     /brand_name/                                -> from main.db
@@ -544,16 +578,16 @@ def car_view(request, brand_name=None, year=None, model_name=None):
 
     # Case 1: Only brand name. Public catalog (the sales/purchase page lists the
     # vehicles we cover); intentionally exposes no manual content and no internal
-    # db_address path.
+    # db_address path. display_name strips the multi-year " (YYYY)" stem suffix
+    # (the year rides in its own field); `spec` is the public schema.org identity
+    # object (JSON-LD-ready) when a VehicleSpec exists — safe by construction,
+    # it never includes manual-derived service data.
     if brand_name and not year:
         cars = [
             c for c in Car.objects.filter(brand_name__iexact=brand_name).order_by('car_name', 'year')
             if car_db_ready(c)
         ]
-        return JsonResponse([
-            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year}
-            for c in cars
-        ], safe=False)
+        return JsonResponse(_public_car_list(cars), safe=False)
 
     # Case 2: Brand and year. Public catalog, same rationale as Case 1.
     if brand_name and year and not model_name:
@@ -567,10 +601,7 @@ def car_view(request, brand_name=None, year=None, model_name=None):
             c for c in Car.objects.filter(brand_name__iexact=brand_name, year=year_val).order_by('car_name')
             if car_db_ready(c)
         ]
-        return JsonResponse([
-            {'brand_name': c.brand_name, 'car_name': c.car_name, 'year': c.year}
-            for c in cars
-        ], safe=False)
+        return JsonResponse(_public_car_list(cars), safe=False)
 
     # Case 3: Brand, year, and car_name
     if brand_name and year and model_name:
@@ -614,6 +645,22 @@ def car_view(request, brand_name=None, year=None, model_name=None):
             href_lookup = request.GET.get('href')
             page_file = request.GET.get('page')
             search_q = request.GET.get('q')
+
+            if request.GET.get('spec') is not None:
+                # Structured schema.org vehicle data for this car (grant-gated
+                # like the manual content it is partly derived from).
+                from .models import VehicleSpec
+                from . import vehicleschema
+                sp = VehicleSpec.objects.filter(car=car).first()
+                if sp is None:
+                    return JsonResponse({'spec': None})
+                return JsonResponse({'spec': {
+                    'data': sp.data,
+                    'jsonld': vehicleschema.jsonld(sp.data),
+                    'provenance': sp.provenance,
+                    'built_at': sp.built_at.isoformat(),
+                    'builder_version': sp.builder_version,
+                }})
 
             if search_q is not None:
                 # Full-text-ish search over this car's tree: match the query

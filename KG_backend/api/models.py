@@ -515,12 +515,116 @@ class PipelineSettings(models.Model):
     auto_resume = models.BooleanField(default=True)      # watchdog relaunches stalled jobs
     embed_rate_pps = models.FloatField(default=1.5)      # observed pages/second
     diag_secs_per_car = models.FloatField(default=90.0)  # observed seconds/car
+    parse_secs_per_zip = models.FloatField(default=180.0)        # observed seconds/zip (parse stage)
+    download_secs_per_vehicle = models.FloatField(default=120.0)  # observed seconds/vehicle (download stage)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod
     def get(cls):
         obj, _ = cls.objects.get_or_create(id=1)
         return obj
+
+
+class DownloadRequest(models.Model):
+    """A queued request to fetch vehicle-manual ZIPs from the LEMON source site.
+
+    Created from the admin panel (optionally narrowed by ``name_filter``, e.g.
+    'corolla cross'); executed by the pipeline worker's download stage, which
+    lists the Brand/Year page, downloads each matching vehicle's ZIP into the
+    inbox, and registers the ZIPs as ZipPackage rows for the parse stage.
+    ``listing`` snapshots the per-vehicle state so the panel can show exactly
+    which vehicles were fetched/skipped/failed.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'pending'), ('running', 'running'), ('done', 'done'),
+        ('failed', 'failed'), ('canceled', 'canceled'),
+    ]
+    url = models.TextField()                                     # Brand/Year page URL
+    brand = models.CharField(max_length=40, blank=True, default='')
+    year = models.IntegerField(null=True, blank=True)
+    name_filter = models.CharField(max_length=120, blank=True, default='')
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES,
+                              default='pending', db_index=True)
+    # [{name, bundle_url, state: pending|ok|skip|fail}] — filled at creation
+    # (from the source listing) and updated per vehicle by the worker.
+    listing = models.JSONField(default=list, blank=True)
+    vehicles_total = models.IntegerField(default=0)
+    vehicles_done = models.IntegerField(default=0)
+    error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    ACTIVE = ('pending', 'running')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'download #{self.id} {self.brand} {self.year} [{self.status}]'
+
+
+class ZipPackage(models.Model):
+    """One vehicle-manual ZIP discovered in the inbox — the parse queue.
+
+    Registered by ``scan_zips`` (or by the download stage right after a
+    fetch). Identity is the absolute path; a changed size/mtime resets a
+    non-pending row back to pending so replaced files are reprocessed. The
+    duplicate guard marks a ZIP whose target warehouse stem already exists
+    (catalog row + .db on disk, or an earlier queued package for the same
+    stem) as ``skipped_duplicate`` so re-downloads under new names never
+    clobber or duplicate an ingested car.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'pending'),                    # waiting for the parse stage
+        ('parsing', 'parsing'),
+        ('done', 'done'),
+        ('failed', 'failed'),
+        ('skipped_duplicate', 'skipped_duplicate'),
+    ]
+    path = models.TextField(unique=True)           # absolute path of the ZIP
+    zip_name = models.CharField(max_length=300)
+    size = models.BigIntegerField(default=0)
+    mtime = models.FloatField(default=0.0)
+    brand = models.CharField(max_length=40, blank=True, default='')
+    year = models.IntegerField(null=True, blank=True)
+    car_name = models.TextField(blank=True, default='')   # e.g. 'Corolla Cross LE, FWD'
+    stem = models.TextField(blank=True, default='')       # warehouse stem (year rule applied)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES,
+                              default='pending', db_index=True)
+    pages_processed = models.IntegerField(default=0)
+    error = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'zip {self.zip_name} [{self.status}]'
+
+
+class VehicleSpec(models.Model):
+    """schema.org-automotive-shaped structured data for one vehicle.
+
+    ``data`` is a schema.org ``Car`` dict (JSON-LD-ready, without @context):
+    only fields we can fill RELIABLY are present — an absent key means
+    "unknown", never guessed. ``provenance`` records, per dotted field path,
+    where the value came from ('catalog' | 'stem' | 'manual' | 'curated') and
+    the exact detail (stem token / manual section path), so every value is
+    auditable. Built by build_vehicle_schema / the pipeline schema stage from
+    the catalog, the name stem, and spec tables parsed out of the repair
+    manuals themselves.
+    """
+    car = models.OneToOneField(Car, on_delete=models.CASCADE, related_name='spec')
+    data = models.JSONField(default=dict, blank=True)
+    provenance = models.JSONField(default=dict, blank=True)
+    sections_used = models.JSONField(default=list, blank=True)  # manual paths parsed
+    builder_version = models.CharField(max_length=16, blank=True, default='')
+    built_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'spec for {self.car.car_name}'
 
 
 class SystemAlert(models.Model):

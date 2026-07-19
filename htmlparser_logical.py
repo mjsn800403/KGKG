@@ -865,6 +865,21 @@ def parse_car_info(db_name: str) -> Tuple[str, int, str]:
     return brand, year, car_name
 
 
+# The fleet's original naming convention keeps the plain car name as the
+# warehouse stem for this model year; other years get a " (<year>)" suffix so
+# e.g. the 2023 and 2025 "Corolla Cross LE, FWD" manuals coexist as separate
+# cars (the stem doubles as catalog car_name and RAG car_stem — it must be
+# unique per vehicle, and year alone lives in the catalog's year column).
+DEFAULT_STEM_YEAR = 2025
+
+
+def warehouse_stem(car_name: str, year: int) -> str:
+    """Warehouse filename stem (== catalog car_name) for a parsed car."""
+    if year and year != DEFAULT_STEM_YEAR:
+        return f"{car_name} ({year})"
+    return car_name
+
+
 def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
                        static_warehouse: Path, current_dir: Path,
                        ledger: "ProcessingLedger", cancel_event=None,
@@ -970,8 +985,9 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
 
     # Parse car info from database name (db_name/db_path computed above).
     brand, year, car_name = parse_car_info(db_name)
+    stem = warehouse_stem(car_name, year)
     with print_lock:
-        print(f"🚗 Car info: {brand} {year} {car_name}")
+        print(f"🚗 Car info: {brand} {year} {car_name} (stem: {stem})")
     
     # Run HTML parser
     with print_lock:
@@ -984,8 +1000,9 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
     )
     pages = parser.crawl(cancel_event)
 
-    # Copy database to warehouse (rename without prefix/year)
-    final_db_name = f"{car_name}.db"
+    # Copy database to warehouse (renamed to the stem — no LEMON prefix, and
+    # the year only appears in the stem for non-default model years).
+    final_db_name = f"{stem}.db"
     final_db_path = db_warehouse / final_db_name
 
     if db_path.exists():
@@ -1001,7 +1018,7 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
     # Copy images folder to static warehouse
     images_source = extract_dir / "images"
     if images_source.exists() and images_source.is_dir():
-        images_dest = static_warehouse / car_name
+        images_dest = static_warehouse / stem
         if images_dest.exists():
             shutil.rmtree(images_dest)
         shutil.copytree(images_source, images_dest)
@@ -1016,7 +1033,7 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
                 break
         
         if images_found:
-            images_dest = static_warehouse / car_name
+            images_dest = static_warehouse / stem
             if images_dest.exists():
                 shutil.rmtree(images_dest)
             shutil.copytree(images_found, images_dest)
@@ -1036,11 +1053,15 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
     with print_lock:
         print(f"🏁 Completed {zip_path.name}: {pages} pages")
 
-    # Return car info for backend update
+    # Return car info for backend update. car_name is the STEM: the catalog's
+    # car_name column must equal the warehouse filename stem (that invariant is
+    # what makes brand/year/name links and RAG car_stem resolve), so a
+    # year-suffixed stem is carried through to the catalog verbatim while the
+    # year column keeps the numeric year.
     return {
         'brand': brand,
         'year': year,
-        'car_name': car_name,
+        'car_name': stem,
         # Always use POSIX '/' separators so the address is portable: the frontend
         # may serve from Linux/macOS where a Windows '\' is a literal filename char
         # (causing 404s). '/' is valid on Windows too, so this is safe everywhere.

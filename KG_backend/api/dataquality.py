@@ -86,14 +86,26 @@ def normalize_section(title):
     return t
 
 
+# Whole-model powertrains that the trim naming does NOT mark: these models are
+# electrified (or engine-less) in every variant of this fleet's era, so section
+# expectations must not demand combustion sections from a Mirai or skip the
+# hybrid sections of a Prius.
+_ELECTRIFIED_MODEL_PREFIXES = ('prius', 'sienna', 'venza', 'crown', 'mirai',
+                               'rav4 prime')
+_NO_COMBUSTION_MODEL_PREFIXES = ('bz4x', 'mirai')
+
+
 def is_electrified(stem):
-    """Hybrid or EV, by naming convention (Hybrid trims, bZ4X EVs, Lexus 'h')."""
+    """Hybrid or EV, by naming convention (Hybrid trims, bZ4X EVs, Lexus 'h')
+    plus whole-model knowledge for lines whose trims carry no marker."""
     s = stem.lower()
-    return 'hybrid' in s or 'bz4x' in s or bool(_LEXUS_HYBRID_RE.search(s))
+    return ('hybrid' in s or 'bz4x' in s or bool(_LEXUS_HYBRID_RE.search(s))
+            or s.startswith(_ELECTRIFIED_MODEL_PREFIXES))
 
 
 def is_pure_ev(stem):
-    return 'bz4x' in stem.lower()
+    """No combustion engine at all (battery EV or fuel cell)."""
+    return stem.lower().startswith(_NO_COMBUSTION_MODEL_PREFIXES)
 
 
 def expected_sections(stem):
@@ -260,9 +272,14 @@ def run_audit(fix=False, log=None):
     # A "<base> (N)" file whose base exists with identical content is the same
     # vehicle uploaded twice. Base missing or content differing = suspect copy
     # (surfaced for manual review, never auto-merged).
+    # EXCEPTION: "(YYYY)" is the multi-year stem suffix ('Corolla Cross LE,
+    # FWD (2023)' is a different MODEL YEAR of the base car, not a copy) —
+    # a plausible model year is never treated as a copy counter.
     for s in sorted(stems):
         m = _COPY_SUFFIX_RE.match(s)
         if not m:
+            continue
+        if 1980 <= int(m.group('n')) <= 2100:
             continue
         base = m.group('base')
         if base in stems and fp_of.get(base) and fp_of[base] == fp_of.get(s):

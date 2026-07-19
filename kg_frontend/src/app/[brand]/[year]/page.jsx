@@ -14,13 +14,36 @@ export default async function YearPage({ params }) {
   const items = cars.map((car) => ({
     href: `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(car.car_name)}`,
     icon: '▣',
-    title: car.car_name,
+    title: car.display_name || car.car_name,
     sub: String(brand).toUpperCase() + ' / ' + year,
     go: 'مشاهده مستندات ←',
   }));
 
+  // schema.org markup for the public catalog: an ItemList of Car objects
+  // built from each vehicle's structured identity spec (backend-provided;
+  // identity fields only — never manual content).
+  const specs = cars.filter((c) => c.spec);
+  const jsonld = specs.length
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        name: `${brand} ${year} vehicle documentation`,
+        numberOfItems: specs.length,
+        itemListElement: specs.map((c, i) => {
+          const { ['@context']: _ctx, ...item } = c.spec;
+          return { '@type': 'ListItem', position: i + 1, item };
+        }),
+      }
+    : null;
+
   return (
     <DashboardShell>
+      {jsonld && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonld) }}
+        />
+      )}
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} />
         <UserChip />

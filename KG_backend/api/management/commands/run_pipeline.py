@@ -96,17 +96,22 @@ class Runner:
                   log_tail=self._log_tail(), heartbeat_at=timezone.now())
 
     def stage(self, key):
-        return next(s for s in self.job.stages if s['key'] == key)
+        # None (not KeyError) for jobs created before a stage existed, so
+        # resuming a legacy job never crashes on a newer stage list.
+        return next((s for s in self.job.stages if s['key'] == key), None)
 
     # ---- overall progress model -------------------------------------------
     # Percentages weight each stage by its estimated time share, so the bar
     # moves honestly (100 diag cars ≠ 100 embedded pages).
     def _stage_cost(self, s):
         rate = max(0.2, self.settings_row.embed_rate_pps or 1.5)
-        per_item = {'catalog': 1.0,
+        per_item = {'download': getattr(self.settings_row, 'download_secs_per_vehicle', None) or 120.0,
+                    'parse': getattr(self.settings_row, 'parse_secs_per_zip', None) or 180.0,
+                    'catalog': 1.0,
+                    'schema': 5.0,
                     'rag': 1.0 / rate,
                     'diag': self.settings_row.diag_secs_per_car or 90.0,
-                    'audit': 90.0}[s['key']]
+                    'audit': 90.0}.get(s['key'], 60.0)
         return max(1.0, s['items_total'] * per_item)
 
     def update_overall(self):
@@ -135,7 +140,7 @@ class Runner:
         prog = self.job.progress
         # Live embedding progress straight from the artifact (crash-proof).
         rag = self.stage('rag')
-        if rag['status'] == 'running':
+        if rag is not None and rag['status'] == 'running':
             total, embedded = pipeline._index_counts()
             base = prog.get('embed_baseline', 0)
             rag['items_done'] = max(0, embedded - base)
@@ -167,6 +172,8 @@ class Runner:
 
     def run_stage(self, key, fn):
         s = self.stage(key)
+        if s is None:              # legacy job from before this stage existed
+            return True
         if s['items_total'] <= 0:
             s['status'] = 'skipped'
             self.persist_progress()
@@ -193,6 +200,130 @@ class Runner:
             s['finished_at'] = timezone.now().isoformat()
             self.update_overall()
             self.persist_progress()
+
+    def replan_pending_stages(self, keys):
+        """Refresh items_total for not-yet-run stages from a fresh
+        pending_work(). The download/parse stages CREATE work for the stages
+        after them (new .db files, new catalog rows) that did not exist when
+        the job was planned — without a replan, a stage planned at 0 items
+        would wrongly auto-skip the work that just appeared."""
+        try:
+            work = pipeline.pending_work()
+        except Exception:
+            return
+        plans = {d['key']: d['plan'] for d in pipeline.stage_definitions()}
+        for s in self.job.stages:
+            if s['key'] in keys and s['status'] == 'pending' and s['key'] in plans:
+                try:
+                    s['items_total'] = plans[s['key']](work)
+                except Exception:
+                    pass
+        self.update_overall()
+        self.persist_progress()
+
+    def stage_download(self, s):
+        from api import ingest
+        from api.models import DownloadRequest
+        reqs = list(DownloadRequest.objects
+                    .filter(status__in=DownloadRequest.ACTIVE).order_by('id'))
+        errors = []
+        done = 0
+
+        def on_vehicle(v, state):
+            nonlocal done
+            done += 1
+            s['items_done'] = done
+            self.job.progress['current_item'] = v['name']
+            self.update_overall()
+            self.persist_progress()
+
+        for req in reqs:
+            self.check_cancel()
+            try:
+                counts = ingest.execute_download_request(
+                    req, log=self.log, check_cancel=self.check_cancel,
+                    on_vehicle=on_vehicle)
+                if counts['fail']:
+                    errors.append(f'درخواست #{req.id}: {counts["fail"]} دانلود ناموفق')
+            except _Canceled:
+                raise
+            except Exception as e:
+                errors.append(f'#{req.id}: {e.__class__.__name__}: {e}')
+                DownloadRequest.objects.filter(id=req.id).update(
+                    status='failed', error=str(e)[:500])
+                self.log(f'!! download request #{req.id} failed: {e}')
+        self.job.progress.pop('current_item', None)
+        if errors:
+            s['error'] = ' | '.join(errors)[:800]
+            if reqs and len(errors) == len(reqs) and done == 0:
+                raise RuntimeError('every download request failed')
+
+    def stage_parse(self, s):
+        from api import ingest
+        from api.models import ZipPackage
+        todo = list(ZipPackage.objects.filter(status='pending')
+                    .order_by('id').values_list('id', flat=True))
+        errors = []
+        parsed = 0
+        for i, pkg_id in enumerate(todo):
+            self.check_cancel()
+            ingest.check_disk_guard()
+            pkg = ZipPackage.objects.filter(id=pkg_id).first()
+            if pkg is None or pkg.status != 'pending':
+                s['items_done'] = i + 1
+                continue
+            self.job.progress['current_item'] = pkg.zip_name
+            self.persist_progress()
+            t0 = time.monotonic()
+            outcome = ingest.parse_zip_package(
+                pkg, cancel_event=self.cancel, log=self.log)
+            if outcome == 'paused':
+                raise _Canceled()
+            if outcome == 'done':
+                parsed += 1
+                dt = time.monotonic() - t0
+                # Learn this server's real per-zip cost for future estimates.
+                prev = getattr(self.settings_row, 'parse_secs_per_zip', None) or dt
+                self.settings_row.parse_secs_per_zip = round(0.7 * prev + 0.3 * dt, 1)
+            elif outcome == 'failed':
+                pkg.refresh_from_db()
+                errors.append(f'{pkg.zip_name}: {(pkg.error or "?")[:120]}')
+            s['items_done'] = i + 1
+            self.update_overall()
+            self.persist_progress()
+        try:
+            self.settings_row.save(update_fields=['parse_secs_per_zip', 'updated_at'])
+        except Exception:
+            pass
+        self.job.progress.pop('current_item', None)
+        self.log(f'parse stage: {parsed} parsed, {len(errors)} failed, '
+                 f'{len(todo) - parsed - len(errors)} skipped')
+        if errors:
+            s['error'] = ' | '.join(errors)[:800]
+            if todo and len(errors) == len(todo):
+                raise RuntimeError('every zip parse failed')
+
+    def stage_schema(self, s):
+        from api import vehicleschema
+        todo = vehicleschema.stale_stems()
+        errors = []
+        for i, stem in enumerate(todo):
+            self.check_cancel()
+            self.job.progress['current_item'] = stem
+            self.persist_progress()
+            try:
+                vehicleschema.build_for_stem(stem)
+            except Exception as e:
+                errors.append(f'{stem}: {e.__class__.__name__}: {e}')
+                self.log(f'!! schema failed for {stem}: {e}')
+            s['items_done'] = i + 1
+            self.update_overall()
+            self.persist_progress()
+        self.job.progress.pop('current_item', None)
+        if errors:
+            s['error'] = ' | '.join(errors)[:800]
+            if todo and len(errors) == len(todo):
+                raise RuntimeError('every vehicle-schema build failed')
 
     def stage_catalog(self, s):
         call_command('sync_car_catalog', stdout=self.tee, stderr=self.tee)
@@ -304,7 +435,18 @@ class Runner:
         hb.start()
         failed_stages = []
         try:
+            ok_download = self.run_stage('download', self.stage_download)
+            self.check_cancel()
+            # Downloads registered new ZIPs the parse plan didn't know about.
+            self.replan_pending_stages(('parse',))
+            ok_parse = self.run_stage('parse', self.stage_parse)
+            self.check_cancel()
+            # Parsing landed new .db files + catalog rows: refresh the plans
+            # of every later stage so none of them auto-skips fresh work.
+            self.replan_pending_stages(('catalog', 'schema', 'rag', 'diag'))
             ok_catalog = self.run_stage('catalog', self.stage_catalog)
+            self.check_cancel()
+            ok_schema = self.run_stage('schema', self.stage_schema)
             self.check_cancel()
             ok_rag = self.run_stage('rag', self.stage_rag)
             self.check_cancel()
@@ -312,7 +454,7 @@ class Runner:
                 ok_diag = self.run_stage('diag', self.stage_diag)
             else:
                 d = self.stage('diag')
-                if d['items_total'] > 0:
+                if d is not None and d['items_total'] > 0:
                     d['status'] = 'skipped'
                     d['error'] = 'به دلیل خطا در مرحله RAG اجرا نشد'
                 ok_diag = False

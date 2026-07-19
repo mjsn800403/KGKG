@@ -587,6 +587,13 @@ export async function POST(request) {
       // even if a weak nearest neighbour exists).
       const hasContext = (rag?.hits?.length || 0) > 0 && rag?.grounded !== false;
       const built = hasContext ? buildContext(rag) : { sources: [], contextText: '' };
+      // Structured vehicle facts for the pinned car (schema.org-derived,
+      // deterministic). Prepended INSIDE the grounding context so the phraser
+      // can answer spec questions (fuel type, drivetrain, capacities, tires)
+      // while remaining strictly context-only.
+      if (hasContext && rag?.vehicle_specs) {
+        built.contextText = `مشخصات فنی ثبت‌شدهٔ این خودرو (قطعی):\n${rag.vehicle_specs}\n---\n${built.contextText}`;
+      }
       sources = built.sources;
       grounded = hasContext;
       const cb = rag?.confidence_band;

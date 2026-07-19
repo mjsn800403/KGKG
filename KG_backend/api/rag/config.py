@@ -17,6 +17,7 @@ Nothing here ever writes to the original car databases or db.sqlite3. Every
 artefact lives under Database_warehouse/_rag/ and can be deleted to fully revert.
 """
 import os
+import re
 from pathlib import Path
 from django.conf import settings
 
@@ -116,6 +117,26 @@ CAR_REGISTRY = {
 
 _LEXUS_PREFIXES = ('NX', 'RX', 'ES', 'IS', 'UX', 'GX', 'LX', 'LS', 'RC', 'LC')
 
+# Multi-year stems: the 2025 fleet keeps plain names; other model years carry
+# a " (YYYY)" suffix (e.g. 'Corolla Cross LE, FWD (2023)') so the same trim
+# can exist for several years as distinct cars. See htmlparser_logical.
+_STEM_YEAR_RE = re.compile(r'\s*\((\d{4})\)\s*$')
+
+
+def split_stem_year(car_stem):
+    """('Corolla Cross LE, FWD', 2023) for a year-suffixed stem;
+    (stem, None) for a plain one."""
+    m = _STEM_YEAR_RE.search(car_stem)
+    if m:
+        return car_stem[:m.start()].strip(), int(m.group(1))
+    return car_stem, None
+
+
+def display_name(car_stem):
+    """Human-facing car name: the stem without the year suffix (the year is
+    shown separately from the catalog's year column)."""
+    return split_stem_year(car_stem)[0]
+
 _CATALOG_CACHE = None
 
 
@@ -152,14 +173,16 @@ def car_meta(car_stem):
     so the build never crashes on an unregistered file."""
     if car_stem in CAR_REGISTRY:
         return dict(CAR_REGISTRY[car_stem], car_stem=car_stem)
-    first = car_stem.split()[0] if car_stem.split() else car_stem
+    base, stem_year = split_stem_year(car_stem)
+    first = base.split()[0] if base.split() else base
     brand = 'Lexus' if first in _LEXUS_PREFIXES else 'Toyota'
-    model = car_stem.split(',')[0].strip()
+    model = base.split(',')[0].strip()
     cat = _catalog_meta(car_stem)
     if cat:
         return dict(brand=cat[0] or brand, model=model, variant='',
-                    year=cat[1], car_stem=car_stem)
-    return dict(brand=brand, model=model, variant='', year=None, car_stem=car_stem)
+                    year=cat[1] or stem_year, car_stem=car_stem)
+    return dict(brand=brand, model=model, variant='', year=stem_year,
+                car_stem=car_stem)
 
 
 # ---------------------------------------------------------------------------

@@ -12,8 +12,9 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .admin_auth import require_admin_token
 from .models import (
-    ActivityLog, Car, DataQualityRun, PipelineSettings, ProcessingJob,
-    SystemAlert, TrafficStat, VisitorSeen,
+    ActivityLog, Car, DataQualityRun, DownloadRequest, PipelineSettings,
+    ProcessingJob, SystemAlert, TrafficStat, VehicleSpec, VisitorSeen,
+    ZipPackage,
 )
 from . import dataquality, monitoring, pipeline
 
@@ -197,6 +198,51 @@ def admin_traffic_view(request):
 # Data-processing pipeline (admin-triggered background workflow)
 # ---------------------------------------------------------------------------
 
+_LEMON_BASE = 'https://lemon-manuals.org.ua'
+
+
+def _source_url(body):
+    """Brand/Year page URL from {url} or {brand, year}. None when invalid.
+    Only the LEMON source host is accepted."""
+    url = (body.get('url') or '').strip()
+    if not url:
+        brand = (body.get('brand') or '').strip()
+        year = str(body.get('year') or '').strip()
+        if not (brand and year.isdigit()):
+            return None
+        url = f'{_LEMON_BASE}/{brand}/{year}/'
+    if 'lemon-manuals' not in url:
+        return None
+    return url
+
+
+def _brand_year_from_url(url):
+    from urllib.parse import unquote, urlparse
+    parts = [unquote(p) for p in urlparse(url).path.strip('/').split('/') if p]
+    brand = parts[0] if parts else ''
+    year = None
+    if len(parts) > 1 and parts[1].isdigit():
+        year = int(parts[1])
+    return brand, year
+
+
+def _download_dict(r):
+    return {'id': r.id, 'url': r.url, 'brand': r.brand, 'year': r.year,
+            'name_filter': r.name_filter, 'status': r.status,
+            'vehicles_total': r.vehicles_total, 'vehicles_done': r.vehicles_done,
+            'listing': r.listing, 'error': r.error,
+            'created_at': r.created_at.isoformat(),
+            'finished_at': r.finished_at.isoformat() if r.finished_at else None}
+
+
+def _zip_dict(p):
+    return {'id': p.id, 'zip_name': p.zip_name, 'brand': p.brand,
+            'year': p.year, 'car_name': p.car_name, 'stem': p.stem,
+            'status': p.status, 'size_mb': round((p.size or 0) / 1048576, 1),
+            'pages_processed': p.pages_processed, 'error': p.error,
+            'updated_at': p.updated_at.isoformat()}
+
+
 @csrf_exempt
 @require_admin_token
 def admin_pipeline_view(request):
@@ -258,6 +304,65 @@ def admin_pipeline_view(request):
             st.save()
             return JsonResponse({'ok': True})
 
+        if action == 'list_source':
+            # Synchronous dry-run listing of a LEMON Brand/Year page, annotated
+            # with what we already have locally (downloaded / ingested).
+            from . import ingest
+            url = _source_url(body)
+            if url is None:
+                return JsonResponse({'error': 'آدرس منبع یا برند/سال لازم است.'}, status=400)
+            try:
+                listing = ingest.list_source(url, body.get('filter') or '')
+            except Exception as e:
+                return JsonResponse(
+                    {'error': f'دریافت فهرست از منبع ممکن نشد: {e}'}, status=502)
+            return JsonResponse({'ok': True, **listing})
+
+        if action == 'download':
+            # Queue a DownloadRequest; the pipeline's download stage executes it.
+            url = _source_url(body)
+            if url is None:
+                return JsonResponse({'error': 'آدرس منبع یا برند/سال لازم است.'}, status=400)
+            brand, year = _brand_year_from_url(url)
+            req = DownloadRequest.objects.create(
+                url=url, brand=brand or '', year=year,
+                name_filter=(body.get('filter') or '').strip())
+            return JsonResponse({'ok': True, 'request': _download_dict(req)})
+
+        if action == 'cancel_download':
+            req = DownloadRequest.objects.filter(id=body.get('request_id')).first()
+            if req is None:
+                return JsonResponse({'error': 'درخواست یافت نشد.'}, status=404)
+            if req.status in DownloadRequest.ACTIVE:
+                req.status = 'canceled'
+                req.finished_at = timezone.now()
+                req.save(update_fields=['status', 'finished_at', 'updated_at'])
+            return JsonResponse({'ok': True, 'request': _download_dict(req)})
+
+        if action == 'scan_zips':
+            from . import ingest
+            try:
+                summary = ingest.scan_inbox(
+                    normalize=bool(body.get('normalize', True)),
+                    dry_run=bool(body.get('dry_run')))
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({'ok': True, 'summary': summary})
+
+        if action in ('skip_zip', 'requeue_zip'):
+            pkg = ZipPackage.objects.filter(id=body.get('zip_id')).first()
+            if pkg is None:
+                return JsonResponse({'error': 'بسته یافت نشد.'}, status=404)
+            if action == 'skip_zip' and pkg.status in ('pending', 'failed'):
+                pkg.status = 'skipped_duplicate'
+                pkg.error = 'skipped by admin'
+                pkg.save(update_fields=['status', 'error', 'updated_at'])
+            elif action == 'requeue_zip' and pkg.status in ('failed', 'skipped_duplicate'):
+                pkg.status = 'pending'
+                pkg.error = ''
+                pkg.save(update_fields=['status', 'error', 'updated_at'])
+            return JsonResponse({'ok': True, 'zip': _zip_dict(pkg)})
+
         return JsonResponse({'error': 'unknown action'}, status=400)
 
     st = PipelineSettings.get()
@@ -277,6 +382,10 @@ def admin_pipeline_view(request):
                  .filter(status__in=['done', 'failed', 'canceled'])
                  .order_by('-created_at').first())
 
+    zip_counts = {}
+    for status in ZipPackage.objects.values_list('status', flat=True):
+        zip_counts[status] = zip_counts.get(status, 0) + 1
+
     return JsonResponse({
         'pending': work,
         'load': load,
@@ -292,11 +401,77 @@ def admin_pipeline_view(request):
              'error': j.error}
             for j in ProcessingJob.objects.all()[:12]
         ],
+        'download_requests': [_download_dict(r) for r in
+                              DownloadRequest.objects.all()[:10]],
+        'zip_queue': {
+            'counts': zip_counts,
+            'rows': [_zip_dict(p) for p in
+                     ZipPackage.objects.order_by('-updated_at')[:200]],
+        },
         'settings': {'auto_enabled': st.auto_enabled,
                      'auto_resume': st.auto_resume,
                      'load_threshold': st.load_threshold,
                      'embed_rate_pps': st.embed_rate_pps,
-                     'diag_secs_per_car': st.diag_secs_per_car},
+                     'diag_secs_per_car': st.diag_secs_per_car,
+                     'parse_secs_per_zip': getattr(st, 'parse_secs_per_zip', None),
+                     'download_secs_per_vehicle': getattr(st, 'download_secs_per_vehicle', None)},
+    })
+
+
+# ---------------------------------------------------------------------------
+# Structured vehicle specs (schema.org) — read-only admin visibility
+# ---------------------------------------------------------------------------
+
+@require_admin_token
+def admin_vehicle_specs_view(request):
+    """GET /api/admin/vehicle-specs/            -> coverage list (no bodies)
+       GET /api/admin/vehicle-specs/?car_id=N   -> one car's full spec+provenance
+    """
+    from . import vehicleschema
+    from .rag import config as ragconfig
+
+    car_id = request.GET.get('car_id')
+    if car_id:
+        car = Car.objects.filter(id=car_id).first()
+        if car is None:
+            return JsonResponse({'error': 'خودرو یافت نشد.'}, status=404)
+        sp = VehicleSpec.objects.filter(car=car).first()
+        return JsonResponse({
+            'car_id': car.id, 'brand': car.brand_name, 'car_name': car.car_name,
+            'display_name': ragconfig.display_name(car.car_name),
+            'year': car.year,
+            'spec': None if sp is None else {
+                'data': sp.data, 'jsonld': vehicleschema.jsonld(sp.data),
+                'provenance': sp.provenance, 'sections_used': sp.sections_used,
+                'builder_version': sp.builder_version,
+                'built_at': sp.built_at.isoformat(),
+            },
+        })
+
+    specs = {s.car_id: s for s in VehicleSpec.objects.all()}
+    field_coverage = {}
+    vehicles = []
+    for car in Car.objects.order_by('brand_name', 'car_name'):
+        sp = specs.get(car.id)
+        fields = (sorted(k for k in sp.data if not k.startswith('@'))
+                  if sp else [])
+        for f in fields:
+            field_coverage[f] = field_coverage.get(f, 0) + 1
+        vehicles.append({
+            'car_id': car.id, 'brand': car.brand_name,
+            'car_name': car.car_name,
+            'display_name': ragconfig.display_name(car.car_name),
+            'year': car.year, 'has_spec': sp is not None,
+            'field_count': len(fields), 'fields': fields,
+            'built_at': sp.built_at.isoformat() if sp else None,
+        })
+    return JsonResponse({
+        'total': len(vehicles),
+        'with_spec': sum(1 for v in vehicles if v['has_spec']),
+        'stale': vehicleschema.stale_stems(),
+        'field_coverage': field_coverage,
+        'builder_version': vehicleschema.BUILDER_VERSION,
+        'vehicles': vehicles,
     })
 
 

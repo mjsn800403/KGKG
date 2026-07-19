@@ -51,7 +51,8 @@ const SECTIONS = [
   { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart', desc: 'میزان استفاده به تفکیک شرکت و حوزه فنی' },
   { id: 'activity', label: 'گزارش فعالیت', icon: 'clock', desc: 'ریز رویدادهای کاربران در سامانه' },
   { id: 'dataquality', label: 'سلامت داده‌ها', icon: 'shield', desc: 'ممیزی کامل بودن و کیفیت مستندات هر خودرو' },
-  { id: 'pipeline', label: 'پردازش داده‌ها', icon: 'refresh', desc: 'ایندکس RAG و پردازش داده‌های جدید' },
+  { id: 'pipeline', label: 'پردازش داده‌ها', icon: 'refresh', desc: 'دانلود، استخراج، ایندکس RAG و پردازش داده‌های جدید' },
+  { id: 'vehicle-specs', label: 'مشخصات خودروها', icon: 'car', desc: 'مشخصات ساختاریافته (schema.org) هر خودرو و منبع هر مقدار' },
   { id: 'system', label: 'پایش سیستم', icon: 'gear', desc: 'منابع سرور، ترافیک و هشدارهای عملیاتی' },
 ];
 
@@ -61,7 +62,7 @@ const SECTION_GROUPS = [
   { title: 'بلادرنگ', tag: '// REALTIME', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
   { title: 'مشتریان و فروش', tag: '// CUSTOMERS', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
   { title: 'گزارش و تحلیل', tag: '// INSIGHTS', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'activity'] },
-  { title: 'داده و عملیات', tag: '// OPERATIONS', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'system'] },
+  { title: 'داده و عملیات', tag: '// OPERATIONS', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system'] },
 ];
 
 function fmtDate(iso) {
@@ -229,6 +230,7 @@ export default function AdminPage() {
               {section === 'activity' && <Activity guard={guard} />}
               {section === 'dataquality' && <DataQuality guard={guard} />}
               {section === 'pipeline' && <Pipeline guard={guard} />}
+              {section === 'vehicle-specs' && <VehicleSpecs guard={guard} />}
               {section === 'system' && <SystemMonitor guard={guard} />}
             </motion.div>
           </AnimatePresence>
@@ -1690,6 +1692,191 @@ function StageRow({ stage }) {
   );
 }
 
+const DL_STATUS = {
+  pending: { label: 'در صف دانلود', color: '#3b82f6' },
+  running: { label: 'در حال دانلود', color: '#22c55e' },
+  done: { label: 'کامل شد', color: '#22c55e' },
+  failed: { label: 'ناموفق', color: '#ef4444' },
+  canceled: { label: 'لغو شد', color: '#9ca3af' },
+};
+const ZIP_STATUS = {
+  pending: { label: 'در صف استخراج', color: '#3b82f6' },
+  parsing: { label: 'در حال استخراج', color: '#22c55e' },
+  done: { label: 'انجام شد', color: '#22c55e' },
+  failed: { label: 'خطا', color: '#ef4444' },
+  skipped_duplicate: { label: 'تکراری — رد شد', color: '#9ca3af' },
+};
+
+// Source-download card: check the LEMON source for a brand/year (optionally
+// filtered by model name), see what is new vs already on the server, and queue
+// a download request that the pipeline's download stage will execute.
+function DownloadSourceCard({ data, act, busy, guard }) {
+  const [brand, setBrand] = useState('Toyota');
+  const [year, setYear] = useState('');
+  const [filter, setFilter] = useState('');
+  const [listing, setListing] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [err, setErr] = useState('');
+
+  const check = async () => {
+    setChecking(true); setErr(''); setListing(null);
+    try {
+      const res = await guard(() => adminApi.pipelineAction(
+        { action: 'list_source', brand, year, filter }));
+      if (res) setListing(res.vehicles || []);
+    } catch (e) { setErr(e.message || 'خطا در دریافت فهرست'); }
+    finally { setChecking(false); }
+  };
+
+  const newCount = (listing || []).filter((v) => !v.ingested && !v.downloaded).length;
+  const requests = data?.download_requests || [];
+
+  return (
+    <div className="card glass" style={{ marginBottom: 16 }}>
+      <h3 style={{ marginTop: 0 }}><Icon name="cart" size={16} /> دانلود بسته‌های جدید از منبع (LEMON)</h3>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input dir="ltr" style={{ width: 110 }} value={brand} placeholder="Toyota"
+          onChange={(e) => setBrand(e.target.value)} />
+        <input dir="ltr" style={{ width: 80 }} value={year} placeholder="2024"
+          onChange={(e) => setYear(e.target.value)} />
+        <input dir="ltr" style={{ width: 180 }} value={filter} placeholder="فیلتر مدل (مثلاً corolla cross)"
+          onChange={(e) => setFilter(e.target.value)} />
+        <button className="btn" disabled={checking || busy || !brand || !year} onClick={check}>
+          {checking ? 'در حال بررسی…' : 'بررسی منبع'}
+        </button>
+        <button className="btn btn-accent" disabled={busy || !brand || !year}
+          onClick={() => act({ action: 'download', brand, year, filter },
+            'درخواست دانلود ثبت شد؛ با شروع پردازش بعدی (یا حالت خودکار) دانلود انجام می‌شود.')}>
+          افزودن به صف دانلود
+        </button>
+      </div>
+      {err && <div style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>{err}</div>}
+
+      {listing && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 6 }}>
+            {listing.length.toLocaleString('fa-IR')} خودرو در منبع — {newCount.toLocaleString('fa-IR')} مورد جدید
+          </div>
+          <div style={{ maxHeight: 220, overflow: 'auto', border: '1px solid rgba(120,120,160,.2)', borderRadius: 8 }}>
+            <table className="adm-table" style={{ margin: 0 }}>
+              <tbody>
+                {listing.map((v) => (
+                  <tr key={v.bundle_url}>
+                    <td dir="ltr" style={{ fontSize: 13 }}>{v.name}</td>
+                    <td>
+                      {v.ingested ? <span className="st-badge st-ok">در سامانه موجود است</span>
+                        : v.downloaded ? <span className="st-badge st-rev">دانلود شده — در انتظار استخراج</span>
+                        : <span className="st-badge st-new">جدید</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {requests.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 6 }}>درخواست‌های دانلود اخیر</div>
+          <table className="adm-table" style={{ margin: 0 }}>
+            <thead><tr><th>#</th><th>منبع</th><th>فیلتر</th><th>وضعیت</th><th>پیشرفت</th><th /></tr></thead>
+            <tbody>
+              {requests.map((r) => {
+                const rs = DL_STATUS[r.status] || {};
+                return (
+                  <tr key={r.id}>
+                    <td>{r.id}</td>
+                    <td dir="ltr" style={{ fontSize: 12 }}>{r.brand} {r.year}</td>
+                    <td dir="ltr" style={{ fontSize: 12 }}>{r.name_filter || '—'}</td>
+                    <td><span className="st-badge" style={{ background: `${rs.color}22`, color: rs.color }}>{rs.label || r.status}</span></td>
+                    <td dir="ltr">{r.vehicles_total ? `${r.vehicles_done}/${r.vehicles_total}` : '—'}</td>
+                    <td>
+                      {['pending', 'running'].includes(r.status) && (
+                        <button className="btn" style={{ fontSize: 12, padding: '2px 10px' }} disabled={busy}
+                          onClick={() => act({ action: 'cancel_download', request_id: r.id }, 'درخواست دانلود لغو شد.')}>لغو</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The parse queue: every discovered ZIP with its status; scan button registers
+// newly downloaded/copied files (and normalizes legacy names).
+function ZipQueueCard({ data, act, busy }) {
+  const [showAll, setShowAll] = useState(false);
+  const q = data?.zip_queue;
+  if (!q) return null;
+  const counts = q.counts || {};
+  const rows = q.rows || [];
+  const visible = showAll ? rows : rows.slice(0, 25);
+  return (
+    <div className="card glass" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <h3 style={{ margin: 0 }}><Icon name="catalog" size={16} /> صف بسته‌های فشرده (ZIP)</h3>
+        <button className="btn" disabled={busy}
+          onClick={() => act({ action: 'scan_zips' }, 'پوشه دانلودها اسکن شد و بسته‌های جدید به صف اضافه شدند.')}>
+          اسکن پوشه دانلودها
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '10px 0', fontSize: 13 }}>
+        {Object.entries(ZIP_STATUS).map(([k, v]) => (
+          counts[k] ? <span key={k} className="st-badge" style={{ background: `${v.color}22`, color: v.color }}>{counts[k].toLocaleString('fa-IR')} {v.label}</span> : null
+        ))}
+        {rows.length === 0 && <span style={{ color: 'var(--text-dim)' }}>بسته‌ای ثبت نشده است — «اسکن پوشه دانلودها» را بزنید.</span>}
+      </div>
+      {rows.length > 0 && (
+        <>
+          <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid rgba(120,120,160,.2)', borderRadius: 8 }}>
+            <table className="adm-table" style={{ margin: 0 }}>
+              <thead><tr><th>بسته</th><th>خودرو</th><th>سال</th><th>حجم</th><th>وضعیت</th><th /></tr></thead>
+              <tbody>
+                {visible.map((p) => {
+                  const zs = ZIP_STATUS[p.status] || {};
+                  return (
+                    <tr key={p.id}>
+                      <td dir="ltr" style={{ fontSize: 12, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.zip_name}>{p.zip_name}</td>
+                      <td dir="ltr" style={{ fontSize: 12 }}>{p.stem}</td>
+                      <td dir="ltr">{p.year}</td>
+                      <td dir="ltr">{p.size_mb} MB</td>
+                      <td>
+                        <span className="st-badge" style={{ background: `${zs.color}22`, color: zs.color }}>{zs.label || p.status}</span>
+                        {p.error && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 2 }} dir="ltr">{p.error}</div>}
+                      </td>
+                      <td>
+                        {['pending', 'failed'].includes(p.status) && (
+                          <button className="btn" style={{ fontSize: 12, padding: '2px 10px' }} disabled={busy}
+                            onClick={() => act({ action: 'skip_zip', zip_id: p.id }, 'بسته از صف خارج شد.')}>رد کردن</button>
+                        )}
+                        {['failed', 'skipped_duplicate'].includes(p.status) && (
+                          <button className="btn" style={{ fontSize: 12, padding: '2px 10px' }} disabled={busy}
+                            onClick={() => act({ action: 'requeue_zip', zip_id: p.id }, 'بسته دوباره به صف اضافه شد.')}>بازگردانی به صف</button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {rows.length > 25 && (
+            <button className="btn" style={{ marginTop: 8, fontSize: 12 }} onClick={() => setShowAll((v) => !v)}>
+              {showAll ? 'نمایش کمتر' : `نمایش همه (${rows.length.toLocaleString('fa-IR')})`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function Pipeline({ guard }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -1748,7 +1935,10 @@ function Pipeline({ guard }) {
             </div>
             {pending?.has_work && (
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, fontSize: 13 }}>
+                {pending.need_download > 0 && <span className="st-badge st-rev">{pending.need_download.toLocaleString('fa-IR')} خودرو در صف دانلود</span>}
+                {pending.need_parse > 0 && <span className="st-badge st-rev">{pending.need_parse.toLocaleString('fa-IR')} بسته فشرده در انتظار استخراج</span>}
                 {pending.need_catalog.length > 0 && <span className="st-badge st-rev">{pending.need_catalog.length} خودرو خارج از کاتالوگ</span>}
+                {(pending.need_schema || []).length > 0 && <span className="st-badge st-rev">{pending.need_schema.length} خودرو بدون مشخصات ساختاریافته</span>}
                 {pending.need_rag_ingest.length > 0 && <span className="st-badge st-rev">{pending.need_rag_ingest.length} خودرو بدون ایندکس</span>}
                 {pending.pages_to_embed > 0 && <span className="st-badge st-rev">{pending.pages_to_embed.toLocaleString('fa-IR')} صفحه در انتظار پردازش هوشمند</span>}
                 {pending.need_diag.length > 0 && <span className="st-badge st-rev">{pending.need_diag.length} خودرو بدون موتور عیب‌یابی</span>}
@@ -1858,6 +2048,12 @@ function Pipeline({ guard }) {
             </div>
           )}
 
+          {/* Download source (LEMON) — list, filter, queue for the pipeline */}
+          <DownloadSourceCard data={data} act={act} busy={busy} guard={guard} />
+
+          {/* ZIP parse queue */}
+          <ZipQueueCard data={data} act={act} busy={busy} />
+
           {/* History */}
           {(data.history || []).length > 0 && (
             <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
@@ -1881,6 +2077,129 @@ function Pipeline({ guard }) {
               </table>
             </div>
           )}
+        </>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Structured vehicle specs (schema.org) — read-only coverage + per-car detail
+// with the provenance of every value (stem / catalog / manual / curated).
+// ---------------------------------------------------------------------------
+const PROV_LABELS = {
+  catalog: 'کاتالوگ', stem: 'نام فنی خودرو', manual: 'دفترچه تعمیرات',
+  curated: 'جدول تأییدشده', derived: 'استنتاج قطعی',
+};
+
+function VehicleSpecs({ guard }) {
+  const [data, setData] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailBusy, setDetailBusy] = useState(false);
+
+  useEffect(() => { guard(adminApi.vehicleSpecs).then((d) => d && setData(d)); }, [guard]);
+
+  const openDetail = async (carId) => {
+    setDetailBusy(true);
+    try {
+      const d = await guard(() => adminApi.vehicleSpecs(carId));
+      if (d) setDetail(d);
+    } finally { setDetailBusy(false); }
+  };
+
+  return (
+    <>
+      <h1 className="page-title">مشخصات ساختاریافته خودروها</h1>
+      <div className="page-sub">// VEHICLE_SCHEMA — مشخصات هر خودرو به قالب schema.org، با منبع هر مقدار</div>
+
+      {!data ? <div className="empty-state">در حال بارگذاری…</div> : (
+        <>
+          <div className="card glass" style={{ margin: '16px 0' }}>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 14 }}>
+              <span>خودروها: <b>{data.total.toLocaleString('fa-IR')}</b></span>
+              <span>دارای مشخصات: <b style={{ color: '#22c55e' }}>{data.with_spec.toLocaleString('fa-IR')}</b></span>
+              {(data.stale || []).length > 0 && (
+                <span>در انتظار به‌روزرسانی: <b style={{ color: '#eab308' }}>{data.stale.length.toLocaleString('fa-IR')}</b></span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, fontSize: 12 }}>
+              {Object.entries(data.field_coverage || {}).sort((a, b) => b[1] - a[1]).map(([f, n]) => (
+                <span key={f} className="st-badge st-rev" dir="ltr">{f}: {n}</span>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 8 }}>
+              فیلدهایی که منبع قابل‌اتکایی ندارند (وزن، ابعاد، قدرت موتور، ظرفیت سرنشین…) عمداً خالی می‌مانند.
+            </div>
+          </div>
+
+          {detail && (
+            <div className="card glass" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>{detail.brand} {detail.display_name} — {detail.year}</h3>
+                <button className="btn" onClick={() => setDetail(null)}>بستن</button>
+              </div>
+              {!detail.spec ? (
+                <div style={{ color: 'var(--text-dim)', marginTop: 8 }}>برای این خودرو هنوز مشخصاتی ساخته نشده است.</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', margin: '6px 0' }}>
+                    ساخته‌شده در {fmtDate(detail.spec.built_at)} — نسخه {detail.spec.builder_version}
+                  </div>
+                  <table className="adm-table" style={{ margin: '8px 0' }}>
+                    <thead><tr><th>فیلد</th><th>مقدار</th><th>منبع</th></tr></thead>
+                    <tbody>
+                      {Object.entries(detail.spec.data).filter(([k]) => !k.startsWith('@')).map(([k, v]) => (
+                        <tr key={k}>
+                          <td dir="ltr" style={{ fontSize: 12 }}>{k}</td>
+                          <td dir="ltr" style={{ fontSize: 12, maxWidth: 420, whiteSpace: 'pre-wrap' }}>
+                            {typeof v === 'object' ? JSON.stringify(v, null, 1) : String(v)}
+                          </td>
+                          <td style={{ fontSize: 12 }}>
+                            {(() => {
+                              const p = (detail.spec.provenance || {})[k];
+                              if (!p) return '—';
+                              return `${PROV_LABELS[p.source] || p.source}`;
+                            })()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <details>
+                    <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--text-dim)' }}>JSON-LD کامل</summary>
+                    <pre dir="ltr" style={{ fontSize: 11, maxHeight: 260, overflow: 'auto', background: 'rgba(0,0,0,.25)', padding: 10, borderRadius: 8 }}>
+                      {JSON.stringify(detail.spec.jsonld, null, 2)}
+                    </pre>
+                  </details>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
+            <table className="adm-table">
+              <thead><tr><th>برند</th><th>خودرو</th><th>سال</th><th>فیلدها</th><th>به‌روزرسانی</th><th /></tr></thead>
+              <tbody>
+                {(data.vehicles || []).map((v) => (
+                  <tr key={v.car_id}>
+                    <td>{v.brand}</td>
+                    <td dir="ltr" style={{ fontSize: 13 }}>{v.display_name}</td>
+                    <td dir="ltr">{v.year}</td>
+                    <td>
+                      {v.has_spec
+                        ? <span className="st-badge st-ok">{v.field_count.toLocaleString('fa-IR')} فیلد</span>
+                        : <span className="st-badge st-no">بدون مشخصات</span>}
+                    </td>
+                    <td style={{ fontSize: 12 }}>{v.built_at ? fmtDate(v.built_at) : '—'}</td>
+                    <td>
+                      <button className="btn" style={{ fontSize: 12, padding: '2px 10px' }}
+                        disabled={detailBusy || !v.has_spec} onClick={() => openDetail(v.car_id)}>مشاهده</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </>

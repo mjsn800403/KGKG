@@ -8,6 +8,8 @@ urlpatterns = [
     path('api/admin/system/', adminops.admin_system_view, name='admin_system'),
     path('api/admin/traffic/', adminops.admin_traffic_view, name='admin_traffic'),
     path('api/admin/pipeline/', adminops.admin_pipeline_view, name='admin_pipeline'),
+    path('api/admin/vehicle-specs/', adminops.admin_vehicle_specs_view,
+         name='admin_vehicle_specs'),
 
     # Real-time event backbone: SSE stream + REST snapshot/history companions.
     path('api/events/stream/', events.stream_view, name='events_stream'),

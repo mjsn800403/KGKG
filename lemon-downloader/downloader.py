@@ -185,15 +185,21 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
     interrupted download never looks complete.
     """
     safe_name = sanitize_filename(vehicle["name"])
-    zip_path = output_dir / f"{safe_name}.zip"
 
-    # Already have a VALID zip? skip — WITHOUT hitting the server (avoids needless
-    # 429s on re-runs). Check both the model-name file and the older
-    # "LEMON <year> <brand> <model>.zip" name from earlier versions.
+    # Name downloads with the ingestion convention the parser expects
+    # ("LEMON <year> <brand> <model>.zip" — brand/year taken from the bundle
+    # URL). Model-only names from earlier versions are still recognized for
+    # skipping, but never written anymore.
     bp = [unquote(p) for p in urlparse(vehicle["bundle_url"]).path.strip("/").split("/")]
-    candidates = [zip_path]
     if len(bp) == 4:   # ['bundle', brand, year, model]
-        candidates.append(output_dir / sanitize_filename(f"LEMON {bp[2]} {bp[1]} {bp[3]}.zip"))
+        zip_path = output_dir / sanitize_filename(f"LEMON {bp[2]} {bp[1]} {bp[3]}.zip")
+        candidates = [zip_path, output_dir / f"{safe_name}.zip"]
+    else:
+        zip_path = output_dir / f"{safe_name}.zip"
+        candidates = [zip_path]
+
+    # Already have a VALID zip? skip — WITHOUT hitting the server (avoids
+    # needless 429s on re-runs).
     for c in candidates:
         if c.exists() and zipfile.is_zipfile(c):
             log(f"[skip] already downloaded: {c.name}")
@@ -289,6 +295,9 @@ def main():
     parser.add_argument("--delay", type=float, default=3.0,
                         help="Seconds to wait before every request, to avoid 429 bursts (default: 3.0)")
     parser.add_argument("--dry-run", action="store_true", help="List vehicles, download nothing")
+    parser.add_argument("--filter", default="", dest="name_filter", metavar="TEXT",
+                        help="Only vehicles whose name contains TEXT (case-insensitive), "
+                             "e.g. --filter 'corolla cross'")
     args = parser.parse_args()
 
     url = args.url or input("Enter Brand/Year URL (e.g. https://lemon-manuals.org.ua/Toyota/2025/): ").strip()
@@ -313,6 +322,10 @@ def main():
     log(f"Output directory: {save_dir.resolve()}")
 
     vehicles = get_vehicles(session, url)
+    if args.name_filter:
+        needle = args.name_filter.lower()
+        vehicles = [v for v in vehicles if needle in v["name"].lower()]
+        log(f"Filter '{args.name_filter}': {len(vehicles)} vehicle(s) match")
     if not vehicles:
         err("No vehicles found. Check the URL.")
         sys.exit(1)

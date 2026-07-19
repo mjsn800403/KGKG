@@ -60,7 +60,13 @@ class PendingWorkTests(TestCase):
         con.close()
         for stem in ('Car A', 'Car B'):
             (rag_dir / 'diag' / f'{stem}.diag.db').touch()
+        # Vehicle specs are their own stage now; "everything done" includes
+        # them (built here via the real builder so staleness math runs too).
+        from . import vehicleschema
+        for stem in ('Car A', 'Car B'):
+            vehicleschema.build_for_stem(stem)
         work = pipeline.pending_work()
+        self.assertEqual(work['need_schema'], [])
         self.assertFalse(work['has_work'])
         self.assertEqual(work['pages_to_embed'], 0)
 
@@ -107,7 +113,9 @@ class JobLifecycleTests(TestCase):
             job, err = pipeline.start_job()
             self.assertIsNone(err)
             self.assertEqual(job.status, 'pending')
-            self.assertEqual(len(job.stages), 4)
+            self.assertEqual([s['key'] for s in job.stages],
+                             ['download', 'parse', 'catalog', 'schema',
+                              'rag', 'diag', 'audit'])
             launch.assert_called_once()
             # Second start while one is active must refuse.
             job2, err2 = pipeline.start_job()
