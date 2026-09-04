@@ -108,7 +108,9 @@ class Command(BaseCommand):
                          car_stem=e.get('car') or e.get('car_stem'))
             t0 = time.monotonic()
             try:
-                res = retrieve.assist(e['query'], **scope)
+                # pass k through: without it k_eff falls back to the adaptive
+                # FINAL_K_MIN/MAX (4-8) and --k would score a list it can never fill
+                res = retrieve.assist(e['query'], k=k, **scope)
             except Exception as ex:
                 per_query.append({'query': e['query'], 'error': str(ex)})
                 continue

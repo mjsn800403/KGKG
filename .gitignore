@@ -17,6 +17,9 @@
 # Env files and backups (never commit secrets/binaries)
 .env.prod
 .env.prod.bak
+# any env backup variant (.bak-hfoffline, .bak.<ts>, .pre-turnstile ...)
+.env.prod*
+*/.env.prod*
 *.bak
 *.bak_*
 KG_backend/staticfiles/

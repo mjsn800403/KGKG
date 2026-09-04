@@ -3,12 +3,17 @@ populate the unified index.
 
 For each leaf page:
   * hash its cleaned text;
-  * the FIRST time a hash is seen -> create one `blob`, clean + chunk it, write
-    chunks + FTS rows (this is the only content we ever embed);
+  * the FIRST time a hash is seen -> create one `blob` holding the whole cleaned
+    page, and write its FTS row (this is the only content we ever embed);
   * EVERY time -> record an `occurrence` (which car / node / breadcrumb / href).
 
 So identical content across the five bZ4X types, or shared between RAV4 and
 Corolla, is embedded once but remains addressable from every vehicle it lives in.
+
+Segmentation is structural, not algorithmic: the retrieval unit is one logical
+manual page as the document tree defines it, carrying its breadcrumb chain, with
+tables flattened cell-by-cell so torque and spec values stay searchable. There is
+no sub-page splitting and no `chunks` table -- one blob and one vector per page.
 """
 import re
 import hashlib

@@ -27,7 +27,9 @@ from django.conf import settings
 BASE_DIR = Path(settings.DATABASES['default']['NAME']).parent
 WAREHOUSE_DIR = BASE_DIR / 'Database_warehouse'
 RAG_DIR = WAREHOUSE_DIR / '_rag'              # all output (deletable)
-INDEX_DB = RAG_DIR / 'index.rag.db'           # the single unified index
+# RAG_INDEX_DB lets an offline experiment point at an alternate index copy
+# without touching production. Unset in .env.prod -> production is unaffected.
+INDEX_DB = Path(os.environ.get('RAG_INDEX_DB') or (RAG_DIR / 'index.rag.db'))
 
 # Bilingual terminology store (terms + generation queue) and the en->fa display
 # artifact generated from it (consumed by the Next chat route). Both live under
@@ -53,28 +55,25 @@ _NON_CAR_PREFIXES = ('_rag', '_backup')
 # ---------------------------------------------------------------------------
 # Parts translation dictionary (Persian <-> English part names)
 # ---------------------------------------------------------------------------
-# A user-maintained CSV of "ENGLISH PART NAME, فارسی" rows (e.g. Book1.csv).
-# It feeds the glossary so a Persian query naming a part is expanded with the
-# English part terms the manual actually uses -- a build-free accuracy lever:
-# edit the CSV and the next query benefits (the glossary reloads on file change).
-# Resolution order: env override -> project root -> backend dir -> _rag copy.
-def _resolve_parts_csv():
+# A user-maintained SQLite DB (translation.db, Book1 table: field1=English,
+# field2=Persian). The glossary reads it at startup and reloads on mtime change.
+# Resolution order: env override -> project root -> backend dir.
+def _resolve_parts_db():
     candidates = []
-    env = os.environ.get('RAG_PARTS_CSV')
+    env = os.environ.get('RAG_PARTS_DB')
     if env:
         candidates.append(Path(env))
     candidates += [
-        BASE_DIR.parent / 'Book1.csv',   # project root (where the user keeps it)
-        BASE_DIR / 'Book1.csv',
-        RAG_DIR / 'parts.csv',
+        BASE_DIR.parent / 'translation.db',
+        BASE_DIR / 'translation.db',
     ]
     for p in candidates:
         if p.exists():
             return p
-    return candidates[-1]   # default location even if absent (glossary tolerates)
+    return candidates[-1]
 
 
-PARTS_CSV = _resolve_parts_csv()
+PARTS_DB = _resolve_parts_db()
 # Minimum normalised length (chars) for a CSV Persian phrase to be used as a
 # query-expansion key -- guards against very short, ambiguous parts (e.g. "بست")
 # polluting unrelated queries. The hand-curated map keeps its own short keys.

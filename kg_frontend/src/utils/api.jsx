@@ -3,7 +3,20 @@
 // deploy (it's inlined into the client bundle, hence the NEXT_PUBLIC_ prefix).
 // Falls back to localhost for dev. Trailing slash is stripped so callers can
 // safely concatenate `${API_BASE}/path`.
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+// Browser-facing base: relative same-origin path in production ("/kg-api"),
+// so requests ride the current https origin through Cloudflare/nginx and never
+// trip mixed-content. Inlined into the client bundle (NEXT_PUBLIC_ prefix).
+const CLIENT_BASE = (process.env.NEXT_PUBLIC_API_BASE || '/kg-api').replace(/\/+$/, '');
+// Server-only origin used during SSR, where Node's fetch() cannot resolve a
+// relative URL. Talks straight to Django on localhost (bypassing the public
+// hop). Override with API_BASE_INTERNAL if the backend moves.
+const SERVER_BASE = (process.env.API_BASE_INTERNAL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+// Fetches: absolute localhost origin on the server, same-origin relative in the
+// browser.
+const API_BASE = typeof window === 'undefined' ? SERVER_BASE : CLIENT_BASE;
+// Media/content URLs get embedded in HTML that is sent to the browser, so they
+// must ALWAYS point at the public browser-reachable path, never SERVER_BASE.
+const PUBLIC_BASE = CLIENT_BASE;
 
 // Vehicle manuals are paid content, so the content endpoints now require the
 // portal session token. It travels one of two ways depending on where the fetch
@@ -22,6 +35,10 @@ async function contentError(res, fallback) {
   const data = await res.json().catch(() => ({}));
   const err = new Error(data?.error || data?.detail || fallback || `HTTP ${res.status}`);
   err.status = res.status;
+  // A real subscription block is the Django JSON {"error":"forbidden"}. A 403
+  // WITHOUT that body is something else (e.g. a ModSecurity/WAF rule) and must
+  // NOT be reported to the user as "not in your subscription".
+  err.forbidden = res.status === 403 && data?.error === 'forbidden';
   return err;
 }
 
@@ -34,7 +51,7 @@ async function contentError(res, fallback) {
 function withAbsoluteMediaUrls(nodes) {
   for (const node of nodes) {
     if (node?.content) {
-      node.content = node.content.replaceAll('="/media/', `="${API_BASE}/media/`);
+      node.content = node.content.replaceAll('="/media/', `="${PUBLIC_BASE}/media/`);
     }
   }
   return nodes;
@@ -153,7 +170,7 @@ export async function fetchRawPage(brand, year, model, filename, token) {
   }
   const data = await res.json();
   if (data?.content) {
-    data.content = data.content.replaceAll('="/media/', `="${API_BASE}/media/`);
+    data.content = data.content.replaceAll('="/media/', `="${PUBLIC_BASE}/media/`);
   }
   return data; // { title, content }
 }
@@ -177,11 +194,69 @@ export async function searchNodes(brand, year, model, q, limit = 30, token) {
   }
 }
 
+// In-app URLs carry one breadcrumb title per path segment, but a title can
+// legitimately contain "/" ("Wiper/Washer Systems", "A/C"). A literal "/" in
+// the URL path is normalized by the Next router into a segment separator, so
+// the deep-nav walk then searches for the wrong titles and 404s. Mirror the
+// parser's scheme (htmlparser_logical._SLASH_ESCAPE): carry an in-title slash
+// as U+2044 FRACTION SLASH in the URL, and swap it back to "/" on read.
+export const NAV_SLASH = '⁄';
+export const segToUrl = (s) => String(s ?? '').split('/').join(NAV_SLASH);
+export const urlToSeg = (s) => String(s ?? '').split(NAV_SLASH).join('/');
+
 // Build the in-app navigation URL for a search result from its segment chain.
 export function buildNodeHref(brand, year, model, segments = []) {
   const base = `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`;
   if (!segments.length) return base;
-  return `${base}/${segments.map(encodeURIComponent).join('/')}`;
+  return `${base}/${segments.map((s) => encodeURIComponent(segToUrl(s))).join('/')}`;
+}
+
+// Direct download URL for a vehicle's full Labor Times report (CSV). Points at
+// the Django export endpoint through API_BASE; auth rides the same-site
+// kg_portal_token cookie on the top-level download navigation, so this is used
+// as a plain <a href download> with no client token handling.
+export function laborTimesCsvUrl(brand, year, model) {
+  return `${API_BASE}/api/labor-times/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
+}
+
+// Navigation drills at most this many levels; the node at this depth flattens
+// its whole remaining subtree onto one page (see fetchSubtree).
+export const FLATTEN_DEPTH = 4;
+// A node's subtree is flattened onto one page only when it holds at most
+// this many content nodes; larger subtrees show a drill-down index instead.
+export const FLATTEN_MAX = 200;
+
+// Structure-only children for the car-tree sidebar: same seg-param + auth
+// contract as fetchNodes, but the backend strips page bodies (nav=1) and adds a
+// `has_content` boolean, so expanding a deep folder never downloads its pages.
+export async function fetchNav(brand, year, model, pathSegments = [], token) {
+  const qs = new URLSearchParams();
+  pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
+  qs.set('nav', '1');
+  const url = `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch nav: ${res.status}`);
+  return res.json();
+}
+
+// Aggregated subtree for the flattened single-page view: every content node
+// beneath `pathSegments`, each with a stable anchor id. Media URLs on each item
+// are rewritten absolute, same as the single-node content path.
+export async function fetchSubtree(brand, year, model, pathSegments = [], token, max) {
+  const qs = new URLSearchParams();
+  pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
+  qs.set('subtree', '1');
+  if (max) qs.set('max', String(max));
+  const url = `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch subtree: ${res.status}`);
+  const data = await res.json();
+  if (Array.isArray(data?.items)) {
+    for (const it of data.items) {
+      if (it.content) it.content = it.content.replaceAll('="/media/', `="${PUBLIC_BASE}/media/`);
+    }
+  }
+  return data;
 }
 
 export async function fetchModels(brand, year, model, token) {
@@ -197,6 +272,39 @@ export async function fetchModels(brand, year, model, token) {
     console.error('fetchModels error:', error);
     throw error;
   }
+}
+
+// --- parts catalog (کاتالوگ قطعات یدکی) ------------------------------------
+// Per-vehicle EPC parts trees, served from the _parts warehouse. Same auth +
+// error conventions as the manual content fetchers; the extra `cfg` dimension
+// selects the vehicle configuration (frame / model code) being browsed.
+
+// Vehicle parts root: { car, frames[], default_frame, counts }.
+export async function fetchPartsRoot(brand, year, model, token) {
+  const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch parts root: ${res.status}`);
+  return res.json();
+}
+
+// Walk the group tree of one configuration. Segments ride as repeated `seg`
+// query params (titles can contain "/", same rationale as fetchNodes).
+// Returns either an ARRAY of child nodes, or a leaf OBJECT
+// { leaf: true, group, sections: [{ figure_code, caption, image, parts[] }] }
+// with section image URLs already made absolute against API_BASE.
+export async function fetchPartsNodes(brand, year, model, cfg, pathSegments = [], token) {
+  const qs = new URLSearchParams({ cfg });
+  pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
+  const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch parts: ${res.status}`);
+  const data = await res.json();
+  if (data && data.leaf && Array.isArray(data.sections)) {
+    for (const s of data.sections) {
+      if (s.image && s.image.startsWith('/media/')) s.image = `${PUBLIC_BASE}${s.image}`;
+    }
+  }
+  return data;
 }
 
 // --- purchase request ------------------------------------------------------
@@ -237,8 +345,33 @@ function setPortalCookie(token) {
   } catch { /* document unavailable */ }
 }
 
+// SSR-readable mirror of PortalUser.browse_mode. The DB is the source of
+// truth; this cookie just lets server components pick the UI without an
+// extra round-trip. Kept in lockstep with the stored user in setPortalSession.
+function setBrowseModeCookie(mode) {
+  try {
+    if (typeof document === 'undefined') return;
+    const m = mode === 'classic' ? 'classic' : 'modern';
+    document.cookie = `kg_browse_mode=${m}; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+  } catch { /* document unavailable */ }
+}
+
+// Stage B: the session lives in a backend-set HttpOnly cookie, which page JS
+// (and therefore any XSS) cannot read. This returns a token ONLY for sessions
+// created before that change, so they can be upgraded — see clearLegacyToken.
 export function getPortalToken() {
   try { return localStorage.getItem(PORTAL_TOKEN_KEY) || ''; } catch { return ''; }
+}
+
+// Drop the legacy JS-readable copies once the HttpOnly cookie is in force.
+// Called after a successful /api/auth/me, which is what issues the cookie.
+export function clearLegacyToken() {
+  try { localStorage.removeItem(PORTAL_TOKEN_KEY); } catch { /* storage unavailable */ }
+  try {
+    if (typeof document !== 'undefined') {
+      document.cookie = `${PORTAL_TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
+    }
+  } catch { /* document unavailable */ }
 }
 
 export function getPortalUser() {
@@ -247,27 +380,55 @@ export function getPortalUser() {
 
 export function setPortalSession(token, user) {
   try {
-    if (token) localStorage.setItem(PORTAL_TOKEN_KEY, token);
-    else localStorage.removeItem(PORTAL_TOKEN_KEY);
+    // Stage B: never persist the session token in JS-reachable storage. The
+    // backend sets it as an HttpOnly + Secure + SameSite cookie at login and
+    // clears it at logout. `token` is accepted for call-site compatibility and
+    // deliberately ignored; any stale copy is removed.
+    localStorage.removeItem(PORTAL_TOKEN_KEY);
     if (user) localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(user));
     else localStorage.removeItem(PORTAL_USER_KEY);
   } catch { /* storage unavailable */ }
   // Keep the SSR cookie in lockstep with the stored token (set on login/refresh,
   // cleared on logout) so server-rendered content pages stay authenticated.
-  setPortalCookie(token || '');
+  // setPortalCookie() intentionally not called: the JS-readable mirror is gone.
+  // The backend's HttpOnly cookie already reaches the Next server during SSR.
+  setBrowseModeCookie(user?.browse_mode);
   // Let mounted components (e.g. the sidebar) react to capability changes.
   try { window.dispatchEvent(new CustomEvent('kg:me', { detail: user || null })); } catch { /* SSR */ }
 }
 
-export async function portalLogin(username, password) {
+export async function portalLogin(username, password, turnstileToken) {
   const res = await fetch(`${API_BASE}/api/auth/login/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, turnstile_token: turnstileToken }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `ورود ناموفق بود: ${res.status}`);
+  // login now returns {otp_session, phone_hint} — token issued after OTP verify
+  return data;
+}
+
+export async function verifyOtp(otpSession, code) {
+  const res = await fetch(`${API_BASE}/api/auth/verify-otp/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_session: otpSession, code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `تأیید ناموفق بود: ${res.status}`);
   setPortalSession(data.token, data.user);
+  return data;
+}
+
+export async function resendOtp(otpSession) {
+  const res = await fetch(`${API_BASE}/api/auth/resend-otp/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_session: otpSession }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ارسال مجدد ناموفق بود: ${res.status}`);
   return data;
 }
 
@@ -287,6 +448,23 @@ export async function portalRefreshMe() {
     throw err;
   }
   if (!res.ok) throw new Error(data?.error || `me: ${res.status}`);
+  setPortalSession(token, data.user);
+  return data.user;
+}
+
+/** Persist the caller's browsing-mode preference (classic | modern) and
+ *  refresh the stored user snapshot + SSR cookies so the next navigation
+ *  renders the chosen UI. */
+export async function updateBrowseMode(mode) {
+  const token = getPortalToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/auth/me/prefs/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ browse_mode: mode }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `prefs: ${res.status}`);
   setPortalSession(token, data.user);
   return data.user;
 }
@@ -746,4 +924,50 @@ export function openEventStream({ admin = false, onEvent, onStatus } = {}) {
 
   connect();
   return () => { closed = true; try { controller?.abort(); } catch {} };
+}
+
+
+// ---------------------------------------------------------------------------
+// Org-graph canvas (n8n-style). Reads open to any authed user; writes root-only.
+// All client-side; the portal token travels as a Bearer header.
+// ---------------------------------------------------------------------------
+
+async function orgFetch(path, { method = 'GET', body } = {}) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.code = data?.code;
+    throw err;
+  }
+  return data;
+}
+
+export function orgGraph() {
+  return orgFetch('/api/org/graph/');
+}
+export function orgCreateNode(payload) {
+  return orgFetch('/api/org/nodes/', { method: 'POST', body: payload });
+}
+export function orgUpdateNode(id, payload) {
+  return orgFetch(`/api/org/nodes/${id}/`, { method: 'PATCH', body: payload });
+}
+export function orgDeleteNode(id) {
+  return orgFetch(`/api/org/nodes/${id}/`, { method: 'DELETE' });
+}
+export function orgSetPermission(id, payload) {
+  return orgFetch(`/api/org/nodes/${id}/permission/`, { method: 'POST', body: payload });
+}
+export function orgCreateUser(id, payload) {
+  return orgFetch(`/api/org/nodes/${id}/create-user/`, { method: 'POST', body: payload });
 }

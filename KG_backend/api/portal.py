@@ -14,6 +14,14 @@ Deliberately dependency-free (no DRF) to match the rest of the project.
 import json
 import secrets
 import string
+import logging
+import os
+import urllib.request
+import urllib.parse
+import threading
+import hashlib
+import time
+import re as _re
 
 from django.db import IntegrityError
 from django.http import JsonResponse
@@ -30,12 +38,13 @@ from .access import (
     CONTENT_CATEGORIES, DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL,
     VALID_CATEGORIES, VALID_DOCS, VALID_ROLES,
     apply_user_access, car_db_ready, category_label, display_role_label,
-    normalize_role, org_role_for_legacy, resolve_category, role_label,
-    seed_default_org_roles, user_ai_eligible, user_manage_scope,
+    normalize_role, resolve_category, role_label,
+    user_ai_eligible, user_manage_scope,
     user_package_set, user_rank,
 )
 from .admin_auth import require_admin_token
 from .ratelimit import rate_limited
+from . import events
 
 
 # A valid-format hash to check bad/absent logins against, so the wrong-password
@@ -43,6 +52,109 @@ from .ratelimit import rate_limited
 # Computed once; the password it encodes is never used to authenticate anything.
 from django.contrib.auth.hashers import make_password as _make_password
 _DUMMY_PASSWORD_HASH = _make_password('kg-login-timing-equalizer')
+
+
+# ---------------------------------------------------------------------------
+# SMS OTP session store (in-process, TTL-based)
+# ---------------------------------------------------------------------------
+_logger_sms = logging.getLogger("kgkg.sms")
+_OTP_LOCK = threading.Lock()
+_OTP_SESSIONS: dict = {}  # session_id -> {user_id, phone, code_hash, expires_at, last_sent_at, attempts}
+
+
+def _otp_cleanup():
+    now = time.time()
+    stale = [k for k, v in _OTP_SESSIONS.items() if v['expires_at'] < now]
+    for k in stale:
+        del _OTP_SESSIONS[k]
+
+
+def _otp_session_create(user_id: int, phone: str, code: int) -> str:
+    session_id = secrets.token_urlsafe(32)
+    code_hash = hashlib.sha256(str(code).encode()).hexdigest()
+    with _OTP_LOCK:
+        _otp_cleanup()
+        _OTP_SESSIONS[session_id] = {
+            'user_id': user_id,
+            'phone': phone,
+            'code_hash': code_hash,
+            'expires_at': time.time() + 300,
+            'last_sent_at': time.time(),
+            'attempts': 0,
+        }
+    return session_id
+
+
+def _otp_session_verify(session_id: str, code: str):
+    with _OTP_LOCK:
+        session = _OTP_SESSIONS.get(session_id)
+        if not session:
+            return None
+        if time.time() > session['expires_at']:
+            _OTP_SESSIONS.pop(session_id, None)
+            return None
+        session['attempts'] += 1
+        if session['attempts'] > 5:
+            _OTP_SESSIONS.pop(session_id, None)
+            return None
+        code_hash = hashlib.sha256(str(code).encode()).hexdigest()
+        if code_hash != session['code_hash']:
+            return None
+        user_id = session['user_id']
+        _OTP_SESSIONS.pop(session_id, None)
+        return user_id
+
+
+def _otp_phone_hint(phone: str) -> str:
+    if len(phone) > 6:
+        return phone[:3] + '*' * (len(phone) - 5) + phone[-2:]
+    return phone
+
+
+def _send_sms_otp(phone: str, code: int) -> bool:
+    sms_user = os.environ.get("SMS_USERNAME", "")
+    sms_key = os.environ.get("SMS_API_KEY", "")
+    sms_from = os.environ.get("SMS_FROM", "")
+    if not sms_user or not sms_key or not sms_from:
+        _logger_sms.warning("SMS not configured (SMS_USERNAME/SMS_API_KEY/SMS_FROM missing)")
+        return False
+    soap = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+        '<soap:Body>'
+        '<SendOtp xmlns="http://tempuri.org/">'
+        '<username>' + sms_user + '</username>'
+        '<password>' + sms_key + '</password>'
+        '<to>' + phone + '</to>'
+        '<from>' + sms_from + '</from>'
+        '<code>' + str(code) + '</code>'
+        '</SendOtp>'
+        '</soap:Body>'
+        '</soap:Envelope>'
+    )
+    try:
+        req = urllib.request.Request(
+            "https://api.payamak-panel.com/post/Send.asmx",
+            data=soap.encode("utf-8"),
+            headers={
+                "Content-Type": "text/xml; charset=utf-8",
+                "SOAPAction": '"http://tempuri.org/SendOtp"',
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8")
+        m = _re.search(r'<SendOtpResult>(.*?)</SendOtpResult>', body)
+        if m:
+            try:
+                return int(m.group(1).strip()) > 0
+            except ValueError:
+                pass
+        _logger_sms.warning("SendOtp unexpected response: %s", body[:300])
+        return False
+    except Exception as exc:
+        _logger_sms.warning("SendOtp error: %s", exc)
+        return False
+
 
 
 def _body(request):
@@ -81,12 +193,49 @@ def _portal_token(request):
         return ''
 
 
+# --- session cookie -------------------------------------------------------
+# The session token is delivered as an HttpOnly cookie so page JavaScript (and
+# therefore any XSS) cannot read it. `_portal_token` already accepts either the
+# cookie or an Authorization header, so this is additive: clients still sending
+# the bearer header keep working while the frontend migrates off localStorage.
+PORTAL_COOKIE = 'kg_portal_token'
+
+
+def _cookie_max_age():
+    """Match the cookie lifetime to the token's own idle TTL, so the cookie can
+    never outlive the credential it carries."""
+    idle, absolute = AuthToken._ttls()
+    return int(min(idle, absolute).total_seconds())
+
+
+def _set_portal_cookie(response, raw_token):
+    response.set_cookie(
+        PORTAL_COOKIE, raw_token,
+        max_age=_cookie_max_age(),
+        httponly=True,
+        secure=True,
+        samesite='Lax',
+        path='/',
+    )
+    return response
+
+
+def _clear_portal_cookie(response):
+    response.delete_cookie(PORTAL_COOKIE, path='/', samesite='Lax')
+    return response
+
+
 def portal_user(request):
-    """Resolve the PortalUser from a Bearer token or session cookie, or None."""
+    """Resolve the PortalUser from a Bearer token or session cookie, or None.
+
+    ``AuthToken.resolve`` looks the token up by sha256 and refuses anything past
+    its expiry; a live hit then slides the idle window forward (rate-limited
+    internally to one write per 5 minutes, since this runs on every request).
+    """
     key = _portal_token(request)
     if not key:
         return None
-    token = AuthToken.objects.filter(key=key).select_related('user', 'user__company').first()
+    token = AuthToken.resolve(key, select_related=('user', 'user__company'))
     if not token or not token.user.active or not token.user.company.active:
         return None
     u = token.user
@@ -94,6 +243,7 @@ def portal_user(request):
         return None
     if u.access_expires_at and u.access_expires_at <= timezone.now():
         return None
+    token.touch()
     return u
 
 
@@ -114,10 +264,6 @@ def _user_dict(u, with_access=False):
         'role': normalize_role(u.role),
         'role_label': display_role_label(u, dept),
         'role_level': user_rank(u),
-        'org_role': ({'id': u.org_role_id, 'name': u.org_role.name,
-                      'rank': u.org_role.rank, 'color': u.org_role.color,
-                      'manage_scope': u.org_role.manage_scope}
-                     if u.org_role_id and u.org_role else None),
         'manage_scope': user_manage_scope(u),
         'company_id': u.company_id, 'company': u.company.name,
         'department_label': u.company.department_label,
@@ -125,6 +271,7 @@ def _user_dict(u, with_access=False):
         'can_manage_team': u.can_manage_team,
         'can_view_analytics': u.can_view_analytics,
         'ai_assistant_enabled': u.ai_assistant_enabled,
+        'browse_mode': getattr(u, 'browse_mode', 'modern'),
         'ai_eligible': user_ai_eligible(u),
         'packages': sorted(user_package_set(u)) if with_access else [],
         'active': u.active, 'locked': u.locked,
@@ -137,9 +284,10 @@ def _user_dict(u, with_access=False):
         # Show the user's full set of granted vehicles (entitlements). Whether a
         # car's content DB is on disk yet is a serve-time concern (car_view 404s),
         # not a reason to hide the grant from the manager/admin who set it.
+        from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
         d['accesses'] = [
             {'car': _car_dict(a.car), 'documents': a.documents, 'admin_granted': a.admin_granted,
-             'ready': car_db_ready(a.car)}
+             'ready': car_db_ready(a.car), 'parts_ready': parts_db_ready(a.car)}
             for a in u.car_accesses.select_related('car')
         ]
     return d
@@ -168,6 +316,55 @@ def _company_dict(c, deep=False):
 # Portal user auth
 # ---------------------------------------------------------------------------
 
+def _client_ip(request):
+    # Behind Cloudflare+nginx the real client is in CF-Connecting-IP; fall back
+    # to the first X-Forwarded-For hop, then REMOTE_ADDR.
+    ip = request.META.get("HTTP_CF_CONNECTING_IP")
+    if ip:
+        return ip.strip()
+    xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
+
+
+def _verify_turnstile(request, token, expected_action="login"):
+    """Canonical Cloudflare Turnstile server-side verification. Fails closed."""
+    secret = os.environ.get("TURNSTILE_SECRET", "")
+    if not secret:
+        from django.conf import settings
+        return bool(getattr(settings, "DEBUG", False))
+    if not isinstance(token, str) or not token or len(token) > 2048:
+        return False
+    hostnames = {h.strip() for h in os.environ.get("TURNSTILE_HOSTNAMES", "").split(",") if h.strip()}
+    data = urllib.parse.urlencode({
+        "secret": secret,
+        "response": token,
+        "remoteip": _client_ip(request),
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+    except Exception:
+        return False
+    _tlog = logging.getLogger("kgkg.turnstile")
+    if not result.get("success"):
+        _tlog.warning("turnstile FAIL success=false codes=%s hostname=%s action=%s", result.get("error-codes"), result.get("hostname"), result.get("action"))
+        return False
+    if result.get("action") != expected_action:
+        _tlog.warning("turnstile FAIL action mismatch got=%s want=%s", result.get("action"), expected_action)
+        return False
+    if hostnames and result.get("hostname") not in hostnames:
+        _tlog.warning("turnstile FAIL hostname mismatch got=%s allow=%s", result.get("hostname"), hostnames)
+        return False
+    return True
+
+
 @csrf_exempt
 @rate_limited('login', 15, 60)
 def login_view(request):
@@ -182,6 +379,8 @@ def login_view(request):
     b = _body(request)
     username = (b.get('username') or '').strip()
     password = b.get('password') or ''
+    if not _verify_turnstile(request, b.get("turnstile_token") or "", "login"):
+        return JsonResponse({"error": "تأیید امنیتی ناموفق بود. دوباره تلاش کنید."}, status=403)
     user = (PortalUser.objects
             .filter(Q(username__iexact=username) | Q(email__iexact=username))
             .select_related('company').first())
@@ -199,58 +398,168 @@ def login_view(request):
         return JsonResponse({'error': 'این حساب قفل شده است. با پشتیبانی تماس بگیرید.'}, status=403)
     if user.access_expires_at and user.access_expires_at <= timezone.now():
         return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
-    user.last_login_at = timezone.now()
-    user.save(update_fields=['last_login_at'])
-    token = AuthToken.issue(user)
-    ActivityLog.objects.create(user=user, action='login', detail='ورود به سامانه')
-    try:
-        from . import events
-        events.emit_company('activity', user.company_id, {
-            'user_id': user.id, 'user_name': user.display_name or user.username,
-            'action': 'login', 'category': '', 'car': None,
-            'detail': 'ورود به سامانه'}, user_id=user.id)
-    except Exception:
-        pass
-    return JsonResponse({'token': token.key, 'user': _user_dict(user, with_access=True)})
+    phone = (user.phone or '').strip()
+    if not phone:
+        return JsonResponse({'error': 'شماره موبایل برای این حساب ثبت نشده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    code = secrets.randbelow(900000) + 100000
+    sent = _send_sms_otp(phone, code)
+    if not sent:
+        from django.conf import settings as _s
+        if not getattr(_s, 'DEBUG', False):
+            return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود. لطفاً دوباره تلاش کنید.'}, status=503)
+        _logger_sms.warning("DEBUG OTP for %s: %s", user.username, code)
+    otp_session = _otp_session_create(user.id, phone, code)
+    return JsonResponse({'otp_session': otp_session, 'phone_hint': _otp_phone_hint(phone)})
 
 
 @csrf_exempt
 def logout_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
-    key = _bearer(request)
+    key = _portal_token(request)
     if key:
-        AuthToken.objects.filter(key=key).delete()
+        AuthToken.objects.filter(key_hash=AuthToken._hash(key)).delete()
+    return _clear_portal_cookie(JsonResponse({'ok': True}))
+
+
+@csrf_exempt
+@rate_limited('verify_otp', 10, 60)
+def verify_otp_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    session_id = (b.get('otp_session') or '').strip()
+    code = (b.get('code') or '').strip()
+    if not session_id or not code:
+        return JsonResponse({'error': 'اطلاعات ناقص است.'}, status=400)
+    user_id = _otp_session_verify(session_id, code)
+    if user_id is None:
+        return JsonResponse({'error': 'کد وارد شده اشتباه یا منقضی شده است.'}, status=401)
+    try:
+        user = PortalUser.objects.select_related('company').get(id=user_id)
+    except PortalUser.DoesNotExist:
+        return JsonResponse({'error': 'خطای داخلی.'}, status=500)
+    if not user.active or not user.company.active or user.locked:
+        return JsonResponse({'error': 'این حساب غیرفعال شده است.'}, status=403)
+    if user.access_expires_at and user.access_expires_at <= timezone.now():
+        return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
+    user.last_login_at = timezone.now()
+    user.save(update_fields=['last_login_at'])
+    token = AuthToken.issue(user)
+    ActivityLog.objects.create(user=user, action='login', detail='ورود به سامانه')
+    try:
+        events.emit_company('activity', user.company_id, {
+            'user_id': user.id, 'user_name': user.display_name or user.username,
+            'action': 'login', 'category': '', 'car': None,
+            'detail': 'ورود به سامانه'}, user_id=user.id)
+    except Exception:
+        pass
+    resp = JsonResponse({'token': token.key, 'user': _user_dict(user, with_access=True)})
+    return _set_portal_cookie(resp, token.key)
+
+
+@csrf_exempt
+@rate_limited('resend_otp', 3, 60)
+def resend_otp_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    session_id = (b.get('otp_session') or '').strip()
+    phone = ''
+    code = 0
+    with _OTP_LOCK:
+        session = _OTP_SESSIONS.get(session_id)
+        if not session or time.time() > session['expires_at']:
+            return JsonResponse({'error': 'جلسه منقضی شده است. دوباره وارد شوید.'}, status=400)
+        wait_secs = 60 - (time.time() - session['last_sent_at'])
+        if wait_secs > 0:
+            return JsonResponse({'error': f'لطفاً {int(wait_secs) + 1} ثانیه صبر کنید.'}, status=429)
+        code = secrets.randbelow(900000) + 100000
+        session['code_hash'] = hashlib.sha256(str(code).encode()).hexdigest()
+        session['last_sent_at'] = time.time()
+        session['attempts'] = 0
+        phone = session['phone']
+    sent = _send_sms_otp(phone, code)
+    if not sent:
+        from django.conf import settings as _s
+        if not getattr(_s, 'DEBUG', False):
+            return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود.'}, status=503)
+        _logger_sms.warning("DEBUG resend OTP: %s", code)
     return JsonResponse({'ok': True})
 
 
 def me_view(request):
-    """GET /api/auth/me -> the logged-in user + their granted cars/docs."""
+    """GET /api/auth/me -> the logged-in user + their granted cars/docs.
+
+    Also performs the localStorage -> HttpOnly cookie upgrade: a client that
+    authenticated with a bearer header and has no session cookie yet gets one
+    issued here. That covers every session created before the cookie existed,
+    on the first page load, without asking the user to log in again.
+    """
     user = portal_user(request)
     if not user:
         return JsonResponse({'error': 'unauthorized'}, status=401)
+    resp = JsonResponse({'user': _user_dict(user, with_access=True)})
+    try:
+        if _bearer(request) and not (request.COOKIES.get(PORTAL_COOKIE) or '').strip():
+            _set_portal_cookie(resp, _bearer(request))
+    except Exception:
+        pass          # upgrade is best-effort; never break /me over it
+    return resp
+
+
+@csrf_exempt
+def me_prefs_view(request):
+    """POST /api/auth/me/prefs/ {browse_mode} -> update the caller's own
+    preferences. Only self-editable, low-risk display prefs live here."""
+    user = portal_user(request)
+    if not user:
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    if 'browse_mode' in b:
+        mode = str(b.get('browse_mode') or '').strip()
+        if mode not in ('modern', 'classic'):
+            return JsonResponse({'error': 'invalid browse_mode'}, status=400)
+        user.browse_mode = mode
+        user.save(update_fields=['browse_mode'])
     return JsonResponse({'user': _user_dict(user, with_access=True)})
 
 
 def fleet_view(request):
-    """GET /api/auth/fleet/ -> catalog rows for cars this user may open."""
+    """GET /api/auth/fleet/ -> catalog rows for cars this user may open.
+
+    A car is servable when it has a manual DB, a parts DB, or both; the
+    additive has_manual/has_parts flags let the frontend route the tile
+    (parts-only vehicles have no manual tree to open). Old clients that only
+    read brand/name/year keep working unchanged.
+    """
+    from .access import user_car_documents
+    from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
     user = portal_user(request)
     if not user:
         return JsonResponse({'error': 'unauthorized'}, status=401)
     car_ids = list(user.car_accesses.values_list('car_id', flat=True))
     if not car_ids:
         return JsonResponse({'items': []})
-    cars = [c for c in Car.objects.filter(id__in=car_ids).order_by('brand_name', 'car_name', 'year') if car_db_ready(c)]
-    return JsonResponse({
-        'items': [
-            {
-                'brand_name': c.brand_name,
-                'car_name': c.car_name,
-                'year': c.year,
-            }
-            for c in cars
-        ],
-    })
+    items = []
+    for c in Car.objects.filter(id__in=car_ids).order_by('brand_name', 'car_name', 'year'):
+        has_manual = car_db_ready(c)
+        # Advertise Parts only when the seat actually holds that layer —
+        # parts_view enforces it, so a chip without the grant would be a
+        # dead end (403 on click).
+        has_parts = parts_db_ready(c) and 'parts' in (user_car_documents(user, c) or set())
+        if not (has_manual or has_parts):
+            continue
+        items.append({
+            'brand_name': c.brand_name,
+            'car_name': c.car_name,
+            'year': c.year,
+            'has_manual': has_manual,
+            'has_parts': has_parts,
+        })
+    return JsonResponse({'items': items})
 
 
 @csrf_exempt
@@ -397,13 +706,36 @@ def admin_packages_view(request):
 
 @require_admin_token
 def admin_cars_view(request):
-    """GET /api/admin/cars/ — the FULL catalog (admin sees everything)."""
+    """GET /api/admin/cars/ — the FULL catalog (admin sees everything).
+
+    Every row carries its health indicators (data completeness, missing or
+    empty sections, indexing state, outstanding processing) so the admin can
+    filter the fleet by quality without opening the data-quality report, and
+    so an access grant shows whether the car it grants is actually servable.
+    """
+    from .dataquality import latest_health_by_car
+    from .models import VehicleSpec
+
+    health, audited_at = latest_health_by_car()
+    spec_fields = {
+        car_id: len([k for k in (data or {}) if not str(k).startswith('@')])
+        for car_id, data in VehicleSpec.objects.values_list('car_id', 'data')
+    }
+
+    from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
     items = []
     for c in Car.objects.order_by('brand_name', 'car_name'):
         row = _car_dict(c)
         row['ready'] = car_db_ready(c)
+        row['has_parts'] = parts_db_ready(c)
+        row['health'] = health.get(c.id)
+        row['has_spec'] = c.id in spec_fields
+        row['spec_fields'] = spec_fields.get(c.id, 0)
         items.append(row)
-    return JsonResponse({'items': items})
+    return JsonResponse({
+        'items': items,
+        'audited_at': audited_at.isoformat() if audited_at else None,
+    })
 
 
 @csrf_exempt
@@ -430,7 +762,7 @@ def admin_companies_view(request):
             )
         except IntegrityError:
             return JsonResponse({'error': 'شرکتی با این نام قبلاً ثبت شده است.'}, status=400)
-        seed_default_org_roles(c)
+        events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'create'})
         return JsonResponse({'ok': True, 'company': _company_dict(c, deep=True)})
     return JsonResponse({'items': [_company_dict(c) for c in Company.objects.all()]})
 
@@ -461,6 +793,7 @@ def admin_company_detail_view(request, company_id):
             c.save()
         except IntegrityError:
             return JsonResponse({'error': 'شرکتی با این نام قبلاً ثبت شده است.'}, status=400)
+        events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'update'})
     return JsonResponse({'company': _company_dict(c, deep=True)})
 
 
@@ -493,6 +826,7 @@ def admin_company_access_view(request, company_id):
 
     # Prune user grants that fell outside the company's new scope.
     UserCarAccess.objects.filter(user__company=c).exclude(car_id__in=keep_car_ids).delete()
+    events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'access'})
     return JsonResponse({'company': _company_dict(c, deep=True)})
 
 
@@ -540,7 +874,6 @@ def admin_users_view(request):
                 id=b['reports_to_id'], company=company).first()
         u = PortalUser(
             company=company, username=username, role=role,
-            org_role=org_role_for_legacy(company, role),
             display_name=(str(b.get('display_name') or '')).strip()[:150],
             email=(str(b.get('email') or '')).strip()[:254] or None,
             phone=(str(b.get('phone') or '')).strip()[:40],
@@ -557,6 +890,7 @@ def admin_users_view(request):
             u.save()
         except IntegrityError:
             return JsonResponse({'error': 'این نام کاربری یا ایمیل قبلاً استفاده شده است.'}, status=400)
+        events.emit('admin_changed', {'entity': 'user', 'id': u.id, 'action': 'create', 'company_id': u.company_id})
         return JsonResponse({'ok': True, 'user': _user_dict(u, with_access=True), 'password': password})
 
     qs = PortalUser.objects.select_related('company')
@@ -577,8 +911,10 @@ def admin_user_detail_view(request, user_id):
     if request.method == 'POST':
         b = _body(request)
         if b.get('delete'):
+            uid, cid = u.id, u.company_id
             u.tokens.all().delete()
             u.delete()
+            events.emit('admin_changed', {'entity': 'user', 'id': uid, 'action': 'delete', 'company_id': cid})
             return JsonResponse({'ok': True, 'deleted': True})
         if 'active' in b:
             u.active = bool(b['active'])
@@ -614,7 +950,6 @@ def admin_user_detail_view(request, user_id):
             role = normalize_role(b['role'])
             if role in VALID_ROLES:
                 u.role = role
-                u.org_role = org_role_for_legacy(u.company, role) or u.org_role
         if 'access_expires_at' in b:
             exp = b.get('access_expires_at')
             if not exp:
@@ -643,6 +978,11 @@ def admin_user_detail_view(request, user_id):
             from .access import enforce_org_consistency
             enforce_org_consistency(u.company_id)
             u.refresh_from_db()
+        if 'ai_assistant_enabled' in b:
+            # Mirror the AI toggle onto the user's seat (see orggraph.sync_user_to_node).
+            from .orggraph import sync_user_to_node  # lazy: avoids import cycle
+            sync_user_to_node(u)
+        events.emit('admin_changed', {'entity': 'user', 'id': u.id, 'action': 'update', 'company_id': u.company_id})
     resp = {'user': _user_dict(u, with_access=True)}
     if new_password:
         resp['password'] = new_password
@@ -671,6 +1011,10 @@ def admin_user_access_view(request, user_id):
         apply_user_access(u, accesses, override_purchase=override, allow_admin_grants=True)
     except ValueError as e:
         return JsonResponse({'error': str(e)}, status=400)
+    # Keep the org-graph seat in step so /admin and /team never disagree.
+    from .orggraph import sync_user_to_node  # lazy: avoids import cycle
+    sync_user_to_node(u)
+    events.emit('admin_changed', {'entity': 'user', 'id': u.id, 'action': 'access', 'company_id': u.company_id})
     return JsonResponse({'user': _user_dict(u, with_access=True)})
 
 
