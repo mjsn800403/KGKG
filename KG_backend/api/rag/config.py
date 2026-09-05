@@ -326,7 +326,29 @@ CONF_LOW_SIM = 0.45
 # so the phraser refuses instead of inventing an answer. Measured separation on
 # this corpus: real queries score >=0.64, nonsense <=0.49 (eval_rag surfaces it).
 # Code queries clear it via BM25 (eff_sim = max(sim, bm25)).
-GROUND_SIM_FLOOR = float(os.environ.get('RAG_GROUND_SIM_FLOOR', '0.55'))
+#
+# Raised 0.55 -> 0.60 on 2026-09-05 (Phase 3 Task 4). Non-automotive and nonsense
+# queries were already refused 100% of the time; the gap was automotive questions
+# about components genuinely absent from this corpus (diesel glow plugs, AdBlue),
+# which scored 0.623 mean similarity against 0.676 for real queries — close enough
+# that only 8.3% were refused. Measured trade at each threshold:
+#
+#     floor   absent caught   FA false-refusal   EN false-refusal
+#     0.55           8.3%               0.0%               1.2%
+#     0.60          33.3%               1.2%               1.2%
+#     0.62          50.0%               6.2%               5.0%
+#     0.64          75.0%              15.0%               6.2%
+#
+# 0.60 quadruples boundary refusal for ~1% false refusal; past it the cost rises
+# far faster than the benefit. Note the absent set is only n=12, so "33.3%" is
+# 4 queries and its confidence interval is wide — the gold set needs expanding
+# before pushing this further.
+#
+# What was tried and rejected: checking whether the query's component vocabulary
+# occurs in the index at all. Absent components are described with words that are
+# all present ("diesel", "injector", "plug"), so corpus-vocabulary coverage scored
+# 1.000 for absent and in-corpus queries alike — no separation whatsoever.
+GROUND_SIM_FLOOR = float(os.environ.get('RAG_GROUND_SIM_FLOOR', '0.60'))
 
 # ---------------------------------------------------------------------------
 # Human-in-the-loop closed loop (all signals live in the feedback.db sidecar)

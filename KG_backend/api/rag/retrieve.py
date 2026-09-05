@@ -61,7 +61,9 @@ def _app_url(occ):
         year = m.group(1) if m else 'unknown'
     base = f"/{_enc(occ['brand'])}/{year}/{_enc(occ['car_stem'])}"
     if segs:
-        base += '/' + '/'.join(_enc(s) for s in segs)
+        # In-title '/' -> U+2044 so it survives as one URL path segment
+        # (the Next router splits a literal '/'); frontend swaps it back.
+        base += '/' + '/'.join(_enc(s.replace('/', '⁄')) for s in segs)
     return base, segs
 
 
@@ -379,7 +381,69 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
         # chat layer can tell "vehicle loaded, just no strong match" apart from
         # "vehicle not loaded at all" (car_indexed=False above).
         out['car_indexed'] = True
+        # Hard vehicle-scope gate (part 2): verify the evidence we are about to
+        # cite actually belongs to the pinned vehicle, and say so when it does
+        # not. Part 1 above only catches a vehicle missing from the index
+        # entirely; this catches the commoner and more dangerous case — the
+        # vehicle IS indexed, but the component being asked about is not part
+        # of it, so the nearest neighbour is another car's page.
+        ev = _evidence_scope(index, hits, car_stem)
+        if ev:
+            out['evidence'] = ev
+            if ev['title_absent_from_vehicle']:
+                out['out_of_scope'] = 'title_absent_from_vehicle'
     return out
+
+
+def _vehicle_has_title(index, title, car_stem):
+    """Does this vehicle have any page carrying ``title``?
+
+    The blob title is the corpus's own name for a component, so this answers
+    "is this component documented for this vehicle at all" without parsing the
+    user's query — which is what makes it work in Persian as well as English.
+    """
+    t = (title or '').strip()
+    if not t or not car_stem:
+        return None
+    row = index.execute(
+        "SELECT 1 FROM occurrences o JOIN blobs b ON b.blob_id = o.blob_id "
+        "WHERE o.car_stem = ? AND b.title = ? LIMIT 1", (car_stem, t)).fetchone()
+    return bool(row)
+
+
+def _evidence_scope(index, hits, car_stem):
+    """Vehicle-scoped evidence verification.
+
+    Standard RAG cites whatever ranks highest. Because deduplication makes one
+    stored page addressable from many vehicles, a high-ranking page may belong
+    to a DIFFERENT vehicle than the one the technician has open — and for repair
+    data (torque values, procedures) presenting that silently is unsafe.
+
+    Returns a dict describing where the evidence actually came from:
+      in_vehicle     - the top hit is a page of the scoped vehicle
+      cross_vehicle  - the top hit belongs to another vehicle; ``title_in_vehicle``
+                       says whether the scoped vehicle has ANY page carrying that
+                       same title. False is strong evidence the component is not
+                       documented for this vehicle, but it is a statement about
+                       titles, not a proof of absence — the rendered warning is
+                       worded to claim only what was checked.
+    """
+    if not car_stem or not hits:
+        return None
+    top = hits[0]
+    in_vehicle = top.get('car_stem') == car_stem
+    n_in = sum(1 for h in hits if h.get('car_stem') == car_stem)
+    present = None if in_vehicle else _vehicle_has_title(index, top.get('title'), car_stem)
+    return {
+        'scope': 'in_vehicle' if in_vehicle else 'cross_vehicle',
+        'source_car_stem': top.get('car_stem'),
+        'title_in_vehicle': present,
+        'hits_in_vehicle': n_in,
+        'hits_total': len(hits),
+        # the loud case: evidence is from another vehicle AND this vehicle has no
+        # page of that name.
+        'title_absent_from_vehicle': (not in_vehicle) and present is False,
+    }
 
 
 def _pinned_hit(index, pin, brand, model, car_stem, allowed_cars=None):

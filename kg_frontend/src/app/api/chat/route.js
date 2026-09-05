@@ -227,6 +227,39 @@ function buildSuggestions({ mode, rag, diag, clarifyRoots }) {
 }
 
 // ---- no-LLM fallback (resilience: Metis is the only external dependency) ----
+// Vehicle-scoped evidence banner.
+//
+// Deduplication makes one stored manual page addressable from many vehicles, so
+// a high-ranking page can belong to a DIFFERENT vehicle than the one the
+// technician has open. For repair data (torque values, procedures) presenting
+// that silently is unsafe. The backend's retrieve.assist() reports where the
+// evidence actually came from; this renders that verdict.
+//
+// It is prepended DETERMINISTICALLY to the final reply rather than asked of the
+// phraser, because a warning the model may choose to omit is not a safety
+// control. It therefore survives an LLM failure and the no-LLM fallback alike.
+function scopeBanner(rag) {
+  const ev = rag?.evidence;
+  if (!ev || ev.scope !== 'cross_vehicle') return '';
+  const src = ev.source_car_stem || 'خودروی دیگر';
+  const alt = ev.hits_in_vehicle > 0
+    ? ` نتایج مربوط به خودروی انتخاب‌شده در فهرست منابع، پایین‌تر آمده است.`
+    : '';
+  if (ev.title_absent_from_vehicle) {
+    return `> ⚠️ **این پاسخ از خودروی دیگری نقل شده است.**
+` +
+           `> صفحهٔ استنادشده متعلق به **${src}** است و در دفترچهٔ خودروی انتخاب‌شده ` +
+           `هیچ صفحه‌ای با همین عنوان وجود ندارد. مقادیر گشتاور و روش‌های تعمیر ` +
+           `میان خودروها متفاوت است؛ پیش از اجرا، مرجع خودروی خودتان را بررسی کنید.${alt}
+
+`;
+  }
+  return `> ℹ️ صفحهٔ استنادشده از **${src}** بازیابی شده است، نه از خودروی انتخاب‌شده. ` +
+         `محتوای این صفحه میان چند خودرو مشترک است.${alt}
+
+`;
+}
+
 // When Metis is unconfigured/down/over budget we still have the full grounded
 // retrieval. Rather than 502, emit a deterministic Persian digest of the sources
 // we already retrieved (as BUTTON links, which survive the faithfulness gate).
@@ -266,7 +299,7 @@ function collectAllowedHrefs(rag) {
   (rag?.hits || []).forEach((h) => {
     if (h.app_url) set.add(normHref(h.app_url));
     (h.related || []).forEach((r) => r.app_url && set.add(normHref(r.app_url)));
-    (h.cross_vehicle || []).forEach((c) => c.app_url && set.add(normHref(c.app_url)));
+    // cross_vehicle skipped: those cars may not be in the user's subscription
   });
   return set;
 }
@@ -278,7 +311,7 @@ function collectAllowedHrefsDiag(d) {
     (c.steps || []).forEach((s) => s.app_url && set.add(normHref(s.app_url)));
     if (c.procedure?.app_url) set.add(normHref(c.procedure.app_url));
     (c.labor_time || []).forEach((l) => l.app_url && set.add(normHref(l.app_url)));
-    (c.cross_vehicle || []).forEach((v) => v.app_url && set.add(normHref(v.app_url)));
+    // cross_vehicle skipped: those cars may not be in the user's subscription
   });
   (d?.procedures || []).forEach((p) => p.app_url && set.add(normHref(p.app_url)));
   return set;
@@ -660,10 +693,14 @@ export async function POST(request) {
     // actually retrieve, so the UI can never show a fabricated source button.
     // (Harmless on the fallback text — its links all come from `sources`.)
     const { text: safeReply, stripped } = sanitizeButtons(rawReply, allowedHrefs);
+    // The scope verdict is prepended AFTER sanitisation so it can never be
+    // stripped, reworded or dropped by the phraser.
+    const banner = grounded ? scopeBanner(rag) : '';
 
     return Response.json({
       sessionId: sid,
-      reply: safeReply,
+      reply: banner + safeReply,
+      evidenceScope: rag?.evidence || null,
       strippedLinks: stripped,
       sources,
       grounded,

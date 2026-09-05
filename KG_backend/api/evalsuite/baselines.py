@@ -24,6 +24,8 @@ scored on identical targets.
 from __future__ import annotations
 
 import contextlib
+import json
+import os
 import re
 
 from api.rag import store, embed, glossary, retrieve, service, scoring, config
@@ -233,6 +235,68 @@ def _graph_centrality_disabled():
         retrieve._centrality_map = orig
 
 
+# --------------------------------------------------------------------------
+# Multi-query expansion (Phase 2 Task 5)
+# --------------------------------------------------------------------------
+# The glossary substitutes TERMS; this substitutes the whole QUESTION. The LLM
+# already in the product writes 2-3 English phrasings of the Persian query, each
+# is retrieved independently, and the ranked lists are fused with RRF.
+#
+# Paraphrases are read from a pre-generated cache rather than called live, so
+# the A/B is reproducible and re-runs cost nothing. If the approach wins, the
+# live call is a small change to service.assist; if it does not, nothing shipped.
+_MQ_CACHE = None
+
+
+def _mq_paraphrases(query):
+    global _MQ_CACHE
+    if _MQ_CACHE is None:
+        path = os.environ.get('RAG_MQ_CACHE', '/root/paraphrases_known_item_fa.json')
+        try:
+            with open(path, encoding='utf-8') as fh:
+                _MQ_CACHE = json.load(fh)
+        except Exception:
+            _MQ_CACHE = {}
+    return _MQ_CACHE.get(query) or []
+
+
+def run_hybrid_mq(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
+    """Production pipeline run once per paraphrase, fused with RRF.
+
+    Falls back to plain `hybrid` when no paraphrase is cached for the query, so
+    an incomplete cache degrades the measurement toward the baseline rather than
+    silently dropping queries from the set.
+    """
+    base = retrieve.assist(query, brand=None, model=None, car_stem=car_stem,
+                           k=k, qvec=qvec)
+    variants = _mq_paraphrases(query)
+    if not variants:
+        return base
+
+    RRF_K = 60
+    fused, seen = {}, {}
+    runs = [base['hits'] or []]
+    for v in variants:
+        try:
+            runs.append((retrieve.assist(v, brand=None, model=None,
+                                         car_stem=car_stem, k=k)['hits']) or [])
+        except Exception:
+            pass
+    for hits in runs:
+        for rank, h in enumerate(hits):
+            bid = h.get('blob_id')
+            if bid is None:
+                continue
+            fused[bid] = fused.get(bid, 0.0) + 1.0 / (RRF_K + rank + 1)
+            seen.setdefault(bid, h)
+    order = sorted(fused, key=lambda b: fused[b], reverse=True)[:k]
+    out = dict(base)
+    out['hits'] = [seen[b] for b in order]
+    out['count'] = len(out['hits'])
+    out['mq_variants'] = len(runs)
+    return out
+
+
 def _ablated(ctx_factory):
     def run(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
         with ctx_factory():
@@ -254,6 +318,7 @@ SYSTEMS = {
     "hybrid":    dict(fn=run_hybrid,  dense=True,  glossary=True,  full=True),
     "hybrid_ng": dict(fn=run_hybrid,  dense=True,  glossary=False, full=True),
     "hybrid_rr": dict(fn=run_hybrid_rerank, dense=True, glossary=True, full=True),
+    "hybrid_mq": dict(fn=run_hybrid_mq, dense=True, glossary=True, full=True),
     "abl_nocal":   dict(fn=run_abl_nocal,   dense=True, glossary=True, full=True),
     "abl_fixedw":  dict(fn=run_abl_fixedw,  dense=True, glossary=True, full=True),
     "abl_noscope": dict(fn=run_abl_noscope, dense=True, glossary=True, full=True),
