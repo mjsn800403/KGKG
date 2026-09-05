@@ -297,6 +297,15 @@ def run_hybrid_mq(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, 
     return out
 
 
+def run_hybrid_mq1(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
+    """Single best English paraphrase, no fusion — isolates translation from RRF."""
+    variants = _mq_paraphrases(query)
+    if not variants:
+        return retrieve.assist(query, brand=None, model=None, car_stem=car_stem,
+                               k=k, qvec=qvec)
+    return retrieve.assist(variants[0], brand=None, model=None, car_stem=car_stem, k=k)
+
+
 def _ablated(ctx_factory):
     def run(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
         with ctx_factory():
@@ -319,6 +328,7 @@ SYSTEMS = {
     "hybrid_ng": dict(fn=run_hybrid,  dense=True,  glossary=False, full=True),
     "hybrid_rr": dict(fn=run_hybrid_rerank, dense=True, glossary=True, full=True),
     "hybrid_mq": dict(fn=run_hybrid_mq, dense=True, glossary=True, full=True),
+    "hybrid_mq1": dict(fn=run_hybrid_mq1, dense=True, glossary=True, full=True),
     "abl_nocal":   dict(fn=run_abl_nocal,   dense=True, glossary=True, full=True),
     "abl_fixedw":  dict(fn=run_abl_fixedw,  dense=True, glossary=True, full=True),
     "abl_noscope": dict(fn=run_abl_noscope, dense=True, glossary=True, full=True),
