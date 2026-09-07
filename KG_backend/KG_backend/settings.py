@@ -212,7 +212,14 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 _TLS = _env_bool('DJANGO_SECURE_SSL', default=False)
-SECURE_SSL_REDIRECT = _TLS
+# NOT tied to _TLS. Cloudflare and nginx already force HTTPS at the edge, so a
+# Django-level redirect adds nothing there -- but it DOES break the internal
+# calls, because the Next.js server fetches the backend directly at
+# http://127.0.0.1:8000, bypassing nginx and therefore arriving with no
+# X-Forwarded-Proto. Django then sees a plain-HTTP request, answers 301 to an
+# https://127.0.0.1:8000 that nothing is listening on, and every server-rendered
+# page fails with "fetch failed". Turned on 2026-09-07, broke SSR, off again.
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SSL_REDIRECT", default=False)
 SESSION_COOKIE_SECURE = _TLS
 CSRF_COOKIE_SECURE = _TLS
 SECURE_HSTS_SECONDS = 31536000 if _TLS else 0

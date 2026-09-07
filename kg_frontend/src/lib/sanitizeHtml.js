@@ -34,21 +34,21 @@ const ALLOWED_ATTRS = new Set([
   'cellpadding', 'border', 'style', 'location', 'data', 'type', 'dir', 'lang',
 ]);
 
+// Elements whose CHILDREN are not prose. An unknown wrapper gets unwrapped so
+// its real content survives, but unwrapping these would surface raw code or
+// metadata as visible text -- <script>alert(1)</script> would render the string
+// "alert(1)" on the page. Harmless, but wrong, so they go with their contents.
+const DROP_WITH_CONTENT = new Set([
+  'script', 'style', 'noscript', 'template', 'title', 'meta', 'link', 'base',
+  'iframe', 'object', 'embed', 'applet', 'form', 'input', 'button', 'select',
+  'textarea', 'head',
+]);
+
 // Block by SCHEME, never by URL shape. The manual cross-links to other sections
 // as bare relative hrefs ("pages/1234.html#..."), which ContentRenderer reads to
 // intercept the click -- an allow-list of shapes silently stripped those and
 // would have broken every in-manual link. So anything WITHOUT a scheme is
 // relative and kept; anything with one must be on the short safe list.
-// Elements whose CHILDREN are not prose. An unknown wrapper gets unwrapped so
-// its real content survives, but unwrapping these would surface raw code or
-// metadata as visible text -- <script>alert(1)</script> would render the string
-// "alert(1)" on the page. Harmless, but wrong, so they are removed outright.
-const DROP_WITH_CONTENT = new Set([
-  script, style, noscript, template, title, meta, link, base,
-  iframe, object, embed, applet, form, input, button, select,
-  textarea, head,
-]);
-
 const HAS_SCHEME = /^[a-z][a-z0-9+.\-]*:/i;
 const SAFE_SCHEME = /^(?:https?:|mailto:|tel:|data:image\/)/i;
 const isSafeUrl = (u) => !HAS_SCHEME.test(u) || SAFE_SCHEME.test(u);
