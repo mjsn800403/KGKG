@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { resolveHref } from '@/utils/api';
 import { showModal } from '@/components/Modal';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 // Collision-free separator for the section's relative path (matches CarNav).
 const SEP = String.fromCharCode(1);
@@ -93,7 +94,7 @@ export default function StackedContent({ payload, brand, year, model }) {
             {it.segments && it.segments.length > 1 && (
               <div className="stack-section-crumb" dir="ltr">{it.segments.join('  /  ')}</div>
             )}
-            <div className="content-wrapper" dangerouslySetInnerHTML={{ __html: it.content }} />
+            <div className="content-wrapper" dangerouslySetInnerHTML={{ __html: sanitizeHtml(it.content) }} />
           </section>
         ))}
       </div>

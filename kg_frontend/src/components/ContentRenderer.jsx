@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { resolveHref } from '@/utils/api';
 import { showModal } from '@/components/Modal';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 // The manual's HTML content cross-links to other sections using the
 // original static site's flat "pages/<id>.html" filenames (optionally with
@@ -67,7 +68,7 @@ export default function ContentRenderer({ content, brand, year, model }) {
       <div className="viewer-body content-renderer" onClick={handleClick}>
         <div
           className="content-wrapper"
-          dangerouslySetInnerHTML={{ __html: content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
         />
       </div>
     </div>
