@@ -188,11 +188,22 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ---------------------------------------------------------------------------
 # Security headers
 # ---------------------------------------------------------------------------
-# Everything below is safe on plain HTTP. The TLS-dependent switches stay
-# env-gated and OFF by default because this deployment currently serves port 80
-# only — turning them on without a certificate would redirect-loop the site and
-# make every session cookie undeliverable. When 443 lands, set
-# DJANGO_SECURE_SSL=1 and the whole group flips on together.
+# Everything above the _TLS block is safe on plain HTTP. The TLS-dependent
+# switches stay env-gated so a non-TLS deployment (local, or a bare origin) can
+# still run, but production HAS served 443 since Cloudflare was put in front,
+# and DJANGO_SECURE_SSL=1 is set in .env.prod as of 2026-09-07.
+#
+# Do not turn it back off on the production host. With it off, Django issues
+# session and CSRF cookies WITHOUT the Secure flag on an HTTPS site and cannot
+# tell a proxied HTTPS request from an HTTP one -- which is exactly the state
+# this deployment sat in, unnoticed, after the certificate landed.
+#
+# What the group depends on, if you are enabling it somewhere new: every
+# location that proxies to Django must send X-Forwarded-Proto (here that comes
+# from snippets/kgkg-backend-proxy.conf, included by all five /kg-api/
+# locations), and the proxy in front must actually reach the origin over TLS so
+# $scheme is https. If either is untrue, SECURE_SSL_REDIRECT will redirect-loop
+# the site.
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
