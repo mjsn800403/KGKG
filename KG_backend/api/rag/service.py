@@ -211,8 +211,16 @@ def search(query, brand=None, model=None, car_stem=None, limit=30, allowed_cars=
         # retrieve.assist checks the index exists (raising FileNotFoundError to
         # trigger the view's LIKE fallback) BEFORE embedding, so we let it embed
         # internally rather than loading the model on the fallback path.
+        # Over-fetch before the per-car filter below. Asking for exactly `limit`
+        # and then discarding another car's hits made the list collapse: measured
+        # over 81 Persian queries at limit=30, the median result count was 7 and
+        # 99% came back short. `related` and `text` are switched off because the
+        # navigation shape below uses neither -- that is what makes the deeper
+        # fetch cheap rather than three times the work.
+        depth = min(limit * config.SEARCH_OVERFETCH, config.SEARCH_MAX_DEPTH)
         res = retrieve.assist(query, brand=brand, model=model, car_stem=car_stem,
-                              k=limit, allowed_cars=allowed_cars)
+                              k=depth, allowed_cars=allowed_cars,
+                              expand=False, with_text=False, scope_fts=True)
         out = []
         for h in res.get('hits', []):
             # per-car search: drop hits whose chosen occurrence is another car's

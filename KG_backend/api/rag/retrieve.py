@@ -18,7 +18,12 @@ import re
 
 from urllib.parse import quote
 
+import logging
+from collections import OrderedDict
+
 from . import config, store, embed, glossary, scoring, feedback
+
+logger = logging.getLogger(__name__)
 
 
 def _fts_match(query):
@@ -175,7 +180,7 @@ def _matched_via(kind, sim, bm25_norm, vehicle_boost, pinned=False):
 
 
 def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
-           allowed_cars=None):
+           allowed_cars=None, expand=True, with_text=True, scope_fts=False):
     """Retrieve grounded manual excerpts for ``query``.
 
     ``allowed_cars`` (a set/frozenset of car_stems, or None) hard-restricts which
@@ -185,7 +190,18 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
     returned hit — including expert-pinned overrides — is cited from an occurrence
     inside the allow-list; blobs with no allowed occurrence are dropped before
     ranking. ``None`` preserves the unrestricted behavior (single-car pages, whose
-    access the caller already checked, and internal/eval callers)."""
+    access the caller already checked, and internal/eval callers).
+
+    ``expand`` / ``with_text`` let a caller opt out of the two per-hit costs the
+    assistant needs but site search does not: relationship-graph expansion and
+    the 3 KB page body. Search over-fetches candidates to survive its own
+    per-car filter, and paying those costs on discarded hits is pure waste.
+
+    ``scope_fts`` adds a keyword pass restricted to ``car_stem`` itself. The
+    global vector/keyword sides rank the whole corpus, so for a single car --
+    about 2% of it -- they surface few of that car's pages; this reaches them
+    directly instead of fetching five times deeper globally and discarding the
+    rest. It only ADDS candidates, so nothing that ranked before can fall out."""
     if not config.INDEX_DB.exists():
         raise FileNotFoundError(str(config.INDEX_DB))
     # Cached, process-wide read connection (no per-request connect + vec load).
@@ -255,6 +271,32 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
                 bump(r['bid'], rank, wf, bm25=float(r['bm']))
         except Exception:
             pass
+
+    # Car-scoped keyword pass: the global cut above ranks all 301,369 blobs, so a
+    # single car's pages are mostly below it. Joining occurrences pulls this car's
+    # keyword matches in directly. Same weight as the global keyword side -- these
+    # are the same signal, just not starved by corpus-wide competition.
+    if scope_fts and car_stem and fts_query:
+        try:
+            # Deep single-table FTS scan, then intersect with this car's blobs in
+            # Python. Joining occurrences inside the query instead cost ~3.6s;
+            # FTS5 also refuses bm25() whenever the MATCH table is joined.
+            own = _car_blob_ids(index, car_stem)
+            taken = 0
+            for r in index.execute(
+                    "SELECT rowid AS bid, bm25(blobs_fts) AS bm FROM blobs_fts "
+                    "WHERE blobs_fts MATCH ? ORDER BY rank LIMIT ?",
+                    (fts_query, config.SCOPE_FTS_SCAN)):
+                if r['bid'] in own:
+                    bump(r['bid'], taken, wf, bm25=float(r['bm']))
+                    taken += 1
+                    if taken >= config.SCOPE_FTS_K:
+                        break
+        except Exception:
+            # additive pass: never fail the query over it, but do not hide the
+            # failure the way a bare `pass` did.
+            logger.warning('scoped FTS pass failed for car_stem=%r', car_stem,
+                           exc_info=True)
 
     if not blob_score:
         return {'query': query,
@@ -330,7 +372,7 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
     for i, (final, sim, bid, occ, occs, explain) in enumerate(ranked[:k_eff]):
         app_url, segs = _app_url(occ)
         related = _expand(index, bid, brand, model, car_stem,
-                          allowed_cars=allowed_cars) if i < expand_n else []
+                          allowed_cars=allowed_cars) if (expand and i < expand_n) else []
         cross = _cross_vehicle(occ, occs)
         band = scoring.confidence_band(final, config.CONF_HIGH_MARGIN, _eff_sim(sim, explain),
                                        high_sim=config.CONF_HIGH_SIM,
@@ -346,7 +388,7 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
             'matched_via': explain['matched_via'],
             'confidence_band': band['band'], 'confidence_label': band['label_fa'],
             'explain': explain,
-            'text': _blob_text(index, bid),
+            'text': _blob_text(index, bid) if with_text else '',
             'related': related, 'cross_vehicle': cross,
         })
 
@@ -393,6 +435,25 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
             if ev['title_absent_from_vehicle']:
                 out['out_of_scope'] = 'title_absent_from_vehicle'
     return out
+
+
+_CAR_BLOBS = OrderedDict()          # car_stem -> frozenset(blob_id), small LRU
+
+
+def _car_blob_ids(index, car_stem):
+    """Every blob this car contains. Cached: the occurrences table has ~6M rows,
+    and joining it per query cost more than the scoped pass was worth."""
+    hit = _CAR_BLOBS.get(car_stem)
+    if hit is not None:
+        _CAR_BLOBS.move_to_end(car_stem)
+        return hit
+    ids = frozenset(r[0] for r in index.execute(
+        "SELECT DISTINCT blob_id FROM occurrences WHERE car_stem = ?", (car_stem,)))
+    _CAR_BLOBS[car_stem] = ids
+    _CAR_BLOBS.move_to_end(car_stem)
+    while len(_CAR_BLOBS) > config.CAR_BLOBS_CACHE:
+        _CAR_BLOBS.popitem(last=False)
+    return ids
 
 
 def _vehicle_has_title(index, title, car_stem):

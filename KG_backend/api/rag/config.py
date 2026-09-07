@@ -311,6 +311,22 @@ CENTRALITY_C = 8.0          # degree/(degree+C) soft-normalisation constant
 # Adaptive retrieval depth: an easy query (clear top winner + strong match)
 # returns fewer hits and expands fewer graphs; an ambiguous one widens. Cuts the
 # average request's work while spending more only where it helps accuracy.
+# Per-car site search over-fetches, because it filters out hits whose occurrence
+# belongs to another car and that filter runs after ranking. 4x covers the
+# measured ~70% drop rate with headroom; the cap keeps a limit=50 request from
+# asking for more candidates than the scoped pool (SCOPED_VEC_K) even holds.
+# Depth of the car-scoped keyword pass (retrieve.assist(scope_fts=True)).
+# 30 already yields a median of 30 in-car candidates where the global pool of 120
+# yields 13, so deeper buys little.
+SCOPE_FTS_K = int(os.environ.get('RAG_SCOPE_FTS_K', '30'))
+# How deep the single-table FTS scan goes before intersecting with the car's own
+# blobs. Deep enough that a car holding ~2% of the corpus still yields SCOPE_FTS_K.
+SCOPE_FTS_SCAN = int(os.environ.get('RAG_SCOPE_FTS_SCAN', '4000'))
+# Per-car blob-id sets cached in memory (~7k ints each).
+CAR_BLOBS_CACHE = int(os.environ.get('RAG_CAR_BLOBS_CACHE', '8'))
+SEARCH_OVERFETCH = int(os.environ.get('RAG_SEARCH_OVERFETCH', '4'))
+SEARCH_MAX_DEPTH = int(os.environ.get('RAG_SEARCH_MAX_DEPTH', '120'))
+
 FINAL_K_MIN = 4             # hits returned for an easy/clear query
 FINAL_K_MAX = FINAL_K       # hits returned for an ambiguous query
 MARGIN_EASY = 0.20          # top1-top2 fused-score gap above which a query is "easy"
