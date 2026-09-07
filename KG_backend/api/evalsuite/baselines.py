@@ -141,6 +141,19 @@ def run_hybrid(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_
                                car_stem=car_stem, k=k, qvec=qvec)
 
 
+def run_hybrid_sfts(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
+    """Production pipeline + the car-scoped keyword pass (retrieve scope_fts).
+
+    The global vector/keyword sides rank the whole corpus, so a single car's
+    pages compete against 301,369 blobs; this adds a keyword pass restricted to
+    the scoped car. Purely additive to the candidate pool.
+    """
+    ctx = contextlib.nullcontext() if use_glossary else glossary_disabled()
+    with ctx:
+        return retrieve.assist(query, brand=None, model=None,
+                               car_stem=car_stem, k=k, qvec=qvec, scope_fts=True)
+
+
 def run_hybrid_rerank(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
     """Production retrieval + the cross-encoder reranker.
 
@@ -327,6 +340,7 @@ SYSTEMS = {
     "hybrid":    dict(fn=run_hybrid,  dense=True,  glossary=True,  full=True),
     "hybrid_ng": dict(fn=run_hybrid,  dense=True,  glossary=False, full=True),
     "hybrid_rr": dict(fn=run_hybrid_rerank, dense=True, glossary=True, full=True),
+    "hybrid_sfts": dict(fn=run_hybrid_sfts, dense=True, glossary=True, full=True),
     "hybrid_mq": dict(fn=run_hybrid_mq, dense=True, glossary=True, full=True),
     "hybrid_mq1": dict(fn=run_hybrid_mq1, dense=True, glossary=True, full=True),
     "abl_nocal":   dict(fn=run_abl_nocal,   dense=True, glossary=True, full=True),

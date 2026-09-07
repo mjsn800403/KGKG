@@ -201,7 +201,20 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
     global vector/keyword sides rank the whole corpus, so for a single car --
     about 2% of it -- they surface few of that car's pages; this reaches them
     directly instead of fetching five times deeper globally and discarding the
-    rest. It only ADDS candidates, so nothing that ranked before can fall out."""
+    rest.
+
+    It is OFF by default, and site search is its only caller. Enabling it for the
+    assistant was measured (`hybrid_sfts`, n=250 per language) and REJECTED: on
+    English nDCG@5 -0.042 and R@10 -0.039, both p<0.001, 66 queries worse against
+    21 better; Persian directionally worse on every metric. All ten metrics fell,
+    at +50% latency.
+
+    The candidates are additive but the SCORING is not. bm25 is normalised across
+    the candidate set, so a larger pool shifts every calibrated score, and scoped
+    hits enter with keyword ranks 0..N that can outrank globally better matches.
+    R@10 falling shows worse pages displacing good ones inside the top 10, not
+    merely reordering them. Deeper recall helps a 30-row search list and hurts a
+    5-hit answer: same mechanism, opposite verdicts."""
     if not config.INDEX_DB.exists():
         raise FileNotFoundError(str(config.INDEX_DB))
     # Cached, process-wide read connection (no per-request connect + vec load).
