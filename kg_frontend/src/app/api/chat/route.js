@@ -31,6 +31,62 @@ async function metis(path, body) {
   return res.json();
 }
 
+// Query translation before retrieval, behind a flag (off by default).
+//
+// The index is English; a Persian question reaches BM25 as ~9 tokens that match
+// zero pages, so the keyword half of the hybrid contributes almost nothing.
+// Measured on the technician-reviewed set known_item_fa_rev (n=59), translating
+// to one English service-manual phrasing first:
+//
+//     Hit@1   0.068 -> 0.203   (p=0.025)
+//     nDCG@5  0.152 -> 0.313   (p=0.003)
+//     R@10    0.305 -> 0.458   (p=0.035)
+//     p50      906  -> 1055 ms
+//
+// Multi-query fusion scored higher on Recall@10 (0.627) but LOWER on Hit@1 and
+// took 2949 ms, so it is deliberately not wired.
+//
+// Caveat worth keeping visible: the paraphrases in that measurement were written
+// by hand, not returned by Metis, so the live gain may be smaller. Re-run the
+// A/B against real Metis output before treating these numbers as shipped.
+const MQ_TRANSLATE = process.env.RAG_MQ_TRANSLATE === '1';
+const FA_RE = /[\u0600-\u06FF]/;
+const _mqCache = new Map();          // process-local, bounded below
+
+const TRANSLATE_PROMPT = [
+  'Translate this Persian automotive service question into ONE short English',
+  'query using Toyota/Lexus service-manual terminology.',
+  'Output ONLY the query: no quotes, no explanation, no punctuation at the end.',
+  'Keep any DTC code (like B0050 or P0607) and any engine code exactly as-is.',
+  '',
+  'Persian question: ',
+].join('\n');
+
+async function translateQuery(q) {
+  if (!MQ_TRANSLATE || !(API_KEY && BOT_ID) || !q || !FA_RE.test(q)) return null;
+  const key = q.trim();
+  if (_mqCache.has(key)) return _mqCache.get(key);
+  try {
+    const session = await metis('session', {
+      botId: BOT_ID, user: { id: 'mq-translate', name: '_' },
+    });
+    const reply = await metis(`session/${session.id}/message`, {
+      message: { type: 'USER', content: TRANSLATE_PROMPT + key },
+    });
+    let out = (reply?.content ?? '').trim().split('\n')[0].replace(/^["'`]|["'`]$/g, '').trim();
+    // Refuse anything that came back still Persian, empty, or implausibly long
+    // -- a bad translation is worse than no translation.
+    if (!out || FA_RE.test(out) || out.length > 200) out = null;
+    if (_mqCache.size > 500) _mqCache.clear();
+    _mqCache.set(key, out);
+    return out;
+  } catch (e) {
+    console.error('query translation failed (using original Persian):', e);
+    return null;
+  }
+}
+
+
 async function backend(path, body, token) {
   const res = await fetch(`${BACKEND_URL}${path}`, {
     method: 'POST',
@@ -607,8 +663,14 @@ export async function POST(request) {
       prompt = buildDiagnosisPrompt({ message, d: diag, contextText: ctx.contextText,
                                       terminology, historyText });
     } else {
+      // Translate before retrieving when the flag is on. Fail-open: a null
+      // translation means we retrieve with the original Persian, exactly as
+      // before. NOT applied to /api/diagnose above -- that engine matches
+      // Persian symptom text.
+      const translated = await translateQuery(retrievalQuery);
+      const assistQuery = translated || retrievalQuery;
       try {
-        rag = await backend('/api/assist/', { query: retrievalQuery, brand, model, car }, token);
+        rag = await backend('/api/assist/', { query: assistQuery, brand, model, car }, token);
       } catch (e) {
         console.error('RAG retrieve error:', e);
         return Response.json(
