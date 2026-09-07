@@ -302,6 +302,21 @@ CROSS_VEHICLE_MAX = 4       # sibling-vehicle corroborations shown per hit
 # Calibrated blend weights handed to scoring.calibrate() (sum need not be 1; the
 # multiplicative boosts ride on top). Tune live — they only re-rank, never
 # re-embed. See scoring.py for the formula.
+# BM25 per-column weights for blobs_fts(text, title, comp). SQLite's bm25()
+# defaults to 1.0 for every column, which rates a term in the page title exactly
+# as highly as one buried in the body -- and in a service manual the title is the
+# component name. Overridable so the A/B (hybrid_tw) can vary them without a
+# code change.
+#
+# Title 8 / comp 4 measured against 1/1/1 on 250 queries per language (hybrid_tw):
+#   EN  nDCG@5 +0.025 p<0.001   Hit@1 +0.052 p=0.004   Hit@5 +0.040 p<0.001
+#   FA  nDCG@5 +0.012 p=0.021   MRR   +0.022 p=0.012
+# Every metric improved on both languages at identical latency; Hit@5 on English
+# moved on 10 queries with none regressing.
+FTS_W_TEXT = float(os.environ.get('RAG_FTS_W_TEXT', '1.0'))
+FTS_W_TITLE = float(os.environ.get('RAG_FTS_W_TITLE', '8.0'))
+FTS_W_COMP = float(os.environ.get('RAG_FTS_W_COMP', '4.0'))
+
 SCORE_W_RRF = 0.30          # fused reciprocal-rank weight
 SCORE_W_SIM = 0.45          # dense cosine similarity weight
 SCORE_W_BM25 = 0.20         # normalized BM25 (keyword strength) weight

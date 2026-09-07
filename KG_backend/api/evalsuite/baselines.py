@@ -141,6 +141,44 @@ def run_hybrid(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_
                                car_stem=car_stem, k=k, qvec=qvec)
 
 
+@contextlib.contextmanager
+def _fts_weights(text=1.0, title=1.0, comp=1.0):
+    """Temporarily set the BM25 column weights."""
+    old = (config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP)
+    config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP = text, title, comp
+    try:
+        yield
+    finally:
+        config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP = old
+
+
+def run_hybrid_notw(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
+    """Pipeline with FLAT bm25 column weights -- the pre-2026-09-07 behaviour.
+
+    Kept so the title-weighting decision stays falsifiable now that the defaults
+    have changed: comparing `hybrid` against `hybrid_tw` once both read the new
+    defaults compares a config against itself, which is exactly the mistake that
+    produced an identical-looking A/B.
+    """
+    ctx = contextlib.nullcontext() if use_glossary else glossary_disabled()
+    with ctx, _fts_weights(1.0, 1.0, 1.0):
+        return retrieve.assist(query, brand=None, model=None,
+                               car_stem=car_stem, k=k, qvec=qvec)
+
+
+def run_hybrid_tw(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
+    """Production pipeline with the page title weighted in BM25.
+
+    blobs_fts is fts5(text, title, comp); default bm25 weights rate a term in the
+    body as highly as one in the title, and in a service manual the title is the
+    component name.
+    """
+    ctx = contextlib.nullcontext() if use_glossary else glossary_disabled()
+    with ctx, _fts_weights(1.0, 8.0, 4.0):
+        return retrieve.assist(query, brand=None, model=None,
+                               car_stem=car_stem, k=k, qvec=qvec)
+
+
 def run_hybrid_sfts(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
     """Production pipeline + the car-scoped keyword pass (retrieve scope_fts).
 
@@ -341,6 +379,8 @@ SYSTEMS = {
     "hybrid_ng": dict(fn=run_hybrid,  dense=True,  glossary=False, full=True),
     "hybrid_rr": dict(fn=run_hybrid_rerank, dense=True, glossary=True, full=True),
     "hybrid_sfts": dict(fn=run_hybrid_sfts, dense=True, glossary=True, full=True),
+    "hybrid_tw": dict(fn=run_hybrid_tw, dense=True, glossary=True, full=True),
+    "hybrid_notw": dict(fn=run_hybrid_notw, dense=True, glossary=True, full=True),
     "hybrid_mq": dict(fn=run_hybrid_mq, dense=True, glossary=True, full=True),
     "hybrid_mq1": dict(fn=run_hybrid_mq1, dense=True, glossary=True, full=True),
     "abl_nocal":   dict(fn=run_abl_nocal,   dense=True, glossary=True, full=True),

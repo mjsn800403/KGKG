@@ -276,10 +276,14 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
 
     if fts_query:
         try:
+            # bm25() takes per-column weights (text, title, comp). Ordering by
+            # the weighted value rather than `rank` also changes WHICH pages are
+            # fetched, not just how they score -- a title match now competes.
             fts = index.execute(
-                "SELECT rowid AS bid, bm25(blobs_fts) AS bm FROM blobs_fts "
-                "WHERE blobs_fts MATCH ? ORDER BY rank LIMIT ?",
-                (fts_query, fts_k)).fetchall()
+                "SELECT rowid AS bid, bm25(blobs_fts, ?, ?, ?) AS bm FROM blobs_fts "
+                "WHERE blobs_fts MATCH ? ORDER BY bm LIMIT ?",
+                (config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP,
+                 fts_query, fts_k)).fetchall()
             for rank, r in enumerate(fts):
                 bump(r['bid'], rank, wf, bm25=float(r['bm']))
         except Exception:
@@ -297,9 +301,10 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
             own = _car_blob_ids(index, car_stem)
             taken = 0
             for r in index.execute(
-                    "SELECT rowid AS bid, bm25(blobs_fts) AS bm FROM blobs_fts "
-                    "WHERE blobs_fts MATCH ? ORDER BY rank LIMIT ?",
-                    (fts_query, config.SCOPE_FTS_SCAN)):
+                    "SELECT rowid AS bid, bm25(blobs_fts, ?, ?, ?) AS bm "
+                    "FROM blobs_fts WHERE blobs_fts MATCH ? ORDER BY bm LIMIT ?",
+                    (config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP,
+                     fts_query, config.SCOPE_FTS_SCAN)):
                 if r['bid'] in own:
                     bump(r['bid'], taken, wf, bm25=float(r['bm']))
                     taken += 1
