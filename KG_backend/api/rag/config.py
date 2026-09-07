@@ -324,6 +324,12 @@ SCOPE_FTS_K = int(os.environ.get('RAG_SCOPE_FTS_K', '30'))
 SCOPE_FTS_SCAN = int(os.environ.get('RAG_SCOPE_FTS_SCAN', '4000'))
 # Per-car blob-id sets cached in memory (~7k ints each).
 CAR_BLOBS_CACHE = int(os.environ.get('RAG_CAR_BLOBS_CACHE', '8'))
+# Site search's own corpus-boundary floor, applied per hit and only when the
+# retriever already flagged the query as ungrounded. Measured: real queries land
+# at 0.63-0.67 vector similarity, absent/gibberish ones at 0.45-0.52. Swept
+# against both costs: 0.55 leaves 1 of 81 real queries empty and suppresses the
+# same junk as 0.58, which leaves 3 empty -- so 0.55 strictly dominates it.
+SEARCH_SIM_FLOOR = float(os.environ.get('RAG_SEARCH_SIM_FLOOR', '0.55'))
 SEARCH_OVERFETCH = int(os.environ.get('RAG_SEARCH_OVERFETCH', '4'))
 SEARCH_MAX_DEPTH = int(os.environ.get('RAG_SEARCH_MAX_DEPTH', '120'))
 

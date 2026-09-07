@@ -222,7 +222,23 @@ def search(query, brand=None, model=None, car_stem=None, limit=30, allowed_cars=
                               k=depth, allowed_cars=allowed_cars,
                               expand=False, with_text=False, scope_fts=True)
         out = []
+        # Corpus-boundary filter. The retriever already decides a query is
+        # out-of-domain (grounded=False) but search ignored that verdict, so
+        # "ssd" -- absent from all 301,369 pages -- returned five nearest
+        # neighbours at similarity ~0.51, and so did outright gibberish.
+        #
+        # A result-level floor would be wrong: "brake pad" is a good query whose
+        # top hit scores 0.0 on the vector side because the keyword side carried
+        # it. So the test is per hit, across both signals: a result must have
+        # real vector similarity OR a genuine keyword match. Junk has neither.
+        weak = (not res.get('grounded')) and \
+            (res.get('top_similarity') or 0.0) < config.SEARCH_SIM_FLOOR
         for h in res.get('hits', []):
+            if weak:
+                ex = h.get('explain') or {}
+                has_kw = (ex.get('bm25') or 0.0) > 0.0
+                if not has_kw and (h.get('similarity') or 0.0) < config.SEARCH_SIM_FLOOR:
+                    continue
             # per-car search: drop hits whose chosen occurrence is another car's
             # (deduped shared content still surfaces — its occurrence in THIS car
             # is the one _pick_occurrence selected when car_stem was passed).
