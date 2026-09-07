@@ -8,20 +8,17 @@ from .models import (
     SystemState,
 )
 from . import events
-from .access import seed_default_org_roles
 
 
 class EventScopingTests(TestCase):
     def setUp(self):
         self.c1 = Company.objects.create(name='EvCo1')
         self.c2 = Company.objects.create(name='EvCo2')
-        seed_default_org_roles(self.c1)
-        roles = {r.rank: r for r in self.c1.org_roles.all()}
         self.mgr = PortalUser(company=self.c1, username='ev_mgr', role='after_sales_manager',
-                              org_role=roles[1], can_manage_team=True, can_view_analytics=True)
+                              can_manage_team=True, can_view_analytics=True)
         self.mgr.set_password('p'); self.mgr.save()
         self.spec = PortalUser(company=self.c1, username='ev_spec', role='after_sales_specialist',
-                               org_role=roles[4])
+                               )
         self.spec.set_password('p'); self.spec.save()
 
     def test_company_event_visible_to_manager_not_other_company(self):
@@ -70,10 +67,8 @@ class CompanyRequestLifecycleTests(TestCase):
         self.car = Car.objects.create(brand_name='Toyota', car_name='bZ4X', year=2023, db_address='x')
         self.company = Company.objects.create(name='ReqCo')
         CompanyCarAccess.objects.create(company=self.company, car=self.car, documents=['manual'])
-        seed_default_org_roles(self.company)
-        roles = {r.rank: r for r in self.company.org_roles.all()}
         self.mgr = PortalUser(company=self.company, username='rq_mgr', role='after_sales_manager',
-                              org_role=roles[1], can_manage_team=True, can_view_analytics=True)
+                              can_manage_team=True, can_view_analytics=True)
         self.mgr.set_password('p'); self.mgr.save()
         self.tok = AuthToken.issue(self.mgr).key
         self.admin_tok = self._admin_login()
@@ -119,10 +114,8 @@ class CompanyRequestLifecycleTests(TestCase):
 
     def test_manager_cannot_see_other_company_requests(self):
         other = Company.objects.create(name='OtherReqCo')
-        seed_default_org_roles(other)
-        r2 = {x.rank: x for x in other.org_roles.all()}
         m2 = PortalUser(company=other, username='rq_mgr2', role='after_sales_manager',
-                        org_role=r2[1], can_manage_team=True)
+                        can_manage_team=True)
         m2.set_password('p'); m2.save()
         t2 = AuthToken.issue(m2).key
         self._post('/api/company/requests/', {'kind': 'support', 'subject': 'x'}, self.tok)
@@ -135,9 +128,8 @@ class CompanyRequestLifecycleTests(TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_specialist_cannot_file_request(self):
-        roles = {r.rank: r for r in self.company.org_roles.all()}
         spec = PortalUser(company=self.company, username='rq_spec',
-                          role='after_sales_specialist', org_role=roles[4])
+                          role='after_sales_specialist', )
         spec.set_password('p'); spec.save()
         st = AuthToken.issue(spec).key
         r = self._post('/api/company/requests/', {'kind': 'support', 'subject': 'x'}, st)

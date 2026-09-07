@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Icon from './Icon';
 import Switch from './Switch';
 import { applyTheme } from './ThemeToggle';
-import { getPortalUser } from '../utils/api';
+import { getPortalUser, updateBrowseMode } from '../utils/api';
 
 // Interactive account settings: working tabs, a theme picker (light/dark) wired
 // to the same persisted store as the header toggle, and a "restart site tour"
@@ -14,12 +14,19 @@ export default function SettingsView() {
   const [tab, setTab] = useState('account');
   const [theme, setTheme] = useState('dark');
   const [me, setMe] = useState(null);
+  const [mode, setMode] = useState('modern');
 
   useEffect(() => {
     setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
-    setMe(getPortalUser());
+    const u0 = getPortalUser();
+    setMe(u0);
+    setMode(u0?.browse_mode === 'classic' ? 'classic' : 'modern');
     const onTheme = (e) => setTheme(e.detail);
-    const onMe = () => setMe(getPortalUser());
+    const onMe = () => {
+      const u = getPortalUser();
+      setMe(u);
+      setMode(u?.browse_mode === 'classic' ? 'classic' : 'modern');
+    };
     window.addEventListener('kg:theme', onTheme);
     window.addEventListener('kg:me', onMe);
     return () => {
@@ -29,6 +36,12 @@ export default function SettingsView() {
   }, []);
 
   const restartTour = () => window.dispatchEvent(new CustomEvent('kg:tour'));
+
+  const chooseMode = async (m) => {
+    if (m === mode) return;
+    setMode(m); // optimistic; onMe reconciles from the saved user
+    try { await updateBrowseMode(m); } catch { setMode(getPortalUser()?.browse_mode === 'classic' ? 'classic' : 'modern'); }
+  };
 
   return (
     <div className="settings-grid">
@@ -76,6 +89,20 @@ export default function SettingsView() {
                 </button>
                 <button className={theme === 'dark' ? 'active' : ''} onClick={() => applyTheme('dark')}>
                   <Icon name="moon" /> حالت تاریک
+                </button>
+              </div>
+            </div>
+            <div className="acct-card">
+              <h3><Icon name="catalog" /> شیوه مرور محتوا</h3>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', opacity: 0.75, lineHeight: 1.7 }}>
+                انتخاب کنید صفحه‌های محتوای خودرو چگونه نمایش داده شوند.
+              </p>
+              <div className="theme-pick">
+                <button className={mode === 'modern' ? 'active' : ''} onClick={() => chooseMode('modern')}>
+                  <Icon name="catalog" /> نوین (نوار کناری + صفحه یکپارچه)
+                </button>
+                <button className={mode === 'classic' ? 'active' : ''} onClick={() => chooseMode('classic')}>
+                  <Icon name="manual" /> کلاسیک (پیمایش کارتی مرحله‌به‌مرحله)
                 </button>
               </div>
             </div>

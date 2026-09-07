@@ -12,9 +12,11 @@ const sent = new Set();
 
 export default function ActivityBeacon({
   action, detail = '', segments = [], nodeTitle = '',
-  appUrl = '', brand = '', year = '', model = '',
+  appUrl = '', brand = '', year = '', model = '', category = '',
 }) {
-  const key = `${action}:${(segments || []).join('/')}:${nodeTitle}`;
+  // The vehicle must be part of the key: two cars' parts roots share the same
+  // action/segments/title, and a vehicle-blind key would log only the first.
+  const key = `${action}:${brand}/${year}/${model}:${(segments || []).join('/')}:${nodeTitle}`;
   const fired = useRef(false);
   useEffect(() => {
     if (fired.current || sent.has(key)) return;
@@ -22,10 +24,13 @@ export default function ActivityBeacon({
     sent.add(key);
     // app_url + brand/model let the backend attach the activity to a car and
     // give the recommendation engine exact "continue reading" deep-links.
+    // `category` (optional) overrides segment-based resolution — parts pages
+    // send it because their segments are EPC group labels, not manual sections.
     logActivity(action, detail, {
       segments, node_title: nodeTitle,
       app_url: appUrl, brand, year, model,
+      ...(category ? { category } : {}),
     });
-  }, [key, action, detail, segments, nodeTitle, appUrl, brand, year, model]);
+  }, [key, action, detail, segments, nodeTitle, appUrl, brand, year, model, category]);
   return null;
 }

@@ -3,7 +3,7 @@
 // asks repair questions scoped to that car). This page just routes there.
 import DashboardShell from '@/components/DashboardShell';
 import UserChip from '@/components/UserChip';
-import CardGrid from '@/components/CardGrid';
+import VehicleCardGrid from '@/components/VehicleCardGrid';
 import ActivityBeacon from '@/components/ActivityBeacon';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
@@ -15,20 +15,10 @@ export const metadata = {
 // statically prerender at build time (when the backend isn't running).
 export const dynamic = 'force-dynamic';
 
-const ICONS = ['▣', '⌖', '◷', '⚙', '◧', '◩', '⬡', '⊞'];
-
 export default async function AssistantPickerPage() {
   const brands = await fetchAllBrands();
   const nested = await Promise.all(brands.map((b) => fetchBrands(b)));
   const cars = nested.flat();
-
-  const items = cars.map((c, i) => ({
-    href: `/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}/assistant`,
-    icon: ICONS[i % ICONS.length],
-    title: `${c.car_name}`,
-    sub: `${c.brand_name} • ${c.year}`,
-    go: 'دستیار این خودرو ←',
-  }));
 
   return (
     <DashboardShell>
@@ -39,7 +29,7 @@ export default async function AssistantPickerPage() {
       <h1 className="page-title">دستیار هوشمند سرویس</h1>
       <div className="page-sub">{'// اول خودرو را انتخاب کن، بعد عیب را بگو یا کد خطا را وارد کن'}</div>
       <ActivityBeacon action="open_assistant" detail="ورود به دستیار هوشمند" />
-      <CardGrid items={items} />
+      <VehicleCardGrid vehicles={cars} hrefSuffix="/assistant" go="دستیار این خودرو ←" />
     </DashboardShell>
   );
 }

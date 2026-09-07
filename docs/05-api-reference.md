@@ -117,7 +117,7 @@ All *admin* auth. The admin panel (`/admin`) is the only consumer.
 | `/api/admin/dashboard/` | GET | Live-dashboard aggregate (KPIs, processing, requests, alerts, activity, traffic) |
 | `/api/admin/processing-snapshot/` | GET | Pending-work snapshot (same source as pipeline panel) |
 | `/api/admin/packages/` | GET | Package id/label list |
-| `/api/admin/cars/` | GET | Catalog + per-car DB readiness |
+| `/api/admin/cars/` | GET | Catalog + per-car DB readiness + health indicators (`health`: status, completeness %, missing/empty sections, RAG/diag/asset indexing, pending processes — from the last DataQualityRun) + `has_spec`/`spec_fields`; `audited_at` on the envelope. Drives the admin catalogue filter (doc 07 §7.7) |
 | `/api/admin/requests/` | GET | Purchase requests; `/<id>/status/` POST updates workflow status |
 | `/api/admin/companies/` | GET/POST | List/create (create seeds default org roles) |
 | `/api/admin/companies/<id>/` | GET/PATCH | Detail (deep: accesses+users) / update (field-length clamped) |

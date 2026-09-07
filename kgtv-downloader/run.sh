@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-command launcher for the LEMON manuals downloader.
+# One-command launcher for the KGTV source downloader.
 # Creates a local virtualenv (.venv), installs deps into it, then runs the
 # downloader. Works on a fresh Debian/Ubuntu server (no system pip pollution)
 # and on macOS. The script asks for the link if you don't pass one.

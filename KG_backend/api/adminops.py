@@ -1,3 +1,4 @@
+import os
 """Operational admin API: data quality, system health, traffic analytics.
 
 Everything here is read-mostly and served from persisted rollups / audit runs,
@@ -198,20 +199,20 @@ def admin_traffic_view(request):
 # Data-processing pipeline (admin-triggered background workflow)
 # ---------------------------------------------------------------------------
 
-_LEMON_BASE = 'https://lemon-manuals.org.ua'
+_SOURCE_BASE = os.environ.get('KGTV_SOURCE_URL', 'https://source-manuals.example.com')
 
 
 def _source_url(body):
     """Brand/Year page URL from {url} or {brand, year}. None when invalid.
-    Only the LEMON source host is accepted."""
+    Only the upstream source host is accepted."""
     url = (body.get('url') or '').strip()
     if not url:
         brand = (body.get('brand') or '').strip()
         year = str(body.get('year') or '').strip()
         if not (brand and year.isdigit()):
             return None
-        url = f'{_LEMON_BASE}/{brand}/{year}/'
-    if 'lemon-manuals' not in url:
+        url = f'{_SOURCE_BASE}/{brand}/{year}/'
+    if _SOURCE_BASE.split('//')[1].split('/')[0] not in url:
         return None
     return url
 
@@ -332,7 +333,7 @@ def admin_pipeline_view(request):
                                  'job': pipeline.job_dict(job)})
 
         if action == 'list_source':
-            # Synchronous dry-run listing of a LEMON Brand/Year page, annotated
+            # Synchronous dry-run listing of an upstream Brand/Year page, annotated
             # with what we already have locally (downloaded / ingested).
             from . import ingest
             url = _source_url(body)

@@ -241,45 +241,6 @@ def car_db_ready(car):
 # Capabilities are stored per-user (see PortalUser). Roles only *seed* sensible
 # defaults at creation; every flag stays individually editable afterwards.
 
-def seed_default_org_roles(company):
-    """Create the standard 4-position ladder for a fresh company (idempotent).
-
-    The company's manager can rename/re-rank/extend it later — this is only
-    the sensible starting point, matching the legacy fixed hierarchy.
-    """
-    from .models import OrgRole  # lazy
-    if OrgRole.objects.filter(company=company).exists():
-        return
-    dept = (company.department_label or '').strip()
-    seed = [
-        (1, 'مدیر خدمات پس از فروش', 'org', True, True, '#e8b04b'),
-        (2, 'رئیس خدمات پس از فروش', 'org', True, True, '#7c6cf0'),
-        (3, 'سرپرست خدمات پس از فروش', 'org', False, True, '#4bb3e8'),
-        (4, 'کارشناس خدمات پس از فروش', 'none', False, False, '#5ecf8a'),
-    ]
-    for rank, base_name, scope, manage, analytics, color in seed:
-        name = base_name
-        if dept and dept != 'خدمات پس از فروش':
-            name = base_name.replace('خدمات پس از فروش', dept)
-        OrgRole.objects.get_or_create(
-            company=company, name=name,
-            defaults={'rank': rank, 'manage_scope': scope,
-                      'can_manage_team': manage, 'can_view_analytics': analytics,
-                      'ai_assistant_enabled': True, 'color': color})
-
-
-def org_role_for_legacy(company, role):
-    """The company's OrgRole matching a legacy fixed-ladder id (by rank), or
-    None. Used by admin flows that still speak legacy role ids so the new
-    hierarchy stays in step."""
-    from .models import OrgRole  # lazy
-    want_rank = ROLE_LEVEL.get(normalize_role(role))
-    if want_rank is None:
-        return None
-    return (OrgRole.objects.filter(company=company, rank=want_rank)
-            .order_by('id').first())
-
-
 def legacy_role_for_rank(rank):
     """Nearest legacy fixed-ladder id for a custom rank (compat shim: the
     ``PortalUser.role`` charfield keeps working for old admin flows)."""
@@ -290,15 +251,6 @@ def legacy_role_for_rank(rank):
     if rank == 3:
         return 'after_sales_supervisor'
     return 'after_sales_specialist'
-
-
-def default_capabilities_for_org_role(role):
-    """Capability defaults seeded onto a new member of ``role`` (an OrgRole)."""
-    return {
-        'can_manage_team': role.can_manage_team,
-        'can_view_analytics': role.can_view_analytics,
-        'ai_assistant_enabled': role.ai_assistant_enabled,
-    }
 
 
 def default_capabilities_for_role(role):
@@ -317,32 +269,21 @@ def default_capabilities_for_role(role):
 
 
 def user_rank(u):
-    """Position of ``u`` in their company's hierarchy (1 = top, smaller wins).
+    """Position of ``u`` in the legacy fixed ladder (1 = top, smaller wins).
 
-    Prefers the company-defined ``org_role``; falls back to the legacy fixed
-    ladder for users that were never mapped."""
-    role = getattr(u, 'org_role', None)
-    if role is not None:
-        return role.rank
+    Retained only for analytics ordering; the live structure is the org graph.
+    """
     return ROLE_LEVEL.get(normalize_role(u.role), 99)
 
 
 def user_manage_scope(u):
-    """Breadth of the team area for ``u``: 'org' | 'subtree' | 'none'.
-
-    Comes from the company-defined position. Legacy users (no org_role) keep
-    the historical subtree behavior."""
-    role = getattr(u, 'org_role', None)
-    if role is not None:
-        return role.manage_scope
+    """Legacy analytics-visibility breadth: 'subtree' for everyone now that the
+    org graph — not a per-role scope — governs management."""
     return 'subtree'
 
 
 def display_role_label(u, department_label=None):
-    """Human label of ``u``'s position (org_role name, else legacy label)."""
-    role = getattr(u, 'org_role', None)
-    if role is not None:
-        return role.name
+    """Human label of ``u``'s legacy role."""
     if department_label is None:
         department_label = u.company.department_label if u.company_id else ''
     return role_label(u.role, department_label)
@@ -351,7 +292,10 @@ def display_role_label(u, department_label=None):
 def manageable_user_ids(actor, include_self=False):
     """IDs of every user ``actor`` may see/manage in the team area.
 
-    The reach depends on the actor's position scope:
+    The org-graph canvas is the live structure, so the actor's reach is the set
+    of seats below their own — see orggraph.graph_subtree_user_ids. Only when the
+    actor has no seat (a company whose graph was never seeded) does this fall
+    back to the legacy ``reports_to`` chain:
       * 'org'     — every company user whose rank is strictly larger
                     (the manager sees everyone; the head sees everyone except
                     the manager; a supervisor sees the specialists — exactly
@@ -360,6 +304,10 @@ def manageable_user_ids(actor, include_self=False):
       * 'none'    — nobody.
     """
     from .models import PortalUser  # lazy: models imports this module
+    from .orggraph import graph_subtree_user_ids  # lazy: imports models
+    graph_ids = graph_subtree_user_ids(actor, include_self=include_self)
+    if graph_ids is not None:
+        return graph_ids
     scope = user_manage_scope(actor)
     if scope == 'none':
         ids = set()
@@ -369,8 +317,7 @@ def manageable_user_ids(actor, include_self=False):
         my_rank = user_rank(actor)
         ids = {
             u.id for u in (PortalUser.objects
-                           .filter(company_id=actor.company_id)
-                           .select_related('org_role'))
+                           .filter(company_id=actor.company_id))
             if u.id != actor.id and user_rank(u) > my_rank
         }
     if include_self:
@@ -435,7 +382,7 @@ def enforce_org_consistency(company_id):
     """
     from .models import PortalUser  # lazy: models imports this module
     users = list(PortalUser.objects.filter(company_id=company_id)
-                 .select_related('org_role', 'reports_to', 'reports_to__org_role'))
+                 .select_related('reports_to'))
     by_id = {u.id: u for u in users}
     top = min((u for u in users if u.active), key=user_rank, default=None)
     fixed = 0
@@ -462,9 +409,12 @@ def enforce_org_consistency(company_id):
 def manager_can_target(actor, target):
     """True iff ``actor`` (a manager) may view/manage ``target``.
 
-    Same company, actor outranks target, and target falls inside the actor's
-    position scope (org-wide / subtree — see manageable_user_ids). This is the
-    authorization spine for every team write.
+    Same company, and target sits below the actor on the org-graph canvas.
+    Sitting below IS the authority: the canvas is the live structure, so the
+    legacy role ladder must not veto it (every seat the root creates is a
+    'specialist' by default, and a rank comparison would make each of them
+    unmanageable). The rank check survives only on the legacy path, for an
+    actor with no seat. This is the authorization spine for every team write.
     """
     if not actor or not target or not getattr(actor, 'can_manage_team', False):
         return False
@@ -472,6 +422,10 @@ def manager_can_target(actor, target):
         return False
     if actor.company_id != target.company_id:
         return False
+    from .orggraph import graph_subtree_user_ids  # lazy: imports models
+    graph_ids = graph_subtree_user_ids(actor)
+    if graph_ids is not None:
+        return target.id in graph_ids
     if user_rank(actor) >= user_rank(target):
         return False
     return target.id in manageable_user_ids(actor)

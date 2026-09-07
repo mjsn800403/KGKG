@@ -13,15 +13,34 @@
 // Server-side everything is gated by KG_ADMIN_TOKEN (open in DEBUG for local
 // dev). If the backend rejects us we prompt for the token.
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
 import AdminDashboard from '@/components/AdminDashboard';
 import RequestsInbox from '@/components/RequestsInbox';
+import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
 import { adminApi, adminLogout, getAdminToken, getAdminUser } from '@/utils/api';
+import useEventStream from '@/utils/useEventStream';
 import { DEPARTMENT_PRESETS, PACKAGES, ROLES, packageLabel, roleWithDepartment } from '@/lib/packages';
+
+// ---------------------------------------------------------------------------
+// Live-refresh plumbing.
+//
+// Every admin section fetches its data on mount and after its OWN writes. That
+// left sibling views (and other open tabs/admins) stale: a change made on the
+// Companies page never reached an already-open Users page, and vice versa.
+//
+// AdminRefreshCtx carries a single monotonic counter. It ticks when either
+//   (a) the window/tab regains focus (safety net for the two-tab case), or
+//   (b) the server's SSE stream delivers an `admin_changed` event (real-time,
+//       fired by any admin write anywhere — this tab, another tab, another admin).
+// Each data-loading effect simply lists this counter in its deps, so the
+// currently-mounted section re-fetches. Only one section is mounted at a time
+// (AnimatePresence mode="wait"), so a tick refetches exactly the visible view.
+const AdminRefreshCtx = createContext(0);
+function useAdminRefresh() { return useContext(AdminRefreshCtx); }
 
 const DOCS = PACKAGES.map((p) => ({ id: p.id, label: p.label }));
 const ALL_DOC_IDS = DOCS.map((d) => d.id);
@@ -39,6 +58,113 @@ const REQ_STATUS = {
   approved: { label: 'تأیید شده', cls: 'st-ok' },
   rejected: { label: 'رد شده', cls: 'st-no' },
 };
+
+const DQ_STATUS = {
+  complete: { label: 'کامل', cls: 'st-ok' },
+  incomplete: { label: 'ناقص', cls: 'st-rev' },
+  duplicate: { label: 'تکراری', cls: 'st-no' },
+  corrupt: { label: 'خراب', cls: 'st-no' },
+};
+
+// Health/status facets handed to the shared vehicle filter. Every admin screen
+// that lists vehicles offers the SAME quality questions, in the same order, so
+// "show me the vehicles still missing their index" works identically wherever
+// the admin happens to be standing.
+const HEALTH_FACETS = [
+  {
+    id: 'health',
+    label: 'سلامت داده',
+    options: [
+      { id: 'complete', label: 'کامل', test: (c) => c.health?.status === 'complete' },
+      { id: 'incomplete', label: 'ناقص', test: (c) => c.health?.status === 'incomplete' },
+      { id: 'corrupt', label: 'خراب', test: (c) => c.health?.status === 'corrupt' },
+      { id: 'duplicate', label: 'تکراری', test: (c) => c.health?.status === 'duplicate' },
+      { id: 'unaudited', label: 'بررسی‌نشده', test: (c) => !c.health },
+    ],
+  },
+  {
+    id: 'processing',
+    label: 'وضعیت پردازش',
+    options: [
+      { id: 'pending', label: 'کار در انتظار', test: (c) => (c.health?.pending_processes || []).length > 0 },
+      { id: 'done', label: 'بدون کار باقی‌مانده', test: (c) => !!c.health && !(c.health.pending_processes || []).length },
+    ],
+  },
+  {
+    id: 'indexing',
+    label: 'ایندکس هوشمند',
+    options: [
+      { id: 'rag', label: 'ایندکس‌شده (RAG)', test: (c) => !!c.health?.rag_indexed },
+      { id: 'norag', label: 'بدون ایندکس', test: (c) => !!c.health && !c.health.rag_indexed },
+      { id: 'nodiag', label: 'بدون عیب‌یاب', test: (c) => !!c.health && !c.health.diag_indexed },
+      { id: 'nospec', label: 'بدون مشخصات', test: (c) => c.has_spec === false },
+    ],
+  },
+  {
+    id: 'servable',
+    label: 'قابل ارائه',
+    options: [
+      { id: 'ready', label: 'فایل داده موجود', test: (c) => c.ready !== false },
+      { id: 'missing', label: 'فایل داده ناموجود', test: (c) => c.ready === false },
+    ],
+  },
+];
+
+// A seat granted 200 cars used to print all 200 names into the user row. Show
+// the shape of the grant (how many, which models) and let the access editor —
+// which has the filter — be the place you actually inspect it.
+function AccessSummary({ accesses = [] }) {
+  const [open, setOpen] = useState(false);
+  if (!accesses.length) return <>هیچ</>;
+
+  const names = accesses.map((a) => `${a.car.brand} ${a.car.model} ${a.car.year}`.trim());
+  const families = [...new Set(accesses.map((a) => familyOf(a.car.model)))].sort();
+  if (accesses.length <= 3) return <span dir="auto">{names.join('، ')}</span>;
+
+  return (
+    <>
+      <b>{accesses.length.toLocaleString('fa-IR')}</b> خودرو
+      <span dir="auto"> ({families.slice(0, 4).join('، ')}{families.length > 4 ? ' …' : ''})</span>
+      <button
+        type="button"
+        className="vf-reset"
+        style={{ marginInlineStart: 8 }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? 'بستن فهرست' : 'نمایش فهرست'}
+      </button>
+      {open && (
+        <div dir="auto" style={{ marginTop: 6, fontSize: 12, lineHeight: 1.9, maxHeight: 160, overflow: 'auto' }}>
+          {names.join('، ')}
+        </div>
+      )}
+    </>
+  );
+}
+
+// Compact completeness read-out used in the catalogue tables.
+function HealthCell({ health }) {
+  if (!health) return <span className="st-badge">بررسی‌نشده</span>;
+  const st = DQ_STATUS[health.status] || { label: health.status, cls: '' };
+  const pct = health.completeness;
+  return (
+    <span className="dq-health">
+      <span className={`st-badge ${st.cls}`}>{st.label}</span>
+      {pct != null && (
+        <span className="dq-meter" title={`${pct}٪ از بخش‌های الزامی محتوا دارند`}>
+          <span
+            className="dq-meter-fill"
+            style={{
+              width: `${pct}%`,
+              background: pct >= 95 ? '#22c55e' : pct >= 70 ? '#eab308' : '#ef4444',
+            }}
+          />
+        </span>
+      )}
+      {pct != null && <span className="dq-pct">{pct}٪</span>}
+    </span>
+  );
+}
 
 const SECTIONS = [
   { id: 'dashboard', label: 'داشبورد بلادرنگ', icon: 'chart', desc: 'وضعیت زندهٔ پلتفرم، پردازش و رویدادها' },
@@ -88,6 +214,9 @@ export default function AdminPage() {
   const [authReady, setAuthReady] = useState(false);
   const [flash, setFlash] = useState('');
   const [companyPrefill, setCompanyPrefill] = useState(null);
+  // Monotonic tick that tells the mounted section to re-fetch (see AdminRefreshCtx).
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const bumpRefresh = useCallback(() => setRefreshSignal((n) => n + 1), []);
 
   useEffect(() => {
     if (!getAdminToken()) { router.replace('/admin/login'); return; }
@@ -98,6 +227,27 @@ export default function AdminPage() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, [router]);
+
+  // Safety net for the two-tab / two-admin case: when this tab regains focus or
+  // becomes visible again, refetch the current section so it can't sit stale.
+  useEffect(() => {
+    if (!authReady) return undefined;
+    const onVisible = () => { if (document.visibilityState === 'visible') bumpRefresh(); };
+    window.addEventListener('focus', bumpRefresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', bumpRefresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [authReady, bumpRefresh]);
+
+  // Real-time: any admin write (this tab, another tab, another admin) emits an
+  // `admin_changed` event on the admin SSE stream — refetch the visible section.
+  useEventStream({
+    admin: true,
+    enabled: authReady,
+    onEvent: (evt) => { if (evt?.type === 'admin_changed') bumpRefresh(); },
+  });
 
   const go = useCallback((id) => {
     setSection(id);
@@ -135,6 +285,7 @@ export default function AdminPage() {
   const current = SECTIONS.find((s) => s.id === section);
 
   return (
+    <AdminRefreshCtx.Provider value={refreshSignal}>
     <MotionConfig reducedMotion="user">
     <div className="screen fade" id="admin-panel">
       <div className={`shell${section ? '' : ' hub-mode'}`}>
@@ -238,6 +389,7 @@ export default function AdminPage() {
       </div>
     </div>
     </MotionConfig>
+    </AdminRefreshCtx.Provider>
   );
 }
 
@@ -246,8 +398,9 @@ export default function AdminPage() {
 // each section, instead of dropping the admin straight into everything.
 // ---------------------------------------------------------------------------
 function AdminHub({ guard, go, adminUser }) {
+  const rs = useAdminRefresh();
   const [data, setData] = useState(null);
-  useEffect(() => { guard(adminApi.overview).then((d) => d && setData(d)); }, [guard]);
+  useEffect(() => { guard(adminApi.overview).then((d) => d && setData(d)); }, [guard, rs]);
 
   const quickStats = data ? [
     { label: 'درخواست‌های جدید', value: data.requests_new, to: 'requests', hot: (data.requests_new || 0) > 0 },
@@ -329,8 +482,9 @@ function AdminHub({ guard, go, adminUser }) {
 
 // ---------------------------------------------------------------------------
 function Overview({ guard, go }) {
+  const rs = useAdminRefresh();
   const [data, setData] = useState(null);
-  useEffect(() => { guard(adminApi.overview).then((d) => d && setData(d)); }, [guard]);
+  useEffect(() => { guard(adminApi.overview).then((d) => d && setData(d)); }, [guard, rs]);
 
   const stats = data ? [
     { label: 'درخواست‌های جدید', value: data.requests_new, section: 'requests' },
@@ -360,53 +514,70 @@ function Overview({ guard, go }) {
 
 // ---------------------------------------------------------------------------
 function Catalog({ guard }) {
+  const rs = useAdminRefresh();
   const [cars, setCars] = useState([]);
-  const [q, setQ] = useState('');
+  const [auditedAt, setAuditedAt] = useState(null);
 
   useEffect(() => {
-    guard(adminApi.cars).then((d) => d && setCars(d.items));
-  }, [guard]);
+    guard(adminApi.cars).then((d) => {
+      if (!d) return;
+      setCars(d.items);
+      setAuditedAt(d.audited_at || null);
+    });
+  }, [guard, rs]);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return cars;
-    return cars.filter((c) =>
-      `${c.brand} ${c.model} ${c.year}`.toLowerCase().includes(needle)
-    );
-  }, [cars, q]);
+  const { filtered, bar } = useVehicleFilter(cars, { facets: HEALTH_FACETS });
 
   return (
     <>
       <h1 className="page-title">فهرست کامل خودروها</h1>
       <div className="page-sub">// FULL_CATALOG — ادمین به همه پکیج‌ها دسترسی دارد</div>
       <p style={{ color: 'var(--text-dim)', fontSize: 14, marginTop: 12, maxWidth: 720 }}>
-        این فهرست همه خودروهای موجود در پایگاه کار را نشان می‌دهد. درخواست خرید ممکن است برای خودرویی
-        باشد که هنوز در این فهرست نیست — پس از تأیید، خودرو را به دسترسی شرکت اضافه کنید.
+        این فهرست همه خودروهای موجود در پایگاه کار را نشان می‌دهد. با فیلترهای سال، مدل و وضعیت
+        می‌توانید بخشی از ناوگان را جدا کنید. درخواست خرید ممکن است برای خودرویی باشد که هنوز در این
+        فهرست نیست — پس از تأیید، خودرو را به دسترسی شرکت اضافه کنید.
       </p>
-      <div style={{ margin: '18px 0', maxWidth: 360 }}>
-        <input
-          placeholder="جستجو برند / مدل / سال…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ width: '100%' }}
-        />
-      </div>
+      <div style={{ margin: '18px 0' }}>{bar}</div>
+      {auditedAt && (
+        <div style={{ color: 'var(--text-faint)', fontSize: 12.5, marginBottom: 10 }}>
+          شاخص‌های سلامت از آخرین بررسی انبار داده — {fmtDate(auditedAt)}
+        </div>
+      )}
       <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
         <table className="adm-table">
           <thead>
-            <tr><th>#</th><th>برند</th><th>مدل</th><th>سال</th></tr>
+            <tr>
+              <th>#</th><th>برند</th><th>مدل</th><th>سال</th>
+              <th>کامل بودن داده</th><th>بخش‌های ناقص</th>
+              <th>RAG</th><th>عیب‌یاب</th><th>تصاویر</th><th>مشخصات</th><th>در انتظار پردازش</th>
+            </tr>
           </thead>
           <tbody>
-            {filtered.map((c, i) => (
-              <tr key={c.id}>
-                <td>{i + 1}</td>
-                <td>{c.brand}</td>
-                <td>{c.model}</td>
-                <td dir="ltr">{c.year}</td>
-              </tr>
-            ))}
+            {filtered.map((c, i) => {
+              const h = c.health;
+              const gaps = h ? h.missing_sections + h.empty_sections : 0;
+              return (
+                <tr key={c.id}>
+                  <td>{i + 1}</td>
+                  <td>{c.brand}</td>
+                  <td dir="ltr" style={{ fontSize: 13 }}>{c.model}</td>
+                  <td dir="ltr">{c.year}</td>
+                  <td><HealthCell health={h} /></td>
+                  <td style={gaps > 0 ? { color: '#eab308' } : undefined}>
+                    {h ? (gaps > 0 ? gaps.toLocaleString('fa-IR') : '—') : '—'}
+                  </td>
+                  <td>{h ? (h.rag_indexed ? '✓' : '✗') : '—'}</td>
+                  <td>{h ? (h.diag_indexed ? '✓' : '✗') : '—'}</td>
+                  <td>{h ? (h.static_assets ? '✓' : '✗') : '—'}</td>
+                  <td>{c.has_spec ? `✓ ${c.spec_fields}` : '✗'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-dim)' }} dir="ltr">
+                    {(h?.pending_processes || []).join('، ') || '—'}
+                  </td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>خودرویی یافت نشد.</td></tr>
+              <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>خودرویی مطابق فیلتر یافت نشد.</td></tr>
             )}
           </tbody>
         </table>
@@ -542,6 +713,7 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
 
 // ---------------------------------------------------------------------------
 function Requests({ guard, onCreateCompany }) {
+  const rs = useAdminRefresh();
   const [items, setItems] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [wizardFor, setWizardFor] = useState(null);
@@ -549,7 +721,7 @@ function Requests({ guard, onCreateCompany }) {
     guard(adminApi.requests).then((d) => d && setItems(d.items));
     guard(adminApi.companies).then((d) => d && setCompanies(d.items));
   }, [guard]);
-  useEffect(load, [load]);
+  useEffect(load, [load, rs]);
 
   const setStatus = async (id, status) => {
     await guard(() => adminApi.setRequestStatus(id, status));
@@ -636,13 +808,22 @@ function Requests({ guard, onCreateCompany }) {
 // ---------------------------------------------------------------------------
 // Access editor — admin has full catalog; explicit doc selection (no empty=all).
 function AccessEditor({ cars, value, onChange, copyFromUsers = [], onCopyFrom }) {
-  const [q, setQ] = useState('');
-
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return cars;
-    return cars.filter((c) => `${c.brand} ${c.model} ${c.year}`.toLowerCase().includes(needle));
-  }, [cars, q]);
+  // Granting access to one car out of hundreds is a filtering problem, not a
+  // scrolling one — the shared bar narrows by brand/model/year, and the
+  // "selection" facet answers "what did I already tick?".
+  const { filtered, bar } = useVehicleFilter(cars, {
+    facets: [
+      {
+        id: 'picked',
+        label: 'انتخاب',
+        options: [
+          { id: 'on', label: 'انتخاب‌شده', test: (c) => value.some((v) => v.car_id === c.id) },
+          { id: 'off', label: 'انتخاب‌نشده', test: (c) => !value.some((v) => v.car_id === c.id) },
+        ],
+      },
+      ...HEALTH_FACETS,
+    ],
+  });
 
   const rowFor = (carId) => value.find((v) => v.car_id === carId);
 
@@ -664,14 +845,74 @@ function AccessEditor({ cars, value, onChange, copyFromUsers = [], onCopyFrom })
 
   const applyPreset = (carId, docs) => setDocs(carId, [...docs]);
 
+  // Grant/revoke a whole brand at once (e.g. every Toyota in the catalog) —
+  // picking 30+ vehicles one by one is the common admin complaint.
+  const brands = useMemo(() => {
+    const m = new Map();
+    cars.forEach((c) => m.set(c.brand, (m.get(c.brand) || 0) + 1));
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [cars]);
+
+  const brandState = (brand) => {
+    const ids = cars.filter((c) => c.brand === brand).map((c) => c.id);
+    const on = ids.filter((id) => value.some((v) => v.car_id === id)).length;
+    return on === 0 ? 'off' : (on === ids.length ? 'all' : 'some');
+  };
+
+  const toggleBrand = (brand) => {
+    const ids = cars.filter((c) => c.brand === brand).map((c) => c.id);
+    if (brandState(brand) === 'all') {
+      onChange(value.filter((v) => !ids.includes(v.car_id)));
+    } else {
+      const missing = ids.filter((id) => !value.some((v) => v.car_id === id));
+      onChange([...value, ...missing.map((id) => ({ car_id: id, documents: [...ALL_DOC_IDS] }))]);
+    }
+  };
+
+  // "Narrow, then take the lot" — the whole point of filtering a grant screen.
+  const shownIds = filtered.map((c) => c.id);
+  const shownOn = shownIds.filter((id) => value.some((v) => v.car_id === id)).length;
+  const grantShown = () => {
+    const missing = shownIds.filter((id) => !value.some((v) => v.car_id === id));
+    onChange([...value, ...missing.map((id) => ({ car_id: id, documents: [...ALL_DOC_IDS] }))]);
+  };
+  const revokeShown = () => onChange(value.filter((v) => !shownIds.includes(v.car_id)));
+
   return (
     <div>
-      <input
-        className="access-editor-search"
-        placeholder="جستجو برند / مدل / سال…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
+      {bar}
+      {cars.length > 4 && (
+        <div className="access-editor-brands">
+          <span className="access-editor-brands-t">نتیجهٔ فیلتر:</span>
+          <button type="button" className="btn" style={{ fontSize: 12 }}
+            disabled={shownOn === shownIds.length || !shownIds.length} onClick={grantShown}>
+            افزودن هر {shownIds.length.toLocaleString('fa-IR')} خودروی نمایش‌داده‌شده
+          </button>
+          <button type="button" className="btn" style={{ fontSize: 12 }}
+            disabled={!shownOn} onClick={revokeShown}>
+            حذف انتخاب‌شده‌های نمایش‌داده‌شده ({shownOn.toLocaleString('fa-IR')})
+          </button>
+          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+            مجموع انتخاب‌شده: <b>{value.length.toLocaleString('fa-IR')}</b>
+          </span>
+        </div>
+      )}
+      {brands.length > 0 && (
+        <div className="access-editor-brands">
+          <span className="access-editor-brands-t">افزودن بر اساس برند:</span>
+          {brands.map(([brand, n]) => {
+            const st = brandState(brand);
+            return (
+              <button key={brand} type="button"
+                className={`doc-chip${st === 'all' ? ' active' : ''}${st === 'some' ? ' partial' : ''}`}
+                onClick={() => toggleBrand(brand)}
+                title={`${n} خودرو`}>
+                <span className="tick">✓</span>{brand} <span style={{ opacity: .6 }}>({n})</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {copyFromUsers?.length > 0 && onCopyFrom && (
         <div className="field" style={{ marginBottom: 12, maxWidth: 360 }}>
           <label>کپی دسترسی از کاربر دیگر</label>
@@ -703,10 +944,16 @@ function AccessEditor({ cars, value, onChange, copyFromUsers = [], onCopyFrom })
           const allOn = ALL_DOC_IDS.every((d) => docs.includes(d));
           return (
             <div key={c.id} className="glass" style={{ padding: '10px 14px', borderRadius: 10 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flexWrap: 'wrap' }}>
                 <input type="checkbox" checked={!!row} onChange={() => toggleCar(c.id)} />
                 <b>{c.brand} {c.model}</b>
                 <span style={{ color: 'var(--text-dim)' }}>{c.year}</span>
+                {c.ready === false && <span className="st-badge st-no">فایل داده ناموجود</span>}
+                {c.health && c.health.status !== 'complete' && (
+                  <span className={`st-badge ${(DQ_STATUS[c.health.status] || {}).cls || ''}`}>
+                    {(DQ_STATUS[c.health.status] || {}).label || c.health.status}
+                  </span>
+                )}
               </label>
               {row && (
                 <>
@@ -744,6 +991,7 @@ function AccessEditor({ cars, value, onChange, copyFromUsers = [], onCopyFrom })
 
 // ---------------------------------------------------------------------------
 function Companies({ guard, prefilled, onPrefillUsed }) {
+  const rs = useAdminRefresh();
   const [companies, setCompanies] = useState([]);
   const [cars, setCars] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -764,7 +1012,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
     guard(adminApi.companies).then((d) => d && setCompanies(d.items));
     guard(adminApi.cars).then((d) => d && setCars(d.items));
   }, [guard]);
-  useEffect(load, [load]);
+  useEffect(load, [load, rs]);
 
   const openCompany = async (id) => {
     const d = await guard(() => adminApi.companyDetail(id));
@@ -935,6 +1183,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
 
 // ---------------------------------------------------------------------------
 function Users({ guard }) {
+  const rs = useAdminRefresh();
   const [users, setUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [cars, setCars] = useState([]);
@@ -952,7 +1201,7 @@ function Users({ guard }) {
     guard(adminApi.companies).then((d) => d && setCompanies(d.items));
     guard(adminApi.cars).then((d) => d && setCars(d.items));
   }, [guard, companyFilter]);
-  useEffect(load, [load]);
+  useEffect(load, [load, rs]);
 
   const create = async () => {
     const d = await guard(() => adminApi.createUser(form));
@@ -979,6 +1228,7 @@ function Users({ guard }) {
     setProfileDraft({
       role: u.role,
       display_name: u.display_name || '',
+      phone: u.phone || '',
       access_expires_at: u.access_expires_at
         ? new Date(u.access_expires_at).toISOString().slice(0, 16)
         : '',
@@ -990,6 +1240,7 @@ function Users({ guard }) {
     const payload = {
       role: profileDraft.role,
       display_name: profileDraft.display_name,
+      phone: profileDraft.phone,
       access_expires_at: profileDraft.access_expires_at
         ? new Date(profileDraft.access_expires_at).toISOString()
         : null,
@@ -1086,12 +1337,14 @@ function Users({ guard }) {
                 {u.ai_eligible && <span className="adm-status st-ok">AI فعال</span>}
                 {u.ai_assistant_enabled && !u.ai_eligible && <span className="adm-status st-rev">AI (بدون مجوز)</span>}
                 {u.locked && <span className="adm-status st-no">قفل</span>}
+                {/* No phone = the SMS code has nowhere to go, so login is impossible. */}
+                {!(u.phone || '').trim() && <span className="adm-status st-no">بدون شماره موبایل</span>}
                 <span className={`adm-status ${u.active ? 'st-ok' : 'st-no'}`}>{u.active ? 'فعال' : 'غیرفعال'}</span>
               </div>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>
               پکیج‌ها: {(u.packages || []).map(packageLabel).join('، ') || '—'}
-              · دسترسی خودرو: {u.accesses.length ? u.accesses.map((a) => `${a.car.brand} ${a.car.model}`).join('، ') : 'هیچ'}
+              · دسترسی خودرو: <AccessSummary accesses={u.accesses} />
               {u.access_expires_at && <> · انقضا: {fmtDate(u.access_expires_at)}</>}
               {u.last_login_at && <> · آخرین ورود: {fmtDate(u.last_login_at)}</>}
             </div>
@@ -1121,6 +1374,11 @@ function Users({ guard }) {
                   <div className="field"><label>نام نمایشی</label>
                     <input value={profileDraft.display_name}
                       onChange={(e) => setProfileDraft({ ...profileDraft, display_name: e.target.value })} /></div>
+                  {u.otp_required && (
+                    <div className="field"><label>شماره موبایل (کد ورود پیامکی)</label>
+                      <input dir="ltr" placeholder="09xxxxxxxxx" value={profileDraft.phone}
+                        onChange={(e) => setProfileDraft({ ...profileDraft, phone: e.target.value })} /></div>
+                  )}
                   <div className="field"><label>انقضای دسترسی</label>
                     <input type="datetime-local" dir="ltr" value={profileDraft.access_expires_at}
                       onChange={(e) => setProfileDraft({ ...profileDraft, access_expires_at: e.target.value })} /></div>
@@ -1157,48 +1415,239 @@ function Users({ guard }) {
 }
 
 // ---------------------------------------------------------------------------
+// Excel-style per-column dropdown filter used by the activity report. Each
+// column header gets a funnel button that opens a checklist of the distinct
+// values in that column (narrowed by whatever the OTHER columns already
+// filter), plus a search box, select-all, and ascending/descending sort.
+const BLANK = '—';
+
+function ColumnFilterPop({ label, options, selected, sortDir, onSort, onApply, onClose }) {
+  const [q, setQ] = useState('');
+  // `selected == null` means "no filter" → every option is checked.
+  const [checked, setChecked] = useState(() => new Set(selected ?? options));
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return needle ? options.filter((o) => o.toLowerCase().includes(needle)) : options;
+  }, [q, options]);
+  const allShownChecked = shown.length > 0 && shown.every((o) => checked.has(o));
+
+  const toggle = (o) => setChecked((prev) => {
+    const next = new Set(prev);
+    next.has(o) ? next.delete(o) : next.add(o);
+    return next;
+  });
+  const toggleAllShown = () => setChecked((prev) => {
+    const next = new Set(prev);
+    if (allShownChecked) shown.forEach((o) => next.delete(o));
+    else shown.forEach((o) => next.add(o));
+    return next;
+  });
+
+  const apply = () => {
+    // All options checked ⇒ clear the filter (null); otherwise pass the set.
+    if (options.every((o) => checked.has(o))) onApply(null);
+    else onApply(Array.from(checked));
+    onClose();
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'absolute', top: '100%', insetInlineEnd: 0, marginTop: 6, zIndex: 41,
+          width: 240, background: 'var(--surface, #10151c)', color: 'var(--text, #e8eef5)',
+          border: '1px solid var(--border, #2a333f)', borderRadius: 10,
+          boxShadow: '0 12px 34px rgba(0,0,0,.45)', padding: 10, textAlign: 'right', fontWeight: 400,
+        }}
+      >
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <button type="button" onClick={() => onSort('asc')}
+            style={sortBtn(sortDir === 'asc')}>▲ صعودی</button>
+          <button type="button" onClick={() => onSort('desc')}
+            style={sortBtn(sortDir === 'desc')}>▼ نزولی</button>
+        </div>
+        <input
+          value={q} onChange={(e) => setQ(e.target.value)} placeholder={`جستجو در ${label}…`}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', marginBottom: 8,
+            background: 'var(--surface-2, #0b0f14)', color: 'inherit',
+            border: '1px solid var(--border, #2a333f)', borderRadius: 6, fontSize: 13 }}
+        />
+        <label style={optRow(true)}>
+          <input type="checkbox" checked={allShownChecked} onChange={toggleAllShown} />
+          <span>(انتخاب همه)</span>
+        </label>
+        <div style={{ maxHeight: 200, overflowY: 'auto', margin: '4px 0' }}>
+          {shown.map((o) => (
+            <label key={o} style={optRow(false)}>
+              <input type="checkbox" checked={checked.has(o)} onChange={() => toggle(o)} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+            </label>
+          ))}
+          {shown.length === 0 && <div style={{ color: 'var(--text-dim)', fontSize: 12, padding: 4 }}>موردی نیست</div>}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <button type="button" onClick={apply} style={applyBtn}>اعمال</button>
+          <button type="button" onClick={onClose} style={cancelBtn}>لغو</button>
+        </div>
+      </div>
+    </>
+  );
+}
+const sortBtn = (on) => ({
+  flex: 1, padding: '5px 6px', fontSize: 12, cursor: 'pointer', borderRadius: 6,
+  border: '1px solid var(--border, #2a333f)',
+  background: on ? 'var(--accent, #3b82f6)' : 'transparent',
+  color: on ? '#fff' : 'inherit',
+});
+const optRow = (bold) => ({
+  display: 'flex', alignItems: 'center', gap: 8, padding: '3px 2px', fontSize: 13,
+  cursor: 'pointer', fontWeight: bold ? 600 : 400,
+});
+const applyBtn = {
+  flex: 1, padding: '6px', cursor: 'pointer', borderRadius: 6, border: 'none',
+  background: 'var(--accent, #3b82f6)', color: '#fff', fontSize: 13,
+};
+const cancelBtn = {
+  flex: 1, padding: '6px', cursor: 'pointer', borderRadius: 6,
+  border: '1px solid var(--border, #2a333f)', background: 'transparent', color: 'inherit', fontSize: 13,
+};
+
 function Activity({ guard }) {
+  const rs = useAdminRefresh();
   const [items, setItems] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyFilter, setCompanyFilter] = useState('');
+  const [filters, setFilters] = useState({});   // key -> allowed string[]  (absent = no filter)
+  const [sort, setSort] = useState(null);        // { key, dir }
+  const [openKey, setOpenKey] = useState(null);  // which column dropdown is open
 
   useEffect(() => {
     guard(adminApi.companies).then((d) => d && setCompanies(d.items));
-  }, [guard]);
+  }, [guard, rs]);
   useEffect(() => {
     const params = companyFilter ? { company_id: companyFilter } : {};
     guard(() => adminApi.activity(params)).then((d) => d && setItems(d.items));
-  }, [guard, companyFilter]);
+  }, [guard, companyFilter, rs]);
+
+  const columns = useMemo(() => [
+    { key: 'time', label: 'زمان', get: (a) => fmtDate(a.created_at), sortVal: (a) => a.created_at || '', ltr: false },
+    { key: 'user', label: 'کاربر', get: (a) => a.user, ltr: true },
+    { key: 'company', label: 'شرکت', get: (a) => a.company },
+    { key: 'role', label: 'نقش', get: (a) => a.role_label },
+    { key: 'action', label: 'عملیات', get: (a) => a.action },
+    { key: 'category', label: 'حوزه', get: (a) => a.category_label || BLANK },
+    { key: 'detail', label: 'جزئیات', get: (a) => a.detail },
+  ], []);
+
+  const valOf = useCallback((a, col) => {
+    const v = col.get(a);
+    return v === null || v === undefined || v === '' ? BLANK : String(v);
+  }, []);
+
+  // Rows passing every active column filter except `exceptKey` (Excel narrowing).
+  const passExcept = useCallback((a, exceptKey) => columns.every((c) =>
+    c.key === exceptKey || !filters[c.key] || filters[c.key].includes(valOf(a, c))
+  ), [columns, filters, valOf]);
+
+  const optionsFor = useCallback((col) => Array.from(
+    new Set(items.filter((a) => passExcept(a, col.key)).map((a) => valOf(a, col)))
+  ).sort((x, y) => x.localeCompare(y, 'fa')), [items, passExcept, valOf]);
+
+  const rows = useMemo(() => {
+    let out = items.filter((a) => columns.every((c) => !filters[c.key] || filters[c.key].includes(valOf(a, c))));
+    if (sort) {
+      const col = columns.find((c) => c.key === sort.key);
+      const dir = sort.dir === 'desc' ? -1 : 1;
+      const sv = (a) => (col.sortVal ? col.sortVal(a) : valOf(a, col));
+      out = [...out].sort((a, b) => dir * String(sv(a)).localeCompare(String(sv(b)), 'fa'));
+    }
+    return out;
+  }, [items, columns, filters, sort, valOf]);
+
+  const activeCount = Object.keys(filters).length;
+
+  const setSortFor = (key, dir) => { setSort({ key, dir }); setOpenKey(null); };
 
   return (
     <>
       <h1 className="page-title">گزارش فعالیت کاربران</h1>
       <div className="page-sub">// USER_ACTIVITY_REPORT</div>
-      <div style={{ margin: '18px 0' }}>
+      <div style={{ margin: '18px 0', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <select className="adm-select" value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)}>
           <option value="">همه شرکت‌ها</option>
           {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        {(activeCount > 0 || sort) && (
+          <>
+            <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>
+              نمایش {rows.length.toLocaleString('fa-IR')} از {items.length.toLocaleString('fa-IR')}
+            </span>
+            <button type="button" className="adm-select" style={{ cursor: 'pointer' }}
+              onClick={() => { setFilters({}); setSort(null); }}>
+              پاک کردن فیلترها
+            </button>
+          </>
+        )}
       </div>
-      <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card glass" style={{ padding: 0, overflow: 'visible' }}>
         <table className="adm-table">
           <thead>
-            <tr><th>زمان</th><th>کاربر</th><th>شرکت</th><th>نقش</th><th>عملیات</th><th>حوزه</th><th>جزئیات</th></tr>
+            <tr>
+              {columns.map((col) => {
+                const on = !!filters[col.key];
+                const sorted = sort && sort.key === col.key;
+                return (
+                  <th key={col.key} style={{ position: 'relative', whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span>{col.label}</span>
+                      {sorted && <span style={{ fontSize: 10, opacity: 0.8 }}>{sort.dir === 'desc' ? '▼' : '▲'}</span>}
+                      <button type="button" title="فیلتر" onClick={() => setOpenKey(openKey === col.key ? null : col.key)}
+                        style={{
+                          cursor: 'pointer', border: 'none', background: 'transparent', padding: 2, lineHeight: 1,
+                          fontSize: 11, color: on ? 'var(--accent, #3b82f6)' : 'var(--text-dim, #8a97a8)',
+                        }}>
+                        {on ? '▼●' : '▽'}
+                      </button>
+                    </span>
+                    {openKey === col.key && (
+                      <ColumnFilterPop
+                        label={col.label}
+                        options={optionsFor(col)}
+                        selected={filters[col.key] ?? null}
+                        sortDir={sorted ? sort.dir : null}
+                        onSort={(dir) => setSortFor(col.key, dir)}
+                        onApply={(vals) => setFilters((prev) => {
+                          const next = { ...prev };
+                          if (vals === null) delete next[col.key]; else next[col.key] = vals;
+                          return next;
+                        })}
+                        onClose={() => setOpenKey(null)}
+                      />
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
           </thead>
           <tbody>
-            {items.map((a) => (
+            {rows.map((a) => (
               <tr key={a.id}>
                 <td>{fmtDate(a.created_at)}</td>
                 <td dir="ltr">{a.user}</td>
                 <td>{a.company}</td>
                 <td>{a.role_label}</td>
                 <td>{a.action}</td>
-                <td>{a.category_label || '—'}</td>
+                <td>{a.category_label || BLANK}</td>
                 <td>{a.detail}</td>
               </tr>
             ))}
-            {items.length === 0 && (
-              <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>فعالیتی ثبت نشده است.</td></tr>
+            {rows.length === 0 && (
+              <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>
+                {items.length === 0 ? 'فعالیتی ثبت نشده است.' : 'موردی با این فیلترها یافت نشد.'}
+              </td></tr>
             )}
           </tbody>
         </table>
@@ -1213,12 +1662,13 @@ function Activity({ guard }) {
 const AN_RANGES = [{ id: '7', label: '۷ روز' }, { id: '30', label: '۳۰ روز' }, { id: '90', label: '۹۰ روز' }];
 
 function PlatformAnalytics({ guard }) {
+  const rs = useAdminRefresh();
   const [data, setData] = useState(null);
   const [range, setRange] = useState('30');
 
   useEffect(() => {
     guard(() => adminApi.analytics({ range })).then((d) => d && setData(d));
-  }, [guard, range]);
+  }, [guard, range, rs]);
 
   if (!data) return <div className="empty-state">در حال بارگذاری تحلیل‌ها…</div>;
   const maxCat = Math.max(1, ...data.categories.map((c) => c.count));
@@ -1292,23 +1742,61 @@ function PlatformAnalytics({ guard }) {
 // Data quality — which vehicles are complete, which have missing sections,
 // duplicates, and which pipeline processes are still pending per vehicle.
 // ---------------------------------------------------------------------------
-const DQ_STATUS = {
-  complete: { label: 'کامل', cls: 'st-ok' },
-  incomplete: { label: 'ناقص', cls: 'st-rev' },
-  duplicate: { label: 'تکراری', cls: 'st-no' },
-  corrupt: { label: 'خراب', cls: 'st-no' },
-};
+// Facets over the audit rows themselves (stem-shaped, not catalogue-shaped).
+const DQ_FACETS = [
+  {
+    id: 'status',
+    label: 'وضعیت',
+    options: [
+      { id: 'issues', label: 'دارای مشکل', test: (v) => v.status !== 'complete' },
+      { id: 'complete', label: 'کامل', test: (v) => v.status === 'complete' },
+      { id: 'incomplete', label: 'ناقص', test: (v) => v.status === 'incomplete' },
+      { id: 'corrupt', label: 'خراب', test: (v) => v.status === 'corrupt' },
+      { id: 'duplicate', label: 'تکراری', test: (v) => v.status === 'duplicate' },
+    ],
+  },
+  {
+    id: 'sections',
+    label: 'بخش‌ها',
+    kind: 'menu',
+    options: [
+      { id: 'missing', label: 'بخش غایب دارد', test: (v) => (v.missing_sections || []).length > 0 },
+      { id: 'empty', label: 'بخش خالی دارد', test: (v) => (v.empty_sections || []).length > 0 },
+      { id: 'full', label: 'همه بخش‌ها کامل', test: (v) => !(v.missing_sections || []).length && !(v.empty_sections || []).length },
+    ],
+  },
+  {
+    id: 'index',
+    label: 'ایندکس و دارایی',
+    kind: 'menu',
+    options: [
+      { id: 'norag', label: 'بدون ایندکس RAG', test: (v) => !v.rag_indexed },
+      { id: 'nodiag', label: 'بدون عیب‌یاب', test: (v) => !v.diag_indexed },
+      { id: 'noassets', label: 'بدون تصاویر', test: (v) => !v.static_assets },
+      { id: 'nocatalog', label: 'خارج از کاتالوگ', test: (v) => !v.cataloged },
+    ],
+  },
+  {
+    id: 'processing',
+    label: 'پردازش',
+    kind: 'menu',
+    options: [
+      { id: 'pending', label: 'کار در انتظار', test: (v) => (v.pending_processes || []).length > 0 },
+      { id: 'clear', label: 'بدون کار باقی‌مانده', test: (v) => !(v.pending_processes || []).length },
+    ],
+  },
+];
 
 function DataQuality({ guard }) {
+  const rs = useAdminRefresh();
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(null);
-  const [filter, setFilter] = useState('all');
 
   const load = useCallback(() => {
     guard(adminApi.dataQuality).then((d) => d && setData(d));
   }, [guard]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, rs]);
 
   // While a refresh runs, poll until it lands.
   useEffect(() => {
@@ -1326,12 +1814,8 @@ function DataQuality({ guard }) {
   };
 
   const report = data?.report;
-  const vehicles = useMemo(() => {
-    const items = report?.vehicles || [];
-    if (filter === 'all') return items;
-    if (filter === 'issues') return items.filter((v) => v.status !== 'complete');
-    return items.filter((v) => v.status === filter);
-  }, [report, filter]);
+  const allVehicles = useMemo(() => report?.vehicles || [], [report]);
+  const { filtered: vehicles, bar } = useVehicleFilter(allVehicles, { facets: DQ_FACETS });
 
   const s = report?.summary;
   return (
@@ -1392,18 +1876,7 @@ function DataQuality({ guard }) {
 
       {report && (
         <>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-            {[['all', 'همه'], ['issues', 'دارای مشکل'], ['complete', 'کامل'], ['incomplete', 'ناقص'], ['corrupt', 'خراب'], ['duplicate', 'تکراری']].map(([id, label]) => (
-              <button
-                key={id}
-                className={`btn${filter === id ? ' btn-accent' : ''}`}
-                style={{ padding: '4px 12px', fontSize: 13 }}
-                onClick={() => setFilter(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {bar}
           <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
             <table className="adm-table">
               <thead>
@@ -1483,6 +1956,7 @@ const SEV = {
 };
 
 function SystemMonitor({ guard }) {
+  const rs = useAdminRefresh();
   const [sys, setSys] = useState(null);
   const [traffic, setTraffic] = useState(null);
   const [range, setRange] = useState(7);
@@ -1491,7 +1965,7 @@ function SystemMonitor({ guard }) {
   const load = useCallback(() => {
     guard(adminApi.system).then((d) => d && setSys(d));
   }, [guard]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, rs]);
   useEffect(() => {
     guard(() => adminApi.traffic(range)).then((d) => d && setTraffic(d));
   }, [guard, range]);
@@ -1707,7 +2181,7 @@ const ZIP_STATUS = {
   skipped_duplicate: { label: 'تکراری — رد شد', color: '#9ca3af' },
 };
 
-// Source-download card: check the LEMON source for a brand/year (optionally
+// Source-download card: check the upstream source for a brand/year (optionally
 // filtered by model name), see what is new vs already on the server, and queue
 // a download request that the pipeline's download stage will execute.
 function DownloadSourceCard({ data, act, busy, guard }) {
@@ -1733,7 +2207,7 @@ function DownloadSourceCard({ data, act, busy, guard }) {
 
   return (
     <div className="card glass" style={{ marginBottom: 16 }}>
-      <h3 style={{ marginTop: 0 }}><Icon name="cart" size={16} /> دانلود بسته‌های جدید از منبع (LEMON)</h3>
+      <h3 style={{ marginTop: 0 }}><Icon name="cart" size={16} /> دانلود بسته‌های جدید از منبع</h3>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input dir="ltr" style={{ width: 110 }} value={brand} placeholder="Toyota"
           onChange={(e) => setBrand(e.target.value)} />
@@ -1932,6 +2406,7 @@ function PowerToggle({ data, act, busy, jobActive }) {
 }
 
 function Pipeline({ guard }) {
+  const rs = useAdminRefresh();
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -1941,7 +2416,7 @@ function Pipeline({ guard }) {
   const load = useCallback(() => {
     guard(adminApi.pipeline).then((d) => d && setData(d));
   }, [guard]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, rs]);
 
   const jobActive = data?.job && ['pending', 'running'].includes(data.job.status);
   useEffect(() => {
@@ -2105,7 +2580,7 @@ function Pipeline({ guard }) {
             </div>
           )}
 
-          {/* Download source (LEMON) — list, filter, queue for the pipeline */}
+          {/* Download source (upstream) — list, filter, queue for the pipeline */}
           <DownloadSourceCard data={data} act={act} busy={busy} guard={guard} />
 
           {/* ZIP parse queue */}
@@ -2149,12 +2624,28 @@ const PROV_LABELS = {
   curated: 'جدول تأییدشده', derived: 'استنتاج قطعی',
 };
 
+const SPEC_FACETS = [
+  {
+    id: 'spec',
+    label: 'مشخصات',
+    options: [
+      { id: 'has', label: 'دارای مشخصات', test: (v) => !!v.has_spec },
+      { id: 'none', label: 'بدون مشخصات', test: (v) => !v.has_spec },
+      { id: 'thin', label: 'کمتر از ۱۰ فیلد', test: (v) => !!v.has_spec && (v.field_count || 0) < 10 },
+    ],
+  },
+];
+
 function VehicleSpecs({ guard }) {
+  const rs = useAdminRefresh();
   const [data, setData] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailBusy, setDetailBusy] = useState(false);
 
-  useEffect(() => { guard(adminApi.vehicleSpecs).then((d) => d && setData(d)); }, [guard]);
+  useEffect(() => { guard(adminApi.vehicleSpecs).then((d) => d && setData(d)); }, [guard, rs]);
+
+  const allVehicles = useMemo(() => data?.vehicles || [], [data]);
+  const { filtered: vehicles, bar } = useVehicleFilter(allVehicles, { facets: SPEC_FACETS });
 
   const openDetail = async (carId) => {
     setDetailBusy(true);
@@ -2233,11 +2724,12 @@ function VehicleSpecs({ guard }) {
             </div>
           )}
 
+          {bar}
           <div className="card glass" style={{ padding: 0, overflow: 'hidden' }}>
             <table className="adm-table">
               <thead><tr><th>برند</th><th>خودرو</th><th>سال</th><th>فیلدها</th><th>به‌روزرسانی</th><th /></tr></thead>
               <tbody>
-                {(data.vehicles || []).map((v) => (
+                {vehicles.map((v) => (
                   <tr key={v.car_id}>
                     <td>{v.brand}</td>
                     <td dir="ltr" style={{ fontSize: 13 }}>{v.display_name}</td>
@@ -2254,6 +2746,9 @@ function VehicleSpecs({ guard }) {
                     </td>
                   </tr>
                 ))}
+                {vehicles.length === 0 && (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>خودرویی مطابق فیلتر یافت نشد.</td></tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -498,6 +498,103 @@ def rewrite_image_urls(content, car_name):
     content = _IMG_DATA_RE.sub(lambda m: f'data="{media_base}/{m.group(1)}.svg"', content)
     return content
 
+# ---------------------------------------------------------------------------
+# Subtree aggregation for the "flatten everything below this node" page.
+# Once navigation reaches a fixed depth, the frontend stops drilling and
+# renders the whole remaining subtree on ONE page, each content node given a
+# stable anchor (its node id) so the car-tree sidebar can jump straight to it.
+# ---------------------------------------------------------------------------
+SUBTREE_MAX_ITEMS = 600
+_IMG_TAG_RE = re.compile(r'<img\s', re.IGNORECASE)
+
+
+def _lazy_images(html):
+    """Defer offscreen images: a flattened subtree can stack hundreds of pages,
+    so eager <img> loading would fire hundreds of requests at once."""
+    if not html:
+        return html
+    return _IMG_TAG_RE.sub('<img loading="lazy" ', html)
+
+
+def subtree_content(conn, root_row, car_name, max_items=SUBTREE_MAX_ITEMS):
+    """Content-bearing descendants of ``root_row`` in tree order, each with a
+    stable anchor id, title, and breadcrumb below the root node.
+
+    Adaptive flatten: the caller flattens a node only when its subtree is small
+    enough to render as one page. A cheap COUNT decides that up front — if the
+    subtree holds more content nodes than ``max_items`` the payload comes back as
+    ``mode='cards'`` (no bodies), telling the caller to show a drill-down index
+    instead; otherwise ``mode='stack'`` carries the full stacked content."""
+    root_path = root_row['path']
+    root_full = root_path.split('/')[1:]      # segments under the car
+    root_depth = len(root_full)
+
+    leaf_count = conn.execute(
+        "SELECT COUNT(*) FROM nodes WHERE content IS NOT NULL "
+        "AND (path = ? OR path LIKE ?)",
+        (root_path, root_path + '/%'),
+    ).fetchone()[0]
+    if leaf_count > max_items:
+        return {
+            'mode': 'cards',
+            'root': {
+                'id': root_row['id'],
+                'title': root_row['title'],
+                'segments': [seg.replace('\u2044', '/') for seg in root_full],
+            },
+            'items': [],
+            'count': leaf_count,
+            'truncated': True,
+        }
+    rows = conn.execute("""
+        WITH RECURSIVE tree(id, parent_id, title, node_type, href, content, path,
+                            sort_order, ord) AS (
+            SELECT id, parent_id, title, node_type, href, content, path, sort_order,
+                   printf('%08d', sort_order)
+            FROM nodes WHERE parent_id = ?
+            UNION ALL
+            SELECT n.id, n.parent_id, n.title, n.node_type, n.href, n.content,
+                   n.path, n.sort_order,
+                   t.ord || '.' || printf('%08d', n.sort_order)
+            FROM nodes n JOIN tree t ON n.parent_id = t.id
+        )
+        SELECT id, title, node_type, href, content, path FROM tree ORDER BY ord
+    """, (root_row['id'],)).fetchall()
+
+    seq = []
+    if root_row['content'] is not None:
+        seq.append(root_row)          # the node itself may hold content
+    seq.extend(rows)
+
+    items = []
+    truncated = False
+    for r in seq:
+        if r['content'] is None:
+            continue
+        if len(items) >= max_items:
+            truncated = True
+            break
+        full = r['path'].split('/')[1:]
+        rel = [seg.replace('\u2044', '/') for seg in full[root_depth:]]
+        items.append({
+            'id': r['id'],
+            'title': r['title'],
+            'segments': rel,
+            'content': _lazy_images(rewrite_image_urls(r['content'], car_name)),
+        })
+    return {
+        'mode': 'stack',
+        'root': {
+            'id': root_row['id'],
+            'title': root_row['title'],
+            'segments': [seg.replace('\u2044', '/') for seg in root_full],
+        },
+        'items': items,
+        'count': len(items),
+        'truncated': truncated,
+    }
+
+
 def node_to_dict(row, car_name):
     node = dict(row)
     node['content'] = rewrite_image_urls(node.get('content'), car_name)
@@ -751,10 +848,16 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 # "Download .zip for offline use" node).
                 cur.execute(f"""
                     SELECT {NODE_COLUMNS}
-                    FROM nodes
-                    WHERE node_type = 'root' AND depth = 1
-                          AND (href IS NULL OR href != '404.html')
-                    ORDER BY sort_order
+                    FROM nodes n
+                    WHERE n.node_type = 'root' AND n.depth = 1
+                          AND (n.href IS NULL OR n.href != '404.html')
+                          AND NOT (
+                              n.content IS NULL AND n.href IS NULL
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM nodes c WHERE c.parent_id = n.id
+                              )
+                          )
+                    ORDER BY n.sort_order
                 """)
             else:
                 # Walk down the tree title by title. We deliberately do NOT
@@ -772,6 +875,7 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                     return JsonResponse({'error': 'Car has no root nodes'}, status=404)
 
                 current_parent_id = root_row['parent_id']
+                current_parent_title = None
                 matched = None
                 walked = []
                 for seg in path_segments:
@@ -783,6 +887,24 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                         LIMIT 1
                     """, (current_parent_id, seg))
                     matched = cur.fetchone()
+                    if not matched and current_parent_title:
+                        # Alphabetical index pages are titled with their folder
+                        # name repeated as a prefix ("Emission Control
+                        # Abbreviations: \"D\"") but sit directly under a folder
+                        # of that same name. Older/bookmarked/hand-trimmed links
+                        # that drop the redundant prefix (".../Emission Control
+                        # Abbreviations/\"D\"") would 404 against an exact title
+                        # match. Retry with the prefix composed back on so those
+                        # links still resolve. Additive: the exact match above is
+                        # always preferred first.
+                        cur.execute(f"""
+                            SELECT {NODE_COLUMNS}
+                            FROM nodes
+                            WHERE parent_id = ? AND title = ?
+                            ORDER BY sort_order
+                            LIMIT 1
+                        """, (current_parent_id, f"{current_parent_title}: {seg}"))
+                        matched = cur.fetchone()
                     if not matched:
                         walked.append(seg)
                         return JsonResponse(
@@ -791,6 +913,19 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                         )
                     walked.append(seg)
                     current_parent_id = matched['id']
+                    current_parent_title = matched['title']
+
+                # ?subtree=1: don't return this node's immediate children -
+                # return every content node beneath it, flattened, so the
+                # frontend can stack the whole remaining tree on one page.
+                if request.GET.get('subtree') is not None:
+                    try:
+                        cap = int(request.GET.get('max') or SUBTREE_MAX_ITEMS)
+                    except (TypeError, ValueError):
+                        cap = SUBTREE_MAX_ITEMS
+                    cap = max(1, min(cap, SUBTREE_MAX_ITEMS))
+                    return JsonResponse(
+                        subtree_content(conn, matched, car.car_name, max_items=cap))
 
                 # Leaf nodes carry their own content and have no children -
                 # return the node itself instead of querying for children.
@@ -798,14 +933,33 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                     nodes = [node_to_dict(matched, car.car_name)]
                     return JsonResponse(nodes, safe=False)
 
+                # Hide dead-end placeholder nodes: crawl artifacts with no
+                # content, no href to resolve, and no children (e.g. the
+                # "External Pages > Different car" bucket, which points at a car
+                # model that was never onboarded). They otherwise render as a
+                # clickable card leading only to an empty "no items" page. A real
+                # page always has content or an href, and a real section always
+                # has children, so this never hides anything navigable.
                 cur.execute(f"""
                     SELECT {NODE_COLUMNS}
-                    FROM nodes
-                    WHERE parent_id = ?
-                    ORDER BY sort_order
+                    FROM nodes n
+                    WHERE n.parent_id = ?
+                          AND NOT (
+                              n.content IS NULL AND n.href IS NULL
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM nodes c WHERE c.parent_id = n.id
+                              )
+                          )
+                    ORDER BY n.sort_order
                 """, (matched['id'],))
 
             nodes = [node_to_dict(row, car.car_name) for row in cur.fetchall()]
+            if request.GET.get("nav") is not None:
+                # Sidebar tree only needs structure, not page bodies: drop the
+                # (potentially large) content and expose a boolean instead.
+                for n in nodes:
+                    n['has_content'] = n.get('content') is not None
+                    n['content'] = None
             return JsonResponse(nodes, safe=False)
 
         except Car.DoesNotExist:

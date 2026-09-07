@@ -1,5 +1,10 @@
 # 12 — Security
 
+
+> **2026-08-05:** secret/token rotation, edge rate limiting, the
+> ModSecurity+CRS WAF and self-hosted error monitoring are documented
+> in [18 — Security hardening](18-security-hardening.md). The known
+> limitations below were re-assessed on that date.
 ## 12.1 Enforced guarantees (as of 2026-07-15)
 
 1. **Content paywall is backend-enforced.** Every manual-content endpoint (car content,

@@ -1,7 +1,7 @@
 # 15 — Structured Vehicle Data (schema.org) & the Ingestion Pipeline Extension
 
 > Built 2026-07-18. Covers two related systems added together: the **download →
-> parse** front half of the processing pipeline (LeMon downloader + ZIP inbox),
+> parse** front half of the processing pipeline (source downloader + ZIP inbox),
 > and the **schema.org vehicle spec** layer built on top of the ingested data.
 
 ## 1. The full pipeline (7 stages)
@@ -11,7 +11,7 @@ downloads/ZIPs behaves exactly like the old 4-stage pipeline):
 
 | # | stage      | what it does | code |
 |---|-----------|--------------|------|
-| 1 | `download` | executes queued `DownloadRequest`s against lemon-manuals.org.ua via `lemon-downloader/downloader.py` (imported with importlib; 3s pacing, 429 backoff, atomic `.part` writes, LEMON filename convention), registers fetched ZIPs | `run_pipeline.stage_download`, `api/ingest.py execute_download_request` |
+| 1 | `download` | executes queued `DownloadRequest`s against the upstream source via `kgtv-downloader/downloader.py` (imported with importlib; 3s pacing, 429 backoff, atomic `.part` writes, KGTV filename convention), registers fetched ZIPs | `run_pipeline.stage_download`, `api/ingest.py execute_download_request` |
 | 2 | `parse`    | runs pending `ZipPackage`s through `htmlparser_logical.process_single_zip` → `Database_warehouse/<stem>.db` + `static_warehouse/<stem>/` + catalog upsert; deletes the extracted tree + intermediate crawl DB afterwards (ZIPs are kept); disk guard pauses below 20 GB free (`KG_PIPELINE_MIN_FREE_GB`) | `stage_parse`, `ingest.parse_zip_package` |
 | 3 | `catalog`  | `sync_car_catalog` (validating backstop; parse already upserted) | unchanged |
 | 4 | `schema`   | builds/refreshes `VehicleSpec` rows for stale/missing cars | `stage_schema`, `api/vehicleschema.py` |
@@ -32,7 +32,7 @@ the job started is re-planned instead of wrongly auto-skipping.
 * `manage.py scan_zips [--normalize] [--dry-run]` — discovers `*.zip`,
   reads `"<year> <brand> <model>/"` from each ZIP's inner top-level folder
   (no extraction needed), renames legacy model-only files to
-  `LEMON <year> <brand> <model>.zip`, registers `ZipPackage` rows.
+  `KGTV <year> <brand> <model>.zip`, registers `ZipPackage` rows.
 * **Duplicate guard**: a ZIP whose target stem already has a warehouse `.db`,
   or whose stem is already covered by another queued/done package, becomes
   `skipped_duplicate` — re-downloads of ingested cars can never clobber or
@@ -102,7 +102,7 @@ car DB newer than built_at).
   context-only.
 * **Admin**: section «مشخصات خودروها» (`/api/admin/vehicle-specs/`) — fleet
   coverage, per-field counts, per-car spec + provenance viewer. The pipeline
-  section gained the LEMON source-check form («بررسی منبع» dry-run listing,
+  section gained the source-check form («بررسی منبع» dry-run listing,
   «افزودن به صف دانلود»), the ZIP queue table, and download-request rows.
 
 ## 6. Admin API additions (`/api/admin/pipeline/` POST)
@@ -147,7 +147,7 @@ and the scheduler services them instantly even against Nice-0 parsing.
 * `requests` had to be added to the backend venv (downloader dependency);
   bs4/html5lib were already present.
 * The downloader stays standalone-usable (`bash run.sh <url> --filter
-  "corolla cross" --dry-run`); it now names files with the LEMON convention
+  "corolla cross" --dry-run`); it now names files with the KGTV convention
   itself, and still skips model-only-named leftovers.
 * Legacy ProcessingJob rows predate the new stages — `Runner.stage()` returns
   None for unknown keys and `run_stage` no-ops, so resuming an old job never

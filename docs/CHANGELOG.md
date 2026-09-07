@@ -3,6 +3,56 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## 2026-08-05 — security hardening: secrets, rate limiting, WAF, error monitoring
+- **Secrets**: `.env.prod` / `.env.production` / `db.sqlite3` and ~24 stray backup copies were
+  world-readable (0644) — now 0600 root-only. Both production secrets rotated. (doc 18 §1)
+- **Session tokens hashed + expiring**: `AuthToken`/`AdminAuthToken` stored the bearer value in
+  plaintext and never expired. Now sha256-at-rest with idle/absolute TTLs (user 14d/90d, admin
+  12h/7d) and a rolling `touch()`. Migration 0017 deletes the 89 pre-existing plaintext rows —
+  everyone re-logs in once. (doc 18 §1)
+- **Rotation tooling**: `manage.py rotate_secrets` (atomic env rewrite, `SECRET_KEY_FALLBACKS`
+  retention) and `manage.py rotate_tokens` (prune/revoke), plus `kgkg-token-prune.timer`.
+- **nginx rate limiting**: six tiers + connection limits, 429s logged for fail2ban. Loopback is
+  exempt — SSR fetches the public URL, so counting them would throttle the whole site. (doc 18 §2)
+- **WAF**: ModSecurity 3 + OWASP CRS 3.3.5 at PL1, blocking. Tuned from a DetectionOnly run:
+  CRS 920271 and 920350 removed (Persian/UTF-8 and the domain-less numeric Host header fired on
+  112/112 legitimate requests), free-text SQLi/XSS scoring lifted off named search/chat args.
+  Plus four fail2ban jails. (doc 18 §3)
+- **Error monitoring**: self-hosted GlitchTip on 127.0.0.1:8010 (SSH tunnel only — no TLS on this
+  box yet), Django + Next.js reporting, JSON logs in `/var/log/kgkg` with secret redaction.
+  Two silent compatibility traps documented (Brotli, DSN hyphens). (doc 18 §4)
+- **Verified**: 305 backend tests green (40 new in `api/test_security.py`); 44/44 external
+  security probe; 39/39 whole-site sweep.
+- **Found, not fixed**: `/admin/<anything>` returns 500 (pre-existing — `[brand]/[year]` catch-all
+  plus no `not-found.tsx`/`error.tsx` boundary); orphaned staging `next-server` on :3123.
+
+## 2026-08-03 — platform-wide vehicle filtering
+- **Shared filter component** (`components/VehicleFilter.jsx`): `useVehicleFilter()` +
+  `VehicleFilterBar`. Facets on **brand, model and model year only**, plus search. Appears
+  automatically above 4 vehicles, hides dimensions with a single option, counts each facet
+  against all *other* filters. (doc 07 §7.7)
+- **Scope correction, same day:** attribute facets (trim, drivetrain, powertrain,
+  transmission) were built, then removed on request — brand/model/year is the whole filter.
+  Search still matches the full vehicle name, so "AWD" or "Hybrid" still find their cars.
+  The admin *status* facets (completeness / processing / indexing) stay: they are health
+  indicators, not vehicle specifications.
+- **Adopted everywhere vehicles are listed**: `/browse` fleet, `/[brand]/[year]` and
+  `/assistant` pickers (new `VehicleCardGrid` replaces the raw `CardGrid` — 200+ cards were
+  unfiltered), admin catalogue, the access editors behind **both** user and company grants,
+  data-quality, vehicle specs, and the org-graph seat panel. Bulk grant/revoke now acts on
+  the filtered set.
+- **Admin health indicators on the catalogue** (`/api/admin/cars/`): per-vehicle data
+  completeness %, missing/empty sections, RAG + diagnostic + image indexing, schema.org
+  spec field count, outstanding processing — joined from the last `DataQualityRun` via
+  `dataquality.latest_health_by_car()` (one row read, no warehouse I/O). Filterable as
+  status facets. (doc 05, doc 07 §7.7)
+- **`company_cars` gains `model` + `year`** (`orggraph_api`) so the seat panel can facet
+  rather than substring-match a joined label.
+- **Model-family fix**: `Grand Highlander`, `Crown Signia`, `GR Corolla`/`GR Supra` were
+  grouping under `Grand`/`Crown`/`GR`; multi-word family list corrected, and the `" (YYYY)"`
+  multi-year stem suffix is now stripped before grouping.
+- 243 backend tests green (`api/test_vehiclefilter.py` new).
+
 ## 2026-07-19 — parallel parsing + max-power toggle
 - **Parse stage parallelised** (commit 8fc1ff1): one ZIP per subprocess
   (`ProcessPoolExecutor` spawn, `api/parse_worker.py`) so the GIL-bound html5lib
@@ -16,10 +66,10 @@ short and point at the doc section that was updated.
 ## 2026-07-18 (b) — ingestion pipeline + vehicle schema
 - **Pipeline front half shipped** (commit 8e5c4ba): new `download` and `parse` stages ahead
   of catalog/rag/diag/audit; `DownloadRequest` + `ZipPackage` queues (migration 0013);
-  `manage.py scan_zips` inbox scanner with LEMON filename normalization and a
+  `manage.py scan_zips` inbox scanner with KGTV filename normalization and a
   stem-level duplicate guard; disk guard (pause < 20 GB free). (doc 15)
-- **LeMon downloader integrated**: importable by the worker, `--filter` flag, output
-  renamed to the `LEMON <year> <brand> <model>.zip` convention. (doc 15)
+- **source downloader integrated**: importable by the worker, `--filter` flag, output
+  renamed to the `KGTV <year> <brand> <model>.zip` convention. (doc 15)
 - **Multi-year stems**: non-2025 model years get a `" (YYYY)"` stem suffix
   (`htmlparser_logical.warehouse_stem`); suffix-aware `car_meta`/`display_name`;
   dataquality treats a year suffix as NOT a copy marker. (doc 15 §3)

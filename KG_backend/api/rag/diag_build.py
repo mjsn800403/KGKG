@@ -161,7 +161,9 @@ def _app_url(meta, car_stem, chain):
     year = meta['year'] if meta['year'] is not None else 'unknown'
     base = f"/{_enc(meta['brand'])}/{year}/{_enc(car_stem)}"
     if segs:
-        base += '/' + '/'.join(_enc(s) for s in segs)
+        # In-title '/' -> U+2044 so it survives as one URL path segment
+        # (the Next router splits a literal '/'); frontend swaps it back.
+        base += '/' + '/'.join(_enc(s.replace('/', '⁄')) for s in segs)
     return base
 
 

@@ -1,11 +1,12 @@
 // app/[brand]/[year]/[model]/page.js — vehicle view (real root documents)
 import { redirect } from 'next/navigation';
-import { fetchModels } from '@/utils/api';
-import { portalTokenCookie } from '@/utils/serverAuth';
+import { fetchModels, fetchPartsRoot, buildNodeHref } from '@/utils/api';
+import { portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
+import CarBrowser from '@/components/CarBrowser';
 import SearchBox from '@/components/SearchBox';
 
 // Pick a meaningful icon from the section title; fall back to a rotation so
@@ -31,19 +32,43 @@ export default async function ModelPage({ params }) {
 
   const token = await portalTokenCookie();
   if (!token) redirect('/login');
+  // Classic mode drops the sidebar; modern wraps content in the tree browser.
+  const classic = (await browseModeCookie()) === 'classic';
 
+  // A vehicle can carry a manual tree, a parts catalog, or both (parts-only
+  // vehicles exist — their manual fetch 403/404s by design). Load both in
+  // parallel and fail the page only when NEITHER surface is available.
   let nodes = [];
+  let partsRoot = null;
   let loadError = '';
-  try {
+  const [manualRes, partsRes] = await Promise.allSettled([
     // Raw year segment on purpose: parseInt turns a legacy 'unknown' year into
     // NaN; the backend resolves the car by brand+name when the year mismatches.
-    nodes = await fetchModels(brand, year, model, token);
-  } catch (e) {
-    if (e?.status === 401) redirect('/login');
-    else if (e?.status === 403) {
+    fetchModels(brand, year, model, token),
+    fetchPartsRoot(brand, year, model, token),
+  ]);
+  if (manualRes.status === 'fulfilled') {
+    nodes = manualRes.value || [];
+  } else if (manualRes.reason?.status === 401) {
+    redirect('/login');
+  }
+  if (partsRes.status === 'fulfilled') {
+    partsRoot = partsRes.value;
+  } else if (partsRes.reason?.status === 401) {
+    redirect('/login');
+  }
+  const hasManual = manualRes.status === 'fulfilled';
+  const hasParts = !!partsRoot;
+  if (!hasManual && !hasParts) {
+    // Prefer a 403 from EITHER surface: "not in your subscription" is the
+    // actionable message, and a raw backend 404 string would be shown instead
+    // whenever the manual happens to fail differently from the parts side.
+    const reasons = [manualRes.reason, partsRes.reason].filter(Boolean);
+    const denied = reasons.find((e) => e?.forbidden);
+    if (denied) {
       loadError = 'دسترسی به مستندات این خودرو در اشتراک شما نیست. برای افزودن این خودرو با مدیر یا پشتیبانی تماس بگیرید.';
     } else {
-      loadError = e?.message || 'بارگذاری مستندات این خودرو ناموفق بود.';
+      loadError = reasons[0]?.message || 'بارگذاری مستندات این خودرو ناموفق بود.';
     }
   }
 
@@ -62,16 +87,24 @@ export default async function ModelPage({ params }) {
   const base = `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`;
   // The smart assistant lives inside each car: the customer picks the vehicle
   // first, then diagnoses a fault (Persian symptom or DTC) or asks repair Qs.
+  // It grounds in the manual tree, so it only appears when a manual exists.
   const items = [
-    {
+    ...(hasManual ? [{
       href: `${base}/assistant`,
       icon: 'bot',
       title: 'دستیار هوشمند',
       sub: 'تشخیص عیب از روی علائم یا کد خطا (DTC) + راهنمای تعمیر',
       go: 'گفتگو با دستیار ←',
-    },
+    }] : []),
+    ...(hasParts ? [{
+      href: `${base}/parts`,
+      icon: 'parts',
+      title: 'کاتالوگ قطعات یدکی',
+      sub: `OEM EPC / ${partsRoot?.frames?.length || 1} CONFIG`,
+      go: 'ورود به کاتالوگ ←',
+    }] : []),
     ...nodes.map((node, i) => ({
-      href: `${base}/${encodeURIComponent(node.title)}`,
+      href: buildNodeHref(brand, year, model, [node.title]),
       icon: iconFor(node.title, i),
       title: node.title,
       go: 'ورود به مستند ←',
@@ -82,12 +115,18 @@ export default async function ModelPage({ params }) {
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} />
-        <SearchBox brand={brand} year={year} model={model} />
+        {hasManual && <SearchBox brand={brand} year={year} model={model} />}
         <UserChip />
       </div>
       <h1 className="page-title">{model} {year}</h1>
       <div className="page-sub">// VEHICLE_DOCUMENTS</div>
-      <CardGrid items={items} />
+      {classic ? (
+        <CardGrid items={items} />
+      ) : (
+        <CarBrowser brand={brand} year={year} model={model} currentPath={[]}>
+          <CardGrid items={items} />
+        </CarBrowser>
+      )}
     </DashboardShell>
   );
 }

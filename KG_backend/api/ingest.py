@@ -1,14 +1,14 @@
-"""ZIP-inbox ingestion: the bridge between the LeMon downloader and the
+"""ZIP-inbox ingestion: the bridge between the source downloader and the
 processing pipeline.
 
 Until now the two halves of ingestion were disconnected: the downloader
-(``lemon-downloader/downloader.py``) was run by hand and dropped ZIPs in
+(``kgtv-downloader/downloader.py``) was run by hand and dropped ZIPs in
 ``/root/downloads``, and the HTML parser (``htmlparser_logical.py``) was run
 by hand on a desktop to turn those ZIPs into warehouse ``.db`` files. This
 module puts both under pipeline control:
 
 * ``scan_inbox``       — discover vehicle-manual ZIPs in the inbox roots,
-  normalize legacy model-only filenames to the ``LEMON <year> <brand>
+  normalize legacy model-only filenames to the ``KGTV <year> <brand>
   <model>.zip`` convention (brand/year read from the ZIP's own inner top-level
   folder, no extraction needed), and register each ZIP as a ``ZipPackage``
   row — the parse queue. A duplicate guard keeps re-downloads of
@@ -18,7 +18,7 @@ module puts both under pipeline control:
   extracted tree and intermediate crawl DB (ZIPs themselves are kept as the
   source archive).
 * ``execute_download_request`` — fetch a queued ``DownloadRequest`` from the
-  LEMON source site (with the downloader's own pacing/backoff) and register
+  upstream source site (with the downloader's own pacing/backoff) and register
   the resulting ZIPs.
 
 The downloader and parser stay standalone-usable scripts; they are loaded
@@ -96,8 +96,8 @@ def downloader_module():
     global _downloader_mod
     if _downloader_mod is None:
         path = os.environ.get('KG_DOWNLOADER_PATH',
-                              str(PROJECT_ROOT / 'lemon-downloader' / 'downloader.py'))
-        _downloader_mod = _load_module('kg_lemon_downloader', path)
+                              str(PROJECT_ROOT / 'kgtv-downloader' / 'downloader.py'))
+        _downloader_mod = _load_module('kg_source_downloader', path)
     return _downloader_mod
 
 
@@ -140,7 +140,7 @@ def check_disk_guard():
 def zip_inner_meta(zip_path):
     """(brand, year, car_name) read from the ZIP's inner top-level folder
     ("<year> <brand> <model>/") without extracting. None when unrecognizable
-    (not a LEMON manual bundle)."""
+    (not a source manual bundle)."""
     try:
         with zipfile.ZipFile(zip_path) as zf:
             names = zf.namelist()
@@ -158,8 +158,8 @@ def zip_inner_meta(zip_path):
     return m.group(2), int(m.group(1)), m.group(3).strip()
 
 
-def lemon_zip_name(brand, year, car_name):
-    return sanitize_filename(f'LEMON {year} {brand} {car_name}.zip')
+def source_zip_name(brand, year, car_name):
+    return sanitize_filename(f'KGTV {year} {brand} {car_name}.zip')
 
 
 def register_zip(path, normalize=False, dry_run=False):
@@ -180,8 +180,8 @@ def register_zip(path, normalize=False, dry_run=False):
     brand, year, car_name = meta
 
     renamed = False
-    if normalize and not path.name.startswith('LEMON '):
-        target = path.with_name(lemon_zip_name(brand, year, car_name))
+    if normalize and not path.name.startswith('KGTV '):
+        target = path.with_name(source_zip_name(brand, year, car_name))
         if target != path and not target.exists():
             if not dry_run:
                 path.rename(target)
@@ -300,7 +300,7 @@ def _cleanup_after_parse(parser, zip_path, log=None):
     if tree and tree.exists() and tree != zip_path.parent:
         shutil.rmtree(tree, ignore_errors=True)
         say(f'cleaned extracted tree: {tree.name}')
-    crawl_db = zip_path.parent / zip_path.name.replace('LEMON ', '').replace('.zip', '.db')
+    crawl_db = zip_path.parent / zip_path.name.replace('KGTV ', '').replace('.zip', '.db')
     for suffix in ('', '-wal', '-shm'):
         p = Path(str(crawl_db) + suffix)
         if p.exists():
@@ -410,7 +410,7 @@ def list_source(url, name_filter=''):
         if len(bp) == 4:                      # ['bundle', brand, year, model]
             brand, year, model = bp[1], int(bp[2]), bp[3]
             stem = warehouse_stem(model, year)
-            for cand in (save_dir / lemon_zip_name(brand, year, model),
+            for cand in (save_dir / source_zip_name(brand, year, model),
                          save_dir / f'{sanitize_filename(model)}.zip'):
                 if cand.exists() and zipfile.is_zipfile(cand):
                     downloaded = True
@@ -475,7 +475,7 @@ def execute_download_request(req, log=None, check_cancel=None, on_vehicle=None):
         if state in ('ok', 'skip'):
             bp = [unquote(p) for p in urlparse(v['bundle_url']).path.strip('/').split('/')]
             if len(bp) == 4:
-                for cand in (save_dir / lemon_zip_name(bp[1], int(bp[2]), bp[3]),
+                for cand in (save_dir / source_zip_name(bp[1], int(bp[2]), bp[3]),
                              save_dir / f'{sanitize_filename(v["name"])}.zip'):
                     if cand.exists():
                         register_zip(cand, normalize=True)

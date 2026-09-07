@@ -118,6 +118,11 @@ body{
   .credit .heart{animation-duration:1.4s !important;animation-iteration-count:infinite !important}
   .vin-decode .cursor{animation-duration:1s !important;animation-iteration-count:infinite !important}
   .hotspot{animation-duration:2.2s !important;animation-iteration-count:infinite !important}
+  /* Parts callout selection: the user explicitly wants the picked marker/row to
+     keep blinking, so re-enable it here (the global rule above would otherwise
+     freeze it to a single 0.001ms tick). */
+  .parts-landmark.is-selected .parts-landmark-ring{animation-duration:1s !important;animation-iteration-count:infinite !important}
+  .parts-table tr.is-selected .c-callout{animation-duration:1s !important;animation-iteration-count:infinite !important}
   .modal-overlay.show{animation-duration:.3s !important}
   .modal-box{animation-duration:.4s !important}
 }
@@ -229,7 +234,7 @@ html[data-theme="light"] #spotlight{mix-blend-mode:multiply;opacity:.22}
 .theme-toggle:hover{border-color:var(--gold);color:var(--gold);transform:rotate(20deg)}
 .theme-toggle svg{width:17px;height:17px}
 .btn{
-  font-family:var(--fa);font-size:13.5px;font-weight:600;cursor:pointer;
+  font-family:var(--fa);font-size:13.5px;font-weight:600;cursor:pointer;user-select:none;-webkit-user-select:none;
   border:1px solid var(--border);background:transparent;color:var(--text);
   padding:10px 22px;border-radius:var(--radius);letter-spacing:.02em;
   transition:transform .25s cubic-bezier(.2,.9,.3,1),box-shadow .3s,border-color .3s,background .3s;
@@ -237,8 +242,8 @@ html[data-theme="light"] #spotlight{mix-blend-mode:multiply;opacity:.22}
   transform:translateZ(0);backface-visibility:hidden;-webkit-backface-visibility:hidden;will-change:transform;
 }
 .btn-accent{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn-accent:hover{box-shadow:0 0 28px var(--accent-glow);filter:brightness(1.08);transform:translateY(-2px)}
-.btn:not(.btn-accent):hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.btn-accent:hover{box-shadow:0 -2px 28px var(--accent-glow);filter:brightness(1.08)}
+.btn:not(.btn-accent):hover{border-color:var(--gold);color:var(--gold);box-shadow:0 -2px 14px rgba(0,0,0,.35)}
 .btn:active{transform:translateY(0) scale(.97)}
 .btn:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
@@ -284,7 +289,7 @@ section{padding:110px 48px;position:relative}
 .card{background:var(--surface);padding:38px 32px;transition:background .35s,transform .35s cubic-bezier(.2,.9,.3,1);position:relative;overflow:hidden}
 .card > *{position:relative;z-index:1}
 .card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,var(--accent-glow),transparent 60%);opacity:0;transition:opacity .4s;pointer-events:none}
-.card:hover{background:var(--surface-2);transform:translateY(-4px)}
+.card:hover{background:var(--surface-2);box-shadow:0 -4px 22px rgba(0,0,0,.30)}
 .card:hover::before{opacity:1}
 .card .num{font-family:var(--mono);color:var(--accent);font-size:12.5px;margin-bottom:20px;letter-spacing:.12em;font-weight:600;position:relative;z-index:1;display:flex;align-items:center;gap:10px}
 .card .num svg{width:20px;height:20px;color:var(--gold)}
@@ -381,7 +386,7 @@ footer{border-top:1px solid var(--border);background:var(--surface)}
 
 /* ===== DASHBOARD ===== */
 .shell{display:flex;min-height:100vh;min-height:100svh;padding-top:26px}
-.sidebar{width:240px;flex:none;border-left:1px solid var(--border);padding:28px 22px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.sidebar{width:240px;flex:none;border-left:1px solid var(--border);padding:28px 22px;display:flex;flex-direction:column;gap:6px;background:var(--surface);/* Pin to the viewport instead of stretching to the (possibly very long) page, so the bottom-anchored logout stays on screen. */position:sticky;top:26px;align-self:flex-start;height:calc(100vh - 26px);height:calc(100svh - 26px);overflow-y:auto}
 .sb-brand{display:flex;align-items:center;gap:10px;margin-bottom:36px;padding:0 6px;text-decoration:none;color:inherit}
 .sb-brand img{height:26px}
 .sb-brand span{font-family:var(--disp);font-weight:700;font-size:14.5px}
@@ -439,13 +444,13 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   color:var(--text-dim);font-size:13.5px;font-weight:500;cursor:pointer;font-family:var(--fa);
   transition:border-color .25s,background .25s,color .25s,transform .2s;
 }
-.model-chip:hover{border-color:var(--gold);color:var(--text);transform:translateY(-1px)}
+.model-chip:hover{border-color:var(--gold);color:var(--text)}
 .model-chip.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 16px var(--accent-glow)}
 .model-chip .cnt{font-family:var(--mono);font-size:10.5px;opacity:.75;margin-right:6px}
 
 .fleet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;background:var(--border);margin-bottom:48px}
 .fleet-card{background:var(--surface);padding:24px;cursor:pointer;transition:background .25s,transform .25s cubic-bezier(.2,.9,.3,1);position:relative;text-decoration:none;color:var(--text);display:block}
-.fleet-card:hover{background:var(--surface-2);transform:translateY(-3px)}
+.fleet-card:hover{background:var(--surface-2);box-shadow:0 -3px 18px rgba(0,0,0,.30)}
 .fleet-card .tag{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);letter-spacing:.08em;margin-bottom:14px}
 .fleet-card h4{font-family:var(--fa);font-size:16.5px;font-weight:600;margin-bottom:6px}
 .fleet-card .yrs{font-size:13.5px;color:var(--text-dim)}
@@ -460,7 +465,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 
 .doc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)}
 .doc-card{background:var(--surface);padding:30px 24px;min-height:170px;display:flex;flex-direction:column;justify-content:space-between;transition:background .3s,transform .3s cubic-bezier(.2,.9,.3,1);cursor:pointer;position:relative;overflow:hidden;text-decoration:none;color:var(--text)}
-.doc-card:hover{background:var(--surface-2);transform:translateY(-4px)}
+.doc-card:hover{background:var(--surface-2);box-shadow:0 -4px 22px rgba(0,0,0,.30)}
 .doc-card .icon{font-family:var(--mono);font-size:22px;color:var(--accent);display:flex;align-items:center}
 .doc-card .icon svg{width:26px;height:26px}
 .doc-card h4{font-family:var(--fa);font-weight:700;font-size:16.5px;margin:14px 0 4px}
@@ -748,7 +753,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   display:grid;place-items:center;font-size:17px;font-family:var(--fa);font-weight:700;
   box-shadow:var(--shadow);transition:.25s;
 }
-.tour-help-btn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-2px)}
+.tour-help-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ── Responsive: tablet ────────────────────────────────────────────────── */
 @media (max-width:1180px){
@@ -776,6 +781,9 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   .vtab{padding:12px 14px}
   .model-chip,.doc-chip{min-height:40px}
   .navlinks a,.settings-tabs .stab{min-height:44px;display:flex;align-items:center}
+  /* Breadcrumbs are how you go back up a level; 24px was too short. */
+  .breadcrumb a,.crumb a{min-height:32px;display:inline-flex;align-items:center}
+  .searchbox .search-btn{min-width:32px;min-height:32px}
 }
 
 /* ── Responsive: mobile ────────────────────────────────────────────────── */
@@ -817,6 +825,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
     width:100%;flex-direction:row;align-items:center;overflow-x:auto;overflow-y:hidden;
     border-left:none;border-bottom:1px solid var(--border);padding:10px 14px;gap:4px;
     -webkit-overflow-scrolling:touch;
+    position:static;height:auto;top:auto;align-self:auto;
   }
   .sidebar::-webkit-scrollbar{display:none}
   .sb-brand{margin-bottom:0;margin-left:10px}
@@ -1009,7 +1018,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   background:var(--grad-accent);color:#fff;border:none;padding:0 22px 0 14px;border-radius:40px;
   font-family:var(--fa);font-size:15px;font-weight:600;box-shadow:0 12px 30px -12px var(--accent-glow);
   transition:transform .25s,box-shadow .25s}
-.team-add-fab:hover{transform:translateY(-2px);box-shadow:0 18px 40px -14px var(--accent-glow)}
+.team-add-fab:hover{box-shadow:0 18px 40px -14px var(--accent-glow)}
 .team-add-fab .fab-plus{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
   background:rgba(255,255,255,.18);margin:5px 0}
 .team-add-fab .fab-text{padding-block:12px}
@@ -1331,7 +1340,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 .rt-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
 .rt-kpi{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:14px 16px;border-radius:14px;
   border:1px solid var(--border-soft);cursor:pointer;transition:transform .2s,border-color .2s;text-align:right}
-.rt-kpi:hover{transform:translateY(-3px);border-color:var(--accent)}
+.rt-kpi:hover{border-color:var(--accent)}
 .rt-kpi .rk-ico{color:var(--text-dim);margin-bottom:2px}
 .rt-kpi .rk-val{font-size:23px;font-weight:700;font-family:'Space Grotesk','Vazirmatn',sans-serif}
 .rt-kpi .rk-label{font-size:12px;color:var(--text-dim)}
@@ -1524,7 +1533,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;
   display:grid;place-items:center;box-shadow:var(--shadow);transition:.25s;
 }
-.guide-fab:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-2px)}
+.guide-fab:hover{border-color:var(--accent);color:var(--accent)}
 .guide-fab svg{width:20px;height:20px}
 .guide-fab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
@@ -1576,7 +1585,7 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;cursor:pointer;
   transition:.2s;
 }
-.guide-ctx-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.guide-ctx-card:hover{border-color:var(--accent)}
 .gcc-title{font-family:var(--fa);font-weight:600;font-size:13.5px;color:var(--text);margin-bottom:3px}
 .gcc-sum{font-size:12px;color:var(--text-dim);line-height:1.7}
 
@@ -1698,3 +1707,523 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
   border-radius:999px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.25s;
 }
 .chat-suggestion-chip:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);border-style:solid}
+
+/* --------------------------------------------------------------------------
+   Org-graph canvas (n8n-style team management)
+   -------------------------------------------------------------------------- */
+.org-wrap { display: flex; flex-direction: column; gap: 12px; }
+.org-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface);
+}
+.org-btn {
+  font-family: var(--fa); font-size: 13px; cursor: pointer;
+  padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); transition: .15s;
+}
+.org-btn:hover:not(:disabled) { border-color: var(--accent); }
+.org-btn:disabled { opacity: .45; cursor: not-allowed; }
+.org-btn.primary { background: var(--grad-accent); color: #fff; border: none; }
+.org-btn.ghost { background: transparent; }
+.org-btn.danger { color: #ff6b6b; border-color: #ff6b6b55; }
+.org-cap { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+.org-cap.full { color: #ffb020; }
+.org-cap-warn, .org-error.inline { color: #ffb020; font-size: 12px; }
+.org-readonly { color: var(--text-dim); font-size: 13px; }
+.org-loading, .org-error { padding: 40px; text-align: center; color: var(--text-dim); font-family: var(--fa); }
+
+.org-canvas {
+  position: relative; height: 68vh; min-height: 460px;
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  background: var(--bg);
+}
+.org-canvas .react-flow__attribution { display: none; }
+
+/* seat node */
+.seat-node {
+  position: relative; min-width: 150px; padding: 12px 14px;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  font-family: var(--fa); box-shadow: var(--shadow); text-align: center;
+}
+.seat-node .seat-title { font-weight: 700; font-size: 13px; }
+.seat-node .seat-occ { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.seat-empty { color: var(--text-faint); font-style: italic; }
+.seat-root { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), var(--gold-glow); }
+.seat-mine { outline: 2px solid var(--accent); }
+.seat-selected { border-color: var(--accent); box-shadow: var(--accent-glow); }
+.seat-badge {
+  position: absolute; top: -9px; inset-inline-start: 8px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 1px;
+  background: var(--gold); color: #1a1200; padding: 1px 6px; border-radius: 6px;
+}
+
+/* side panel */
+.org-panel {
+  position: absolute; top: 0; inset-inline-end: 0; height: 100%;
+  width: 340px; max-width: 92%; overflow-y: auto;
+  background: var(--surface); border-inline-start: 1px solid var(--border);
+  padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  font-family: var(--fa); box-shadow: var(--shadow);
+}
+.org-panel-head { display: flex; justify-content: space-between; align-items: center; }
+.org-x { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; line-height: 1; }
+.org-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); }
+.org-field input, .org-select {
+  font-family: var(--fa); font-size: 13px; padding: 7px 9px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text); width: 100%;
+}
+.org-sec { border-top: 1px solid var(--border-soft); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.org-sec-t { font-size: 12px; font-weight: 700; color: var(--text); }
+.org-sec-t.sm { font-weight: 500; color: var(--text-dim); font-size: 11px; }
+.org-occ-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.org-invite { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.org-invite-url { font-size: 11px; color: var(--text-dim); word-break: break-all; }
+.org-invite-url code { color: var(--accent); }
+.org-check { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.org-cars { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.org-car { border: 1px solid var(--border-soft); border-radius: 8px; padding: 7px 9px; }
+.org-car.on { border-color: var(--accent); }
+.org-pkgs { margin-top: 6px; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 4px; }
+.org-pkg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+.org-pkg-hint { font-size: 10px; color: var(--text-faint); }
+
+/* --------------------------------------------------------------------------
+   Org-graph canvas v2 — friendlier panel, tabs, tidy layout controls.
+   Overrides/extends the v1 block above.
+   -------------------------------------------------------------------------- */
+.org-btn.sm { padding: 5px 10px; font-size: 12px; }
+.org-btn.sm.on { border-color: var(--accent); color: var(--accent); }
+.org-dirs { display: inline-flex; gap: 4px; }
+.org-hint { font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+
+/* node */
+.seat-node { min-width: 158px; padding: 11px 14px; }
+.seat-name { font-weight: 700; font-size: 13px; }
+.seat-role { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+.seat-badge {
+  position: absolute; top: -10px; inset-inline-start: 10px;
+  font-family: var(--fa); font-size: 9px; letter-spacing: .3px;
+  background: var(--gold); color: #1a1200; padding: 2px 7px; border-radius: 6px;
+}
+
+/* panel */
+.org-panel {
+  width: 360px; padding: 0; gap: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.org-panel-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border-soft);
+}
+.org-panel-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.org-panel-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.org-panel-foot { padding: 12px 16px; border-top: 1px solid var(--border-soft); }
+.org-panel-foot .org-btn { width: 100%; }
+.ltr { direction: ltr; text-align: left; }
+
+.org-tabs { display: flex; border-bottom: 1px solid var(--border-soft); }
+.org-tabs button {
+  flex: 1; padding: 10px 8px; font-family: var(--fa); font-size: 12.5px;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-dim); cursor: pointer;
+}
+.org-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+.org-occ { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.org-bulk { display: flex; gap: 6px; }
+.org-creds {
+  font-size: 12px; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid var(--accent); background: var(--bg); line-height: 1.9;
+}
+.org-cars { max-height: none; }
+
+/* Brand bulk-grant chips in the admin access editor */
+.access-editor-brands {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin: 10px 0 12px;
+}
+.access-editor-brands-t { font-size: 12px; color: var(--text-dim); margin-inline-end: 4px; }
+.doc-chip.partial { border-color: var(--accent); color: var(--accent); opacity: .8; }
+
+.org-bulk.wrap { flex-wrap: wrap; align-items: center; }
+
+/* ---------------------------------------------------------------------------
+   Shared vehicle filter (components/VehicleFilter.jsx) — the one filtering
+   surface used by every screen that lists more than a handful of vehicles.
+   --------------------------------------------------------------------------- */
+.vf { margin-bottom: 22px; }
+.vf-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+
+.vf-search {
+  position: relative; display: flex; align-items: center; flex: 1 1 220px;
+  min-width: 180px; max-width: 340px;
+}
+.vf-search-ico {
+  position: absolute; inset-inline-start: 12px; font-size: 15px;
+  color: var(--text-faint); pointer-events: none;
+}
+.vf-search input {
+  width: 100%; padding: 11px 34px 11px 14px; font-family: var(--fa); font-size: 13.5px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); transition: border-color .25s;
+}
+.vf-search input:focus { outline: none; border-color: var(--accent); }
+.vf-search input::-webkit-search-cancel-button { filter: grayscale(1) opacity(.6); }
+
+.vf-dd { position: relative; }
+.vf-dd-btn {
+  display: flex; align-items: center; gap: 8px; height: 100%; min-width: 150px;
+  padding: 7px 14px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer; font-family: var(--fa);
+  color: var(--text); transition: border-color .25s;
+}
+.vf-dd-btn:hover { border-color: var(--gold); }
+.vf-dd.on .vf-dd-btn { border-color: var(--accent); }
+.vf-dd-label { font-size: 10.5px; color: var(--text-faint); font-family: var(--mono); }
+.vf-dd-value { font-size: 13.5px; margin-inline-end: auto; }
+.vf-dd.on .vf-dd-value { color: var(--accent); font-weight: 600; }
+.vf-dd-btn .arr { font-size: 10px; color: var(--text-faint); transition: transform .3s cubic-bezier(.2,.9,.3,1); }
+.vf-dd.open .arr { transform: rotate(180deg); }
+
+.vf-dd-menu {
+  z-index: 90; overflow: auto; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface-2); box-shadow: var(--shadow);
+  padding: 4px;
+}
+.vf-dd-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 9px 12px; font-size: 13.5px; font-family: var(--fa);
+  background: none; border: none; border-radius: 8px; color: var(--text);
+  cursor: pointer; text-align: start; transition: background .18s, color .18s;
+}
+.vf-dd-item:hover { background: var(--surface-3); color: var(--accent); }
+.vf-dd-item.on { color: var(--accent); font-weight: 600; }
+.vf-dd-item .cnt { font-family: var(--mono); font-size: 10.5px; opacity: .7; }
+
+.vf-chips {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px;
+}
+.vf-chips-label { font-size: 12.5px; color: var(--text-faint); margin-inline-end: 2px; }
+.vf-chips .model-chip { padding: 6px 14px; font-size: 12.5px; }
+
+.vf-foot {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px;
+  font-size: 12.5px; color: var(--text-faint);
+}
+.vf-count b { color: var(--text); font-family: var(--mono); }
+.vf-reset {
+  background: none; border: none; padding: 0; cursor: pointer; font-family: var(--fa);
+  font-size: 12.5px; color: var(--accent); text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Compact variant — side panels and modals (org-graph seat access, dialogs). */
+.vf-dense { margin-bottom: 12px; }
+.vf-dense .vf-row { gap: 6px; }
+.vf-dense .vf-search { max-width: none; min-width: 140px; }
+.vf-dense .vf-search input { padding: 8px 30px 8px 10px; font-size: 12.5px; }
+.vf-dense .vf-dd-btn { min-width: 118px; padding: 5px 10px; }
+.vf-dense .vf-dd-value { font-size: 12.5px; }
+.vf-dense .vf-chips { margin-top: 8px; gap: 6px; }
+.vf-dense .vf-chips .model-chip { padding: 4px 11px; font-size: 11.5px; }
+.vf-dense .vf-foot { margin-top: 8px; font-size: 11.5px; }
+
+@media (max-width: 720px) {
+  .vf-row { gap: 8px; }
+  .vf-search { max-width: none; flex-basis: 100%; }
+  .vf-dd { flex: 1 1 46%; }
+  .vf-dd-btn { width: 100%; min-width: 0; }
+  .vf-search input, .vf-dd-btn { min-height: 42px; }
+  .vf-chips .model-chip { min-height: 34px; }
+}
+
+/* Per-vehicle data-completeness read-out in the admin catalogue tables. */
+.dq-health { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.dq-meter {
+  width: 54px; height: 6px; border-radius: 999px; overflow: hidden;
+  background: var(--surface-3); border: 1px solid var(--border-soft);
+}
+.dq-meter-fill { display: block; height: 100%; border-radius: 999px; }
+.dq-pct { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+/* Parts catalog (کاتالوگ قطعات یدکی) — EPC browser: config picker, group
+   tree cards (stock .doc-grid), and the leaf viewer (exploded diagram +
+   structured parts table). Diagrams are white-canvas GIFs like the manual
+   SVGs, hence the deliberate #fff surface. */
+.fleet-parts-chip{
+  display:inline-flex;align-items:center;gap:6px;margin:-6px 0 10px;
+  font-size:11px;color:var(--gold);border:1px solid var(--border);
+  border-radius:999px;padding:2px 10px;background:var(--surface-2);
+  width:fit-content;
+}
+.parts-cfg-row{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.parts-cfg-chip{font-family:var(--mono);font-size:11px;letter-spacing:.04em}
+.parts-cfg-chip.active{
+  background:var(--accent);border-color:var(--accent);color:#fff;
+  box-shadow:0 0 14px var(--accent-glow);
+}
+.parts-frame-info{
+  display:flex;flex-wrap:wrap;gap:7px 14px;align-items:center;
+  margin:0 0 22px;font-size:12px;color:var(--text-dim);
+}
+.parts-frame-code{
+  font-family:var(--mono);font-size:11.5px;color:var(--accent-2);
+  border:1px solid var(--border);border-radius:4px;padding:2px 8px;
+  background:var(--surface-2);
+}
+.parts-frame-bit{white-space:nowrap}
+.parts-frame-bit + .parts-frame-bit{border-right:1px solid var(--border-soft);padding-right:14px}
+
+.parts-viewer{display:flex;flex-direction:column;gap:26px;margin-top:6px}
+.parts-cat-line{display:flex;align-items:center;gap:10px;margin-bottom:-8px}
+.parts-cat-chip{
+  font-size:11.5px;color:var(--teal);border:1px solid var(--border);
+  border-radius:999px;padding:3px 12px;background:var(--surface-2);
+}
+.parts-cat-en{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);letter-spacing:.06em}
+
+.parts-section{border:1px solid var(--border);border-radius:var(--radius);padding:18px 18px 8px}
+.parts-section-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:12px;
+}
+.parts-section-head h3{font-size:15.5px;margin:0;direction:ltr;text-align:left}
+.parts-fig{
+  font-family:var(--mono);font-size:10.5px;color:var(--text-faint);
+  letter-spacing:.08em;border:1px solid var(--border-soft);border-radius:4px;
+  padding:2px 8px;white-space:nowrap;
+}
+
+.parts-diagram-wrap{
+  margin-bottom:14px;
+  /* Keep the illustration pinned while the (often very long) parts table
+     scrolls beneath it, so the user never loses the diagram they are picking
+     callouts from. Sticks within its section, releasing at the section end.
+     Opaque surface bg so scrolling table rows pass invisibly underneath. */
+  position:sticky;top:12px;z-index:6;
+  background:var(--surface);padding-top:6px;
+}
+.parts-diagram{
+  height:480px;overflow:hidden;position:relative;background:#fff;
+  border:1px solid var(--border-soft);border-radius:4px;cursor:zoom-in;
+  /* pan-y at 1x so a touch swipe still scrolls the page; only a zoomed
+     diagram claims the gesture for panning. */
+  touch-action:pan-y;display:flex;align-items:center;justify-content:center;
+}
+.parts-diagram.zoomed{cursor:grab;touch-action:none}
+.parts-diagram.dragging{cursor:grabbing}
+/* The canvas wraps the image AND the callout overlay and carries the pan/zoom
+   transform, so markers stay locked to the illustration at every scale. */
+/* The canvas box must equal the RENDERED image box exactly, because the callout
+   overlay (.parts-landmarks, inset:0) positions markers as a percentage of it.
+   So the canvas carries the image's own aspect-ratio (set inline from the
+   natural size once known) and is sized to the frame height; the image then
+   fills it. A percentage max-height on the image cannot work here — the canvas
+   height is content-based, so the percentage is indefinite and never
+   constrains, which let the image render at ~natural height and be clipped by
+   the frame's overflow:hidden. */
+.parts-diagram-canvas{
+  position:relative;display:block;
+  height:100%;width:auto;max-width:100%;
+  transform-origin:center center;transition:transform .06s linear;
+  will-change:transform;
+}
+.parts-diagram img{
+  /* The canvas already carries the correct ratio, so contain fits exactly with
+     no letterboxing; it only acts as a guard before the natural size is known
+     (and for the rare image wider than the frame), never as a distortion. */
+  display:block;width:100%;height:100%;object-fit:contain;user-select:none;
+}
+/* No animation while the pointer is driving the transform: the tween makes
+   the illustration lag the cursor on every pan. */
+.parts-diagram.dragging .parts-diagram-canvas{transition:none}
+@media (prefers-reduced-motion:reduce){.parts-diagram-canvas{transition:none}}
+
+/* Callout landmarks overlaid on the diagram (positioned as a percentage of the
+   image's native size, so they track pan/zoom via the canvas transform). */
+.parts-landmarks{position:absolute;inset:0;pointer-events:none}
+.parts-landmark{
+  position:absolute;transform:translate(-50%,-50%);
+  min-width:14px;min-height:14px;padding:0;margin:0;border:0;background:none;
+  cursor:pointer;pointer-events:auto;z-index:2;
+  -webkit-tap-highlight-color:transparent;
+}
+.parts-landmark-ring{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:26px;height:26px;border-radius:50%;box-sizing:border-box;
+  border:2px solid transparent;
+  transition:border-color .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+/* Hover = a steady red preview ring. */
+.parts-landmark:hover .parts-landmark-ring,
+.parts-landmark.is-hover .parts-landmark-ring{
+  border-color:#e2323b;background:rgba(226,50,59,.12);
+}
+/* Selection (click) = a persistent ring that repeatedly blinks between a solid
+   red glow and a faint ring. It never fully disappears (min border stays), and
+   it stays lit after the pointer leaves so it reads as "picked". Colour/glow is
+   animated rather than element opacity, so the circle can't vanish. */
+.parts-landmark.is-selected{z-index:4}
+/* Solid, always-visible base (red ring + glow) so the circle can NEVER vanish,
+   even if animations are disabled; the blink animates on top of it. */
+.parts-landmark.is-selected .parts-landmark-ring{
+  border-color:#e2323b;background:rgba(226,50,59,.22);
+  box-shadow:0 0 0 3px rgba(226,50,59,.5);
+  animation:parts-callout-blink 1s ease-in-out infinite;
+}
+@keyframes parts-callout-blink{
+  0%,100%{
+    border-color:#e2323b;background:rgba(226,50,59,.22);
+    box-shadow:0 0 0 3px rgba(226,50,59,.5);
+  }
+  50%{
+    border-color:rgba(226,50,59,.25);background:rgba(226,50,59,.04);
+    box-shadow:0 0 0 9px rgba(226,50,59,0);
+  }
+}
+/* Table rows that map to a diagram callout */
+.parts-table tr.parts-row-linkable{cursor:pointer}
+.parts-table tr.parts-row-linkable:hover>td,
+.parts-table tr.is-hover>td{background:var(--surface-2)}
+.parts-table tr.is-selected>td{background:rgba(226,50,59,.16)}
+.parts-table tr.is-selected .c-callout{
+  color:#e2323b;font-weight:700;animation:parts-row-blink 1s ease-in-out infinite;
+}
+@keyframes parts-row-blink{0%,100%{opacity:1}50%{opacity:.35}}
+.parts-diagram-zoom{
+  font-family:var(--mono);font-size:10.5px;color:var(--text-faint);
+  min-width:44px;
+}
+.parts-diagram-tools{
+  display:flex;align-items:center;gap:6px;margin-top:8px;
+}
+.parts-diagram-tools button{
+  width:30px;height:30px;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface-2);color:var(--text);font-size:15px;cursor:pointer;
+  line-height:1;display:inline-flex;align-items:center;justify-content:center;
+}
+.parts-diagram-tools button:hover{border-color:var(--accent);color:var(--accent)}
+.parts-diagram-hint{
+  font-size:11px;color:var(--text-faint);margin-right:8px;
+}
+
+.parts-table-wrap{overflow-x:auto;margin:0 -2px 12px}
+.parts-table{
+  width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px;
+}
+.parts-table th{
+  background:var(--surface-2);color:var(--text-dim);font-weight:600;
+  font-family:var(--fa);font-size:12px;text-align:right;
+  padding:9px 10px;border:1px solid var(--border-soft);white-space:nowrap;
+}
+/* Headers follow their own column's alignment — the LTR data columns are
+   left-aligned, so right-aligned labels would sit at the opposite edge. */
+.parts-table th.c-callout,.parts-table th.c-pn,.parts-table th.c-qty,
+.parts-table th.c-note,.parts-table th.c-range{text-align:left}
+.parts-table td{
+  padding:8px 10px;border:1px solid var(--border-soft);vertical-align:top;
+  color:var(--text);
+}
+.parts-table .c-callout{width:92px;text-align:left;color:var(--accent-2)}
+.parts-table .c-pn{width:150px;text-align:left;white-space:nowrap}
+.parts-table .c-qty{width:56px;text-align:left}
+.parts-table .c-range{width:120px;text-align:left;color:var(--text-dim);white-space:nowrap}
+.parts-table .c-note{text-align:left;color:var(--text-dim);max-width:260px}
+.parts-table .c-name{min-width:200px}
+.parts-table .pn-text{letter-spacing:.03em}
+.parts-copy{
+  border:1px solid var(--border-soft);background:transparent;color:var(--text-faint);
+  border-radius:4px;width:22px;height:22px;margin-left:7px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
+}
+.parts-copy:hover{color:var(--accent);border-color:var(--accent)}
+.parts-copy.ok{color:var(--teal);border-color:var(--teal)}
+.parts-table .name-en{display:block;direction:ltr;text-align:left}
+.parts-table .name-fa{
+  display:block;font-family:var(--fa);font-size:11.5px;color:var(--text-dim);
+  margin-top:3px;
+}
+.parts-row-xref td{color:var(--text-faint);background:var(--surface-2)}
+.parts-xref-badge{
+  font-family:var(--fa);font-size:11px;color:var(--text-faint);
+  border:1px dashed var(--border);border-radius:999px;padding:2px 10px;
+}
+@media (max-width:880px){
+  .parts-diagram{height:340px}
+  .parts-diagram-wrap{position:static}
+  .parts-table{font-size:11.5px}
+  .parts-frame-bit + .parts-frame-bit{border-right:0;padding-right:0}
+}
+
+/* ── Car content browser: tree sidebar + content pane ─────────────────── */
+.car-browse{display:flex;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);margin-top:12px;overflow:visible;align-items:flex-start}
+.car-tree{width:300px;flex:none;background:var(--surface);padding:14px 12px;overflow:auto;align-self:flex-start;position:sticky;top:26px;max-height:calc(100vh - 120px)}
+.car-tree-head{font-family:var(--fa);font-weight:700;font-size:15px;color:var(--text);padding:2px 6px 12px;border-bottom:1px solid var(--border-soft);margin-bottom:6px;position:sticky;top:0;background:var(--surface);z-index:1}
+.car-tree-kicker{display:block;font-family:var(--mono);font-weight:600;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);opacity:.9;margin-bottom:4px}
+.car-content{flex:1;min-width:0;background:var(--surface);padding:22px 26px;overflow:auto;scroll-behavior:smooth}
+.car-content .viewer,.car-content .doc-grid{margin-top:0}
+.car-tree ul{list-style:none;margin:0;padding:0}
+/* Indentation guide: a hairline connector runs down each level, like the rules
+   in a printed table of contents; the trail to the current node turns accent. */
+.tree-children{padding-inline-start:20px;border-inline-start:1px solid var(--border-soft);margin-inline-start:11px}
+.tree-li{margin:1px 0}
+.tree-row{display:flex;align-items:center;gap:4px;border-radius:6px;position:relative;padding-inline-end:2px}
+.tree-row:hover{background:var(--surface-2)}
+/* Chapter (top level) reads heavier than its sub-sections. */
+.tree-row.depth-1>.tree-label{font-weight:600;font-size:13.5px;color:var(--text)}
+.tree-row.depth-2>.tree-label{font-size:12.5px}
+.tree-row.depth-3>.tree-label,.tree-row.depth-4>.tree-label{font-size:12px}
+/* The trail from root down to where you are stays lit so you never lose place. */
+.tree-row.trail-row>.tree-label{color:var(--text)}
+.tree-row.trail-row+.tree-children{border-inline-start-color:var(--accent);border-inline-start-width:1.5px}
+.tree-row.active-row{background:var(--accent-dim)}
+.tree-row.active-row::before{content:"";position:absolute;inset-inline-start:-1px;top:4px;bottom:4px;width:3px;border-radius:3px;background:var(--accent)}
+/* Expand/collapse control: a real, tappable chevron that rotates open. */
+.tree-caret{width:20px;height:22px;flex:none;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:0;display:grid;place-items:center;border-radius:5px;transform:rotate(90deg);transition:transform .16s ease,color .16s ease,background .16s ease}
+.tree-caret svg{display:block}
+.tree-caret.open{transform:rotate(0deg)}
+.tree-caret:hover{color:var(--accent);background:var(--surface-3)}
+.tree-caret.tree-dot{cursor:default;transform:none}
+.tree-caret.tree-dot::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--text-faint);opacity:.55}
+.tree-label{font-size:13px;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.tree-label:hover{color:var(--text)}
+.tree-label.active{color:var(--text);font-weight:700}
+.tree-label.spy{color:var(--accent);font-weight:600;background:var(--accent-dim)}
+.tree-row.spy-trail-row>.tree-label{color:var(--text)}
+.tree-row.spy-trail-row+.tree-children{border-inline-start-color:var(--accent);border-inline-start-width:1.5px}
+.tree-loading{font-size:12px;color:var(--text-faint);padding:4px 8px}
+
+/* on-page contents + stacked sections (flattened subtree view) */
+.stack .stack-note{background:var(--accent-dim);border:1px solid var(--accent);color:var(--text);padding:12px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:16px;line-height:1.7}
+.stack-toc{border:1px solid var(--border-soft);border-radius:var(--radius);background:var(--surface-2);padding:12px 16px;margin-bottom:22px;direction:rtl;text-align:right}
+.stack-toc-head{font-family:var(--fa);font-weight:700;font-size:13px;color:var(--text);margin-bottom:8px}
+.stack-toc ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.stack-toc a{color:var(--text-dim);text-decoration:none;font-size:13px;padding:3px 6px;border-radius:5px;display:block}
+.stack-toc a:hover{background:var(--surface-3);color:var(--accent)}
+.stack-section{border-top:1px solid var(--border-soft);padding-top:20px;margin-top:26px;scroll-margin-top:26px}
+.stack-section:first-of-type{border-top:none;padding-top:0;margin-top:0}
+.stack-section-title{font-family:var(--fa);color:var(--text);font-size:17px;font-weight:700;margin-bottom:4px;direction:ltr;text-align:left}
+.stack-section-crumb{font-family:var(--mono);font-size:11px;color:var(--text-faint);margin-bottom:12px}
+
+@media (max-width:900px){
+  .car-browse{flex-direction:column;min-width:0}
+  /* width:auto on a flex:none column item resolves to MAX-CONTENT, so the tree
+     sized itself to its longest chapter label (~534px) and hung off the side of
+     the viewport, where body{overflow-x:clip} silently cropped it. Pin it to the
+     container and let the labels ellipsis instead. */
+  .car-tree{width:100%;max-width:100%;min-width:0;position:static;max-height:320px;border-bottom:1px solid var(--border)}
+  .car-content{min-width:0;max-width:100%}
+}
+
+/* ── Touch: enlarge the car-tree hit areas ─────────────────────────────────
+   Must live at the END of the file: .tree-caret/.tree-label are defined in the
+   car-browser section below the main touch block, and a media query adds no
+   specificity — an earlier rule would simply lose on source order. Only the
+   tappable area grows; glyph and font sizes stay as designed. */
+@media (pointer:coarse){
+  .tree-caret{width:32px;height:32px}
+  .tree-label{padding:8px 6px}
+  .tree-row{gap:2px}
+}

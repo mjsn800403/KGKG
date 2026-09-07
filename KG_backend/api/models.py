@@ -1,10 +1,30 @@
 import datetime
 import hashlib
+import os
 import secrets
 
 from django.db import models
 from django.contrib.auth.hashers import make_password, check_password
 from django.utils import timezone
+
+
+def _env_timedelta(name, default):
+    """Read a day-count (or hour-count for *_HOURS) override from the env.
+
+    Session TTLs are the kind of knob you want to retune during an incident
+    without shipping code, so they're env-overridable — but garbage input falls
+    back to the compiled-in default rather than accidentally disabling expiry.
+    """
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if value <= 0:
+        return default
+    return datetime.timedelta(hours=value) if name.endswith('_HOURS') else datetime.timedelta(days=value)
 
 
 class Car(models.Model):
@@ -111,62 +131,14 @@ class CompanyCarAccess(models.Model):
         return f'{self.company.name} → {self.car.brand_name} {self.car.car_name} {self.car.year}'
 
 
-class OrgRole(models.Model):
-    """A company-defined position in its own organisational hierarchy.
-
-    Companies are not forced into the fixed 4-level after-sales ladder any
-    more: a manager can create, rename, re-rank and delete positions freely.
-    ``rank`` orders the hierarchy (1 = top; a smaller rank outranks a larger
-    one). ``manage_scope`` decides WHO a member of this position can see and
-    manage in the team area:
-
-      * ``org``     — everyone in the company with a strictly larger rank
-                      (e.g. the head sees every supervisor/specialist,
-                      regardless of reporting lines, but never the manager);
-      * ``subtree`` — only people who transitively report to them;
-      * ``none``    — nobody (a pure member).
-
-    The capability flags are the DEFAULTS seeded onto new members of the
-    position (each member's own flags stay individually editable), and
-    ``default_accesses`` is an optional car/package template applied to new
-    members (and bulk-applicable to existing ones).
-    """
-    MANAGE_SCOPE_CHOICES = [
-        ('org', 'همه رده‌های پایین‌تر'),
-        ('subtree', 'فقط زیرمجموعه مستقیم'),
-        ('none', 'بدون دسترسی مدیریتی'),
-    ]
-
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='org_roles')
-    name = models.CharField(max_length=80)
-    rank = models.PositiveIntegerField(default=1)
-    manage_scope = models.CharField(max_length=12, choices=MANAGE_SCOPE_CHOICES, default='org')
-    can_manage_team = models.BooleanField(default=False)
-    can_view_analytics = models.BooleanField(default=False)
-    ai_assistant_enabled = models.BooleanField(default=True)
-    # UI accent for the org chart / badges (hex like '#7c6cf0' or named token).
-    color = models.CharField(max_length=16, blank=True, default='')
-    # Access template: [{car_id, documents: [...]}, ...]. Applied (clamped to
-    # the granting manager's own scope) when a member joins the position.
-    default_accesses = models.JSONField(default=list, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['company_id', 'rank', 'id']
-        unique_together = [('company', 'name')]
-        indexes = [models.Index(fields=['company', 'rank'])]
-
-    def __str__(self):
-        return f'{self.company.name} · {self.name} (rank {self.rank})'
-
-
 class PortalUser(models.Model):
-    """A seat under a company, tied to an organisational role.
+    """A company employee account.
 
     Historically only the platform admin issued these. They can now also be
-    created self-service by a company manager (``can_manage_team``): the new
-    employee is emailed an invite and sets their own password. ``role`` still
-    drives the label + ``ROLE_LEVEL`` hierarchy; feature access is per-user
+    created self-service (via a seat invite) or assigned into a seat on the org
+    graph. ``role`` is a legacy label kept for compat; the live organisational
+    structure and every permission now come from the org-graph canvas
+    (OrgNode / NodePermission — see api/orggraph.py). Feature access is per-user
     (the capability flags below + per-car grants in ``UserCarAccess``).
     """
     INVITE_STATUS_CHOICES = [
@@ -183,17 +155,18 @@ class PortalUser(models.Model):
     password_hash = models.CharField(max_length=256)
     display_name = models.CharField(max_length=150, blank=True, default='')
     role = models.CharField(max_length=40, choices=ROLE_CHOICES)
-    # The company-defined position (see OrgRole). ``role`` stays as a legacy
-    # fallback/compat label; when ``org_role`` is set it wins everywhere.
-    org_role = models.ForeignKey(
-        OrgRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
-    # Explicit org hierarchy: who this person reports to (same company).
+    # Legacy reporting pointer, retained for analytics visibility. The live org
+    # structure is the graph (OrgNode.parent); this is no longer authoritative.
     reports_to = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reports')
     # Per-user capabilities (seeded from role at creation, individually editable).
     can_manage_team = models.BooleanField(default=False)
     can_view_analytics = models.BooleanField(default=False)
     ai_assistant_enabled = models.BooleanField(default=False)
+    # Which car-content UI this user prefers: 'modern' (sidebar tree +
+    # adaptive flatten) or 'classic' (the original card-by-card drill-down,
+    # no sidebar). Source of truth for the per-user browsing-mode toggle.
+    browse_mode = models.CharField(max_length=10, default='modern')
     active = models.BooleanField(default=True)
     locked = models.BooleanField(default=False)
     # Invite lifecycle. ``password_set`` gates login: an invited user cannot log
@@ -242,15 +215,122 @@ class UserCarAccess(models.Model):
         return f'{self.user.username} → {self.car.car_name}'
 
 
-class AuthToken(models.Model):
-    """Opaque bearer token for portal users (simple, DB-backed sessions)."""
-    key = models.CharField(max_length=64, unique=True)
-    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='tokens')
+class SessionTokenBase(models.Model):
+    """Shared machinery for opaque, hashed-at-rest bearer session tokens.
+
+    Only the sha256 of the token is persisted — same discipline InviteToken
+    already uses. A stolen database (ours lived in git history for a while) no
+    longer hands over live sessions, because the raw bearer value is returned
+    exactly once at issue time and never written down.
+
+    Two independent clocks bound a session:
+      * ``IDLE_TTL``    — how long a token may go unused before it dies;
+      * ``ABSOLUTE_TTL`` — a hard ceiling no amount of activity extends.
+    ``expires_at`` always holds the earlier of (last_used + idle, absolute cap),
+    so a single indexed comparison answers "is this still live?".
+
+    Subclasses set the two TTLs and declare their own owner FK.
+    """
+    IDLE_TTL = datetime.timedelta(days=14)
+    ABSOLUTE_TTL = datetime.timedelta(days=90)
+
+    # How stale last_used_at may get before a refresh is worth a DB write.
+    # portal_user() runs on EVERY content request; writing per request would
+    # put SQLite under pointless write pressure for no security gain.
+    TOUCH_INTERVAL = datetime.timedelta(minutes=5)
+
+    key_hash = models.CharField(max_length=64, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        abstract = True
+
+    @staticmethod
+    def _hash(raw):
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
     @classmethod
-    def issue(cls, user):
-        return cls.objects.create(key=secrets.token_hex(32), user=user)
+    def _ttls(cls):
+        """TTL overrides, so ops can retune without a deploy."""
+        prefix = 'KG_ADMIN_TOKEN' if cls.__name__.startswith('Admin') else 'KG_TOKEN'
+        return (
+            _env_timedelta(f'{prefix}_IDLE_DAYS', cls.IDLE_TTL),
+            _env_timedelta(f'{prefix}_MAX_DAYS', cls.ABSOLUTE_TTL),
+        )
+
+    @classmethod
+    def issue(cls, owner):
+        """Mint a token for ``owner``.
+
+        Returns the instance with the raw bearer value attached as ``.key`` —
+        an in-memory attribute only (``key`` is deliberately not a field any
+        more), so callers keep reading ``token.key`` right after issuing while
+        the database never sees it.
+        """
+        idle, absolute = cls._ttls()
+        now = timezone.now()
+        raw = secrets.token_urlsafe(48)
+        obj = cls.objects.create(
+            key_hash=cls._hash(raw),
+            last_used_at=now,
+            expires_at=now + min(idle, absolute),
+            **{cls.OWNER_FIELD: owner},
+        )
+        obj.absolute_deadline = now + absolute
+        obj.key = raw
+        return obj
+
+    @classmethod
+    def resolve(cls, raw, select_related=()):
+        """Return the live token for ``raw``, or None if unknown/expired.
+
+        Expiry is enforced in the query itself, so a stale row can never be
+        resolved even if a later `touch()` would have extended it.
+        """
+        if not raw:
+            return None
+        qs = cls.objects.filter(key_hash=cls._hash(raw), expires_at__gt=timezone.now())
+        if select_related:
+            qs = qs.select_related(*select_related)
+        return qs.first()
+
+    def touch(self):
+        """Slide the idle window forward, never past the absolute ceiling.
+
+        The expiry is recomputed from scratch rather than only ever pushed
+        outward: the ceiling can sit *earlier* than the stored expiry (an old
+        session whose idle window would otherwise reach past its hard limit),
+        and in that case the value has to come down, not stay put.
+
+        TOUCH_INTERVAL is what keeps this from writing on every request; past
+        that gate a single UPDATE covers both fields.
+        """
+        idle, absolute = self._ttls()
+        now = timezone.now()
+        if self.last_used_at and (now - self.last_used_at) < self.TOUCH_INTERVAL:
+            return
+        new_expiry = min(now + idle, self.created_at + absolute)
+        self.last_used_at = now
+        self.expires_at = new_expiry
+        self.__class__.objects.filter(pk=self.pk).update(
+            last_used_at=now, expires_at=new_expiry)
+
+    @classmethod
+    def prune(cls):
+        """Delete tokens past their expiry. Returns how many went."""
+        return cls.objects.filter(expires_at__lte=timezone.now()).delete()[0]
+
+
+class AuthToken(SessionTokenBase):
+    """Opaque bearer token for portal users (simple, DB-backed sessions)."""
+    OWNER_FIELD = 'user'
+
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='tokens')
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return f'token:{self.user.username}'
@@ -356,15 +436,22 @@ class PlatformAdmin(models.Model):
         return self.username
 
 
-class AdminAuthToken(models.Model):
-    """Session token issued after platform-admin username/password login."""
-    key = models.CharField(max_length=64, unique=True)
-    admin = models.ForeignKey(PlatformAdmin, on_delete=models.CASCADE, related_name='tokens')
-    created_at = models.DateTimeField(auto_now_add=True)
+class AdminAuthToken(SessionTokenBase):
+    """Session token issued after platform-admin username/password login.
 
-    @classmethod
-    def issue(cls, admin):
-        return cls.objects.create(key=secrets.token_hex(32), admin=admin)
+    Deliberately much shorter-lived than a portal session: this token opens the
+    whole platform (data-quality fixes, pipeline control, every company's
+    users), so an unattended browser is a far bigger liability than it is for a
+    specialist reading a manual.
+    """
+    OWNER_FIELD = 'admin'
+    IDLE_TTL = datetime.timedelta(hours=12)
+    ABSOLUTE_TTL = datetime.timedelta(days=7)
+
+    admin = models.ForeignKey(PlatformAdmin, on_delete=models.CASCADE, related_name='tokens')
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return f'admin-token:{self.admin.username}'
@@ -531,7 +618,7 @@ class PipelineSettings(models.Model):
 
 
 class DownloadRequest(models.Model):
-    """A queued request to fetch vehicle-manual ZIPs from the LEMON source site.
+    """A queued request to fetch vehicle-manual ZIPs from the upstream source site.
 
     Created from the admin panel (optionally narrowed by ``name_filter``, e.g.
     'corolla cross'); executed by the pipeline worker's download stage, which
@@ -784,3 +871,229 @@ class CompanyRequest(models.Model):
 
     def __str__(self):
         return f'req #{self.id} {self.kind} [{self.status}]'
+
+# ---------------------------------------------------------------------------
+# Org-graph canvas (n8n-style). Replaces the OrgRole/rank/scope authoring model.
+#
+# The organisation is a GRAPH DOCUMENT owned by exactly one root node (layer 0).
+# The root node's occupant is the company super-admin: only they may edit the
+# graph (create/delete seats, assign people, set permissions). Every other node
+# is a SEAT with an explicit, root-assigned permission set; parent edges are
+# PURELY VISUAL reporting lines and carry no authorisation meaning. One employee
+# occupies at most one seat. Permissions live on the node and are compiled down
+# (see api/orggraph.py) into the existing enforcement primitives — UserCarAccess
+# rows + PortalUser.ai_assistant_enabled + granted admin panels — so content /
+# RAG / chat gating stays unchanged.
+# ---------------------------------------------------------------------------
+
+
+class OrgGraph(models.Model):
+    """The single org-structure document for a company."""
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='org_graph')
+    updated_at = models.DateTimeField(auto_now=True)
+    # Occupant PortalUser who last edited (root), for audit.
+    updated_by = models.ForeignKey(
+        'PortalUser', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'graph:{self.company.name}'
+
+    @property
+    def root_node(self):
+        return self.nodes.filter(is_root=True).first()
+
+
+class OrgNode(models.Model):
+    """A seat on the canvas. May be empty or occupied by one PortalUser."""
+    graph = models.ForeignKey(OrgGraph, on_delete=models.CASCADE, related_name='nodes')
+    parent = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
+    # Exactly one node per graph has is_root=True; only its occupant can edit.
+    is_root = models.BooleanField(default=False)
+    label = models.CharField(max_length=120, blank=True, default='')
+    # Canvas position (React Flow coordinates).
+    canvas_x = models.FloatField(default=0)
+    canvas_y = models.FloatField(default=0)
+    # The employee sitting in this seat (one seat per person is enforced by the
+    # OneToOne: a PortalUser can occupy at most one node).
+    occupant = models.OneToOneField(
+        'PortalUser', on_delete=models.SET_NULL, null=True, blank=True, related_name='seat')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['graph_id', 'id']
+        indexes = [models.Index(fields=['graph', 'parent'])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['graph'], condition=models.Q(is_root=True),
+                name='one_root_per_graph'),
+        ]
+
+    def __str__(self):
+        who = self.occupant.username if self.occupant_id else '(empty)'
+        return f'node:{self.label or who}'
+
+
+class NodePermission(models.Model):
+    """Root-assigned permission set for a seat. Source of truth; compiled into
+    the enforcement primitives whenever it changes (see api/orggraph.py)."""
+    node = models.OneToOneField(OrgNode, on_delete=models.CASCADE, related_name='permission')
+    # Car/content access, same shape as apply_user_access accepts:
+    # [{car_id: int, documents: [package_id, ...]}, ...]. Empty documents list
+    # for a car == all layers the root grants for it. Root is super-admin, so
+    # these are applied as admin grants (bypass the company purchase cap).
+    car_access = models.JSONField(default=list, blank=True)
+    ai_eligible = models.BooleanField(default=False)
+    # Granted admin-panel keys (subset of orggraph.ADMIN_PANEL_KEYS), e.g.
+    # ['metrics', 'data_quality', 'ingest', 'terminology']. Empty == none.
+    admin_panels = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'perm:{self.node_id}'
+
+
+class NodeInvite(models.Model):
+    """Invite bound to a specific empty seat: the invitee registers straight
+    into ``node``. Only the sha256 of the opaque token is stored."""
+    DEFAULT_TTL = datetime.timedelta(days=7)
+
+    node = models.ForeignKey(OrgNode, on_delete=models.CASCADE, related_name='invites')
+    email = models.EmailField(max_length=254)
+    display_name = models.CharField(max_length=150, blank=True, default='')
+    key_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @staticmethod
+    def _hash(raw):
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+    @classmethod
+    def issue(cls, node, email, display_name='', ttl=None):
+        cls.objects.filter(node=node, used_at__isnull=True).delete()
+        raw = secrets.token_urlsafe(32)
+        obj = cls.objects.create(
+            node=node, email=email, display_name=display_name,
+            key_hash=cls._hash(raw),
+            expires_at=timezone.now() + (ttl or cls.DEFAULT_TTL))
+        return obj, raw
+
+    @classmethod
+    def resolve(cls, raw):
+        if not raw:
+            return None
+        obj = cls.objects.filter(key_hash=cls._hash(raw)).select_related(
+            'node', 'node__graph', 'node__graph__company').first()
+        if not obj or obj.used_at is not None or obj.expires_at <= timezone.now():
+            return None
+        return obj
+
+    def consume(self):
+        self.used_at = timezone.now()
+        self.save(update_fields=['used_at'])
+
+
+class OtpChallenge(models.Model):
+    """Pending SMS second factor between the password step and token issue.
+
+    DB-backed rather than in-process: gunicorn runs several workers, so a
+    challenge created while serving the login request must be verifiable by
+    whichever worker happens to serve the verify request. Only the sha256 of
+    the code is stored.
+    """
+    DEFAULT_TTL = datetime.timedelta(minutes=2)
+    RESEND_INTERVAL = datetime.timedelta(seconds=60)
+    MAX_ATTEMPTS = 5
+
+    key_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='otp_challenges')
+    phone = models.CharField(max_length=40)
+    code_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    last_sent_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'otp:{self.user.username}'
+
+    @staticmethod
+    def _hash(raw):
+        return hashlib.sha256(str(raw).encode('utf-8')).hexdigest()
+
+    @classmethod
+    def issue(cls, user, phone, code, ttl=None):
+        """Start a challenge, dropping any earlier one for this user.
+
+        Returns (instance, raw_key); hand the raw key to the client and keep
+        nothing else.
+        """
+        cls.objects.filter(user=user).delete()
+        raw = secrets.token_urlsafe(32)
+        now = timezone.now()
+        obj = cls.objects.create(
+            key_hash=cls._hash(raw), user=user, phone=phone,
+            code_hash=cls._hash(code),
+            expires_at=now + (ttl or cls.DEFAULT_TTL),
+            last_sent_at=now,
+        )
+        return obj, raw
+
+    @classmethod
+    def recent_send_wait(cls, user):
+        """Seconds to wait before another OTP SMS may be sent to ``user``.
+
+        Enforced at the login send path too (not only resend) so no endpoint
+        can push more than one SMS per RESEND_INTERVAL to the same account.
+        """
+        obj = (cls.objects.filter(user=user)
+               .filter(expires_at__gt=timezone.now())
+               .order_by("-last_sent_at").first())
+        if not obj:
+            return 0
+        remaining = cls.RESEND_INTERVAL - (timezone.now() - obj.last_sent_at)
+        return max(0, int(remaining.total_seconds() + 0.999))
+
+    @classmethod
+    def resolve(cls, raw):
+        """Return the live (unexpired) challenge for ``raw``, or None."""
+        if not raw:
+            return None
+        obj = (cls.objects.filter(key_hash=cls._hash(raw))
+               .select_related('user', 'user__company').first())
+        if not obj or obj.expires_at <= timezone.now():
+            return None
+        return obj
+
+    def check_code(self, code):
+        """Spend one attempt. True only on a match; the challenge is then
+        consumed so a code cannot be replayed."""
+        self.attempts += 1
+        if self.attempts > self.MAX_ATTEMPTS:
+            self.delete()
+            return False
+        if self._hash(code) != self.code_hash:
+            self.save(update_fields=['attempts'])
+            return False
+        self.delete()
+        return True
+
+    def resend_wait(self):
+        """Seconds still to wait before another SMS may be sent (0 if ready)."""
+        elapsed = timezone.now() - self.last_sent_at
+        remaining = self.RESEND_INTERVAL - elapsed
+        return max(0, int(remaining.total_seconds() + 0.999))
+
+    def rotate(self, code):
+        self.code_hash = self._hash(code)
+        self.last_sent_at = timezone.now()
+        self.attempts = 0
+        self.save(update_fields=['code_hash', 'last_sent_at', 'attempts'])

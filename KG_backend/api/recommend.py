@@ -264,7 +264,7 @@ def insights_for_manager(manager, days=30):
     from .access import manageable_user_ids, user_rank, display_role_label
     since = timezone.now() - timezone.timedelta(days=days)
     ids = manageable_user_ids(manager, include_self=False)
-    members = list(PortalUser.objects.filter(id__in=ids).select_related('org_role'))
+    members = list(PortalUser.objects.filter(id__in=ids))
 
     ev_by_user = Counter()
     last_by_user = {}

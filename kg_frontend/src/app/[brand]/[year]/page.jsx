@@ -1,23 +1,24 @@
 // app/[brand]/[year]/page.js — cars for a brand+year, in the dashboard shell
+import { notFound } from 'next/navigation';
 import { fetchYearData } from '@/utils/api';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
-import CardGrid from '@/components/CardGrid';
+import VehicleCardGrid from '@/components/VehicleCardGrid';
 
 export default async function YearPage({ params }) {
   const raw = await params;
   const brand = decodeURIComponent(raw.brand);
   const year = raw.year;
-  const cars = await fetchYearData(brand, parseInt(year));
 
-  const items = cars.map((car) => ({
-    href: `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(car.car_name)}`,
-    icon: '▣',
-    title: car.display_name || car.car_name,
-    sub: String(brand).toUpperCase() + ' / ' + year,
-    go: 'مشاهده مستندات ←',
-  }));
+  // Guard: year must be a 4-digit integer (e.g. /admin/config would otherwise
+  // fall through here as brand="admin", year="config" and throw a JSON parse
+  // error when the backend returns 404 HTML instead of JSON).
+  if (!/^\d{4}$/.test(year)) {
+    notFound();
+  }
+
+  const cars = await fetchYearData(brand, parseInt(year));
 
   // schema.org markup for the public catalog: an ItemList of Car objects
   // built from each vehicle's structured identity spec (backend-provided;
@@ -50,7 +51,7 @@ export default async function YearPage({ params }) {
       </div>
       <h1 className="page-title">{brand} {year}</h1>
       <div className="page-sub">// SELECT_VEHICLE</div>
-      <CardGrid items={items} />
+      <VehicleCardGrid vehicles={cars} brand={brand} year={year} />
     </DashboardShell>
   );
 }

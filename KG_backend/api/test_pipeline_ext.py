@@ -70,7 +70,7 @@ class ScanInboxTest(TestCase):
             self.assertEqual(summary['registered'], 1)
             self.assertEqual(summary['renamed'], 1)
             pkg = ZipPackage.objects.get()
-            self.assertEqual(pkg.zip_name, 'LEMON 2023 Toyota Corolla Cross LE, FWD.zip')
+            self.assertEqual(pkg.zip_name, 'KGTV 2023 Toyota Corolla Cross LE, FWD.zip')
             self.assertTrue(Path(pkg.path).exists())
             self.assertEqual(pkg.stem, 'Corolla Cross LE, FWD (2023)')
             self.assertEqual(pkg.year, 2023)
@@ -103,7 +103,7 @@ class ScanInboxTest(TestCase):
             sub1.mkdir()
             sub2.mkdir()
             _make_zip(sub1, 'RAV4 LE.zip', '2025 Toyota RAV4 LE')
-            _make_zip(sub2, 'LEMON 2025 Toyota RAV4 LE.zip', '2025 Toyota RAV4 LE')
+            _make_zip(sub2, 'KGTV 2025 Toyota RAV4 LE.zip', '2025 Toyota RAV4 LE')
             with envp, minp, whp:
                 ingest.scan_inbox(normalize=True)
             statuses = sorted(ZipPackage.objects.values_list('status', flat=True))
@@ -127,7 +127,7 @@ class PendingWorkQueueTest(TestCase):
             self.assertEqual(base['need_download'], 0)
             self.assertEqual(base['need_parse'], 0)
 
-            DownloadRequest.objects.create(url='https://lemon-manuals.org.ua/Toyota/2024/')
+            DownloadRequest.objects.create(url='https://source-manuals.example.com/Toyota/2024/')
             ZipPackage.objects.create(path='/tmp/x.zip', zip_name='x.zip',
                                       stem='X', status='pending')
             work = pipeline.pending_work()
@@ -384,7 +384,7 @@ class ParseZipPackageTest(TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             wh = Path(tmp)
             (wh / 'Z.db').write_bytes(b'')
-            zp = _make_zip(tmp, 'LEMON 2025 Toyota Z.zip', '2025 Toyota Z')
+            zp = _make_zip(tmp, 'KGTV 2025 Toyota Z.zip', '2025 Toyota Z')
             pkg = ZipPackage.objects.create(path=str(zp),
                                             zip_name=zp.name, stem='Z',
                                             status='pending')

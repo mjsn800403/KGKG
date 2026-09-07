@@ -13,7 +13,7 @@ respected via `MotionConfig`).
 | `/login` | public | Portal login (username or email) |
 | `/purchase` | public | Purchase-request wizard (vehicle, layers, `SeatPlanBuilder`, contact) |
 | `/invite/[token]` | public | Invite acceptance: validate → set password → auto-login |
-| `/browse` | portal | Dashboard home: granted fleet tiles (`FleetView`), model filter chips, `RecommendationsWidget` |
+| `/browse` | portal | Dashboard home: granted fleet tiles (`FleetView`), shared vehicle filter (§7.7), `RecommendationsWidget` |
 | `/[brand]/[year]/[model]` (+`/[...path]`, `/page/[file]`, `/search`, `/assistant`) | portal + car grant (SSR-gated) | Manual browsing: node tree, leaf pages, per-car semantic search, per-car assistant |
 | `/assistant` | portal (AI-eligible for answers) | General assistant chat (`AssistantChat`) |
 | `/team` | manager | Team area: Members / Org chart / Roles tabs (`TeamView`, `OrgChart`, `RolesPanel`) |
@@ -112,3 +112,44 @@ help articles to these ids (doc 13).
   symlinks.
 - `/api/chat` holds secrets (Metis) — it must stay a server route, never client-fetchable
   config.
+
+## 7.7 Shared vehicle filter (`components/VehicleFilter.jsx`)
+
+The catalogue is 221 vehicles and grows with every ingest run, so **any screen that lists
+more than four vehicles filters them** — one component, so the experience is identical
+whether you are a customer picking a manual or an admin granting access.
+
+```jsx
+const { filtered, bar } = useVehicleFilter(cars);   // bar is null at ≤ MIN_ITEMS (4)
+return <>{bar}{filtered.map(...)}</>;
+```
+
+- **Facets: brand, model, model year — and nothing else.** The model family is derived
+  client-side from the vehicle name (`familyOf`), so no endpoint has to grow a column for
+  it. Search is offered too, but never alone. Attribute facets read out of the name (trim,
+  drivetrain, powertrain, transmission) shipped 2026-08-03 and were **removed the same day
+  on request** — do not reintroduce them without asking.
+- **Shape-agnostic.** `readVehicle()` normalises every payload the platform returns —
+  `{brand_name, car_name, year}` (portal fleet), `{brand, model, year}` (admin catalogue),
+  `{brand, label}` (org-graph seats), `{stem, brand, year}` (data-quality rows). Give a new
+  endpoint `brand` + `model` + `year` and it works with no filter changes.
+- **Faceted counts.** Each dimension is counted against every filter *except its own*, so
+  the number on a chip is what picking it would actually yield. A dimension with one
+  option hides itself (no brand picker on a single-brand page).
+- **Never dead-ends.** Picking a value that contradicts a standing filter drops the older
+  filter instead of emptying the list; a selection the data can no longer satisfy is
+  ignored at render time. No `setState` in an effect — the React 19 compiler lint rejects it.
+- **Extra facets** are passed by the caller and rendered in the same bar. These are *status*
+  facets, not vehicle specifications — the admin screens use them for health
+  (`HEALTH_FACETS`, `DQ_FACETS`, `SPEC_FACETS` in `app/admin/page.jsx`): data completeness,
+  missing sections, processing backlog, RAG / diagnostic / image / spec indexing,
+  servability. A facet's `test` may close over live state (e.g. "already selected"); the
+  hook keys on the caller's array identity for that.
+- **Menus are `position: fixed`**, measured from the button rect — these bars live inside
+  scrolling panels (`.org-panel-body`) and cards that would clip an absolute menu.
+
+Adopted by: `FleetView` (`/browse`), `VehicleCardGrid` (`/[brand]/[year]`, `/assistant`),
+admin `Catalog` / `AccessEditor` (user **and** company grants) / `DataQuality` /
+`VehicleSpecs`, and the `OrgGraphCanvas` seat-access panel (`dense` variant). Bulk actions
+in the grant editors act on the **filtered** set ("add all 24 shown"), which is the point of
+filtering a grant screen. Styles: `.vf-*` in `globals.css`.

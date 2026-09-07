@@ -110,5 +110,5 @@ guide (doc 13).
 - 38 vehicles, all passing data-quality audit; RAG index covers the whole fleet
   (126k vectors); diag sidecars for all cars.
 - Known content gap: **Land Cruiser Base has no static images** (assets never downloaded;
-  needs a lemon-downloader re-crawl). 5 malformed partial crawls + 1 duplicate live in
+  needs a kgtv-downloader re-crawl). 5 malformed partial crawls + 1 duplicate live in
   `Database_warehouse/_quarantine/`.

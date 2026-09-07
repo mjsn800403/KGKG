@@ -8,24 +8,21 @@ from .models import (
     ActivityLog, AuthToken, Car, Company, CompanyCarAccess, PortalUser,
     UserCarAccess,
 )
-from .access import seed_default_org_roles
 from . import recommend
 
 
 class RecommendUserTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name='RecCo')
-        seed_default_org_roles(self.company)
-        roles = {r.rank: r for r in self.company.org_roles.all()}
         self.car1 = Car.objects.create(brand_name='Toyota', car_name='bZ4X', year=2023, db_address='x')
         self.car2 = Car.objects.create(brand_name='Lexus', car_name='NX', year=2022, db_address='y')
         for c in (self.car1, self.car2):
             CompanyCarAccess.objects.create(company=self.company, car=c, documents=['manual'])
         self.user = PortalUser(company=self.company, username='rec_u',
-                               role='after_sales_specialist', org_role=roles[4])
+                               role='after_sales_specialist', )
         self.user.set_password('p'); self.user.save()
         self.peer = PortalUser(company=self.company, username='rec_peer',
-                               role='after_sales_specialist', org_role=roles[4])
+                               role='after_sales_specialist', )
         self.peer.set_password('p'); self.peer.save()
         for c in (self.car1, self.car2):
             UserCarAccess.objects.create(user=self.user, car=c, documents=['manual'])
@@ -92,15 +89,11 @@ class RecommendEndpointTests(TestCase):
     def setUp(self):
         self.c = Client()
         self.company = Company.objects.create(name='RecEpCo')
-        seed_default_org_roles(self.company)
-        roles = {r.rank: r for r in self.company.org_roles.all()}
         self.mgr = PortalUser(company=self.company, username='rec_mgr',
-                              role='after_sales_manager', org_role=roles[1],
-                              can_manage_team=True, can_view_analytics=True)
+                              role='after_sales_manager', can_manage_team=True, can_view_analytics=True)
         self.mgr.set_password('p'); self.mgr.save()
         self.spec = PortalUser(company=self.company, username='rec_sp',
-                               role='after_sales_specialist', org_role=roles[4],
-                               reports_to=self.mgr)
+                               role='after_sales_specialist', reports_to=self.mgr)
         self.spec.set_password('p'); self.spec.save()
 
     def test_recommendations_requires_login(self):

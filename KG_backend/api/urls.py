@@ -1,5 +1,6 @@
 from django.urls import path
 from . import adminops, events, recommend, requests_api, views, portal, team
+from . import orggraph_api, parts, labortimes
 
 urlpatterns = [
     # Liveness probe (public, cheap, no secrets) + operational admin API.
@@ -31,23 +32,26 @@ urlpatterns = [
     path('api/auth/login/', portal.login_view, name='portal_login'),
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
+    path('api/auth/me/prefs/', portal.me_prefs_view, name='portal_me_prefs'),
     path('api/auth/fleet/', portal.fleet_view, name='portal_fleet'),
+    path('api/auth/verify-otp/', portal.verify_otp_view, name='portal_verify_otp'),
+    path('api/auth/resend-otp/', portal.resend_otp_view, name='portal_resend_otp'),
     path('api/activity/', portal.activity_view, name='portal_activity'),
 
     # Company self-service team management (manager-gated) + employee invites.
-    path('api/team/members/', team.team_members_view, name='team_members'),
-    path('api/team/members/<int:user_id>/', team.team_member_detail_view, name='team_member_detail'),
-    path('api/team/members/<int:user_id>/access/', team.team_member_access_view, name='team_member_access'),
-    path('api/team/org/', team.team_org_view, name='team_org'),
-    path('api/team/roles/', team.team_roles_view, name='team_roles'),
-    path('api/team/roles/reorder/', team.team_roles_reorder_view, name='team_roles_reorder'),
-    path('api/team/roles/<int:role_id>/', team.team_role_detail_view, name='team_role_detail'),
     path('api/team/analytics/', team.team_analytics_view, name='team_analytics'),
     path('api/team/report/', team.team_report_pdf_view, name='team_report_pdf'),
     path('api/team/insights/', recommend.manager_insights_view, name='team_insights'),
 
     # Personalised behavioural recommendations for the logged-in portal user.
     path('api/recommendations/', recommend.recommendations_view, name='recommendations'),
+    # Org-graph canvas (n8n-style). Reads open to any authed user; writes root-only.
+    path('api/org/graph/', orggraph_api.graph_view, name='org_graph'),
+    path('api/org/nodes/', orggraph_api.nodes_view, name='org_nodes'),
+    path('api/org/nodes/<int:node_id>/', orggraph_api.node_detail_view, name='org_node_detail'),
+    path('api/org/nodes/<int:node_id>/permission/', orggraph_api.node_permission_view, name='org_node_permission'),
+    path('api/org/nodes/<int:node_id>/create-user/', orggraph_api.node_create_user_view, name='org_node_create_user'),
+    path('api/admin/org/reassign-root/', orggraph_api.admin_reassign_root_view, name='admin_reassign_root'),
     path('api/invite/<str:token>/', team.invite_view, name='invite'),
 
     # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).
@@ -84,6 +88,17 @@ urlpatterns = [
     # /api/purchase-request/ -> legal-entity documentation purchase request (POST).
     # Declared before the <brand> patterns so "api" is never read as a brand.
     path('api/purchase-request/', views.purchase_request_view, name='purchase_request'),
+
+    # Parts catalog (کاتالوگ قطعات یدکی): per-vehicle EPC trees served from the
+    # _parts warehouse. Same ?seg= walking contract as the manuals, plus ?cfg=
+    # to pick the vehicle configuration (frame). Grant layer: 'parts'.
+    path('api/parts/<str:brand_name>/<str:year>/<str:model_name>/',
+         parts.parts_view, name='parts_view'),
+    path('api/admin/parts/', parts.admin_parts_summary_view, name='admin_parts_summary'),
+    # Per-vehicle Labor Times CSV export (paid manual content: same login +
+    # per-car access gate as car_view). Declared before the <brand> catch-alls.
+    path('api/labor-times/<str:brand_name>/<str:year>/<str:model_name>/',
+         labortimes.labor_times_csv_view, name='labor_times_csv'),
 
     # /                                            -> distinct list of brands
     path('', views.brands_list_view, name='brands_list'),

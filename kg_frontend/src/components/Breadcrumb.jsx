@@ -1,5 +1,6 @@
 // components/Breadcrumb.js — dashboard topbar breadcrumb (prototype style)
 import Link from 'next/link';
+import { buildNodeHref } from '@/utils/api';
 
 export default function Breadcrumb({ brand, year, model, path = [] }) {
   const encodedBrand = encodeURIComponent(brand);
@@ -12,7 +13,7 @@ export default function Breadcrumb({ brand, year, model, path = [] }) {
     ...(model ? [{ label: model, href: `/${encodedBrand}/${year}/${encodedModel}` }] : []),
     ...path.map((p, index) => ({
       label: p,
-      href: `/${encodedBrand}/${year}/${encodedModel}/${path.slice(0, index + 1).map(encodeURIComponent).join('/')}`,
+      href: buildNodeHref(brand, year, model, path.slice(0, index + 1)),
     })),
   ];
 

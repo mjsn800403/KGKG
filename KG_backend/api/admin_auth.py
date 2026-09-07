@@ -20,12 +20,19 @@ def _presented_token(request):
 
 
 def _admin_session_valid(token):
+    """Live, unexpired session belonging to an active admin?
+
+    Resolution is by sha256 (the raw key is never stored) and rejects anything
+    past ``expires_at``; a hit slides the idle window forward.
+    """
     if not token:
         return False
     from .models import AdminAuthToken
-    return AdminAuthToken.objects.filter(
-        key=token, admin__active=True,
-    ).exists()
+    obj = AdminAuthToken.resolve(token, select_related=('admin',))
+    if not obj or not obj.admin.active:
+        return False
+    obj.touch()
+    return True
 
 
 def require_admin_token(view):

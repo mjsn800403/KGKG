@@ -3,7 +3,7 @@ queue (ZipPackage rows).
 
     manage.py scan_zips --dry-run              # classify only, change nothing
     manage.py scan_zips --normalize            # also rename legacy model-only
-                                               # filenames to LEMON convention
+                                               # filenames to KGTV convention
     manage.py scan_zips                        # register with current names
 
 The duplicate guard marks ZIPs of already-ingested cars (or a second copy of
@@ -21,7 +21,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--normalize', action='store_true',
                             help='Rename legacy model-only ZIPs to '
-                                 '"LEMON <year> <brand> <model>.zip" first.')
+                                 '"KGTV <year> <brand> <model>.zip" first.')
         parser.add_argument('--dry-run', action='store_true',
                             help='Report what would happen without renaming '
                                  'files or writing queue rows.')

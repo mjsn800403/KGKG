@@ -18,8 +18,6 @@ import logging
 import os
 import urllib.request
 import urllib.parse
-import threading
-import hashlib
 import time
 import re as _re
 
@@ -32,7 +30,7 @@ from django.db.models import Count, Q
 
 from .models import (
     ActivityLog, AdminAuthToken, AuthToken, Car, Company, CompanyCarAccess,
-    PlatformAdmin, PortalUser, PurchaseRequest, UserCarAccess,
+    OtpChallenge, PlatformAdmin, PortalUser, PurchaseRequest, UserCarAccess,
 )
 from .access import (
     CONTENT_CATEGORIES, DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL,
@@ -58,103 +56,68 @@ _DUMMY_PASSWORD_HASH = _make_password('kg-login-timing-equalizer')
 # SMS OTP session store (in-process, TTL-based)
 # ---------------------------------------------------------------------------
 _logger_sms = logging.getLogger("kgkg.sms")
-_OTP_LOCK = threading.Lock()
-_OTP_SESSIONS: dict = {}  # session_id -> {user_id, phone, code_hash, expires_at, last_sent_at, attempts}
-
-
-def _otp_cleanup():
-    now = time.time()
-    stale = [k for k, v in _OTP_SESSIONS.items() if v['expires_at'] < now]
-    for k in stale:
-        del _OTP_SESSIONS[k]
-
-
-def _otp_session_create(user_id: int, phone: str, code: int) -> str:
-    session_id = secrets.token_urlsafe(32)
-    code_hash = hashlib.sha256(str(code).encode()).hexdigest()
-    with _OTP_LOCK:
-        _otp_cleanup()
-        _OTP_SESSIONS[session_id] = {
-            'user_id': user_id,
-            'phone': phone,
-            'code_hash': code_hash,
-            'expires_at': time.time() + 300,
-            'last_sent_at': time.time(),
-            'attempts': 0,
-        }
-    return session_id
-
-
-def _otp_session_verify(session_id: str, code: str):
-    with _OTP_LOCK:
-        session = _OTP_SESSIONS.get(session_id)
-        if not session:
-            return None
-        if time.time() > session['expires_at']:
-            _OTP_SESSIONS.pop(session_id, None)
-            return None
-        session['attempts'] += 1
-        if session['attempts'] > 5:
-            _OTP_SESSIONS.pop(session_id, None)
-            return None
-        code_hash = hashlib.sha256(str(code).encode()).hexdigest()
-        if code_hash != session['code_hash']:
-            return None
-        user_id = session['user_id']
-        _OTP_SESSIONS.pop(session_id, None)
-        return user_id
-
-
 def _otp_phone_hint(phone: str) -> str:
     if len(phone) > 6:
         return phone[:3] + '*' * (len(phone) - 5) + phone[-2:]
     return phone
 
 
-def _send_sms_otp(phone: str, code: int) -> bool:
+# Persian bodies are only accepted with the trailing "لغو11" opt-out line;
+# without it the operator returns Value 11. ASCII bodies do not need it.
+_OTP_SMS_TEXT = "خدمات گستر\nکد ورود : {0}\nلغو11"
+_OTP_SMS_ASCII = "Khadamat Gostar\nlogin code : {0}"
+
+
+def _post_sms(phone: str, text: str):
+    """Send one SMS. Returns (sent, value), value being Melipayamak's status.
+
+    RetStatus/StrRetStatus only say the request parsed; the real outcome is in
+    Value -- a long RecID when sent, otherwise a documented failure code
+    ("11" unicode rejected, "14" contains a link, "2" no credit, "5" bad line).
+    """
     sms_user = os.environ.get("SMS_USERNAME", "")
     sms_key = os.environ.get("SMS_API_KEY", "")
     sms_from = os.environ.get("SMS_FROM", "")
     if not sms_user or not sms_key or not sms_from:
         _logger_sms.warning("SMS not configured (SMS_USERNAME/SMS_API_KEY/SMS_FROM missing)")
-        return False
-    soap = (
-        '<?xml version="1.0" encoding="utf-8"?>'
-        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
-        '<soap:Body>'
-        '<SendOtp xmlns="http://tempuri.org/">'
-        '<username>' + sms_user + '</username>'
-        '<password>' + sms_key + '</password>'
-        '<to>' + phone + '</to>'
-        '<from>' + sms_from + '</from>'
-        '<code>' + str(code) + '</code>'
-        '</SendOtp>'
-        '</soap:Body>'
-        '</soap:Envelope>'
-    )
+        return False, ""
+    payload = json.dumps({
+        "username": sms_user,
+        "password": sms_key,
+        "to": phone,
+        "from": sms_from,
+        "text": text,
+        "isFlash": False,
+    }).encode("utf-8")
     try:
         req = urllib.request.Request(
-            "https://api.payamak-panel.com/post/Send.asmx",
-            data=soap.encode("utf-8"),
-            headers={
-                "Content-Type": "text/xml; charset=utf-8",
-                "SOAPAction": '"http://tempuri.org/SendOtp"',
-            },
+            "https://rest.payamak-panel.com/api/SendSMS/SendSMS",
+            data=payload,
+            headers={"Content-Type": "application/json"},
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            body = resp.read().decode("utf-8")
-        m = _re.search(r'<SendOtpResult>(.*?)</SendOtpResult>', body)
-        if m:
-            try:
-                return int(m.group(1).strip()) > 0
-            except ValueError:
-                pass
-        _logger_sms.warning("SendOtp unexpected response: %s", body[:300])
-        return False
+            result = json.loads(resp.read().decode("utf-8"))
     except Exception as exc:
-        _logger_sms.warning("SendOtp error: %s", exc)
-        return False
+        _logger_sms.warning("SendSMS transport error: %s", exc)
+        return False, ""
+    value = str(result.get("Value", "")).strip().split(",")[0]
+    try:
+        if int(value) > 1000:
+            return True, value
+    except ValueError:
+        pass
+    return False, value
 
+
+def _send_sms_otp(phone: str, code: int) -> bool:
+    """Send the login code, preferring the Persian body.
+
+    """
+    sent, value = _post_sms(phone, _OTP_SMS_TEXT.format(code))
+    if sent:
+        return True
+    _logger_sms.warning("SendSMS failed for %s (Value=%s)", phone, value)
+    return False
 
 
 def _body(request):
@@ -275,6 +238,9 @@ def _user_dict(u, with_access=False):
         'ai_eligible': user_ai_eligible(u),
         'packages': sorted(user_package_set(u)) if with_access else [],
         'active': u.active, 'locked': u.locked,
+        # Lets the admin UI show the phone field only where it matters:
+        # a phone is required to log in only for org-graph root seats.
+        'otp_required': _otp_required(u),
         'invite_status': u.invite_status, 'password_set': u.password_set,
         'access_expires_at': u.access_expires_at.isoformat() if u.access_expires_at else None,
         'created_at': u.created_at.isoformat(),
@@ -365,6 +331,33 @@ def _verify_turnstile(request, token, expected_action="login"):
     return True
 
 
+def _otp_required(user):
+    """Every account logs in with the SMS second factor, so every account needs
+    a phone on file. The admin who owns a seat is the one who sets it: the root
+    admin fills in the admins below them, and each admin fills in their own
+    seats. Kept as a function so the login gate and the admin UI can never
+    disagree about who needs a number."""
+    return True
+
+
+def _issue_session(user):
+    """Mint the portal session for an authenticated user (shared by the direct
+    login path and the post-OTP path)."""
+    user.last_login_at = timezone.now()
+    user.save(update_fields=['last_login_at'])
+    token = AuthToken.issue(user)
+    ActivityLog.objects.create(user=user, action='login', detail='ورود به سامانه')
+    try:
+        events.emit_company('activity', user.company_id, {
+            'user_id': user.id, 'user_name': user.display_name or user.username,
+            'action': 'login', 'category': '', 'car': None,
+            'detail': 'ورود به سامانه'}, user_id=user.id)
+    except Exception:
+        pass
+    resp = JsonResponse({'token': token.key, 'user': _user_dict(user, with_access=True)})
+    return _set_portal_cookie(resp, token.key)
+
+
 @csrf_exempt
 @rate_limited('login', 15, 60)
 def login_view(request):
@@ -401,6 +394,13 @@ def login_view(request):
     phone = (user.phone or '').strip()
     if not phone:
         return JsonResponse({'error': 'شماره موبایل برای این حساب ثبت نشده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    # Per-user SMS throttle: a live challenge sent < RESEND_INTERVAL ago blocks a
+    # fresh send, so re-submitting the login form cannot spam a user with codes.
+    _wait = OtpChallenge.recent_send_wait(user)
+    if _wait:
+        resp = JsonResponse({'error': f'کد تأیید به‌تازگی ارسال شده است. لطفاً {_wait} ثانیه صبر کنید.'}, status=429)
+        resp['Retry-After'] = str(_wait)
+        return resp
     code = secrets.randbelow(900000) + 100000
     sent = _send_sms_otp(phone, code)
     if not sent:
@@ -408,7 +408,7 @@ def login_view(request):
         if not getattr(_s, 'DEBUG', False):
             return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود. لطفاً دوباره تلاش کنید.'}, status=503)
         _logger_sms.warning("DEBUG OTP for %s: %s", user.username, code)
-    otp_session = _otp_session_create(user.id, phone, code)
+    _challenge, otp_session = OtpChallenge.issue(user, phone, code)
     return JsonResponse({'otp_session': otp_session, 'phone_hint': _otp_phone_hint(phone)})
 
 
@@ -432,30 +432,15 @@ def verify_otp_view(request):
     code = (b.get('code') or '').strip()
     if not session_id or not code:
         return JsonResponse({'error': 'اطلاعات ناقص است.'}, status=400)
-    user_id = _otp_session_verify(session_id, code)
-    if user_id is None:
+    challenge = OtpChallenge.resolve(session_id)
+    if challenge is None or not challenge.check_code(code):
         return JsonResponse({'error': 'کد وارد شده اشتباه یا منقضی شده است.'}, status=401)
-    try:
-        user = PortalUser.objects.select_related('company').get(id=user_id)
-    except PortalUser.DoesNotExist:
-        return JsonResponse({'error': 'خطای داخلی.'}, status=500)
+    user = challenge.user
     if not user.active or not user.company.active or user.locked:
         return JsonResponse({'error': 'این حساب غیرفعال شده است.'}, status=403)
     if user.access_expires_at and user.access_expires_at <= timezone.now():
         return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
-    user.last_login_at = timezone.now()
-    user.save(update_fields=['last_login_at'])
-    token = AuthToken.issue(user)
-    ActivityLog.objects.create(user=user, action='login', detail='ورود به سامانه')
-    try:
-        events.emit_company('activity', user.company_id, {
-            'user_id': user.id, 'user_name': user.display_name or user.username,
-            'action': 'login', 'category': '', 'car': None,
-            'detail': 'ورود به سامانه'}, user_id=user.id)
-    except Exception:
-        pass
-    resp = JsonResponse({'token': token.key, 'user': _user_dict(user, with_access=True)})
-    return _set_portal_cookie(resp, token.key)
+    return _issue_session(user)
 
 
 @csrf_exempt
@@ -465,21 +450,15 @@ def resend_otp_view(request):
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
     session_id = (b.get('otp_session') or '').strip()
-    phone = ''
-    code = 0
-    with _OTP_LOCK:
-        session = _OTP_SESSIONS.get(session_id)
-        if not session or time.time() > session['expires_at']:
-            return JsonResponse({'error': 'جلسه منقضی شده است. دوباره وارد شوید.'}, status=400)
-        wait_secs = 60 - (time.time() - session['last_sent_at'])
-        if wait_secs > 0:
-            return JsonResponse({'error': f'لطفاً {int(wait_secs) + 1} ثانیه صبر کنید.'}, status=429)
-        code = secrets.randbelow(900000) + 100000
-        session['code_hash'] = hashlib.sha256(str(code).encode()).hexdigest()
-        session['last_sent_at'] = time.time()
-        session['attempts'] = 0
-        phone = session['phone']
-    sent = _send_sms_otp(phone, code)
+    challenge = OtpChallenge.resolve(session_id)
+    if challenge is None:
+        return JsonResponse({'error': 'جلسه منقضی شده است. دوباره وارد شوید.'}, status=400)
+    wait_secs = challenge.resend_wait()
+    if wait_secs:
+        return JsonResponse({'error': f'لطفاً {wait_secs} ثانیه صبر کنید.'}, status=429)
+    code = secrets.randbelow(900000) + 100000
+    challenge.rotate(code)
+    sent = _send_sms_otp(challenge.phone, code)
     if not sent:
         from django.conf import settings as _s
         if not getattr(_s, 'DEBUG', False):

@@ -9,15 +9,15 @@ embedded query — sharply improves recall and precision.
 Two sources, merged at query time:
   1. a small, hand-curated map of common service vocabulary (systems, fluids,
      actions) — high precision, includes short high-value keys;
-  2. a large, USER-MAINTAINED parts dictionary loaded from a CSV (config.PARTS_CSV,
-     e.g. Book1.csv: "ENGLISH PART NAME, فارسی"). The CSV is reloaded automatically
-     whenever the file changes, so the user can keep adding translations with no
-     rebuild and no restart.
+  2. a large, USER-MAINTAINED parts dictionary loaded from config.PARTS_DB
+     (translation.db, Book1 table: field1=English, field2=Persian). The DB is
+     reloaded automatically whenever the file's mtime changes — add rows to the
+     DB and the next query benefits with no rebuild and no restart.
 
 This is a cheap, build-free accuracy lever: no embedding model is involved.
 """
 import re
-import csv
+import sqlite3
 
 from . import config
 
@@ -209,31 +209,34 @@ _CURATED_NORM = {_norm_fa(k): v for k, v in GLOSSARY.items()}
 _CSV_CACHE = {'mtime': None, 'data': {}, 'tokens': {}}
 
 
-def _parse_csv(path):
+def _parse_db(path):
     data = {}
-    with open(path, encoding='utf-8-sig', newline='') as f:
-        for row in csv.reader(f):
-            if len(row) < 2:
+    con = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+    try:
+        for en, fa in con.execute('SELECT field1, field2 FROM Book1'):
+            if not en or not fa:
                 continue
-            en_terms = _norm_en(row[0])
-            fa_key = _norm_fa(_PARENS.sub(' ', row[1]))
+            en_terms = _norm_en(en)
+            fa_key = _norm_fa(_PARENS.sub(' ', fa))
             if not en_terms or len(fa_key) < config.PARTS_MIN_KEY_CHARS:
                 continue
             data.setdefault(fa_key, set()).update(en_terms.split())
+    finally:
+        con.close()
     return {k: ' '.join(sorted(v)) for k, v in data.items()}
 
 
 def _csv_glossary():
-    """Return {norm_fa_key: english terms} from the parts CSV, reloading only
+    """Return {norm_fa_key: english terms} from translation.db, reloading only
     when the file's mtime changes. Tolerates a missing/broken file (returns {})."""
-    p = config.PARTS_CSV
+    p = config.PARTS_DB
     try:
         m = p.stat().st_mtime
     except OSError:
         return {}, {}
     if _CSV_CACHE['mtime'] != m:
         try:
-            data = _parse_csv(p)
+            data = _parse_db(p)
         except Exception:
             data = {}
         # precompute token sets for multi-word subset matching

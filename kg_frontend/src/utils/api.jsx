@@ -434,10 +434,12 @@ export async function resendOtp(otpSession) {
 
 /** Refresh the logged-in portal user from the server (picks up admin grant/revoke). */
 export async function portalRefreshMe() {
+  // The live session is an HttpOnly cookie the browser sends automatically;
+  // getPortalToken() only ever returns a pre-cookie legacy token, so it must
+  // not gate the request — bailing on it logs every new session out.
   const token = getPortalToken();
-  if (!token) return null;
   const res = await fetch(`${API_BASE}/api/auth/me/`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
     cache: 'no-store',
   });
   const data = await res.json().catch(() => ({}));
@@ -457,10 +459,9 @@ export async function portalRefreshMe() {
  *  renders the chosen UI. */
 export async function updateBrowseMode(mode) {
   const token = getPortalToken();
-  if (!token) return null;
   const res = await fetch(`${API_BASE}/api/auth/me/prefs/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), },
     body: JSON.stringify({ browse_mode: mode }),
   });
   const data = await res.json().catch(() => ({}));
@@ -472,9 +473,8 @@ export async function updateBrowseMode(mode) {
 /** Cars this portal seat may open — always read live from the backend. */
 export async function fetchGrantedFleet() {
   const token = getPortalToken();
-  if (!token) return [];
   const res = await fetch(`${API_BASE}/api/auth/fleet/`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
     cache: 'no-store',
   });
   const data = await res.json().catch(() => ({}));
@@ -491,11 +491,11 @@ export async function fetchGrantedFleet() {
 export async function portalLogout() {
   const token = getPortalToken();
   setPortalSession('', null);
-  if (!token) return;
   try {
+    // Must always run: only the backend can clear the HttpOnly cookie.
     await fetch(`${API_BASE}/api/auth/logout/`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
     });
   } catch { /* best-effort */ }
 }
@@ -506,11 +506,10 @@ export async function portalLogout() {
 // usage can be sliced by technical area (engine / body / electrical / …).
 export async function logActivity(action, detail = '', extra = {}) {
   const token = getPortalToken();
-  if (!token) return;
   try {
     await fetch(`${API_BASE}/api/activity/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), },
       body: JSON.stringify({ action, detail, ...extra }),
     });
   } catch { /* never block the UI on telemetry */ }
@@ -586,9 +585,8 @@ export const teamApi = {
 /** Personalised behavioural recommendations for the logged-in portal user. */
 export async function fetchRecommendations(limit = 6) {
   const token = getPortalToken();
-  if (!token) return null;
   const res = await fetch(`${API_BASE}/api/recommendations/?limit=${limit}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
   });
   if (!res.ok) return null;
   return res.json().catch(() => null);
@@ -850,8 +848,9 @@ export function openEventStream({ admin = false, onEvent, onStatus } = {}) {
   let cursor = 0;
   let retry = 3000;
 
+  // Admin still uses sessionStorage; the portal rides its HttpOnly cookie.
   const token = admin ? getAdminToken() : getPortalToken();
-  if (!token) {
+  if (admin && !token) {
     onStatus?.('unauthorized');
     return () => {};
   }
@@ -863,7 +862,7 @@ export function openEventStream({ admin = false, onEvent, onStatus } = {}) {
     try {
       const res = await fetch(`${API_BASE}/api/events/stream/`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           Accept: 'text/event-stream',
           ...(cursor ? { 'Last-Event-ID': String(cursor) } : {}),
         },

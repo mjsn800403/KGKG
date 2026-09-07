@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LEMON Manuals Downloader
+KGTV Source Downloader
 ------------------------
 Give it a Brand/Year page URL. It finds every vehicle listed on that page and
 downloads each one's offline .zip manual into an output folder.
@@ -15,7 +15,7 @@ Usage:
     python3 downloader.py "<url>" --workers 3 --output-dir /root/downloads
 
 Example URL:
-    https://lemon-manuals.org.ua/Toyota/2025/
+    <Brand/Year URL>
 """
 
 import argparse
@@ -46,7 +46,7 @@ except ImportError:
     from urllib3.util.retry import Retry
 
 
-BASE_URL = "https://lemon-manuals.org.ua"
+BASE_URL = os.environ.get("KGTV_SOURCE_URL", "https://source-manuals.example.com")
 CAPTCHA_ANSWER = "human"   # the site asks you to literally type "human"
 
 # Rate-limit handling. On 429 / error, wait min(RL_WAIT*attempt, RL_WAIT_MAX)
@@ -187,12 +187,12 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
     safe_name = sanitize_filename(vehicle["name"])
 
     # Name downloads with the ingestion convention the parser expects
-    # ("LEMON <year> <brand> <model>.zip" — brand/year taken from the bundle
+    # ("KGTV <year> <brand> <model>.zip" — brand/year taken from the bundle
     # URL). Model-only names from earlier versions are still recognized for
     # skipping, but never written anymore.
     bp = [unquote(p) for p in urlparse(vehicle["bundle_url"]).path.strip("/").split("/")]
     if len(bp) == 4:   # ['bundle', brand, year, model]
-        zip_path = output_dir / sanitize_filename(f"LEMON {bp[2]} {bp[1]} {bp[3]}.zip")
+        zip_path = output_dir / sanitize_filename(f"KGTV {bp[2]} {bp[1]} {bp[3]}.zip")
         candidates = [zip_path, output_dir / f"{safe_name}.zip"]
     else:
         zip_path = output_dir / f"{safe_name}.zip"
@@ -273,20 +273,20 @@ def download_bundle(session: requests.Session, vehicle: dict, output_dir: Path) 
 
 
 def resolve_output_dir(cli_value: str) -> Path:
-    """Pick the output directory: CLI > env LEMON_OUTPUT_DIR > /root/downloads (root) > ~/Downloads/lemon."""
+    """Pick the output directory: CLI > env KGTV_OUTPUT_DIR > /root/downloads (root) > ~/Downloads/kgtv."""
     if cli_value:
         return Path(cli_value).expanduser()
-    env = os.environ.get("LEMON_OUTPUT_DIR")
+    env = os.environ.get("KGTV_OUTPUT_DIR")
     if env:
         return Path(env).expanduser()
     if os.name == "posix" and hasattr(os, "geteuid") and os.geteuid() == 0:
         return Path("/root/downloads")
-    return Path.home() / "Downloads" / "lemon"
+    return Path.home() / "Downloads" / "kgtv"
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download offline .zip manuals from lemon-manuals.org.ua"
+        description="Download offline .zip manuals from upstream source"
     )
     parser.add_argument("url", nargs="?", help="Brand/Year page URL (asked interactively if omitted)")
     parser.add_argument("--output-dir", default="", help="Where to save .zip files")
@@ -300,9 +300,9 @@ def main():
                              "e.g. --filter 'corolla cross'")
     args = parser.parse_args()
 
-    url = args.url or input("Enter Brand/Year URL (e.g. https://lemon-manuals.org.ua/Toyota/2025/): ").strip()
-    if "lemon-manuals.org.ua" not in url:
-        err("URL must be from lemon-manuals.org.ua")
+    url = args.url or input("Enter Brand/Year URL: ").strip()
+    if BASE_URL.split("//")[1].split("/")[0] not in url:
+        err("Invalid source URL")
         sys.exit(1)
 
     workers = max(1, args.workers)

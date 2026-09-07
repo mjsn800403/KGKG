@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/react';
 import Icon from './Icon';
-import { teamApi, portalRefreshMe, getPortalToken, downloadTeamReport } from '../utils/api';
+import { teamApi, portalRefreshMe, getPortalUser, downloadTeamReport } from '../utils/api';
 
 const RANGES = [
   { id: '7', label: '۷ روز' },
@@ -74,7 +74,7 @@ export default function AnalyticsView() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!getPortalToken()) { router.replace('/login'); return; }
+      if (!getPortalUser()) { router.replace('/login'); return; }
       try {
         await portalRefreshMe();
         await fetchData(range, memberId);

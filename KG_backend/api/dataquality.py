@@ -365,11 +365,18 @@ def run_audit(fix=False, log=None):
                 todo.append('upload_static_assets')
         v['pending_processes'] = todo
 
-    catalog_no_db = sorted(set(cars) - stems)
+    # Parts-only vehicles (db_address='' + a built parts DB) have no manual
+    # warehouse file BY DESIGN — report them separately, not as missing DBs.
+    from .parts import parts_db_ready  # lazy: parts imports models/portal
+    parts_only = sorted(
+        name for name in (set(cars) - stems)
+        if not cars[name].db_address and parts_db_ready(cars[name]))
+    catalog_no_db = sorted((set(cars) - stems) - set(parts_only))
 
     summary = {
         'total_dbs': len(vehicles),
         'catalog_rows': len(cars),
+        'parts_only_vehicles': parts_only,
         'complete': complete,
         'incomplete': incomplete,
         'corrupt': corrupt,
@@ -567,3 +574,50 @@ def run_audit_async(fix=False):
 
     threading.Thread(target=_worker, name='kg-audit', daemon=True).start()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Cheap read-side view of the last audit
+# ---------------------------------------------------------------------------
+def latest_health_by_car():
+    """Per-car health indicators from the most recent finished audit.
+
+    Returns ``({car_id: {...}}, finished_at)`` — ``({}, None)`` before the first
+    audit. One row read, no warehouse I/O, so catalogue and access-granting
+    screens can show completeness / indexing state per vehicle without paying
+    for a scan (the scan itself takes minutes — see run_audit).
+    """
+    from .models import DataQualityRun
+    run = (DataQualityRun.objects.filter(status='done')
+           .order_by('-finished_at').first())
+    if not run or not run.vehicles:
+        return {}, None
+
+    out = {}
+    for v in run.vehicles:
+        car_id = v.get('car_id')
+        if car_id is None:
+            continue
+        sections = v.get('sections') or []
+        missing = v.get('missing_sections') or []
+        empty = v.get('empty_sections') or []
+        # Completeness = required sections that actually carry content, over
+        # every required section (present-but-empty counts against, as it must).
+        expected = len(sections) + len(missing)
+        filled = max(0, len(sections) - len(empty))
+        out[car_id] = {
+            'status': v.get('status') or 'unknown',
+            'completeness': round(100 * filled / expected) if expected else None,
+            'sections': len(sections),
+            'missing_sections': len(missing),
+            'empty_sections': len(empty),
+            'size_mb': v.get('size_mb'),
+            'integrity': v.get('integrity'),
+            'is_duplicate': bool(v.get('is_duplicate')),
+            'static_assets': bool(v.get('static_assets')),
+            'rag_indexed': bool(v.get('rag_indexed')),
+            'diag_indexed': bool(v.get('diag_indexed')),
+            'pending_processes': list(v.get('pending_processes') or []),
+            'stem': v.get('stem'),
+        }
+    return out, run.finished_at

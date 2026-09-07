@@ -47,6 +47,14 @@ if not SECRET_KEY:
         raise RuntimeError(
             'DJANGO_SECRET_KEY must be set when DEBUG is off (production).')
 
+# Retired keys, newest first, comma-separated. Django still *verifies* (never
+# signs) with these, so rotating DJANGO_SECRET_KEY doesn't instantly break every
+# password-reset link and signed cookie in flight — the previous key keeps
+# validating old signatures for one retention window, then drops off the list.
+# `manage.py rotate_secrets` maintains both variables together; see
+# api/management/commands/rotate_secrets.py.
+SECRET_KEY_FALLBACKS = _env_list('DJANGO_SECRET_KEY_FALLBACKS')
+
 # Comma-separated, e.g. DJANGO_ALLOWED_HOSTS="example.com,api.example.com".
 # Defaults to localhost so dev works out of the box.
 ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS',
@@ -175,3 +183,135 @@ MEDIA_ROOT = BASE_DIR / 'static_warehouse'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ---------------------------------------------------------------------------
+# Security headers
+# ---------------------------------------------------------------------------
+# Everything below is safe on plain HTTP. The TLS-dependent switches stay
+# env-gated and OFF by default because this deployment currently serves port 80
+# only — turning them on without a certificate would redirect-loop the site and
+# make every session cookie undeliverable. When 443 lands, set
+# DJANGO_SECURE_SSL=1 and the whole group flips on together.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+_TLS = _env_bool('DJANGO_SECURE_SSL', default=False)
+SECURE_SSL_REDIRECT = _TLS
+SESSION_COOKIE_SECURE = _TLS
+CSRF_COOKIE_SECURE = _TLS
+SECURE_HSTS_SECONDS = 31536000 if _TLS else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _TLS
+SECURE_HSTS_PRELOAD = _TLS
+# nginx sets this on every proxied request; without it Django can't tell an
+# HTTPS request from an HTTP one behind the proxy.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if _TLS else None
+
+CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
+
+
+# ---------------------------------------------------------------------------
+# Structured logging + error monitoring
+# ---------------------------------------------------------------------------
+# Before this, unhandled exceptions went to gunicorn's stderr and journald and
+# nowhere else: no aggregation, no history past the journal's rotation, nothing
+# anyone would notice without SSHing in. Now every log record is emitted as one
+# JSON object per line (greppable, machine-parseable, ships to anything) and
+# errors additionally go to GlitchTip via the Sentry protocol.
+LOG_DIR = Path(os.environ.get('KG_LOG_DIR', '/var/log/kgkg'))
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _LOG_TO_FILE = os.access(LOG_DIR, os.W_OK)
+except OSError:
+    # Unwritable log dir must never stop the app booting — fall back to stderr.
+    _LOG_TO_FILE = False
+
+_LOG_LEVEL = os.environ.get('KG_LOG_LEVEL', 'INFO').upper()
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {'()': 'KG_backend.jsonlog.JsonFormatter'},
+        'plain': {'format': '[%(asctime)s] %(levelname)s %(name)s: %(message)s'},
+    },
+    'filters': {
+        # Keeps the log readable during tests and management commands, which
+        # would otherwise spray expected 4xx tracebacks into the error file.
+        'quiet_in_tests': {'()': 'KG_backend.jsonlog.QuietInTests'},
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'plain' if DEBUG else 'json',
+            'filters': ['quiet_in_tests'],
+        },
+    },
+    'root': {'handlers': ['console'], 'level': _LOG_LEVEL},
+    'loggers': {
+        # Django logs handled 4xx here too; those are noise, not incidents.
+        'django.request': {'handlers': [], 'level': 'ERROR', 'propagate': True},
+        'django.security': {'handlers': [], 'level': 'INFO', 'propagate': True},
+        'django.db.backends': {'handlers': [], 'level': 'WARNING', 'propagate': True},
+        'kgkg': {'handlers': [], 'level': _LOG_LEVEL, 'propagate': True},
+    },
+}
+
+if _LOG_TO_FILE:
+    LOGGING['handlers']['app_file'] = {
+        'class': 'logging.handlers.WatchedFileHandler',  # cooperates with logrotate
+        'filename': str(LOG_DIR / 'app.jsonl'),
+        'formatter': 'json',
+        'filters': ['quiet_in_tests'],
+    }
+    LOGGING['handlers']['error_file'] = {
+        'class': 'logging.handlers.WatchedFileHandler',
+        'filename': str(LOG_DIR / 'error.jsonl'),
+        'formatter': 'json',
+        'level': 'WARNING',
+        'filters': ['quiet_in_tests'],
+    }
+    LOGGING['root']['handlers'] += ['app_file', 'error_file']
+
+# GlitchTip (self-hosted, Sentry-wire-compatible) — inert unless SENTRY_DSN is
+# set, so dev boxes and the test runner never phone home.
+SENTRY_DSN = (os.environ.get('SENTRY_DSN') or '').strip()
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+
+        from KG_backend.jsonlog import scrub_event
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[
+                DjangoIntegration(),
+                LoggingIntegration(level=None, event_level='ERROR'),
+            ],
+            environment=os.environ.get('SENTRY_ENVIRONMENT', 'production'),
+            release=os.environ.get('KG_RELEASE') or None,
+            # MUST stay gzip. sentry-sdk 2.x picks Brotli automatically
+            # whenever the `brotli` package is importable — and it is here,
+            # pulled in transitively — but GlitchTip 4.1.3 cannot decompress
+            # Brotli and answers every such envelope with
+            # `400 {"detail": "Cannot parse request body"}`. The SDK logs that
+            # at DEBUG and moves on, so the failure mode is silent: the app
+            # looks instrumented and not one error ever arrives.
+            # (It lives under _experiments, not as a top-level option.)
+            _experiments={'transport_compression_algo': 'gzip'},
+            # Customer manual content and Persian PII must not leave the box in
+            # error payloads: no request bodies, no user emails/IPs attached.
+            send_default_pii=False,
+            max_request_body_size='never',
+            traces_sample_rate=float(os.environ.get('SENTRY_TRACES_RATE', '0') or 0),
+            before_send=lambda event, hint: scrub_event(event),
+        )
+    except Exception:  # pragma: no cover - monitoring must never break boot
+        import logging
+        logging.getLogger('kgkg').warning('sentry_sdk init failed', exc_info=True)

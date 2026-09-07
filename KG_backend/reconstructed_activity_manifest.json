@@ -1,0 +1,19 @@
+{
+  "purpose": "reconstructed repair-manual reading activity",
+  "generated_for": "evaluation/demo — NOT genuine user history",
+  "range_start_jalali": "1404-06-01",
+  "range_start": "2025-08-23 00:00:00",
+  "range_end": "2026-08-12 15:04:06",
+  "activitylog_id_min": 12148,
+  "activitylog_id_max": 114201,
+  "rows": 102054,
+  "marker_suffix": " — بازسازی‌شده",
+  "untouched_rows_before": 638,
+  "genuine_id_max": 12147,
+  "delete_sql": "DELETE FROM api_activitylog WHERE detail LIKE '%بازسازی\\u200cشده%';",
+  "delete_sql_by_marker": "DELETE FROM api_activitylog WHERE detail LIKE '%' || 'بازسازی\\u200cشده' || '%';",
+  "genuine_rows": 638,
+  "genuine_rows_inside_id_range": 0,
+  "users_covered": 27,
+  "user_without_activity": "parts_specialist — genuinely has no manual package, so none was invented"
+}

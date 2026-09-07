@@ -31,6 +31,9 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [13 — User guidance system](13-guidance-system.md) | Role-based tours, help center, contextual hints — and how they stay in sync with these docs |
 | [14 — Terminology & bilingual display](14-terminology.md) | terms.db store, bilingual chat display, QA-gated translation |
 | [15 — Vehicle schema & ingestion pipeline](15-vehicle-schema.md) | download/parse pipeline stages, ZIP inbox, multi-year stems, schema.org vehicle specs |
+| [16 — Parts catalog](16-parts-catalog.md) | Parts-only vehicles, import pipeline, /parts UI |
+| [17 — AI evaluation suite](17-evaluation.md) | Gold sets, baselines, retrieval/diagnosis/answer metrics, expert-review tooling |
+| [18 — Security hardening](18-security-hardening.md) | Secret/token rotation, nginx rate limiting, ModSecurity+CRS WAF, GlitchTip error monitoring |
 | [CHANGELOG](CHANGELOG.md) | Dated log of shipped changes, newest first |
 
 ## Quick facts (verified 2026-07-15)
