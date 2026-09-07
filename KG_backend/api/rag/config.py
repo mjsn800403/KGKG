@@ -333,8 +333,8 @@ as its their there then than which when where while into over under
 '''.split())
 
 FTS_W_TEXT = float(os.environ.get('RAG_FTS_W_TEXT', '1.0'))
-FTS_W_TITLE = float(os.environ.get('RAG_FTS_W_TITLE', '8.0'))
-FTS_W_COMP = float(os.environ.get('RAG_FTS_W_COMP', '4.0'))
+FTS_W_TITLE = float(os.environ.get('RAG_FTS_W_TITLE', '4.0'))
+FTS_W_COMP = float(os.environ.get('RAG_FTS_W_COMP', '12.0'))
 
 SCORE_W_RRF = 0.30          # fused reciprocal-rank weight
 SCORE_W_SIM = 0.45          # dense cosine similarity weight

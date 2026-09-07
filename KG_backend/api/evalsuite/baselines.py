@@ -170,6 +170,24 @@ def run_hybrid_fc(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, 
                                car_stem=car_stem, k=k, qvec=qvec)
 
 
+def _mk_weighted(text, title, comp):
+    """Build an eval system that runs the pipeline at fixed BM25 column weights."""
+    def _run(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
+        ctx = contextlib.nullcontext() if use_glossary else glossary_disabled()
+        with ctx, _fts_weights(text, title, comp):
+            return retrieve.assist(query, brand=None, model=None,
+                                   car_stem=car_stem, k=k, qvec=qvec)
+    return _run
+
+
+# title/comp balance sweep -- comp carries the component name for the ~50% of
+# pages whose title is generic, but is shared across a component's sibling pages.
+run_w_8_8 = _mk_weighted(1.0, 8.0, 8.0)
+run_w_8_12 = _mk_weighted(1.0, 8.0, 12.0)
+run_w_4_12 = _mk_weighted(1.0, 4.0, 12.0)
+run_w_12_6 = _mk_weighted(1.0, 12.0, 6.0)
+
+
 def run_hybrid_notw(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
     """Pipeline with FLAT bm25 column weights -- the pre-2026-09-07 behaviour.
 
@@ -400,6 +418,10 @@ SYSTEMS = {
     "hybrid_tw": dict(fn=run_hybrid_tw, dense=True, glossary=True, full=True),
     "hybrid_notw": dict(fn=run_hybrid_notw, dense=True, glossary=True, full=True),
     "hybrid_fc": dict(fn=run_hybrid_fc, dense=True, glossary=True, full=True),
+    "w_8_8": dict(fn=run_w_8_8, dense=True, glossary=True, full=True),
+    "w_8_12": dict(fn=run_w_8_12, dense=True, glossary=True, full=True),
+    "w_4_12": dict(fn=run_w_4_12, dense=True, glossary=True, full=True),
+    "w_12_6": dict(fn=run_w_12_6, dense=True, glossary=True, full=True),
     "hybrid_mq": dict(fn=run_hybrid_mq, dense=True, glossary=True, full=True),
     "hybrid_mq1": dict(fn=run_hybrid_mq1, dense=True, glossary=True, full=True),
     "abl_nocal":   dict(fn=run_abl_nocal,   dense=True, glossary=True, full=True),
