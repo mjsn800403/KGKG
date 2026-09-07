@@ -152,6 +152,24 @@ def _fts_weights(text=1.0, title=1.0, comp=1.0):
         config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP = old
 
 
+@contextlib.contextmanager
+def _fts_clean(on=True):
+    old = config.FTS_CLEAN
+    config.FTS_CLEAN = on
+    try:
+        yield
+    finally:
+        config.FTS_CLEAN = old
+
+
+def run_hybrid_fc(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
+    """Production pipeline with the FTS MATCH string cleaned (see _fts_match)."""
+    ctx = contextlib.nullcontext() if use_glossary else glossary_disabled()
+    with ctx, _fts_clean(True):
+        return retrieve.assist(query, brand=None, model=None,
+                               car_stem=car_stem, k=k, qvec=qvec)
+
+
 def run_hybrid_notw(index, query, car_stem, k=TOPK, qvec=None, use_glossary=True, **_):
     """Pipeline with FLAT bm25 column weights -- the pre-2026-09-07 behaviour.
 
@@ -381,6 +399,7 @@ SYSTEMS = {
     "hybrid_sfts": dict(fn=run_hybrid_sfts, dense=True, glossary=True, full=True),
     "hybrid_tw": dict(fn=run_hybrid_tw, dense=True, glossary=True, full=True),
     "hybrid_notw": dict(fn=run_hybrid_notw, dense=True, glossary=True, full=True),
+    "hybrid_fc": dict(fn=run_hybrid_fc, dense=True, glossary=True, full=True),
     "hybrid_mq": dict(fn=run_hybrid_mq, dense=True, glossary=True, full=True),
     "hybrid_mq1": dict(fn=run_hybrid_mq1, dense=True, glossary=True, full=True),
     "abl_nocal":   dict(fn=run_abl_nocal,   dense=True, glossary=True, full=True),

@@ -313,6 +313,25 @@ CROSS_VEHICLE_MAX = 4       # sibling-vehicle corroborations shown per hit
 #   FA  nDCG@5 +0.012 p=0.021   MRR   +0.022 p=0.012
 # Every metric improved on both languages at identical latency; Hit@5 on English
 # moved on 10 queries with none regressing.
+# Clean the FTS MATCH string before it is ORed together: drop English stopwords
+# (glossary expansion drags in "and"/"for"/"with", which match 143k-207k of the
+# 301,369 pages and flatten BM25), drop tokens that cannot match the English
+# index at all (Persian query tokens -- measured at 9.0 per Persian query, all
+# matching zero pages), and de-duplicate.
+#
+# Measured (hybrid_fc, n=250 EN + 250 FA + 51 FA-llm): ranking is UNCHANGED --
+# Persian moved on 0 queries, English on 2 (Hit@1 -0.008, p=0.27). BM25 already
+# discounts a term appearing on 67% of pages to near-zero IDF, so the stopwords
+# were never the ranking problem they looked like. What it does buy is latency:
+# p50 1168->819ms EN, 1048->842ms FA, from a much shorter MATCH string.
+FTS_CLEAN = os.environ.get('RAG_FTS_CLEAN', '1') == '1'
+# Functional words only. Deliberately NOT including "no": Toyota titles use
+# "No. 1"/"No. 2" as part identifiers, and stripping it would lose real matches.
+FTS_STOPWORDS = frozenset('''
+and or the a an of to in on at by is are be was were from with for this that it
+as its their there then than which when where while into over under
+'''.split())
+
 FTS_W_TEXT = float(os.environ.get('RAG_FTS_W_TEXT', '1.0'))
 FTS_W_TITLE = float(os.environ.get('RAG_FTS_W_TITLE', '8.0'))
 FTS_W_COMP = float(os.environ.get('RAG_FTS_W_COMP', '4.0'))

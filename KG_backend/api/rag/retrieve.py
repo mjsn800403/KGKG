@@ -27,12 +27,33 @@ logger = logging.getLogger(__name__)
 
 
 def _fts_match(query):
-    """Safe FTS5 MATCH string: keep alphanumeric tokens (len>=2), OR them."""
-    toks = []
+    """Safe FTS5 MATCH string: keep alphanumeric tokens (len>=2), OR them.
+
+    With ``config.FTS_CLEAN`` the string is also filtered, which matters most for
+    Persian. A Persian query arrives here as the question plus its glossary
+    expansion, so it carries ~9 Persian tokens that match zero pages of an English
+    index, plus the occasional English stopword from the expansion. The stopwords
+    are the harmful part: "and" occurs on 200,760 of 301,369 pages, so ORing it in
+    hands BM25 credit to two-thirds of the corpus.
+    """
+    toks, seen = [], set()
     for raw in query.replace('"', ' ').split():
         t = ''.join(ch for ch in raw if ch.isalnum())
-        if len(t) >= 2:
-            toks.append(t)
+        if len(t) < 2:
+            continue
+        if config.FTS_CLEAN:
+            low = t.lower()
+            if low in config.FTS_STOPWORDS or low in seen:
+                continue
+            seen.add(low)
+        toks.append(t)
+    if config.FTS_CLEAN:
+        # Tokens that cannot match the English index are dead weight -- but only
+        # drop them if something usable is left, so an unexpanded Persian query
+        # still behaves exactly as before rather than losing its keyword side.
+        usable = [t for t in toks if t.isascii()]
+        if usable:
+            toks = usable
     return ' OR '.join(toks) if toks else None
 
 
