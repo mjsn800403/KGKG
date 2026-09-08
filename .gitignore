@@ -1,5 +1,15 @@
 # Ignore Database and static warehouses
-/KG_backend/Database_warehouse/
+# ~72 GB of car databases and a 19 GB RAG index: never tracked.
+/KG_backend/Database_warehouse/*
+# ... except the evaluation gold sets (676 KB), which are the ground truth every
+# retrieval metric in the dossier is measured against. Git needs the exclusion
+# restated at each level: a negation cannot rescue a file whose parent directory
+# is itself excluded.
+!/KG_backend/Database_warehouse/_rag/
+/KG_backend/Database_warehouse/_rag/*
+!/KG_backend/Database_warehouse/_rag/eval/
+/KG_backend/Database_warehouse/_rag/eval/*
+!/KG_backend/Database_warehouse/_rag/eval/gold/
 /KG_backend/static_warehouse/
 
 # Ignore Claude metadata and VS Code workspace settings

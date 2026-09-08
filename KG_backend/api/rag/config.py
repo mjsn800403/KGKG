@@ -267,6 +267,33 @@ def component_words(comp_readable, with_parent=False):
     return out
 
 
+# Head nouns that name what KIND of part something is. Used only to reject a
+# pair whose names overlap but whose classes disagree ("High Voltage Battery"
+# vs "Battery Voltage Sensor"); a name declaring no class is not penalised.
+_PART_CLASSES = frozenset((
+    'sensor', 'switch', 'relay', 'valve', 'cable', 'hose', 'gasket', 'seal',
+    'bearing', 'pump', 'motor', 'battery', 'shaft', 'belt', 'filter', 'module',
+    'actuator', 'solenoid', 'radiator', 'condenser', 'compressor', 'pulley',
+    'bracket', 'cover', 'lamp', 'light', 'mirror', 'panel', 'spring', 'damper',
+    'absorber', 'rotor', 'disc', 'disk', 'pad', 'caliper', 'clutch', 'injector',
+    'plug', 'coil', 'amplifier', 'antenna', 'camera', 'regulator', 'thermostat',
+    'alternator', 'starter', 'muffler', 'manifold', 'tank', 'reservoir',
+))
+
+
+def _part_class(comp_readable, with_parent=False):
+    """The LAST class word in the component name -- English part names put the
+    head noun last ("Battery Voltage Sensor" is a sensor, not a battery).
+    Returns None when the name declares no class."""
+    segs = [s.strip() for s in (comp_readable or '').split(' › ') if s.strip()]
+    for i in range(len(segs) - 1, -1, -1):
+        if _is_component_seg(segs[i]):
+            norm = ''.join(c.lower() if c.isalnum() else ' ' for c in segs[i])
+            found = [w for w in norm.split() if w in _PART_CLASSES]
+            return found[-1] if found else None
+    return None
+
+
 def components_compatible(a_comp, b_comp, a_with_parent=True):
     """True when two breadcrumbs name the same component.
 
@@ -281,7 +308,11 @@ def components_compatible(a_comp, b_comp, a_with_parent=True):
             return False
     if aw <= bw or bw <= aw:
         return True
-    return len(aw & bw) >= 2
+    if len(aw & bw) < 2:
+        return False
+    # Same words, different part: both names declare a class and they disagree.
+    ca, cb = _part_class(a_comp, a_with_parent), _part_class(b_comp)
+    return not (ca and cb and ca != cb)
 
 
 # ---------------------------------------------------------------------------
