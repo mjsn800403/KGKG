@@ -38,3 +38,8 @@ KG_backend/staticfiles/
 /KG_backend/db.sqlite3
 /KG_backend/db.sqlite3.*
 /KG_backend/db.sqlite3-*
+
+# Written by parser_gui.py on exit to remember the last-used folders,
+# so it is per-machine. Tracking it meant each commit overwrote everyone
+# else's paths. See parser_gui_config.example.json.
+/parser_gui_config.json
