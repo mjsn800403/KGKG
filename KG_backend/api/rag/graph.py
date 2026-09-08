@@ -149,6 +149,19 @@ def _verb_compatible(a, b):
     return (a, b) in _VERB_COMPAT or (b, a) in _VERB_COMPAT
 
 
+# --- component agreement (the gate that stops cross-component labor links) ---
+# The parser lives in config alongside the other breadcrumb rules, because the
+# retrieval scope guard applies the same test and the two must not drift.
+# with_parent=True on the labor side: that is where the manual carries the
+# directional qualifier ("Axle Shafts - Front" > "Axle Shaft Assembly").
+def _component_compatible(labor_comp, repair_comp):
+    return config.components_compatible(labor_comp, repair_comp, a_with_parent=True)
+
+
+def _component_words(comp_readable, with_parent=False):
+    return config.component_words(comp_readable, with_parent=with_parent)
+
+
 def _blob_cars(index):
     cars = {}
     for r in index.execute("SELECT blob_id, car_stem FROM occurrences"):
@@ -181,6 +194,9 @@ def rebuild_labor_edges(index, log=print, seen=None):
     # actionless, so they are never linked as a procedure.
     title = {r['blob_id']: (r['title'] or '')
              for r in index.execute("SELECT blob_id, title FROM blobs")}
+    # component breadcrumb, for the component-agreement gate below
+    comp = {r['blob_id']: (r['comp_readable'] or '')
+            for r in index.execute("SELECT blob_id, comp_readable FROM blobs")}
     cars = _blob_cars(index)
     labor_ids = [b for b, k in kind.items() if k == 'labor']
 
@@ -208,6 +224,12 @@ def rebuild_labor_edges(index, log=print, seen=None):
             if l_cars and cars.get(rid) and not (l_cars & cars[rid]):
                 continue                       # scope guard: must share a vehicle
             if not _verb_compatible(l_act, _action_class(title.get(rid, ''))):
+                continue
+            # component gate: similarity + verb + shared car still let a brake
+            # labor entry attach to a transaxle inspection, because page vectors
+            # are dominated by page-kind boilerplate. Require the two
+            # breadcrumbs to name the same part.
+            if not _component_compatible(comp.get(lb, ''), comp.get(rid, '')):
                 continue
             added = False
             for a, b in ((lb, rid), (rid, lb)):

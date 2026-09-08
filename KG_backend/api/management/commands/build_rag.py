@@ -49,6 +49,25 @@ class Command(BaseCommand):
         config.RAG_DIR.mkdir(parents=True, exist_ok=True)
         t0 = time.time()
 
+        only = None
+        if opts['pilot']:
+            # Resolve against every car DB actually on disk, not just
+            # CAR_REGISTRY: only 9 stems are registered explicitly, so matching
+            # the registry alone made --pilot a no-op for 96% of the fleet.
+            want = opts['pilot'].lower()
+            only = {f.stem for f in config.car_db_files()
+                    if want in (config.car_meta(f.stem)['model'] or '').lower()
+                    or want in f.stem.lower()}
+            if not only:
+                # ingest() treats an empty set as "no filter", so returning one
+                # here would quietly start a full-fleet rebuild instead of the
+                # pilot the caller asked for.
+                raise CommandError(
+                    f"--pilot {opts['pilot']!r} matched no car DB. Nothing was "
+                    f"built. Check the model name against "
+                    f"Database_warehouse/*.db.")
+            self.stdout.write(f"  pilot mode: {len(only)} car(s): {sorted(only)}")
+
         # --- safety: snapshot original checksums BEFORE touching anything ---
         self.stdout.write(self.style.MIGRATE_HEADING("=== safety: checksumming original car DBs ==="))
         pre = _checksums()
@@ -56,11 +75,6 @@ class Command(BaseCommand):
         cks_path.write_text('\n'.join(f"{n}\t{sz}\t{dg}" for n, (sz, dg) in sorted(pre.items())))
         self.stdout.write(f"  {len(pre)} originals snapshotted -> {cks_path}")
 
-        only = None
-        if opts['pilot']:
-            only = {s for s, m in config.CAR_REGISTRY.items()
-                    if opts['pilot'].lower() in m['model'].lower()}
-            self.stdout.write(f"  pilot mode: {sorted(only)}")
 
         if opts['rebuild']:
             for suffix in ('', '-wal', '-shm'):

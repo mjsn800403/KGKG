@@ -195,6 +195,95 @@ REPAIR_ROOTS = ('repair and diagnosis', 'repair and diagnosis (single page)')
 _DROP_CRUMB_TOKENS = ('other variant',)
 
 
+# Near-miss scope guard: warn when vehicle-scoping substituted a different
+# component (see _evidence_scope). On by default; set RAG_NEARMISS_GUARD=0 to
+# fall back to the title-anchored guard alone without a deploy.
+NEARMISS_GUARD = os.environ.get('RAG_NEARMISS_GUARD', '1') != '0'
+
+# comp_readable is a breadcrumb, not a component name: its last segments are
+# actions and page kinds ("... > Millimeter Wave Radar Sensor > Removal >
+# Procedure"). Walking back past those lands on the component itself. Shared by
+# the labor<->repair graph gate and the retrieval scope guard so the two cannot
+# drift apart.
+_NON_COMPONENT = (
+    'remove', 'replace', 'install', 'removal', 'installation', 'reassembly',
+    'disassembly', 'overhaul', 'adjustment', 'adjust', 'inspection', 'inspect',
+    'diagnosis', 'diagnostic', 'testing', 'test', 'procedure', 'components',
+    'precaution', 'description', 'bleeding', 'bleed', 'balance', 'alignment',
+    'rotation', 'refinish', 'calibration', 'initialization', 'registration',
+    'reset', 'measurement', 'check', 'service information', 'parts location',
+    'illustration', 'wiring diagram', 'system diagram', 'data list',
+    'maintenance overview', 'operation check',
+)
+# Words too generic to be evidence that two names mean the same part.
+_GENERIC_WORDS = frozenset((
+    'assembly', 'assy', 'sub', 'system', 'systems', 'unit', 'and', 'the', 'for',
+    'with', 'complete', 'type', 'side', 'set', 'kit', 'component', 'components',
+))
+# Qualifiers that make two otherwise-similar names DIFFERENT parts.
+_DIRECTIONS = (
+    frozenset(('front', 'rear')), frozenset(('front', 'back')),
+    frozenset(('left', 'right')), frozenset(('lh', 'rh')),
+    frozenset(('upper', 'lower')), frozenset(('inner', 'outer')),
+    frozenset(('no1', 'no2')), frozenset(('no2', 'no3')), frozenset(('no1', 'no3')),
+)
+
+
+def _is_component_seg(seg):
+    s = seg.lower().strip()
+    return not any(s == kw or s.startswith(kw) for kw in _NON_COMPONENT)
+
+
+def component_segment(comp_readable):
+    """The component segment of a comp_readable breadcrumb ('' if none)."""
+    segs = [s.strip() for s in (comp_readable or '').split(' › ') if s.strip()]
+    for i in range(len(segs) - 1, -1, -1):
+        if _is_component_seg(segs[i]):
+            return segs[i]
+    return ''
+
+
+def component_words(comp_readable, with_parent=False):
+    """Content words of the component segment.
+
+    ``with_parent`` also folds in the segment above it, which is where the
+    manual carries the directional qualifier on the Labor-Times side
+    ("Axle Shafts - Front" > "Axle Shaft Assembly"); without it a REAR axle
+    labor entry matches a FRONT drive shaft procedure."""
+    segs = [s.strip() for s in (comp_readable or '').split(' › ') if s.strip()]
+    picked = []
+    for i in range(len(segs) - 1, -1, -1):
+        if _is_component_seg(segs[i]):
+            picked.append(segs[i])
+            if with_parent and i > 0:
+                picked.append(segs[i - 1])
+            break
+    out = set()
+    for seg in picked:
+        norm = ''.join(c.lower() if c.isalnum() else ' ' for c in seg)
+        for w in norm.split():
+            if len(w) > 2 and w not in _GENERIC_WORDS:
+                out.add(w)
+    return out
+
+
+def components_compatible(a_comp, b_comp, a_with_parent=True):
+    """True when two breadcrumbs name the same component.
+
+    Deliberately conservative -- an unidentifiable component on either side is a
+    reject, because the point is to stop a claim nobody checked."""
+    aw = component_words(a_comp, with_parent=a_with_parent)
+    bw = component_words(b_comp)
+    if not aw or not bw:
+        return False
+    for pair in _DIRECTIONS:
+        if (aw & pair) and (bw & pair) and (aw & pair) != (bw & pair):
+            return False
+    if aw <= bw or bw <= aw:
+        return True
+    return len(aw & bw) >= 2
+
+
 # ---------------------------------------------------------------------------
 # Embedding model (selectable; local + multilingual so a Persian query matches
 # the English manual content directly, offline after first download)

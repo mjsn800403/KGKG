@@ -356,6 +356,7 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
 
     # 2) context boost + boilerplate penalty + feedback boost -> calibrate
     ranked = []
+    global_best = (float('-inf'), None)      # best candidate ignoring the vehicle
     for bid, s in blob_score.items():
         occs = occ_map.get(bid)
         if not occs:
@@ -382,6 +383,17 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
             w_bm25=config.SCORE_W_BM25, w_cent=config.SCORE_W_CENT)
         cal['explain']['matched_via'] = _matched_via(cls['kind'], s['sim'], bm25_norm, vboost)
         ranked.append((cal['final'], s['sim'], bid, occ, occs, cal['explain']))
+        # Same candidate, scored as if no vehicle were pinned. The pool is
+        # already global, so this is the corpus's best match for the query and
+        # costs one extra calibrate() -- no second retrieval. Used by the scope
+        # guard to notice when vehicle-scoping swapped in a different component.
+        if scoped and config.NEARMISS_GUARD:
+            gl = scoring.calibrate(
+                dict(signals, vehicle_boost=1.0, scope=1.0),
+                w_rrf=config.SCORE_W_RRF, w_sim=config.SCORE_W_SIM,
+                w_bm25=config.SCORE_W_BM25, w_cent=config.SCORE_W_CENT)
+            if gl['final'] > global_best[0]:
+                global_best = (gl['final'], bid)
     ranked.sort(key=lambda x: x[0], reverse=True)
 
     # 3) adaptive depth: an easy query (clear top winner + strong match)
@@ -468,7 +480,12 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
         # entirely; this catches the commoner and more dangerous case — the
         # vehicle IS indexed, but the component being asked about is not part
         # of it, so the nearest neighbour is another car's page.
-        ev = _evidence_scope(index, hits, car_stem)
+        gcomp = None
+        if global_best[1] is not None:
+            row = index.execute("SELECT comp_readable FROM blobs WHERE blob_id=?",
+                                (global_best[1],)).fetchone()
+            gcomp = row['comp_readable'] if row else None
+        ev = _evidence_scope(index, hits, car_stem, global_comp=gcomp)
         if ev:
             out['evidence'] = ev
             if ev['title_absent_from_vehicle']:
@@ -511,7 +528,43 @@ def _vehicle_has_title(index, title, car_stem):
     return bool(row)
 
 
-def _evidence_scope(index, hits, car_stem):
+# Per-vehicle component vocabulary, for the near-miss half of the scope guard.
+# One query per vehicle (~25k occurrence rows), cached; bounded so a long-lived
+# worker cannot accumulate all 221 fleets.
+_COMP_CACHE = OrderedDict()
+_COMP_CACHE_MAX = 16
+
+
+def _vehicle_components(index, car_stem):
+    if car_stem in _COMP_CACHE:
+        _COMP_CACHE.move_to_end(car_stem)
+        return _COMP_CACHE[car_stem]
+    comps = set()
+    for (cr,) in index.execute(
+            "SELECT DISTINCT b.comp_readable FROM occurrences o "
+            "JOIN blobs b ON b.blob_id = o.blob_id WHERE o.car_stem = ?", (car_stem,)):
+        seg = config.component_segment(cr)
+        if seg:
+            comps.add(seg.strip().lower())
+    _COMP_CACHE[car_stem] = comps
+    if len(_COMP_CACHE) > _COMP_CACHE_MAX:
+        _COMP_CACHE.popitem(last=False)
+    return comps
+
+
+def _component_absent(index, global_comp_readable, car_stem):
+    """Is the corpus's globally-best-matching component undocumented for this
+    vehicle? True is the near-miss signal: vehicle-scoping substituted a
+    different part. None when there is nothing to judge."""
+    if not car_stem or not global_comp_readable:
+        return None
+    seg = config.component_segment(global_comp_readable)
+    if not seg:
+        return None
+    return seg.strip().lower() not in _vehicle_components(index, car_stem)
+
+
+def _evidence_scope(index, hits, car_stem, global_comp=None):
     """Vehicle-scoped evidence verification.
 
     Standard RAG cites whatever ranks highest. Because deduplication makes one
@@ -534,6 +587,10 @@ def _evidence_scope(index, hits, car_stem):
     in_vehicle = top.get('car_stem') == car_stem
     n_in = sum(1 for h in hits if h.get('car_stem') == car_stem)
     present = None if in_vehicle else _vehicle_has_title(index, top.get('title'), car_stem)
+    # Near-miss case: the top hit IS this vehicle's page, but of another
+    # component. Nothing about that hit shows it, so ask instead whether the
+    # corpus's globally-best component is documented for this vehicle at all.
+    comp_absent = _component_absent(index, global_comp, car_stem) if in_vehicle else None
     return {
         'scope': 'in_vehicle' if in_vehicle else 'cross_vehicle',
         'source_car_stem': top.get('car_stem'),
@@ -543,6 +600,8 @@ def _evidence_scope(index, hits, car_stem):
         # the loud case: evidence is from another vehicle AND this vehicle has no
         # page of that name.
         'title_absent_from_vehicle': (not in_vehicle) and present is False,
+        # the quiet one: right vehicle, wrong part.
+        'component_absent_from_vehicle': bool(comp_absent),
     }
 
 
