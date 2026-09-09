@@ -211,12 +211,17 @@ export function buildNodeHref(brand, year, model, segments = []) {
   return `${base}/${segments.map((s) => encodeURIComponent(segToUrl(s))).join('/')}`;
 }
 
-// Direct download URL for a vehicle's full Labor Times report (CSV). Points at
-// the Django export endpoint through API_BASE; auth rides the same-site
-// kg_portal_token cookie on the top-level download navigation, so this is used
-// as a plain <a href download> with no client token handling.
+// Direct download URL for a vehicle's full Labor Times report (CSV). Auth
+// rides the same-site kg_portal_token cookie on the top-level download
+// navigation, so this is used as a plain <a href download> with no client
+// token handling.
+//
+// PUBLIC_BASE, never API_BASE: this URL is rendered into HTML by a server
+// component, and API_BASE is Django's loopback address during SSR. Built from
+// API_BASE the button pointed every visitor at http://127.0.0.1:8000, which
+// only resolves on the server itself.
 export function laborTimesCsvUrl(brand, year, model) {
-  return `${API_BASE}/api/labor-times/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
+  return `${PUBLIC_BASE}/api/labor-times/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
 }
 
 // Direct download URL for a vehicle's merged SST (Special Service Tools) report
@@ -224,7 +229,7 @@ export function laborTimesCsvUrl(brand, year, model) {
 // Same cookie-borne auth as the Labor Times export, so it is used as a plain
 // <a href download>.
 export function sstCsvUrl(brand, year, model) {
-  return `${API_BASE}/api/sst/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
+  return `${PUBLIC_BASE}/api/sst/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
 }
 
 // Does this vehicle have an SST section at all? One car in the fleet has none,
@@ -232,7 +237,10 @@ export function sstCsvUrl(brand, year, model) {
 // backend answers this with a bare existence query -- it deliberately does not
 // count tools, which would mean parsing ~40 HTML pages on every page load.
 export async function fetchSstAvailable(brand, year, model, token) {
-  const res = await fetch(`${sstCsvUrl(brand, year, model)}?probe=1`, {
+  // API_BASE, not the href helper above: this runs during SSR, where Node's
+  // fetch() cannot resolve the relative public path.
+  const url = `${API_BASE}/api/sst/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/?probe=1`;
+  const res = await fetch(url, {
     cache: 'no-store', headers: { ...authHeaders(token) },
   });
   if (!res.ok) return false;
