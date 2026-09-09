@@ -44,6 +44,7 @@ endpoints use.
 """
 import csv
 import io
+import os
 import re
 
 from bs4 import BeautifulSoup
@@ -62,6 +63,15 @@ _DATE_WINDOW = re.compile(r'\[([^\]]*)\]\s*$')
 _TOOL_NUMBER = re.compile(r'^(\()?\s*(\d{5}-\d{5}[A-Z0-9-]*)\s*\)?$')
 # Wrapper folders that describe the page kind, not the system.
 _PREPARATION = ' (Preparation)'
+
+# Where a browser reaches the per-car image store. Django serves the manual's
+# own <img> tags as site-relative "/media/<car>/<file>" and lets the frontend
+# resolve them, but a CSV has no page to be relative to -- it is opened in
+# Excel, mailed on, or read by a script -- so the image column must carry an
+# absolute URL. The host comes from the request; only this prefix is a fixed
+# deployment fact (nginx serves the store under /kg-api/media/, since /kg-api/
+# is the backend's public mount), so it is overridable rather than hard-coded.
+PUBLIC_MEDIA_PREFIX = os.environ.get('KG_PUBLIC_MEDIA_PREFIX', '/kg-api/media')
 
 CSV_HEADER = [
     'brand', 'car', 'year',
@@ -196,7 +206,12 @@ def collect_tools(conn):
 
 
 def iter_report_rows(conn, car_name, brand, year, media_base=''):
-    """Yield full CSV rows (lists aligned to :data:`CSV_HEADER`) for one car."""
+    """Yield full CSV rows (lists aligned to :data:`CSV_HEADER`) for one car.
+
+    ``media_base`` should be the absolute URL of this car's image folder; the
+    image column is left as a bare file name when it is empty, so the core
+    stays testable without a request.
+    """
     year_str = '' if year is None else str(year)
     for rec in collect_tools(conn):
         image = rec['image']
@@ -285,10 +300,14 @@ def sst_csv_view(request, brand_name=None, year=None, model_name=None):
             {'error': 'no SST section',
              'detail': 'برای این خودرو فهرست ابزار مخصوص (SST) ثبت نشده است.'},
             status=404)
-    # Same relative /media/<car> base the manual content uses, so the image
-    # column resolves against whichever host the report is opened from.
+    # Absolute image URLs: a downloaded CSV has no page to be relative to.
+    # The origin is taken from the request rather than configured, so the links
+    # come back on whatever host the report was downloaded from (apex or www,
+    # http in a dev checkout) instead of a host that may not be reachable.
+    origin = request.build_absolute_uri('/').rstrip('/')
     body = build_csv(conn, car.car_name, car.brand_name, car.year,
-                     media_base='/media/%s' % quote(car.car_name))
+                     media_base='%s%s/%s' % (origin, PUBLIC_MEDIA_PREFIX,
+                                             quote(car.car_name)))
 
     resp = HttpResponse(body, content_type='text/csv; charset=utf-8')
     fname = _sanitize_filename(
