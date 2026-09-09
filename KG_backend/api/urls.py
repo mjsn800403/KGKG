@@ -1,6 +1,6 @@
 from django.urls import path
 from . import adminops, events, recommend, requests_api, views, portal, team
-from . import orggraph_api, parts, labortimes
+from . import orggraph_api, parts, labortimes, sst
 
 urlpatterns = [
     # Liveness probe (public, cheap, no secrets) + operational admin API.
@@ -99,6 +99,11 @@ urlpatterns = [
     # per-car access gate as car_view). Declared before the <brand> catch-alls.
     path('api/labor-times/<str:brand_name>/<str:year>/<str:model_name>/',
          labortimes.labor_times_csv_view, name='labor_times_csv'),
+    # Per-vehicle SST (Special Service Tools) CSV export: merges every system's
+    # SST page into one deduplicated tool list. ?probe=1 answers "does this car
+    # have one?" for the front-page button. Same gate as labor-times above.
+    path('api/sst/<str:brand_name>/<str:year>/<str:model_name>/',
+         sst.sst_csv_view, name='sst_csv'),
 
     # /                                            -> distinct list of brands
     path('', views.brands_list_view, name='brands_list'),

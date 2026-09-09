@@ -219,6 +219,27 @@ export function laborTimesCsvUrl(brand, year, model) {
   return `${API_BASE}/api/labor-times/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
 }
 
+// Direct download URL for a vehicle's merged SST (Special Service Tools) report
+// (CSV): every system's SST page collapsed into one deduplicated tool list.
+// Same cookie-borne auth as the Labor Times export, so it is used as a plain
+// <a href download>.
+export function sstCsvUrl(brand, year, model) {
+  return `${API_BASE}/api/sst/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
+}
+
+// Does this vehicle have an SST section at all? One car in the fleet has none,
+// and offering a download that returns 404 is worse than not offering it. The
+// backend answers this with a bare existence query -- it deliberately does not
+// count tools, which would mean parsing ~40 HTML pages on every page load.
+export async function fetchSstAvailable(brand, year, model, token) {
+  const res = await fetch(`${sstCsvUrl(brand, year, model)}?probe=1`, {
+    cache: 'no-store', headers: { ...authHeaders(token) },
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return !!data?.available;
+}
+
 // Navigation drills at most this many levels; the node at this depth flattens
 // its whole remaining subtree onto one page (see fetchSubtree).
 export const FLATTEN_DEPTH = 4;

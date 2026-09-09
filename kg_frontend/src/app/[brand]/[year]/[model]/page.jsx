@@ -1,6 +1,8 @@
 // app/[brand]/[year]/[model]/page.js — vehicle view (real root documents)
 import { redirect } from 'next/navigation';
-import { fetchModels, fetchPartsRoot, buildNodeHref } from '@/utils/api';
+import {
+  fetchModels, fetchPartsRoot, buildNodeHref, sstCsvUrl, fetchSstAvailable,
+} from '@/utils/api';
 import { portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
@@ -41,11 +43,14 @@ export default async function ModelPage({ params }) {
   let nodes = [];
   let partsRoot = null;
   let loadError = '';
-  const [manualRes, partsRes] = await Promise.allSettled([
+  // The SST probe rides along in the same round trip; it resolves to a plain
+  // boolean and never throws, so it cannot affect whether the page renders.
+  const [manualRes, partsRes, sstRes] = await Promise.allSettled([
     // Raw year segment on purpose: parseInt turns a legacy 'unknown' year into
     // NaN; the backend resolves the car by brand+name when the year mismatches.
     fetchModels(brand, year, model, token),
     fetchPartsRoot(brand, year, model, token),
+    fetchSstAvailable(brand, year, model, token),
   ]);
   if (manualRes.status === 'fulfilled') {
     nodes = manualRes.value || [];
@@ -58,6 +63,7 @@ export default async function ModelPage({ params }) {
     redirect('/login');
   }
   const hasManual = manualRes.status === 'fulfilled';
+  const hasSst = sstRes.status === 'fulfilled' && sstRes.value === true;
   const hasParts = !!partsRoot;
   if (!hasManual && !hasParts) {
     // Prefer a 403 from EITHER surface: "not in your subscription" is the
@@ -120,6 +126,27 @@ export default async function ModelPage({ params }) {
       </div>
       <h1 className="page-title">{model} {year}</h1>
       <div className="page-sub">// VEHICLE_DOCUMENTS</div>
+      {/* Every system in the manual has its own SST page; this merges all of
+          them into one deduplicated tool list for the whole vehicle, which no
+          single page in the tree can show. Same download mechanics as the
+          Labor Times CSV: the kg_portal_token cookie rides the top-level
+          navigation, so no client-side token handling is needed. */}
+      {hasSst && (
+        <a
+          href={sstCsvUrl(brand, year, model)}
+          download
+          className="back-link"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+            margin: '0.25rem 0 1rem', padding: '0.5rem 0.9rem',
+            border: '1px solid var(--border, #3a3a3a)', borderRadius: '8px',
+            fontSize: '0.9rem', textDecoration: 'none', width: 'fit-content',
+          }}
+        >
+          <span aria-hidden="true">⭳</span>
+          دانلود فهرست ابزار مخصوص (SST)
+        </a>
+      )}
       {classic ? (
         <CardGrid items={items} />
       ) : (
