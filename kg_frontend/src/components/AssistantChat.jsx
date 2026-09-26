@@ -10,6 +10,37 @@ import { rateAnswer } from '../utils/api';
 // Supports both [label](href) and the instruction's [BUTTON](title="..", href="..")
 // form. Internal links (starting with "/") open in-app via next/link; external
 // ones open in a new tab.
+// Source links built before the in-title-slash fix carry "%2F" inside a path
+// segment; the site encodes that "/" as U+2044 (see NAV_SLASH), so rewrite it
+// or the link opens an error page.
+// The diagnostic index also predates the TIS rebuild, whose manual root is
+// "Repair and Diagnosis" (the old "... (Single Page)" root no longer exists).
+export function fixHref(href) {
+  return href
+    .replace(/%2F/gi, '%E2%81%84')
+    .replace('/Repair%20and%20Diagnosis%20%28Single%20Page%29/', '/Repair%20and%20Diagnosis/');
+}
+
+// Minimal markdown for the LLM's prose: **bold** and "#" headings. Everything
+// else stays plain text (never HTML), so nothing in a reply can inject markup.
+function renderInline(str, keyBase) {
+  const out = [];
+  const lines = str.split('\n');
+  lines.forEach((line, li) => {
+    const heading = line.replace(/^\s*#{1,6}\s+/, '');
+    const isHeading = heading !== line;
+    const parts = heading.split(/\*\*([^*\n]+?)\*\*/g);
+    const inner = parts.map((part, i) => (i % 2
+      ? <strong key={i}>{part}</strong>
+      : part.replace(/\*\*/g, '')));
+    out.push(isHeading
+      ? <strong key={`${keyBase}-${li}`} className="chat-heading">{inner}</strong>
+      : <span key={`${keyBase}-${li}`}>{inner}</span>);
+    if (li < lines.length - 1) out.push('\n');
+  });
+  return out;
+}
+
 function RenderReply({ text }) {
   if (!text) return null;
 
@@ -18,20 +49,22 @@ function RenderReply({ text }) {
   let key = 0;
 
   // [BUTTON](title="X", href="Y")
-  const buttonRe = /\[BUTTON\]\(\s*title\s*=\s*"([^"]*)"\s*,\s*href\s*=\s*"([^"]*)"\s*\)/g;
+  const buttonRe = /\[BUTTON\]\(\s*title\s*=\s*"([^"]*)"\s*,\s*href\s*=\s*"?([^"\s)]*)"?\s*\)/g;
   // generic [label](href)
   const linkRe = /\[([^\]]+)\]\(([^)\s]+)\)/g;
 
   // First normalize BUTTON tokens into generic [label](href) so one pass handles both.
-  const normalized = text.replace(buttonRe, (_, title, href) => `[${title}](${href})`);
+  const normalized = text
+    .replace(buttonRe, (_, title, href) => `[${title}](${href})`)
+    .replace(/\[BUTTON\]\([^)\n]*\)?/g, '');
 
   let m;
   while ((m = linkRe.exec(normalized)) !== null) {
     if (m.index > lastIndex) {
-      nodes.push(<span key={key++}>{normalized.slice(lastIndex, m.index)}</span>);
+      nodes.push(<span key={key++}>{renderInline(normalized.slice(lastIndex, m.index), key)}</span>);
     }
-    const label = m[1];
-    const href = m[2];
+    const label = m[1].replace(/\*\*/g, '');
+    const href = fixHref(m[2]);
     // The assistant only ever cites in-app links (server-side faithfulness gate
     // keeps the retrieved ones). So render ONLY internal "/..." hrefs as links;
     // anything else is a hallucinated/injected URL — show its label as plain
@@ -48,7 +81,7 @@ function RenderReply({ text }) {
     lastIndex = linkRe.lastIndex;
   }
   if (lastIndex < normalized.length) {
-    nodes.push(<span key={key++}>{normalized.slice(lastIndex)}</span>);
+    nodes.push(<span key={key++}>{renderInline(normalized.slice(lastIndex), key)}</span>);
   }
 
   return <div className="chat-reply-body">{nodes}</div>;

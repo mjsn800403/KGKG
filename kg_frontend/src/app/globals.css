@@ -604,8 +604,8 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 .chat-head .ch-title{font-size:15px;font-weight:700}
 .chat-head .ch-sub{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-faint);margin-top:2px}
 .chat-head .ch-sub .live{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e88}
-.chat-scroll{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:18px}
-.chat-msg{display:flex;gap:12px;max-width:80%}
+.chat-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px;display:flex;flex-direction:column;gap:18px}
+.chat-msg{display:flex;gap:12px;max-width:80%;min-width:0}
 .chat-msg.from-user{align-self:flex-start;flex-direction:row-reverse;margin-left:auto}
 .chat-msg.from-ai{align-self:flex-end;margin-right:auto}
 .chat-avatar{
@@ -621,7 +621,8 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 }
 .from-user .chat-bubble{background:var(--accent);border-color:var(--accent);color:#fff;border-radius:16px;border-start-start-radius:4px}
 .chat-bubble.error{border-color:var(--accent-dim);color:var(--accent-2)}
-.chat-reply-body{white-space:pre-wrap}
+.chat-reply-body{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
+.chat-heading{display:inline-block;margin-top:6px}
 .chat-action-btn{
   display:inline-flex;align-items:center;gap:6px;margin:8px 4px 2px 0;padding:8px 16px;
   background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);

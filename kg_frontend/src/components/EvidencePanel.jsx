@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { fixHref } from './AssistantChat';
 
 // Transparency / interpretability for a high-stakes repair assistant: show WHY
 // the answer was given — which sources grounded it, how confident the retrieval
@@ -31,7 +32,7 @@ function SourceRow({ s }) {
       <div className="evi-source-body">
         <div className="evi-source-title">
           {internal ? (
-            <Link href={s.url} className="evi-link">{s.title || s.url} ←</Link>
+            <Link href={fixHref(s.url)} className="evi-link">{s.title || s.url} ←</Link>
           ) : (
             <span>{s.title}</span>
           )}

@@ -375,14 +375,20 @@ function collectAllowedHrefsDiag(d) {
 
 // Drop any [BUTTON](title="...", href="...") whose href didn't come from us.
 // Returns { text, stripped } so the caller can surface how many were removed.
-const BUTTON_RE = /\[BUTTON\]\(\s*title="([^"]*)"\s*,\s*href="([^"]*)"\s*\)/g;
+// The href quotes are optional: the LLM sometimes drops the closing one, and
+// such a token must still be checked (and then re-emitted well-formed) rather
+// than slip through unvalidated as raw text.
+const BUTTON_RE = /\[BUTTON\]\(\s*title\s*=\s*"([^"]*)"\s*,\s*href\s*=\s*"?([^"\s)]*)"?\s*\)/g;
+// Anything still starting with [BUTTON]( after that is unparseable: drop it.
+const BROKEN_BUTTON_RE = /\[BUTTON\]\([^)\n]*\)?/g;
 function sanitizeButtons(reply, allowed) {
   let stripped = 0;
-  const text = (reply || '').replace(BUTTON_RE, (full, _title, href) => {
-    if (allowed.has(normHref(href))) return full;
+  let text = (reply || '').replace(BUTTON_RE, (full, title, href) => {
+    if (allowed.has(normHref(href))) return `[BUTTON](title="${title}", href="${href}")`;
     stripped += 1;
     return '';            // remove the hallucinated link entirely
   });
+  text = text.replace(BROKEN_BUTTON_RE, () => { stripped += 1; return ''; });
   return { text: stripped ? text.replace(/[ \t]+\n/g, '\n').trim() : text, stripped };
 }
 
