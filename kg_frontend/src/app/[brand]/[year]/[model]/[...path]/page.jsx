@@ -15,6 +15,55 @@ import ActivityBeacon from '@/components/ActivityBeacon';
 import { friendlyError } from '@/lib/friendlyError';
 import SectionList from '@/components/SectionList';
 import { faTitle } from '@/lib/faTerms';
+import fs from 'fs';
+import nodePath from 'path';
+
+// Cars whose TIS wiring diagrams were mirrored with the real interactive
+// viewer (tis_crawler/ewd_app_mirror.py) have it at
+// <media>/<car>/_ewd/<EWDNO>/viewer.html. The wiring section embeds that
+// instead of the flat per-page SVG pictures: its own tree, zoom, clickable
+// wires and connector navigation.
+const MEDIA_ROOT = process.env.KG_MEDIA_ROOT || '/opt/KGKG/KG_backend/static_warehouse';
+const EWD_SECTION = 'Electrical Wiring Diagram';
+
+function ewdViewerSrc(model, pathArray) {
+  if (pathArray[0] !== EWD_SECTION) return null;
+  if (!model || model !== nodePath.basename(model) || model.startsWith('.')) return null;
+  try {
+    const base = nodePath.join(MEDIA_ROOT, model, '_ewd');
+    const pub = fs.readdirSync(base).find((d) => /^[A-Z0-9]+$/.test(d)
+      && fs.existsSync(nodePath.join(base, d, 'viewer.html')));
+    if (!pub) return null;
+    let hash = '';
+    const leaf = pathArray[pathArray.length - 1];
+    if (pathArray.includes('System Circuit') && leaf !== 'System Circuit') {
+      const treeDir = nodePath.join(base, pub, '_app', pub, 'ewd', 'contents', 'tree');
+      for (const period of fs.readdirSync(treeDir)) {
+        const f = nodePath.join(treeDir, period, 'tree-system.xml');
+        if (!fs.existsSync(f)) continue;
+        const xml = fs.readFileSync(f, 'utf8');
+        for (const m of xml.matchAll(/id="(SYS\d+)">\s*<name>([^<]*)<\/name>/g)) {
+          const title = m[2].replace(/&amp;/g, '&').trim();
+          if (title === leaf || title.replace(/\//g, '⁄') === leaf) {
+            hash = `#ewd_type=system;ewd=${m[1]}`;
+            break;
+          }
+        }
+        if (hash) break;
+      }
+    }
+    return `/kg-api/media/${encodeURIComponent(model)}/_ewd/${pub}/viewer.html${hash}`;
+  } catch {
+    return null;
+  }
+}
+
+// Only show the Persian subtitle when it is fully translated; a half-done
+// mix ("فیوز List & رله Location") reads worse than the English alone.
+function fullFa(title) {
+  const t = faTitle(title);
+  return /[A-Za-z]*[a-z][A-Za-z]*/.test(t) ? null : t;
+}
 
 
 
@@ -95,11 +144,25 @@ export default async function NodePage({ params }) {
     );
   }
 
-  const stacked = subtree?.mode === 'stack';
+  const ewdSrc = ewdViewerSrc(model, pathArray);
+  const stacked = !ewdSrc && subtree?.mode === 'stack';
 
   let body;
   let mode;
-  if (stacked) {
+  if (ewdSrc) {
+    mode = 'نمایشگر تعاملی نقشهٔ سیم‌کشی';
+    body = (
+      <iframe
+        src={ewdSrc}
+        title={`${model} — ${EWD_SECTION}`}
+        style={{
+          width: '100%', height: 'calc(100vh - 170px)', minHeight: '520px',
+          border: '1px solid var(--border, #ddd)', borderRadius: '10px',
+          background: '#fff', direction: 'ltr',
+        }}
+      />
+    );
+  } else if (stacked) {
     mode = 'همهٔ صفحه‌های این بخش، پشت سر هم';
     body = <StackedContent payload={subtree} brand={brand} year={year} model={model} />;
   } else if ((nodes || []).length === 1 && nodes[0].content != null) {
@@ -119,7 +182,7 @@ export default async function NodePage({ params }) {
       title: node.title,
       // Persian equivalent from the terminology store (server-side only);
       // shown under the original when the store knows the term.
-      titleFa: faTitle(node.title),
+      titleFa: fullFa(node.title),
       isPage: node.has_content === true || node.file_type != null,
     }));
     body = <SectionList items={items} />;

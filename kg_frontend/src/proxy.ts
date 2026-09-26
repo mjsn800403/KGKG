@@ -15,7 +15,8 @@ export function proxy(request: NextRequest) {
     "img-src 'self' data: blob:",
     "font-src 'self' data: https://fonts.gstatic.com",
     "connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com",
-    'frame-src https://challenges.cloudflare.com',
+    // 'self': the wiring-diagram section embeds the TIS EWD viewer from /kg-api/media.
+    "frame-src 'self' https://challenges.cloudflare.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
