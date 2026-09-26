@@ -97,6 +97,7 @@ export default async function NodePage({ params }) {
   let nodes = [];
   let error = null;
   let denied = false;
+  let noLaborData = false;
 
   try {
     if (classic) {
@@ -110,6 +111,7 @@ export default async function NodePage({ params }) {
   } catch (err) {
     if (err?.status === 401) await redirectToLogin();
     else if (err?.forbidden) denied = true;
+    else if (inLaborTimes && pathArray.length === 1 && err?.status === 404) noLaborData = true;
     else { console.error('Error fetching content:', err); error = friendlyError(err, 'بارگذاری محتوا ناموفق بود.'); }
   }
 
@@ -126,6 +128,22 @@ export default async function NodePage({ params }) {
         <div className="error-box">
           <p>دسترسی به مستندات این خودرو در اشتراک شما نیست. برای افزودن این خودرو با مدیر یا پشتیبانی تماس بگیرید.</p>
           <a href="/browse" className="back-link">← بازگشت به خودروهای فعال</a>
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (noLaborData) {
+    return (
+      <DashboardShell>
+        <div className="topbar">
+          <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
+          <UserChip />
+        </div>
+        <h1 className="page-title">Labor Times</h1>
+        <div className="empty-state" style={{ marginTop: 24 }}>
+          <p>زمان‌های کارکرد (Labor Times) برای این خودرو موجود نیست.</p>
+          <a href={`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`} className="back-link">← بازگشت</a>
         </div>
       </DashboardShell>
     );

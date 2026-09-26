@@ -131,6 +131,17 @@ export default async function ModelPage({ params }) {
     title: node.title,
     go: 'ورود به مستند ←',
   }));
+  // Vehicles published without Labor Times still get the card, so its absence
+  // reads as "no data" rather than as a missing feature.
+  if (hasManual && items.length && !nodes.some((n) => n.title === 'Labor Times')) {
+    items.push({
+      href: buildNodeHref(brand, year, model, ['Labor Times']),
+      icon: 'clock',
+      title: 'Labor Times',
+      sub: 'داده‌ای برای این خودرو موجود نیست',
+      go: 'مشاهده ←',
+    });
+  }
   const sections = (
     <>
       {items.length > 0 && <h2 className="section-label">بخش‌های مستندات</h2>}

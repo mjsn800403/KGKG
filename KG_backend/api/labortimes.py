@@ -14,8 +14,8 @@ Path shapes seen in the warehouse (verified across the fleet):
 
 The optional ``Other Variant`` wrapper (labor data borrowed from a sibling
 trim) is dropped; both shapes normalise to ``[Cat, Sub1, Part, Operation]``,
-which maps onto the report's catagory / sub-catagory1 / sub-catagory2 /
-sub-catagory3 columns. "Known missing" leaves (captured with no table) still
+which maps onto the report's category / sub-category1 / sub-category2 /
+sub-category3 columns. "Known missing" leaves (captured with no table) still
 emit one row, with the breadcrumb filled and the hour columns blank.
 
 The module core (:func:`build_csv`) depends only on sqlite3 + BeautifulSoup so
@@ -35,10 +35,10 @@ _VARIANT_WRAPPER = 'Other Variant'
 # "/"-joined path column never splits mid-title. Restore it for display.
 _FRACTION_SLASH = '⁄'
 
-# The report header, verbatim (including the caller's "catagory" spelling).
+# The report header.
 CSV_HEADER = [
     'brand', 'car', 'year',
-    'catagory', 'sub-catagory1', 'sub-catagory2', 'sub-catagory3',
+    'category', 'sub-category1', 'sub-category2', 'sub-category3',
     'Applies To', 'Note', 'Standard Hours', 'Warranty Hours', 'Skill Level',
 ]
 # The five data columns, in the order they appear in the leaf tables.
@@ -167,6 +167,9 @@ def build_csv(conn, car_name, brand, year):
 # use (see car_view Case 3). Auth rides the ``kg_portal_token`` cookie, which a
 # top-level browser download navigation carries (SameSite=Lax), so a plain
 # <a href download> works without any client-side token juggling.
+NO_DATA_MESSAGE = 'زمان‌های کارکرد (Labor Times) برای این خودرو موجود نیست.'
+
+
 def _sanitize_filename(stem):
     out = ''.join(ch if (ch.isalnum() or ch in ' -_') else '_' for ch in stem)
     return (out.strip().replace(' ', '_') or 'car')
@@ -206,6 +209,12 @@ def labor_times_csv_view(request, brand_name=None, year=None, model_name=None):
             {'error': 'vehicle database not available on server'}, status=404)
 
     conn = get_car_db(car.db_address)
+    # Some vehicles were published without Labor Times (e.g. the 4Runner
+    # trims). Say so instead of handing out a header-only CSV.
+    if next(iter_report_rows(conn, car.car_name, car.brand_name, car.year), None) is None:
+        return HttpResponse(
+            '%s\n' % NO_DATA_MESSAGE, status=404,
+            content_type='text/plain; charset=utf-8')
     body = build_csv(conn, car.car_name, car.brand_name, car.year)
 
     resp = HttpResponse(body, content_type='text/csv; charset=utf-8')
