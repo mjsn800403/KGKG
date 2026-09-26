@@ -2,6 +2,7 @@ from django.http import JsonResponse
 from django.urls import path, re_path
 from . import adminops, events, recommend, requests_api, views, portal, team
 from . import orggraph_api, parts, labortimes, sst
+from . import mediaauth
 
 
 def _api_not_found(request, rest=None):
@@ -106,6 +107,8 @@ urlpatterns = [
     path('api/admin/parts/', parts.admin_parts_summary_view, name='admin_parts_summary'),
     # Per-vehicle Labor Times CSV export (paid manual content: same login +
     # per-car access gate as car_view). Declared before the <brand> catch-alls.
+    # nginx auth_request for /kg-api/media/ (see mediaauth.py)
+    path('api/media-auth/', mediaauth.media_auth_view, name='media_auth'),
     path('api/labor-times/<str:brand_name>/<str:year>/<str:model_name>/',
          labortimes.labor_times_csv_view, name='labor_times_csv'),
     # Per-vehicle SST (Special Service Tools) CSV export: merges every system's
