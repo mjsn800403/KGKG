@@ -248,6 +248,22 @@ export async function fetchSstAvailable(brand, year, model, token) {
   return !!data?.available;
 }
 
+// Structured vehicle facts (schema.org Car) for the vehicle cover page. Same
+// grant gate as the manual; resolves to the spec's `data` object or null and
+// never throws, so a missing spec only hides the facts panel.
+export async function fetchVehicleSpec(brand, year, model, token) {
+  try {
+    const res = await fetch(
+      `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?spec=1`,
+      { cache: 'no-store', headers: { ...authHeaders(token) } });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body?.spec?.data || null;
+  } catch {
+    return null;
+  }
+}
+
 // Navigation drills at most this many levels; the node at this depth flattens
 // its whole remaining subtree onto one page (see fetchSubtree).
 export const FLATTEN_DEPTH = 4;
@@ -446,6 +462,29 @@ export async function verifyOtp(otpSession, code) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `تأیید ناموفق بود: ${res.status}`);
+  setPortalSession(data.token, data.user);
+  return data;
+}
+
+export async function recoverStart(identifier, turnstileToken) {
+  const res = await fetch(`${API_BASE}/api/auth/recover/start/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, turnstile_token: turnstileToken }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `درخواست ناموفق بود: ${res.status}`);
+  return data;
+}
+
+export async function recoverReset(otpSession, code, newPassword) {
+  const res = await fetch(`${API_BASE}/api/auth/recover/reset/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_session: otpSession, code, new_password: newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `بازیابی ناموفق بود: ${res.status}`);
   setPortalSession(data.token, data.user);
   return data;
 }
@@ -709,8 +748,19 @@ export const adminApi = {
   companyDetail: (id) => adminFetch(`/api/admin/companies/${id}/`),
   updateCompany: (id, payload) =>
     adminFetch(`/api/admin/companies/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteCompany: (id) =>
+    adminFetch(`/api/admin/companies/${id}/`, { method: 'POST', body: JSON.stringify({ delete: true }) }),
   setCompanyAccess: (id, accesses) =>
     adminFetch(`/api/admin/companies/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses }) }),
+  companyRoles: (companyId) =>
+    adminFetch(`/api/admin/companies/${companyId}/roles/`),
+  addCompanyRole: (companyId, value) =>
+    adminFetch(`/api/admin/companies/${companyId}/roles/`, { method: 'POST', body: JSON.stringify({ value }) }),
+  deleteCompanyRole: (companyId, value, reassignTo) =>
+    adminFetch(`/api/admin/companies/${companyId}/roles/delete/`, {
+      method: 'POST',
+      body: JSON.stringify({ value, reassign_to: reassignTo || undefined }),
+    }),
   users: (companyId) =>
     adminFetch(`/api/admin/users/${companyId ? `?company_id=${companyId}` : ''}`),
   createUser: (payload) =>

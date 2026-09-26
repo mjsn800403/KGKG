@@ -124,8 +124,7 @@ class Runner:
     # moves honestly (100 diag cars ≠ 100 embedded pages).
     def _stage_cost(self, s):
         rate = max(0.2, self.settings_row.embed_rate_pps or 1.5)
-        per_item = {'download': getattr(self.settings_row, 'download_secs_per_vehicle', None) or 120.0,
-                    'parse': getattr(self.settings_row, 'parse_secs_per_zip', None) or 180.0,
+        per_item = {'parse': getattr(self.settings_row, 'parse_secs_per_zip', None) or 180.0,
                     'catalog': 1.0,
                     'schema': 5.0,
                     'rag': 1.0 / rate,
@@ -239,43 +238,6 @@ class Runner:
                     pass
         self.update_overall()
         self.persist_progress()
-
-    def stage_download(self, s):
-        from api import ingest
-        from api.models import DownloadRequest
-        reqs = list(DownloadRequest.objects
-                    .filter(status__in=DownloadRequest.ACTIVE).order_by('id'))
-        errors = []
-        done = 0
-
-        def on_vehicle(v, state):
-            nonlocal done
-            done += 1
-            s['items_done'] = done
-            self.job.progress['current_item'] = v['name']
-            self.update_overall()
-            self.persist_progress()
-
-        for req in reqs:
-            self.check_cancel()
-            try:
-                counts = ingest.execute_download_request(
-                    req, log=self.log, check_cancel=self.check_cancel,
-                    on_vehicle=on_vehicle)
-                if counts['fail']:
-                    errors.append(f'درخواست #{req.id}: {counts["fail"]} دانلود ناموفق')
-            except _Canceled:
-                raise
-            except Exception as e:
-                errors.append(f'#{req.id}: {e.__class__.__name__}: {e}')
-                DownloadRequest.objects.filter(id=req.id).update(
-                    status='failed', error=str(e)[:500])
-                self.log(f'!! download request #{req.id} failed: {e}')
-        self.job.progress.pop('current_item', None)
-        if errors:
-            s['error'] = ' | '.join(errors)[:800]
-            if reqs and len(errors) == len(reqs) and done == 0:
-                raise RuntimeError('every download request failed')
 
     def stage_parse(self, s):
         """Parse pending ZIPs into the warehouse, in parallel PROCESSES.
@@ -515,10 +477,6 @@ class Runner:
         hb.start()
         failed_stages = []
         try:
-            ok_download = self.run_stage('download', self.stage_download)
-            self.check_cancel()
-            # Downloads registered new ZIPs the parse plan didn't know about.
-            self.replan_pending_stages(('parse',))
             ok_parse = self.run_stage('parse', self.stage_parse)
             self.check_cancel()
             # Parsing landed new .db files + catalog rows: refresh the plans

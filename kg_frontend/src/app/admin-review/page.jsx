@@ -10,24 +10,30 @@ import { fetchRecentFeedback, pinFeedback, setAdminToken } from '../../utils/api
 function TokenGate({ onAuthed, error }) {
   const [token, setToken] = useState('');
   return (
-    <div className="review-wrap" dir="rtl" style={{ maxWidth: 460 }}>
-      <h1 style={{ fontSize: 20, marginBottom: 8 }}>ورود کارشناس</h1>
-      <p style={{ color: 'var(--text-faint)', fontSize: 13, marginBottom: 14 }}>
-        این بخش فقط برای کارشناس است. توکن مدیریت (KG_ADMIN_TOKEN) را وارد کن.
-      </p>
-      <input
-        type="password" dir="ltr" placeholder="admin token"
-        value={token} onChange={(e) => setToken(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && token.trim() && onAuthed(token.trim())}
-        style={{ padding: '8px 10px', fontSize: 14, width: '100%', boxSizing: 'border-box' }}
-      />
-      {error && <p style={{ color: 'crimson', fontSize: 13, marginTop: 8 }}>{error}</p>}
-      <button
-        onClick={() => token.trim() && onAuthed(token.trim())}
-        style={{ marginTop: 12, padding: '8px 18px', fontSize: 14 }}
-      >
-        ورود
-      </button>
+    <div className="auth-wrap">
+      <a className="backlink" href="/">→ بازگشت به سایت</a>
+      <div className="auth-step">
+        <div className="auth-card glass">
+          <div className="auth-head">
+            <img src="/brand/logo-mark.png" alt="KGtechvault" />
+            <h2>ورود کارشناس</h2>
+            <p>صف بازبینی پاسخ‌های دستیار هوشمند</p>
+          </div>
+          <div className="field">
+            <label htmlFor="rev-token">توکن کارشناس</label>
+            <input
+              id="rev-token" type="password" dir="ltr" placeholder="••••••••••••"
+              value={token} onChange={(e) => setToken(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && token.trim() && onAuthed(token.trim())}
+            />
+          </div>
+          {error && <div className="pform-error" style={{ marginBottom: 12 }}>{error}</div>}
+          <button className="btn btn-accent full" onClick={() => token.trim() && onAuthed(token.trim())} disabled={!token.trim()}>
+            ورود به صف بازبینی ←
+          </button>
+          <div className="auth-foot">این بخش فقط برای کارشناسان داخلی است؛ توکن را از مدیر سامانه بگیرید.</div>
+        </div>
+      </div>
     </div>
   );
 }

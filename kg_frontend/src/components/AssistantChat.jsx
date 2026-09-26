@@ -54,6 +54,15 @@ function RenderReply({ text }) {
   return <div className="chat-reply-body">{nodes}</div>;
 }
 
+// Example questions shown under the greeting, covering the assistant's main
+// jobs: fault codes, specifications, capacities and repair procedures.
+const STARTERS = [
+  'کد خطای P0301 یعنی چه و چطور عیب‌یابی می‌شود؟',
+  'گشتاور بستن شمع موتور چقدر است؟',
+  'ظرفیت روغن موتور با فیلتر چقدر است؟',
+  'مراحل تعویض لنت ترمز جلو چیست؟',
+];
+
 export default function AssistantChat({ brand, year, model, car } = {}) {
   // The car this assistant is scoped to (the page passes it; the backend uses it
   // to pick the right per-car diagnostic index and to rank manual hits).
@@ -231,6 +240,14 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
                     ? <FeedbackBar onRate={(v) => rate(msg, i, v)} />
                     : <div className="fb-bar fb-done">ممنون از بازخوردت 🙏</div>}
                 </>
+              )}
+              {i === 0 && messages.length === 1 && !loading && carName && (
+                <div className="chat-starters" aria-label="نمونه پرسش‌ها">
+                  <span className="chat-starters-label">برای شروع می‌توانید بپرسید:</span>
+                  {STARTERS.map((q) => (
+                    <button key={q} type="button" className="chat-suggestion-chip" onClick={() => send(q)}>{q}</button>
+                  ))}
+                </div>
               )}
               {msg.role === 'ai' && !msg.error && i === messages.length - 1 &&
                 !loading && (msg.suggestions?.length > 0) && (

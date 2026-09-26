@@ -12,6 +12,7 @@
 // endpoint (structure only, no page bodies). Every node links to its own page;
 // the page itself decides whether to stack the subtree (small enough) or show a
 // drill-down index (too big). Folders also expand in place via the caret.
+import Skeleton from './Skeleton';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchNav, buildNodeHref, urlToSeg } from '@/utils/api';
@@ -242,7 +243,7 @@ export default function CarNav({ brand, year, model, currentPath = [] }) {
   function renderLevel(parentSegs) {
     const entry = byKey[keyOf(parentSegs)];
     if (!entry) return null;
-    if (entry.loading) return <div className="tree-loading">در حال بارگذاری…</div>;
+    if (entry.loading) return <Skeleton kind="tree" count={3} />;
     if (!entry.children.length) return null;
     return (
       <ul className="tree-children">
@@ -260,7 +261,7 @@ export default function CarNav({ brand, year, model, currentPath = [] }) {
         <span className="car-tree-kicker">فهرست مطالب</span>
         {model}
       </div>
-      {renderLevel([]) || <div className="tree-loading">در حال بارگذاری…</div>}
+      {renderLevel([]) || <Skeleton kind="tree" count={7} label="در حال بارگذاری فهرست مطالب…" />}
     </nav>
   );
 }

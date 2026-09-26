@@ -159,7 +159,7 @@ export default function SiteTour() {
             style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height }}
           />
           <div className="tour-tip" ref={tipRef} style={tipPos ? { top: tipPos.top, left: tipPos.left } : { opacity: 0 }}>
-            <div className="tt-step">{idx + 1} / {steps.length}</div>
+            <div className="tt-step">{`گام ${(idx + 1).toLocaleString('fa-IR')} از ${steps.length.toLocaleString('fa-IR')}`}</div>
             <h5>{steps[idx].title}</h5>
             <p>{steps[idx].body}</p>
             <div className="tour-nav">

@@ -79,8 +79,9 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 
 ## Data flow summaries
 
-**Content ingestion (offline → served):** crawler (`kgtv-downloader/`) fetches manual HTML →
-`htmlparser_logical.py` / `parser_gui.py` parse into `<car>.db` (nodes tree) + image files →
+**Content ingestion (offline → served):** the TIS crawler (`toyota_tis.py`, run against a
+Chrome logged into TIS by hand) saves manual HTML → `tis_parser.py` (TIS crawls) or
+`htmlparser_logical.py` / `parser_gui.py` (legacy ZIPs) parse into `<car>.db` (nodes tree) + image files →
 files land in `Database_warehouse/` / `static_warehouse/` → `sync_car_catalog` registers the
 catalog row → pipeline embeds/graphs/diag-builds → data-quality audit verifies.
 
@@ -127,7 +128,7 @@ detached from request serving.
 ├─ docs/                     ← THIS documentation suite
 ├─ htmlparser_logical.py     manual HTML → per-car SQLite parser
 ├─ parser_gui.py             tk GUI wrapper for the parser
-├─ kgtv-downloader/         source-data crawler
+├─ tis_parser.py            TIS crawl folder → per-car SQLite parser (same output as above)
 ├─ run_rag_build.sh / run_diag_build.sh / run_eval.sh / run_server.sh   convenience scripts
 └─ Book1.csv                 EN↔FA parts glossary feeding RAG query expansion
 ```

@@ -1,23 +1,23 @@
 # 15 — Structured Vehicle Data (schema.org) & the Ingestion Pipeline Extension
 
-> Built 2026-07-18. Covers two related systems added together: the **download →
-> parse** front half of the processing pipeline (source downloader + ZIP inbox),
+> Built 2026-07-18. Covers two related systems added together: the **parse**
+> front half of the processing pipeline (ZIP inbox + TIS crawls; the original
+> source downloader and its `download` stage were removed on 2026-09-19),
 > and the **schema.org vehicle spec** layer built on top of the ingested data.
 
-## 1. The full pipeline (7 stages)
+## 1. The full pipeline (6 stages)
 
 Every ProcessingJob now runs (empty stages auto-skip, so a job with no queued
-downloads/ZIPs behaves exactly like the old 4-stage pipeline):
+ZIPs/TIS crawls behaves exactly like the old 4-stage pipeline):
 
 | # | stage      | what it does | code |
 |---|-----------|--------------|------|
-| 1 | `download` | executes queued `DownloadRequest`s against the upstream source via `kgtv-downloader/downloader.py` (imported with importlib; 3s pacing, 429 backoff, atomic `.part` writes, KGTV filename convention), registers fetched ZIPs | `run_pipeline.stage_download`, `api/ingest.py execute_download_request` |
-| 2 | `parse`    | runs pending `ZipPackage`s through `htmlparser_logical.process_single_zip` → `Database_warehouse/<stem>.db` + `static_warehouse/<stem>/` + catalog upsert; deletes the extracted tree + intermediate crawl DB afterwards (ZIPs are kept); disk guard pauses below 20 GB free (`KG_PIPELINE_MIN_FREE_GB`) | `stage_parse`, `ingest.parse_zip_package` |
-| 3 | `catalog`  | `sync_car_catalog` (validating backstop; parse already upserted) | unchanged |
-| 4 | `schema`   | builds/refreshes `VehicleSpec` rows for stale/missing cars | `stage_schema`, `api/vehicleschema.py` |
-| 5 | `rag`      | ingest + embed + graph | unchanged |
-| 6 | `diag`     | diagnostic sidecars | unchanged |
-| 7 | `audit`    | data-quality report | unchanged |
+| 1 | `parse`    | runs pending `ZipPackage`s — a TIS vehicle folder through `tis_parser.process_vehicle`, a ZIP through `htmlparser_logical.process_single_zip` → `Database_warehouse/<stem>.db` + `static_warehouse/<stem>/` + catalog upsert; deletes the extracted tree + intermediate crawl DB afterwards (ZIPs are kept); disk guard pauses below 20 GB free (`KG_PIPELINE_MIN_FREE_GB`) | `stage_parse`, `ingest.parse_zip_package` |
+| 2 | `catalog`  | `sync_car_catalog` (validating backstop; parse already upserted) | unchanged |
+| 3 | `schema`   | builds/refreshes `VehicleSpec` rows for stale/missing cars | `stage_schema`, `api/vehicleschema.py` |
+| 4 | `rag`      | ingest + embed + graph | unchanged |
+| 5 | `diag`     | diagnostic sidecars | unchanged |
+| 6 | `audit`    | data-quality report | unchanged |
 
 `pending_work()` gained `need_download`, `need_parse`, `need_schema`; all feed
 `has_work`, so `pipeline_tick` auto-starts jobs for queued downloads/ZIPs too.
@@ -107,11 +107,21 @@ car DB newer than built_at).
 
 ## 6. Admin API additions (`/api/admin/pipeline/` POST)
 
-`list_source {brand,year|url, filter}` (synchronous listing annotated with
-downloaded/ingested flags) · `download {…}` (creates DownloadRequest) ·
-`cancel_download {request_id}` · `scan_zips {normalize?, dry_run?}` ·
-`skip_zip/requeue_zip {zip_id}`. GET payload gained `download_requests`,
+`tis_start` · `tis_stop` · `tis_chrome` (TIS crawler, see `api/tis_crawler.py`) ·
+`scan_zips {normalize?, dry_run?}` (ZIP inbox + TIS roots) ·
+`skip_zip/requeue_zip {zip_id}`. GET payload has `tis`,
 `zip_queue{counts,rows}`, queue fields in `pending`/`settings`.
+
+**TIS crawls in the queue (2026-09-19).** `scan_zips` also walks the TIS roots
+(`KG_TIS_INBOX`, default `/root/downloads/tis`, plus the on-server crawler's
+`downloads_tis/`) and registers each `<Model>_<Year>/` folder that has pages as a
+`ZipPackage` whose `path` is the folder (`zip_name` `TIS <year> Toyota <model>`).
+Folders with no pages yet, or being written by a running crawler, are left out.
+A crawl made elsewhere is copied in together with its sibling `_assets/`.
+`tis_parser.py` builds the same `nodes` DB (category → publication → TIS sidebar
+tree, in TIS order), publishes images through the ZIP parser's shared store
+(EWD figures/PDFs get a content-hash prefix — their names repeat across cars),
+and rewrites cross-links to `pages/<DocID>.html` with leaf `href`s to match.
 
 ## 6b. Parse parallelism & the max-power toggle
 
@@ -144,11 +154,8 @@ and the scheduler services them instantly even against Nice-0 parsing.
 
 ## 7. Gotchas
 
-* `requests` had to be added to the backend venv (downloader dependency);
-  bs4/html5lib were already present.
-* The downloader stays standalone-usable (`bash run.sh <url> --filter
-  "corolla cross" --dry-run`); it now names files with the KGTV convention
-  itself, and still skips model-only-named leftovers.
+* The original source downloader no longer ships with the application (moved
+  off the app on 2026-09-19); ZIPs still enter through the inbox.
 * Legacy ProcessingJob rows predate the new stages — `Runner.stage()` returns
   None for unknown keys and `run_stage` no-ops, so resuming an old job never
   crashes.

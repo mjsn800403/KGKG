@@ -162,9 +162,8 @@ export default function HelpCenter({
                 <Icon name="sparkles" /> شروع راهنمای تصویری
               </button>
             )}
-            {selected.docRef && (
-              <div className="guide-docref" title="مرجع مستندات فنی">مرجع: {selected.docRef}</div>
-            )}
+            {/* docRef points at our own internal docs tree; it stays in the
+                data for maintenance but is never shown to the reader. */}
           </div>
         )}
 

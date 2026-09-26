@@ -77,9 +77,9 @@ export default function AdminLogin() {
                   <motion.form key="form" onSubmit={submit}
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }}>
                     <div className="auth-head">
-                      <img src="/logo.png" alt="KGtechvault" />
+                      <img src="/brand/logo-mark.png" alt="KGtechvault" />
                       <h2>ورود مدیر سامانه</h2>
-                      <p>PLATFORM ADMIN // RESTRICTED</p>
+                      <p>ورود مدیر سامانه · دسترسی محدود</p>
                     </div>
                     <div className="admin-auth-band">
                       <Icon name="shield" size={15} />

@@ -35,13 +35,15 @@ export default function SearchBox({ brand, year, model, initialQuery = '' }) {
       if (cancelled) return;
       setSuggestions(results);
       setActive(-1);
-      setOpen(true);
+      // On the results page the box arrives pre-filled; its suggestions would
+      // only cover the full list below, so open them once the reader types.
+      if (q !== initialQuery.trim()) setOpen(true);
     }, q ? 350 : 0);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, brand, year, model]);
+  }, [query, brand, year, model, initialQuery]);
 
   // Close the dropdown when clicking outside.
   useEffect(() => {

@@ -10,6 +10,35 @@ import useEventStream from '../utils/useEventStream';
 // Personalised, behaviour-driven suggestions for the logged-in user. Loads from
 // /api/recommendations/ and quietly refreshes when the user's own activity
 // stream ticks (they viewed something new -> "continue" / "related" shift).
+//
+// The warehouse holds navigation stubs as real nodes, so the raw feed offers
+// entries like «"D"» or «External Pages», and the same procedure repeats once
+// per vehicle. Both are filtered here: a suggestion has to name something a
+// technician would recognise, and repeats collapse into one row that says how
+// many vehicles share it.
+
+// Titles that are structure, not content.
+const JUNK_TITLE = /^(external pages?|other variants?|untitled|page|index|contents?|misc)$/i;
+
+function isUseful(item) {
+  const title = String(item?.title || item?.car || '').replace(/["'“”«»]/g, '').trim();
+  if (title.length < 4) return false;              // «"D"», «A/C», single letters
+  if (JUNK_TITLE.test(title)) return false;
+  return true;
+}
+
+// One row per procedure: the first vehicle keeps the link, the rest become a
+// count so four identical "Anti-Lock Brakes" rows read as one.
+function collapse(items) {
+  const byTitle = new Map();
+  items.filter(isUseful).forEach((it) => {
+    const key = String(it.title || it.car).trim().toLowerCase();
+    const seen = byTitle.get(key);
+    if (seen) { seen.alsoCars = (seen.alsoCars || 0) + 1; return; }
+    byTitle.set(key, { ...it });
+  });
+  return [...byTitle.values()];
+}
 export default function RecommendationsWidget() {
   const [rec, setRec] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -31,12 +60,12 @@ export default function RecommendationsWidget() {
   if (!loaded) return null;
   if (!rec) return null;
 
-  const cont = rec.continue || [];
-  const related = rec.related || [];
-  const popular = rec.popular || [];
+  const cont = collapse(rec.continue || []);
+  const related = collapse(rec.related || []);
+  const popular = collapse(rec.popular || []);
   const focus = rec.focus_areas?.areas || [];
-  const focusSug = rec.focus_areas?.suggestions || [];
-  const explore = rec.explore || [];
+  const focusSug = collapse(rec.focus_areas?.suggestions || []);
+  const explore = (rec.explore || []).filter(isUseful);
 
   // Nothing to show for a brand-new user -> render nothing (fleet grid is enough).
   if (!cont.length && !related.length && !popular.length && !focusSug.length && !explore.length) {
@@ -45,7 +74,7 @@ export default function RecommendationsWidget() {
 
   const sections = [
     { key: 'continue', title: 'ادامه بدهید', icon: 'clock', items: cont, tone: 'accent' },
-    { key: 'related', title: 'مرتبط با مطالعهٔ شما', icon: 'bot', items: related, tone: 'gold' },
+    { key: 'related', title: 'مرتبط با مطالعهٔ شما', icon: 'bot', items: related, tone: 'info' },
     { key: 'focus', title: 'محبوب در حوزهٔ کاری شما', icon: 'chart', items: focusSug, tone: 'info' },
     { key: 'popular', title: 'پرکاربرد در شرکت شما', icon: 'users', items: popular, tone: 'info' },
   ].filter((s) => s.items.length > 0);
@@ -80,6 +109,7 @@ export default function RecommendationsWidget() {
                         {it.category_label ? ` · ${it.category_label}` : ''}
                         {it.views ? ` · ${it.views.toLocaleString('fa-IR')} بازدید` : ''}
                         {it.peers ? ` · ${it.peers.toLocaleString('fa-IR')} همکار` : ''}
+                        {it.alsoCars ? ` · و ${it.alsoCars.toLocaleString('fa-IR')} خودروی دیگر` : ''}
                       </span>
                       <span className="recs-go"><Icon name="back" size={13} /></span>
                     </Link>

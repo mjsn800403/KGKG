@@ -103,7 +103,7 @@ export default function PurchaseForm({ cars }) {
       });
       showModal(
         'درخواست شما ثبت شد',
-        'کارشناسان ما در اولین فرصت با شما تماس خواهند گرفت. از اعتماد شما سپاسگزاریم.',
+        'تیم ما موجودی مستند درخواستی را بررسی می‌کند و در اولین فرصت نتیجه را به شما اعلام خواهد کرد. از اعتماد شما سپاسگزاریم.',
         '✓'
       );
       setForm({ brand: '', model: '', year: '', company: '', landline: '', mobile: '', reg_no: '', note: '', employees_count: '' });
@@ -125,8 +125,8 @@ export default function PurchaseForm({ cars }) {
       <div className="pform-note">
         <Icon name="info" />
         <span>
-          مستندات فنی خودرو <b>فقط به اشخاص حقوقی</b> عرضه می‌شود. لطفاً مشخصات خودرو،
-          مستندات مورد نیاز و اطلاعات تماس شرکت را کامل کنید تا کارشناسان ما با شما تماس بگیرند.
+          مستندات فنی <b>فقط به اشخاص حقوقی</b> عرضه می‌شود. مشخصات خودرو، مستندات موردنیاز و اطلاعات
+          تماس شرکت را کامل کنید؛ تیم ما موجودی مستند را بررسی و نتیجه را به شما اعلام می‌کند.
         </span>
       </div>
 
@@ -228,9 +228,9 @@ export default function PurchaseForm({ cars }) {
 
       <div className="pform-actions">
         <button className="btn btn-accent" type="submit" disabled={submitting}>
-          {submitting ? 'در حال ثبت…' : 'ثبت درخواست خرید'}
+          {submitting ? 'در حال ثبت…' : 'ارسال درخواست بررسی موجودی'}
         </button>
-        <span style={{ color: 'var(--text-faint)', fontSize: '13px' }}>پس از ثبت، کارشناسان ما با شما تماس می‌گیرند.</span>
+        <span style={{ color: 'var(--text-faint)', fontSize: '13px' }}>پس از ثبت، موجودی مستند بررسی و نتیجه به شما اعلام می‌شود.</span>
       </div>
     </form>
   );

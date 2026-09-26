@@ -151,6 +151,25 @@ def graph_subtree_user_ids(user, include_self=False):
     return ids
 
 
+def seat_has_children(user):
+    """True iff the user's seat has at least one child seat on the canvas
+    (occupied or empty). A seat with no children is a *leaf*. A user with no
+    seat at all is treated as a leaf (no team below them)."""
+    from .models import OrgNode  # lazy: models imports this module
+    seat = getattr(user, 'seat', None)
+    if seat is None:
+        return False
+    return OrgNode.objects.filter(parent_id=seat.id).exists()
+
+
+def user_can_view_team(user):
+    """Who may open the /team page. Everyone EXCEPT a leaf on the org graph:
+    the root (which always has the org below it) and any node that has children
+    qualify; a leaf seat — or a seatless user — does not. Root is allowed even
+    on a brand-new graph with no children yet, so it can build the team."""
+    return bool(is_graph_root(user) or seat_has_children(user))
+
+
 def sync_reports_to_from_graph(company):
     """Mirror the canvas's parent edges onto the legacy ``reports_to`` field.
 

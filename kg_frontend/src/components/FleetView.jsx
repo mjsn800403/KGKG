@@ -4,11 +4,39 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
+import Skeleton from './Skeleton';
 import { fetchGrantedFleet, getPortalUser, logActivity, portalRefreshMe } from '../utils/api';
 import RecommendationsWidget from './RecommendationsWidget';
 import { useVehicleFilter } from './VehicleFilter';
+import VehicleGroupList from './VehicleGroupList';
 
 const MotionLink = motion.create(Link);
+
+function FleetCard({ c, i }) {
+  return (
+    <MotionLink
+      href={`/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
+      className="fleet-card glass"
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -5 }}
+    >
+      <div className="tag">{String(c.brand_name).toUpperCase()} / {c.year}</div>
+      <h4>{c.car_name}</h4>
+      {/* has_parts is additive backend data — older payloads simply
+          render no chip. Parts-only vehicles say what they open into. */}
+      {c.has_parts && (
+        <div className="fleet-parts-chip">کاتالوگ قطعات</div>
+      )}
+      <div className="yrs">
+        {c.has_parts && c.has_manual === false
+          ? 'مشاهده کاتالوگ قطعات ←'
+          : 'مشاهده مستندات ←'}
+      </div>
+    </MotionLink>
+  );
+}
 
 // Fleet view — loads only the cars the admin granted to this portal seat,
 // refreshed from the backend on every visit so grant/revoke takes effect
@@ -52,7 +80,7 @@ export default function FleetView() {
   const { filtered, bar } = useVehicleFilter(cars, { searchPlaceholder: 'جستجوی خودرو…' });
 
   if (loading) {
-    return <div className="empty-state">در حال بارگذاری خودروهای فعال…</div>;
+    return <Skeleton kind="cards" count={8} label="در حال بارگذاری خودروهای فعال…" />;
   }
 
   if (error) {
@@ -66,40 +94,21 @@ export default function FleetView() {
           absent, so the guided tour must not find an empty placeholder here. */}
       {bar && <div data-tour="model-filter">{bar}</div>}
 
-      <div className="fleet-grid">
-        {filtered.map((c, i) => (
-          <MotionLink
-            key={`${c.brand_name}-${c.year}-${c.car_name}`}
-            href={`/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
-            className="fleet-card glass"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
-            whileHover={{ y: -5 }}
-          >
-            <span className="badge"></span>
-            <div className="tag">{String(c.brand_name).toUpperCase()} / {c.year}</div>
-            <h4>{c.car_name}</h4>
-            {/* has_parts is additive backend data — older payloads simply
-                render no chip. Parts-only vehicles say what they open into. */}
-            {c.has_parts && (
-              <div className="fleet-parts-chip">کاتالوگ قطعات</div>
-            )}
-            <div className="yrs">
-              {c.has_parts && c.has_manual === false
-                ? 'مشاهده کاتالوگ قطعات ←'
-                : 'مشاهده مستندات ←'}
+      <VehicleGroupList
+        rows={filtered}
+        total={cars.length}
+        itemKey={(c) => `${c.brand_name}-${c.year}-${c.car_name}`}
+        renderItem={(c, i) => <FleetCard key={`${c.brand_name}-${c.year}-${c.car_name}`} c={c} i={i} />}
+        empty={(
+          <div className="fleet-grid">
+            <div className="empty-state">
+              {cars.length === 0
+                ? 'هنوز خودرویی برای این حساب تعریف نشده. با ادمین تماس بگیرید.'
+                : 'خودرویی مطابق فیلتر یافت نشد.'}
             </div>
-          </MotionLink>
-        ))}
-        {filtered.length === 0 && (
-          <div className="empty-state">
-            {cars.length === 0
-              ? 'هنوز خودرویی برای این حساب تعریف نشده. با ادمین تماس بگیرید.'
-              : 'خودرویی مطابق فیلتر یافت نشد.'}
           </div>
         )}
-      </div>
+      />
     </div>
   );
 }

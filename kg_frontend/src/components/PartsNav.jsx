@@ -1,5 +1,6 @@
 // Shared helpers for the parts-catalog routes (server-component safe).
 import Link from 'next/link';
+import PartsConfigPicker from './PartsConfigPicker';
 
 export const PARTS_LABEL = 'کاتالوگ قطعات یدکی';
 
@@ -61,28 +62,13 @@ export function PartsBreadcrumb({ brand, year, model, path = [], cfg = '' }) {
 
 // Config (frame) picker — pure links, no client JS. Shown only when the
 // vehicle maps to more than one source configuration.
-export function ConfigPicker({ brand, year, model, frames, active, path = [] }) {
+export function ConfigPicker({ brand, year, model, frames, active }) {
   if (!frames || frames.length <= 1) return null;
-  return (
-    <div className="parts-cfg-row" data-guide="parts-config">
-      {frames.map((f) => {
-        const bits = [f.engine, f.steering, f.grade || f.destination].filter(Boolean).join(' · ');
-        return (
-          <Link
-            key={f.code}
-            // Switching configuration returns to the catalog root: group trees
-            // differ per frame, so a deep path may not exist in the next one.
-            href={partsHref(brand, year, model, [], f.code)}
-            className={`doc-chip parts-cfg-chip${f.code === active ? ' active' : ''}`}
-            title={bits}
-            dir="ltr"
-          >
-            {f.code}
-          </Link>
-        );
-      })}
-    </div>
-  );
+  // Switching configuration returns to the catalog root: group trees differ per
+  // frame, so a deep path may not exist in the next one.
+  // Server components cannot hand a function to a client component, so the
+  // picker gets the catalogue root and builds its own links.
+  return <PartsConfigPicker frames={frames} active={active} base={partsBase(brand, year, model)} />;
 }
 
 // EPC period codes arrive as raw YYYYMM ("202109") — show them as 2021/09.
@@ -94,20 +80,20 @@ function period(code) {
 // One-line spec strip for the active configuration.
 export function FrameInfo({ frame }) {
   if (!frame) return null;
+  // The picker above already names the configuration and its engine/steering/
+  // market, so this strip carries only what it does not: how big the catalogue
+  // is for this frame, and the production window it covers.
+  const fa = (n) => Number(n ?? 0).toLocaleString('fa-IR');
   const bits = [
-    frame.grade && `کلاس: ${frame.grade}`,
-    frame.engine && `موتور: ${frame.engine}`,
-    frame.transmission && `گیربکس: ${frame.transmission}`,
-    frame.steering && `فرمان: ${frame.steering}`,
-    (frame.destination || frame.region) && `بازار: ${frame.destination || frame.region}`,
-    frame.date_from && `تولید: ${period(frame.date_from)}`
+    frame.n_groups != null && `${fa(frame.n_groups)} گروه قطعه`,
+    frame.n_parts != null && `${fa(frame.n_parts)} قطعه`,
+    frame.date_from && `تولید از ${period(frame.date_from)}`
       + (frame.date_to ? ` تا ${period(frame.date_to)}` : ' تاکنون'),
+    frame.transmission && `گیربکس ${frame.transmission}`,
   ].filter(Boolean);
   return (
     <div className="parts-frame-info">
-      <span className="parts-frame-code" dir="ltr">{frame.code}</span>
       {bits.map((b, i) => <span key={i} className="parts-frame-bit">{b}</span>)}
-      <span className="parts-frame-bit" dir="ltr">{frame.n_groups} GROUPS · {frame.n_parts} PARTS</span>
     </div>
   );
 }

@@ -50,7 +50,7 @@ export default async function YearPage({ params }) {
         <UserChip />
       </div>
       <h1 className="page-title">{brand} {year}</h1>
-      <div className="page-sub">// SELECT_VEHICLE</div>
+      <div className="page-sub">مدل و پیکربندی خودرو را انتخاب کنید.</div>
       <VehicleCardGrid vehicles={cars} brand={brand} year={year} />
     </DashboardShell>
   );

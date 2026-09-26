@@ -15,6 +15,7 @@ import PartsViewer from '@/components/PartsViewer';
 import {
   PARTS_LABEL, PARTS_CATEGORY_ANALYTICS, PartsBreadcrumb, partsHref,
 } from '@/components/PartsNav';
+import { friendlyError } from '@/lib/friendlyError';
 
 const GROUP_ICONS = ['parts', 'gear', 'wrench', 'catalog', 'wiring', 'manual', 'car', 'clock'];
 
@@ -41,7 +42,7 @@ export default async function PartsNodePage({ params, searchParams }) {
   } catch (e) {
     if (e?.status === 401) redirect('/login');
     else if (e?.status === 403) denied = true;
-    else error = e?.message || 'بارگذاری این بخش ناموفق بود.';
+    else error = friendlyError(e, 'بارگذاری این بخش ناموفق بود.');
   }
 
   const currentTitle = pathArray.length ? pathArray[pathArray.length - 1] : PARTS_LABEL;
@@ -83,8 +84,8 @@ export default async function PartsNodePage({ params, searchParams }) {
         <UserChip />
       </div>
       <h1 className="page-title">{currentTitle}</h1>
-      <div className="page-sub" dir="ltr">
-        // {isLeaf ? 'PARTS_VIEW' : 'PARTS_INDEX'} — {cfg}
+      <div className="page-sub">
+        {isLeaf ? 'دیاگرام و فهرست قطعات' : 'گروه‌های قطعات'} · <bdi dir="ltr">{cfg}</bdi>
       </div>
       <ActivityBeacon
         action="parts_view"

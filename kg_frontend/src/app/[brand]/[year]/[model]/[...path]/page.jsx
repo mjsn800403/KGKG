@@ -7,14 +7,16 @@ import { portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
-import CardGrid from '@/components/CardGrid';
 import StackedContent from '@/components/StackedContent';
 import ContentRenderer from '@/components/ContentRenderer';
 import CarBrowser from '@/components/CarBrowser';
 import SearchBox from '@/components/SearchBox';
 import ActivityBeacon from '@/components/ActivityBeacon';
+import { friendlyError } from '@/lib/friendlyError';
+import SectionList from '@/components/SectionList';
+import { faTitle } from '@/lib/faTerms';
 
-const ICONS = ['▣', '⌖', '◷', '⚙', '◧', '◩', '⬡', '⊞'];
+
 
 export default async function NodePage({ params }) {
   const raw = await params;
@@ -55,7 +57,7 @@ export default async function NodePage({ params }) {
   } catch (err) {
     if (err?.status === 401) redirect('/login');
     else if (err?.forbidden) denied = true;
-    else { console.error('Error fetching content:', err); error = err.message; }
+    else { console.error('Error fetching content:', err); error = friendlyError(err, 'بارگذاری محتوا ناموفق بود.'); }
   }
 
   const currentTitle = pathArray.length ? pathArray[pathArray.length - 1] : model;
@@ -86,7 +88,7 @@ export default async function NodePage({ params }) {
         </div>
         <h1 className="page-title">خطا</h1>
         <div className="error-box">
-          <p>بارگذاری محتوا ناموفق بود: {error}</p>
+          <p>{error}</p>
           <a href={`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`} className="back-link">← بازگشت</a>
         </div>
       </DashboardShell>
@@ -98,26 +100,29 @@ export default async function NodePage({ params }) {
   let body;
   let mode;
   if (stacked) {
-    mode = 'STACKED_VIEW';
+    mode = 'همهٔ صفحه‌های این بخش، پشت سر هم';
     body = <StackedContent payload={subtree} brand={brand} year={year} model={model} />;
   } else if ((nodes || []).length === 1 && nodes[0].content != null) {
     // A resolved leaf: car_view returns the content node itself as a
     // single-element list (any node with content short-circuits the children
     // query). It is NOT a child to link into — carding it would build a
     // self-referential .../X/X URL that 404s. Render its content directly.
-    mode = 'LEAF_VIEW';
+    mode = 'صفحهٔ منوال';
     body = (
       <ContentRenderer content={nodes[0].content} brand={brand} year={year} model={model} />
     );
   } else {
-    mode = 'SECTION_INDEX';
-    const items = (nodes || []).map((node, i) => ({
+    const list = nodes || [];
+    mode = `${list.length.toLocaleString('fa-IR')} زیربخش`;
+    const items = list.map((node) => ({
       href: buildNodeHref(brand, year, model, [...pathArray, node.title]),
-      icon: ICONS[i % ICONS.length],
       title: node.title,
-      go: 'ورود به مستند ←',
+      // Persian equivalent from the terminology store (server-side only);
+      // shown under the original when the store knows the term.
+      titleFa: faTitle(node.title),
+      isPage: node.has_content === true || node.file_type != null,
     }));
-    body = <CardGrid items={items} />;
+    body = <SectionList items={items} />;
   }
 
   return (
@@ -128,7 +133,7 @@ export default async function NodePage({ params }) {
         <UserChip />
       </div>
       <h1 className="page-title">{currentTitle}</h1>
-      <div className="page-sub">// {mode}</div>
+      <div className="page-sub">{mode}</div>
       {inLaborTimes && (
         <a
           href={laborCsvHref}

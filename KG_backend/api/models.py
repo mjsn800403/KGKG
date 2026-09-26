@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import hmac
 import os
 import secrets
 
@@ -113,6 +114,28 @@ class Company(models.Model):
         return self.name
 
 
+class CompanyRole(models.Model):
+    """A selectable organisational-role label for one company.
+
+    Powers the ``نقش سازمانی`` picker in the admin user editor. Every company
+    starts with the four built-in roles (seeded on first use) and the admin may
+    add custom ones or remove any of them — per company. ``value`` is exactly
+    what gets stored in ``PortalUser.role``: a built-in key for the seeded ones,
+    or the typed label text for custom ones.
+    """
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='org_roles')
+    value = models.CharField(max_length=80)
+    is_builtin = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('company', 'value')
+        ordering = ['is_builtin', 'created_at']
+
+    def __str__(self):
+        return f'{self.company_id}:{self.value}'
+
+
 class CompanyCarAccess(models.Model):
     """What a company purchased: which car, and which document layers.
 
@@ -154,7 +177,11 @@ class PortalUser(models.Model):
     personnel_code = models.CharField(max_length=60, blank=True, default='')
     password_hash = models.CharField(max_length=256)
     display_name = models.CharField(max_length=150, blank=True, default='')
-    role = models.CharField(max_length=40, choices=ROLE_CHOICES)
+    # A label from the company's role list (CompanyRole). Built-in roles store
+    # their canonical key (e.g. 'after_sales_manager'); admin-added custom roles
+    # store the typed label text itself. No DB-level ``choices`` enforcement so
+    # per-company custom roles are allowed; the picker is the source of truth.
+    role = models.CharField(max_length=80)
     # Legacy reporting pointer, retained for analytics visibility. The live org
     # structure is the graph (OrgNode.parent); this is no longer authoritative.
     reports_to = models.ForeignKey(
@@ -185,6 +212,24 @@ class PortalUser(models.Model):
     def set_password(self, raw):
         self.password_hash = make_password(raw)
         self.password_set = True
+
+    @staticmethod
+    def phone_key(raw):
+        """Last 10 digits of a phone (Persian/Arabic digits accepted), so
+        0912..., +98912... and 98912... compare equal. '' if too short."""
+        trans = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
+        digits = ''.join(ch for ch in str(raw or '').translate(trans) if ch.isdigit())
+        return digits[-10:] if len(digits) >= 10 else ''
+
+    @classmethod
+    def phone_taken(cls, phone, exclude_id=None):
+        """True if another account already uses this mobile number. One number
+        per account: the SMS login code and account recovery both go to it."""
+        key = cls.phone_key(phone)
+        if not key:
+            return False
+        qs = cls.objects.exclude(phone='').exclude(id=exclude_id).only('phone')
+        return any(cls.phone_key(p) == key for p in qs.values_list('phone', flat=True))
 
     def check_password(self, raw):
         return check_password(raw, self.password_hash)
@@ -616,51 +661,11 @@ class PipelineSettings(models.Model):
         obj, _ = cls.objects.get_or_create(id=1)
         return obj
 
-
-class DownloadRequest(models.Model):
-    """A queued request to fetch vehicle-manual ZIPs from the upstream source site.
-
-    Created from the admin panel (optionally narrowed by ``name_filter``, e.g.
-    'corolla cross'); executed by the pipeline worker's download stage, which
-    lists the Brand/Year page, downloads each matching vehicle's ZIP into the
-    inbox, and registers the ZIPs as ZipPackage rows for the parse stage.
-    ``listing`` snapshots the per-vehicle state so the panel can show exactly
-    which vehicles were fetched/skipped/failed.
-    """
-    STATUS_CHOICES = [
-        ('pending', 'pending'), ('running', 'running'), ('done', 'done'),
-        ('failed', 'failed'), ('canceled', 'canceled'),
-    ]
-    url = models.TextField()                                     # Brand/Year page URL
-    brand = models.CharField(max_length=40, blank=True, default='')
-    year = models.IntegerField(null=True, blank=True)
-    name_filter = models.CharField(max_length=120, blank=True, default='')
-    status = models.CharField(max_length=12, choices=STATUS_CHOICES,
-                              default='pending', db_index=True)
-    # [{name, bundle_url, state: pending|ok|skip|fail}] — filled at creation
-    # (from the source listing) and updated per vehicle by the worker.
-    listing = models.JSONField(default=list, blank=True)
-    vehicles_total = models.IntegerField(default=0)
-    vehicles_done = models.IntegerField(default=0)
-    error = models.TextField(blank=True, default='')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    finished_at = models.DateTimeField(null=True, blank=True)
-
-    ACTIVE = ('pending', 'running')
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'download #{self.id} {self.brand} {self.year} [{self.status}]'
-
-
 class ZipPackage(models.Model):
     """One vehicle-manual ZIP discovered in the inbox — the parse queue.
 
-    Registered by ``scan_zips`` (or by the download stage right after a
-    fetch). Identity is the absolute path; a changed size/mtime resets a
+    Registered by ``scan_zips``: a ZIP in the inbox, or a TIS vehicle crawl
+    folder (then ``path`` is the folder). Identity is the absolute path; a changed size/mtime resets a
     non-pending row back to pending so replaced files are reprocessed. The
     duplicate guard marks a ZIP whose target warehouse stem already exists
     (catalog row + .db on disk, or an earlier queued package for the same
@@ -1007,7 +1012,9 @@ class OtpChallenge(models.Model):
     the code is stored.
     """
     DEFAULT_TTL = datetime.timedelta(minutes=2)
-    RESEND_INTERVAL = datetime.timedelta(seconds=60)
+    # Equal to DEFAULT_TTL on purpose: resend unlocks exactly when the code
+    # expires, so the login screen needs only one countdown.
+    RESEND_INTERVAL = datetime.timedelta(minutes=2)
     MAX_ATTEMPTS = 5
 
     key_hash = models.CharField(max_length=64, unique=True, db_index=True)
@@ -1018,6 +1025,9 @@ class OtpChallenge(models.Model):
     expires_at = models.DateTimeField()
     last_sent_at = models.DateTimeField()
     attempts = models.PositiveSmallIntegerField(default=0)
+    # 'login' (second factor after the password) or 'recover' (forgotten
+    # password). A recovery code must never open a session on its own.
+    purpose = models.CharField(max_length=8, default='login')
 
     class Meta:
         ordering = ['-created_at']
@@ -1030,7 +1040,7 @@ class OtpChallenge(models.Model):
         return hashlib.sha256(str(raw).encode('utf-8')).hexdigest()
 
     @classmethod
-    def issue(cls, user, phone, code, ttl=None):
+    def issue(cls, user, phone, code, ttl=None, purpose='login'):
         """Start a challenge, dropping any earlier one for this user.
 
         Returns (instance, raw_key); hand the raw key to the client and keep
@@ -1043,7 +1053,7 @@ class OtpChallenge(models.Model):
             key_hash=cls._hash(raw), user=user, phone=phone,
             code_hash=cls._hash(code),
             expires_at=now + (ttl or cls.DEFAULT_TTL),
-            last_sent_at=now,
+            last_sent_at=now, purpose=purpose,
         )
         return obj, raw
 
@@ -1080,7 +1090,7 @@ class OtpChallenge(models.Model):
         if self.attempts > self.MAX_ATTEMPTS:
             self.delete()
             return False
-        if self._hash(code) != self.code_hash:
+        if not hmac.compare_digest(self._hash(code), self.code_hash):
             self.save(update_fields=['attempts'])
             return False
         self.delete()
@@ -1093,7 +1103,60 @@ class OtpChallenge(models.Model):
         return max(0, int(remaining.total_seconds() + 0.999))
 
     def rotate(self, code):
+        # A new code gets a full validity window. Without resetting
+        # expires_at, a resent code died at the first code's deadline.
+        now = timezone.now()
         self.code_hash = self._hash(code)
-        self.last_sent_at = timezone.now()
+        self.last_sent_at = now
+        self.expires_at = now + self.DEFAULT_TTL
         self.attempts = 0
-        self.save(update_fields=['code_hash', 'last_sent_at', 'attempts'])
+        self.save(update_fields=['code_hash', 'last_sent_at', 'expires_at',
+                                 'attempts'])
+
+
+class OtpEvent(models.Model):
+    """One OTP SMS sent or one wrong code entered, per account.
+
+    OtpChallenge rows are deleted on every new login, so they cannot carry a
+    daily count; this log can. Rolling 24 h caps, env-overridable:
+    KG_OTP_MAX_SENDS_PER_DAY (default 10), KG_OTP_MAX_FAILS_PER_DAY (15).
+    """
+    SEND, FAIL = 'send', 'fail'
+    WINDOW = datetime.timedelta(hours=24)
+
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE,
+                             related_name='otp_events')
+    kind = models.CharField(max_length=4)
+    at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'kind', 'at'])]
+
+    @staticmethod
+    def _cap(name, default):
+        try:
+            v = int(os.environ.get(name, default))
+            return v if v > 0 else default
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _count(cls, user, kind):
+        since = timezone.now() - cls.WINDOW
+        return cls.objects.filter(user=user, kind=kind, at__gt=since).count()
+
+    @classmethod
+    def record(cls, user, kind):
+        cls.objects.create(user=user, kind=kind)
+        # Opportunistic prune; the table only ever needs the last 24 h.
+        cls.objects.filter(at__lt=timezone.now() - 2 * cls.WINDOW).delete()
+
+    @classmethod
+    def sends_exhausted(cls, user):
+        return cls._count(user, cls.SEND) >= cls._cap(
+            'KG_OTP_MAX_SENDS_PER_DAY', 10)
+
+    @classmethod
+    def fails_exhausted(cls, user):
+        return cls._count(user, cls.FAIL) >= cls._cap(
+            'KG_OTP_MAX_FAILS_PER_DAY', 15)

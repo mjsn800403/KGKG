@@ -354,7 +354,7 @@ export function VehicleFilterBar({
               className={`model-chip${sel[d.id] === o.id ? ' active' : ''}`}
               onClick={() => onPick(d.id, o.id)}
             >
-              {o.label}<span className="cnt">{o.count}</span>
+              {o.label}<span className="cnt">{o.count.toLocaleString('fa-IR')}</span>
             </button>
           ))}
         </div>
@@ -452,7 +452,7 @@ function VehicleFilterMenu({ dim, value, isOpen, onToggle, onPick }) {
               onClick={() => onPick(o.id)}
             >
               <span>{o.label}</span>
-              <span className="cnt">{o.count}</span>
+              <span className="cnt">{o.count.toLocaleString('fa-IR')}</span>
             </button>
           ))}
         </div>

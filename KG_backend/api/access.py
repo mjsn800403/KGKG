@@ -52,6 +52,54 @@ def role_label(role, department_label=''):
     return base
 
 
+def seed_company_roles(company):
+    """Create the four built-in role options for a company if it has none yet.
+    Idempotent."""
+    from .models import CompanyRole  # lazy: models imports this module
+    for key, _ in ROLE_CHOICES:
+        CompanyRole.objects.get_or_create(
+            company=company, value=key, defaults={'is_builtin': True})
+
+
+def ensure_company_role(company, value):
+    """Make sure ``value`` is a selectable role for ``company`` (auto-adds a
+    custom role the first time it is assigned). No-op for blank values."""
+    from .models import CompanyRole  # lazy
+    value = (value or '').strip()
+    if not value:
+        return
+    CompanyRole.objects.get_or_create(
+        company=company, value=value,
+        defaults={'is_builtin': value in VALID_ROLES})
+
+
+def company_role_options(company):
+    """The role picker for one company: ``[{value, label, builtin, in_use}]``.
+
+    Seeds the built-ins on first use, and also surfaces any role value currently
+    held by a user but missing from the table (legacy data), so the picker never
+    hides a role someone actually has.
+    """
+    from .models import CompanyRole, PortalUser  # lazy
+    rows = list(CompanyRole.objects.filter(company=company))
+    if not rows:
+        seed_company_roles(company)
+        rows = list(CompanyRole.objects.filter(company=company))
+    used = {r for r in PortalUser.objects.filter(company=company)
+            .values_list('role', flat=True) if r}
+    dept = company.department_label
+    known = set()
+    opts = []
+    for r in rows:
+        known.add(r.value)
+        opts.append({'value': r.value, 'label': role_label(r.value, dept),
+                     'builtin': r.is_builtin, 'in_use': r.value in used})
+    for v in sorted(used - known):
+        opts.append({'value': v, 'label': role_label(v, dept),
+                     'builtin': False, 'in_use': True})
+    return opts
+
+
 def role_can_manage(actor_role, target_role):
     """Higher-level roles inherit authority over lower-level roles."""
     a = ROLE_LEVEL.get(normalize_role(actor_role), 99)

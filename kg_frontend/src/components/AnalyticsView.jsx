@@ -221,7 +221,9 @@ function Kpi({ icon, label, value, text }) {
   );
 }
 
-// Single-series area chart (daily events). One hue, gradient fill, recessive axis.
+// Single-series area chart (daily events). Measurements are drawn in the
+// measurement hue, never the action red — red on this page used to read as an
+// alert when it was only "activity per day".
 function TrendArea({ series }) {
   if (!series || series.length === 0) return <div className="muted" style={{ padding: 12 }}>داده‌ای برای نمایش نیست.</div>;
   const W = 640, H = 180, P = 8;
@@ -237,12 +239,12 @@ function TrendArea({ series }) {
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="trend-svg" role="img" aria-label="روند فعالیت روزانه">
         <defs>
           <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--chart-line, var(--accent))" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="var(--chart-line, var(--accent))" stopOpacity="0" />
           </linearGradient>
         </defs>
         <motion.path d={area} fill="url(#trendFill)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} />
-        <motion.path d={line} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+        <motion.path d={line} fill="none" stroke="var(--chart-line, var(--accent))" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1, ease: 'easeInOut' }} />
       </svg>
       <div className="trend-axis"><span>{series[0].date}</span><span>{series[series.length - 1].date}</span></div>

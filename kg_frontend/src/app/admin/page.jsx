@@ -13,7 +13,8 @@
 // Server-side everything is gated by KG_ADMIN_TOKEN (open in DEBUG for local
 // dev). If the backend rejects us we prompt for the token.
 
-import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
@@ -24,6 +25,7 @@ import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
 import { adminApi, adminLogout, getAdminToken, getAdminUser } from '@/utils/api';
 import useEventStream from '@/utils/useEventStream';
 import { DEPARTMENT_PRESETS, PACKAGES, ROLES, packageLabel, roleWithDepartment } from '@/lib/packages';
+import { isPlanRequest, planIdFromCode, quote, faMillion, PLAN_DAYS } from '@/lib/pricing';
 
 // ---------------------------------------------------------------------------
 // Live-refresh plumbing.
@@ -51,6 +53,29 @@ const ACCESS_PRESETS = [
   { id: 'specialist', label: 'کارشناس (راهنما+قطعات)', docs: ['manual', 'parts'] },
   { id: 'parts_only', label: 'فقط قطعات', docs: ['parts'] },
 ];
+
+const faN = (n) => (n ?? 0).toLocaleString('fa-IR');
+
+// Rows per page in the activity log.
+const ACT_PAGE = 25;
+// Rows per page in the catalogue-style tables (one screenful of a dense table).
+const TABLE_PAGE = 40;
+// schema.org field ids as stored on each VehicleSpec, in the words an admin
+// uses. Anything unmapped falls back to the raw id.
+const SPEC_FIELD_FA = {
+  name: 'نام خودرو', brand: 'برند', manufacturer: 'سازنده', model: 'مدل',
+  vehicleModelDate: 'سال مدل', modelDate: 'سال', vehicleConfiguration: 'تیپ/نسخه',
+  fuelType: 'نوع سوخت', bodyType: 'نوع بدنه', numberOfDoors: 'تعداد در',
+  vehicleTransmission: 'گیربکس', fuelCapacity: 'حجم باک', driveWheelConfiguration: 'محور محرک',
+  vehicleEngine: 'موتور', additionalProperty: 'مشخصات تکمیلی (روغن، لاستیک…)',
+};
+// Raw action ids as stored by the client beacons, in Persian for the report.
+const ACTIVITY_FA = {
+  login: 'ورود', logout: 'خروج', view_fleet: 'مشاهده فهرست خودروها', view_car: 'مشاهده خودرو',
+  view_node: 'مشاهده سند', view_section: 'مرور بخش', search: 'جستجو', open_assistant: 'باز کردن دستیار',
+  assist: 'پرسش از دستیار', parts_view: 'مشاهده قطعات', report_pdf: 'دریافت گزارش', team_add: 'افزودن کاربر',
+  role_add: 'افزودن نقش', role_apply: 'اعمال نقش', role_delete: 'حذف نقش',
+};
 
 const REQ_STATUS = {
   new: { label: 'جدید', cls: 'st-new' },
@@ -167,7 +192,7 @@ function HealthCell({ health }) {
 }
 
 const SECTIONS = [
-  { id: 'dashboard', label: 'داشبورد بلادرنگ', icon: 'chart', desc: 'وضعیت زندهٔ پلتفرم، پردازش و رویدادها' },
+  { id: 'dashboard', label: 'داشبورد آنلاین', icon: 'chart', desc: 'وضعیت زندهٔ پلتفرم، پردازش و رویدادها' },
   { id: 'overview', label: 'نمای کلی', icon: 'catalog', desc: 'خلاصه وضعیت کل پلتفرم در یک نگاه' },
   { id: 'catalog', label: 'فهرست خودروها', icon: 'car', desc: 'خودروهای ثبت‌شده و وضعیت دیتابیس هرکدام' },
   { id: 'requests', label: 'درخواست‌های خرید', icon: 'cart', desc: 'درخواست‌های جدید مشتریان و صدور دسترسی' },
@@ -185,16 +210,24 @@ const SECTIONS = [
 // The hub groups the sections so the admin lands on a calm "desk", not the
 // full firehose — a section's tools appear only after entering it.
 const SECTION_GROUPS = [
-  { title: 'بلادرنگ', tag: '// REALTIME', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
-  { title: 'مشتریان و فروش', tag: '// CUSTOMERS', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
-  { title: 'گزارش و تحلیل', tag: '// INSIGHTS', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'activity'] },
-  { title: 'داده و عملیات', tag: '// OPERATIONS', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system'] },
+  { title: 'آنلاین', tag: 'داشبورد و درخواست‌ها', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
+  { title: 'مشتریان و فروش', tag: 'درخواست خرید، شرکت‌ها، کاربران', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
+  { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'activity'] },
+  { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system'] },
 ];
 
 function fmtDate(iso) {
   try {
     return new Date(iso).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' });
   } catch { return iso; }
+}
+
+// A `datetime-local` value (YYYY-MM-DDTHH:mm) `days` from `fromIso` (or now).
+function plusDaysLocal(days, fromIso) {
+  const base = fromIso ? new Date(fromIso) : new Date();
+  const d = new Date(base.getTime() + days * 86400000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 const EASE = [0.22, 1, 0.36, 1];
@@ -299,7 +332,7 @@ export default function AdminPage() {
               transition={SPRING}
             >
               <a className="sb-brand" onClick={() => go(null)} style={{ cursor: 'pointer' }}>
-                <img src="/logo.png" alt="KGtechvault" />
+                <img src="/brand/logo-mark.png" alt="KGtechvault" />
                 <span>پنل مدیریت</span>
               </a>
               <button type="button" className="sb-link" onClick={() => go(null)}>
@@ -498,11 +531,11 @@ function Overview({ guard, go }) {
   return (
     <>
       <h1 className="page-title">نمای کلی</h1>
-      <div className="page-sub">// ADMIN_OVERVIEW</div>
+      <div className="page-sub">نمای کلی سامانه</div>
       <div className="grid3" style={{ marginTop: 20 }}>
         {stats.map((s) => (
           <div key={s.label} className="card glass" style={{ cursor: 'pointer' }} onClick={() => go(s.section)}>
-            <div className="num">{s.value}</div>
+            <div className="num">{faN(s.value)}</div>
             <h3>{s.label}</h3>
           </div>
         ))}
@@ -513,6 +546,31 @@ function Overview({ guard, go }) {
 }
 
 // ---------------------------------------------------------------------------
+// Paging for the long admin tables. The catalogue, data-health and spec tables
+// list every vehicle (235 rows, ~11,000px); a page at a time keeps the filters
+// and the table header in view. Clamping (rather than resetting on change)
+// keeps this free of state updates inside effects.
+function usePagedRows(rows, size = TABLE_PAGE) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(rows.length / size));
+  const current = Math.min(page, pageCount);
+  const pageRows = rows.slice((current - 1) * size, current * size);
+  const pager = rows.length > size ? (
+    <div className="adm-pager">
+      <span>
+        نمایش {(((current - 1) * size) + 1).toLocaleString('fa-IR')}–
+        {Math.min(current * size, rows.length).toLocaleString('fa-IR')} از {rows.length.toLocaleString('fa-IR')} ردیف
+      </span>
+      <span className="adm-pager-btns">
+        <button type="button" className="btn" disabled={current <= 1} onClick={() => setPage(current - 1)}>قبلی</button>
+        <span style={{ alignSelf: 'center' }}>صفحهٔ {current.toLocaleString('fa-IR')} از {pageCount.toLocaleString('fa-IR')}</span>
+        <button type="button" className="btn" disabled={current >= pageCount} onClick={() => setPage(current + 1)}>بعدی</button>
+      </span>
+    </div>
+  ) : null;
+  return { pageRows, pager, offset: (current - 1) * size };
+}
+
 function Catalog({ guard }) {
   const rs = useAdminRefresh();
   const [cars, setCars] = useState([]);
@@ -528,10 +586,12 @@ function Catalog({ guard }) {
 
   const { filtered, bar } = useVehicleFilter(cars, { facets: HEALTH_FACETS });
 
+  const catalogPage = usePagedRows(filtered);
+
   return (
     <>
       <h1 className="page-title">فهرست کامل خودروها</h1>
-      <div className="page-sub">// FULL_CATALOG — ادمین به همه پکیج‌ها دسترسی دارد</div>
+      <div className="page-sub">کاتالوگ کامل — ادمین به همهٔ پکیج‌ها دسترسی دارد</div>
       <p style={{ color: 'var(--text-dim)', fontSize: 14, marginTop: 12, maxWidth: 720 }}>
         این فهرست همه خودروهای موجود در پایگاه کار را نشان می‌دهد. با فیلترهای سال، مدل و وضعیت
         می‌توانید بخشی از ناوگان را جدا کنید. درخواست خرید ممکن است برای خودرویی باشد که هنوز در این
@@ -553,7 +613,8 @@ function Catalog({ guard }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c, i) => {
+            {catalogPage.pageRows.map((c, i0) => {
+              const i = catalogPage.offset + i0;
               const h = c.health;
               const gaps = h ? h.missing_sections + h.empty_sections : 0;
               return (
@@ -582,6 +643,7 @@ function Catalog({ guard }) {
           </tbody>
         </table>
       </div>
+      {catalogPage.pager}
     </>
   );
 }
@@ -623,13 +685,18 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
     const cid = match?.id ? String(match.id) : '';
     setCompanyId(cid);
     const rows = [];
+    // The company's 0-level account (made with the company) already fills one
+    // manager seat; issuing it again would exceed the seats the buyer paid for.
+    let skipManager = match?.has_root ? 1 : 0;
     (request.seat_plan || []).forEach((row, ri) => {
       const slug = (request.company || 'co').replace(/\s+/g, '_').slice(0, 12).toLowerCase();
       for (let i = 0; i < (row.count || 0); i += 1) {
+        if (skipManager && row.role === 'after_sales_manager') { skipManager -= 1; continue; }
         rows.push({
           key: `${ri}-${i}`,
           username: `${slug}_${row.role}_${ri + 1}_${i + 1}`,
           display_name: '',
+          phone: '',
           role: row.role,
           department: row.department || '',
           note: row.note || '',
@@ -650,6 +717,7 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
         company_id: Number(companyId),
         username: d.username.trim(),
         display_name: d.display_name.trim(),
+        phone: d.phone.trim(),
         role: d.role,
       }));
       if (r) out.push({ username: r.user.username, password: r.password });
@@ -686,6 +754,11 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
               onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, display_name: e.target.value } : x))} />
           </div>
           <div className="field">
+            <label>شماره موبایل (ورود پیامکی) *</label>
+            <input dir="ltr" value={d.phone}
+              onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, phone: e.target.value } : x))} />
+          </div>
+          <div className="field">
             <label>نقش</label>
             <select className="adm-select" value={d.role}
               onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, role: e.target.value } : x))}>
@@ -694,7 +767,8 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
           </div>
         </div>
       ))}
-      <button className="btn btn-accent" disabled={busy || !companyId || !drafts.length} onClick={issue}>
+      {drafts.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>همهٔ صندلی‌های این درخواست با حساب سطح‌صفر شرکت پر شده است.</p>}
+      <button className="btn btn-accent" disabled={busy || !companyId || !drafts.length || drafts.some((d) => d.username.trim() && !d.phone.trim())} onClick={issue}>
         {busy ? 'در حال صدور…' : `صدور ${drafts.length} کاربر`}
       </button>
       {results.length > 0 && (
@@ -731,10 +805,20 @@ function Requests({ guard, onCreateCompany }) {
   return (
     <>
       <h1 className="page-title">درخواست‌های خرید و دمو</h1>
-      <div className="page-sub">// PURCHASE_AND_DEMO_REQUESTS</div>
+      <div className="page-sub">
+        درخواست‌های خرید اشتراک از صفحهٔ «پلن‌ها و قیمت» و درخواست‌های قدیمی بررسی موجودی
+        {items.some((r) => r.status === 'new') && <> — <b>{items.filter((r) => r.status === 'new').length.toLocaleString('fa-IR')} درخواست جدید</b></>}
+      </div>
       <div style={{ display: 'grid', gap: 14, marginTop: 20 }}>
         {items.map((r) => {
           const st = REQ_STATUS[r.status] || REQ_STATUS.new;
+          if (isPlanRequest(r)) {
+            return (
+              <PlanRequestCard key={r.id} r={r} st={st} onStatus={setStatus} onCreateCompany={onCreateCompany}
+                wizardOpen={wizardFor === r.id} onWizard={() => setWizardFor(wizardFor === r.id ? null : r.id)}
+                wizard={<IssueUsersWizard request={r} companies={companies} guard={guard} onDone={load} />} />
+            );
+          }
           return (
             <div key={r.id} className="card glass" style={{ padding: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
@@ -778,10 +862,12 @@ function Requests({ guard, onCreateCompany }) {
                     reg_no: r.reg_no,
                     landline: r.landline,
                     mobile: r.mobile,
-                    employees_count: r.employees_count ?? '',
                     seats_count: r.seats_count ?? '',
                     is_demo: r.wants_demo,
                     ai_assistant_enabled: r.wants_ai_assistant,
+                    // Prefill the 0-level account's phone from the buyer's mobile.
+                    admin_phone: r.mobile || '',
+                   
                     note: `درخواست: ${r.brand} ${r.model} ${r.year}${r.note ? ` — ${r.note}` : ''}`,
                   })}
                 >
@@ -802,6 +888,68 @@ function Requests({ guard, onCreateCompany }) {
         {items.length === 0 && <div className="empty-state">درخواستی ثبت نشده است.</div>}
       </div>
     </>
+  );
+}
+
+// A subscription request from the public plans page. It rides the legacy
+// purchase-request fields (see lib/pricing.js): brand = marker, year = plan
+// code, seats_count = team size; the note carries the price the buyer saw.
+function PlanRequestCard({ r, st, onStatus, onCreateCompany, wizardOpen, onWizard, wizard }) {
+  const q = quote(planIdFromCode(r.year), r.seats_count || 1);
+  const lines = String(r.note || '').split('\n').filter(Boolean);
+  const pick = (prefix) => lines.find((l) => l.startsWith(prefix))?.slice(prefix.length).trim();
+  const buyer = pick('نوع خریدار:');
+  const contact = pick('شخص رابط:');
+  const email = pick('ایمیل:');
+  const custNote = pick('توضیحات مشتری:');
+  const shownPrice = pick('برآورد قیمت نمایش‌داده‌شده به مشتری:') || pick('برآورد قیمت:');
+  const isNew = r.status === 'new';
+  return (
+    <div className={`card glass adm-plan-req${isNew ? ' is-new' : ''}`}>
+      <div className="adm-plan-top">
+        <div className="adm-plan-id">
+          <span className="adm-plan-kicker">درخواست خرید اشتراک · <bdi dir="ltr">#{r.id}</bdi></span>
+          <b className="adm-plan-company">{r.company}</b>
+          <span className="adm-plan-meta">{buyer || '—'}{contact ? ` · رابط: ${contact}` : ''}</span>
+        </div>
+        <span className={`adm-status ${st.cls}`}>{st.label}</span>
+      </div>
+      {r.wants_demo && <div className="adm-plan-note">درخواست حساب دمو (رایگان، ۱ کاربر، ۱ روز)</div>}
+      <div className="adm-plan-grid">
+        <div><small>پلن</small><b>{q.plan.title}</b></div>
+        <div><small>کاربران</small><b>{(r.seats_count || 1).toLocaleString('fa-IR')} نفر</b></div>
+        <div><small>برآورد اعلام‌شده</small><b>{shownPrice || (q.custom ? 'قیمت سازمانی' : faMillion(q.total))}</b></div>
+        <div><small>سهمیهٔ دستیار</small><b>{q.aiPerSeat.toLocaleString('fa-IR')} {q.plan.aiUnit}</b></div>
+      </div>
+      <div className="adm-plan-contact">
+        <a href={`tel:${r.mobile}`}><Icon name="phone" /><bdi dir="ltr">{r.mobile}</bdi></a>
+        {r.landline && r.landline !== r.mobile && <a href={`tel:${r.landline}`}><Icon name="phone" /><bdi dir="ltr">{r.landline}</bdi></a>}
+        {email && <a href={`mailto:${email}`}><Icon name="mail" /><bdi dir="ltr">{email}</bdi></a>}
+        <span>{buyer?.includes('حقیقی') ? 'کد ملی' : 'شناسه/ثبت'}: <bdi dir="ltr">{r.reg_no}</bdi></span>
+        <span>{fmtDate(r.created_at)}</span>
+      </div>
+      {custNote && <div className="adm-plan-note">«{custNote}»</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        {['reviewing', 'approved', 'rejected'].filter((s) => s !== r.status).map((s) => (
+          <button key={s} className="btn" onClick={() => onStatus(r.id, s)}>{REQ_STATUS[s].label}</button>
+        ))}
+        <button
+          className="btn btn-accent"
+          onClick={() => onCreateCompany?.({
+            name: r.company, reg_no: r.reg_no, landline: r.landline, mobile: r.mobile,
+            employees_count: r.employees_count ?? '', seats_count: r.seats_count ?? '',
+            is_demo: r.wants_demo, ai_assistant_enabled: true,
+            admin_phone: r.mobile || '', admin_display_name: contact || r.company || '',
+            admin_access_expires_at: plusDaysLocal(PLAN_DAYS[q.plan.id] || 1),
+            note: `اشتراک: ${q.plan.title} — ${(r.seats_count || 1).toLocaleString('fa-IR')} کاربر${shownPrice ? ` — ${shownPrice}` : ''}`,
+          })}
+        >
+          تعریف شرکت از این درخواست
+        </button>
+        <button className="btn" onClick={onWizard}>{wizardOpen ? 'بستن صدور سریع' : 'صدور سریع کاربران'}</button>
+      </div>
+      {wizardOpen && wizard}
+    </div>
   );
 }
 
@@ -880,7 +1028,9 @@ function AccessEditor({ cars, value, onChange, copyFromUsers = [], onCopyFrom })
 
   return (
     <div>
-      {bar}
+      <div className="access-editor-sticky">
+        {bar}
+      </div>
       {cars.length > 4 && (
         <div className="access-editor-brands">
           <span className="access-editor-brands-t">نتیجهٔ فیلتر:</span>
@@ -937,7 +1087,7 @@ function AccessEditor({ cars, value, onChange, copyFromUsers = [], onCopyFrom })
           </button>
         ))}
       </div>
-      <div style={{ display: 'grid', gap: 8 }}>
+      <div className="access-editor-list" style={{ display: 'grid', gap: 8, maxHeight: '52vh', overflowY: 'auto', paddingLeft: 4 }}>
         {filtered.map((c) => {
           const row = rowFor(c.id);
           const docs = row?.documents || [];
@@ -998,7 +1148,27 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
   const [accessDraft, setAccessDraft] = useState([]);
   const [editForm, setEditForm] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: '', department_label: 'خدمات پس از فروش', reg_no: '', landline: '', mobile: '', employees_count: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '' });
+  const [createdAdmin, setCreatedAdmin] = useState(null);
+  // Errors are shown next to the button that caused them; the page-level
+  // flash sits at the top and is off-screen when this long form is scrolled.
+  const [formError, setFormError] = useState('');
+  const [rootUsername, setRootUsername] = useState('');
+  const tryAdmin = async (fn) => {
+    setFormError('');
+    try { return await fn(); } catch (e) {
+      if (e?.unauthorized) return guard(() => { throw e; });
+      setFormError(e?.message || 'خطای نامشخص');
+      return null;
+    }
+  };
+  const [savedMsg, setSavedMsg] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: '', department_label: 'خدمات پس از فروش', reg_no: '', landline: '', mobile: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '', admin_username: '', admin_display_name: '', admin_phone: '', admin_access_expires_at: '' });
+
+  const flashSaved = (msg) => {
+    setSavedMsg(msg);
+    setTimeout(() => setSavedMsg(''), 3500);
+  };
 
   useEffect(() => {
     if (!prefilled) return;
@@ -1029,26 +1199,39 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
       reg_no: co.reg_no || '',
       landline: co.landline || '',
       mobile: co.mobile || '',
-      employees_count: co.employees_count ?? '',
       seats_count: co.seats_count ?? '',
       note: co.note || '',
+      access_expires_at: co.access_expires_at
+        ? new Date(co.access_expires_at).toISOString().slice(0, 16) : '',
     });
   };
 
   const saveCompanyDetails = async () => {
     if (!selected || !editForm) return;
+    setSaving(true);
     const payload = {
       ...editForm,
-      employees_count: Number(editForm.employees_count) || null,
       seats_count: Number(editForm.seats_count) || null,
     };
-    const d = await guard(() => adminApi.updateCompany(selected.id, payload));
-    if (d) { setSelected(d.company); load(); }
+    // The access window lives on the 0-level account. If the company has none
+    // yet, this same save creates it from the company's mobile and name.
+    if (!selected.has_root && rootUsername.trim()) payload.admin_username = rootUsername.trim();
+    payload.access_expires_at = editForm.access_expires_at
+      ? new Date(editForm.access_expires_at).toISOString() : null;
+    const d = await tryAdmin(() => adminApi.updateCompany(selected.id, payload));
+    setSaving(false);
+    if (d) {
+      setSelected(d.company); load();
+      if (d.admin) { setCreatedAdmin(d.admin); setRootUsername(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      flashSaved(d.admin ? '✓ ذخیره شد و حساب سطح‌صفر ساخته شد.' : '✓ مشخصات شرکت ذخیره شد.');
+    }
   };
 
   const saveAccess = async () => {
+    setSaving(true);
     const d = await guard(() => adminApi.setCompanyAccess(selected.id, accessDraft));
-    if (d) { setSelected(d.company); load(); }
+    setSaving(false);
+    if (d) { setSelected(d.company); load(); flashSaved('✓ دسترسی خودروهای شرکت ذخیره شد.'); }
   };
 
   const toggleField = async (field) => {
@@ -1056,16 +1239,24 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
     if (d) { setSelected(d.company); load(); }
   };
 
+  const remove = async (c) => {
+    if (!window.confirm(`حذف شرکت «${c.name}»؟\nاین کار همهٔ کاربران، دسترسی‌ها و ساختار سازمانی این شرکت را برای همیشه حذف می‌کند و قابل بازگشت نیست.`)) return;
+    const d = await guard(() => adminApi.deleteCompany(c.id));
+    if (d) { setSelected(null); load(); }
+  };
+
   const create = async () => {
     const payload = {
       ...form,
-      employees_count: Number(form.employees_count) || null,
       seats_count: Number(form.seats_count) || null,
+      admin_access_expires_at: form.admin_access_expires_at
+        ? new Date(form.admin_access_expires_at).toISOString() : '',
     };
-    const d = await guard(() => adminApi.createCompany(payload));
+    const d = await tryAdmin(() => adminApi.createCompany(payload));
     if (d) {
       setCreating(false);
-      setForm({ name: '', department_label: 'خدمات پس از فروش', reg_no: '', landline: '', mobile: '', employees_count: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '' });
+      setCreatedAdmin(d.admin || null);
+      setForm({ name: '', department_label: 'خدمات پس از فروش', reg_no: '', landline: '', mobile: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '', admin_username: '', admin_display_name: '', admin_phone: '', admin_access_expires_at: '' });
       load();
       setSelected(d.company);
       setAccessDraft([]);
@@ -1075,7 +1266,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
   return (
     <>
       <h1 className="page-title">شرکت‌ها و دسترسی‌ها</h1>
-      <div className="page-sub">// COMPANIES_AND_ACCESS</div>
+      <div className="page-sub">شرکت‌ها و دسترسی خریداری‌شده</div>
 
       <div style={{ display: 'flex', gap: 10, margin: '18px 0' }}>
         <button className="btn btn-accent" onClick={() => { setCreating((v) => !v); setSelected(null); }}>
@@ -1099,20 +1290,54 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
               <input dir="ltr" value={form.landline} onChange={(e) => setForm({ ...form, landline: e.target.value })} /></div>
             <div className="field"><label>تلفن همراه</label>
               <input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></div>
-            <div className="field"><label>تعداد پرسنل</label>
-              <input type="number" dir="ltr" value={form.employees_count} onChange={(e) => setForm({ ...form, employees_count: e.target.value })} /></div>
             <div className="field"><label>تعداد صندلی (کاربر)</label>
               <input type="number" dir="ltr" value={form.seats_count} onChange={(e) => setForm({ ...form, seats_count: e.target.value })} /></div>
           </div>
           <div className="doc-chips" style={{ margin: '10px 0' }}>
-            <button type="button" className={`doc-chip${form.is_demo ? ' active' : ''}`} onClick={() => setForm({ ...form, is_demo: !form.is_demo })}>
+            <button type="button" className={`doc-chip${form.is_demo ? ' active' : ''}`} onClick={() => setForm((f) => {
+              const next = { ...f, is_demo: !f.is_demo };
+              // Turning demo ON pre-fills a 1-day window (editable); leave any
+              // expiry the admin already typed untouched.
+              if (!f.is_demo && !f.admin_access_expires_at) next.admin_access_expires_at = plusDaysLocal(1);
+              return next;
+            })}>
               <span className="tick">✓</span>نسخه دمو
             </button>
             <button type="button" className={`doc-chip${form.ai_assistant_enabled ? ' active' : ''}`} onClick={() => setForm({ ...form, ai_assistant_enabled: !form.ai_assistant_enabled })}>
               <span className="tick">✓</span>دستیار هوش مصنوعی
             </button>
           </div>
+
+          {/* The 0-level (root) account: the buyer's login. Filling it here
+              creates the company org-graph and seats them at the top, so they
+              can log in and build their team. Its انقضای دسترسی is the whole
+              company's access window. Leave the username empty to create the
+              company without a root account for now. */}
+          <div className="pform-section" style={{ marginTop: 6 }}>حساب سطح‌صفر (مدیر شرکت)</div>
+          <div className="pform-grid">
+            <div className="field"><label>نام کاربری حساب سطح‌صفر *</label>
+              <input dir="ltr" value={form.admin_username} onChange={(e) => setForm({ ...form, admin_username: e.target.value })} /></div>
+            <div className="field"><label>انقضای دسترسی (پنجرهٔ دسترسی شرکت)</label>
+              <input type="datetime-local" dir="ltr" value={form.admin_access_expires_at}
+                onChange={(e) => setForm({ ...form, admin_access_expires_at: e.target.value })} /></div>
+          </div>
+
+          <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 8 }}>حساب سطح‌صفر با نام کاربری بالا ساخته می‌شود؛ کد ورود به تلفن همراه شرکت پیامک می‌شود. بدون نام کاربری، شرکت بدون حساب سطح‌صفر ساخته می‌شود.</div>
+          {formError && <div className="pform-error" style={{ marginBottom: 10 }}>{formError}</div>}
           <button className="btn btn-accent" onClick={create}>ثبت شرکت</button>
+        </div>
+      )}
+
+      {createdAdmin && (
+        <div className="card glass" style={{ padding: 16, marginBottom: 20, borderColor: 'var(--accent)' }}>
+          <div className="pform-section">حساب سطح‌صفر ساخته شد — این اطلاعات را به مشتری بدهید</div>
+          <div dir="ltr" style={{ fontFamily: 'monospace', fontSize: 14, marginTop: 6 }}>
+            {createdAdmin.username} / {createdAdmin.password}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 6 }}>
+            رمز عبور فقط همین یک بار نمایش داده می‌شود.
+          </div>
+          <button className="btn" style={{ marginTop: 10 }} onClick={() => setCreatedAdmin(null)}>بستن</button>
         </div>
       )}
 
@@ -1129,7 +1354,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
               </div>
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>
-              واحد: {c.department_label || 'خدمات پس از فروش'} · کاربران: {c.users_count} · صندلی: {c.seats_count ?? '—'} · پرسنل: {c.employees_count ?? '—'}
+              واحد: {c.department_label || 'خدمات پس از فروش'} · کاربران: {c.users_count} · صندلی: {c.seats_count ?? '—'}
             </div>
 
             {selected?.id === c.id && (
@@ -1138,6 +1363,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
                   <button className="btn" onClick={() => toggleField('active')}>{selected.active ? 'غیرفعال‌سازی شرکت' : 'فعال‌سازی شرکت'}</button>
                   <button className="btn" onClick={() => toggleField('ai_assistant_enabled')}>{selected.ai_assistant_enabled ? 'حذف دستیار AI' : 'فعال‌سازی دستیار AI'}</button>
                   <button className="btn" onClick={() => toggleField('is_demo')}>{selected.is_demo ? 'خروج از حالت دمو' : 'تبدیل به دمو'}</button>
+                  <button className="btn" style={{ marginRight: 'auto', borderColor: '#e05252', color: '#ff6b6b' }} onClick={() => remove(selected)}>حذف شرکت</button>
                 </div>
                 {editForm && (
                   <div className="admin-edit-panel">
@@ -1156,21 +1382,56 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
                         <input dir="ltr" value={editForm.landline} onChange={(e) => setEditForm({ ...editForm, landline: e.target.value })} /></div>
                       <div className="field"><label>تلفن همراه</label>
                         <input dir="ltr" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })} /></div>
-                      <div className="field"><label>تعداد پرسنل</label>
-                        <input type="number" dir="ltr" value={editForm.employees_count}
-                          onChange={(e) => setEditForm({ ...editForm, employees_count: e.target.value })} /></div>
                       <div className="field"><label>تعداد صندلی</label>
                         <input type="number" dir="ltr" value={editForm.seats_count}
                           onChange={(e) => setEditForm({ ...editForm, seats_count: e.target.value })} /></div>
+                      <div className="field">
+                        <label>{selected.is_demo ? 'پایان دورهٔ دمو (پنجرهٔ دسترسی شرکت)' : 'انقضای دسترسی شرکت'}</label>
+                        {true ? (
+                          <>
+                            <input type="datetime-local" dir="ltr" value={editForm.access_expires_at}
+                              onChange={(e) => setEditForm({ ...editForm, access_expires_at: e.target.value })} />
+                            {selected.is_demo && (
+                              <button type="button" className="btn" style={{ marginTop: 6 }}
+                                onClick={() => setEditForm({ ...editForm, access_expires_at: plusDaysLocal(1, selected.created_at) })}>
+                                ۱ روز از تاریخ ساخت
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <input dir="ltr" readOnly disabled value="ابتدا حساب سطح‌صفر (مدیر) را بسازید"
+                            title="پنجرهٔ دسترسی روی حساب سطح‌صفر شرکت تنظیم می‌شود." />
+                        )}
+                      </div>
                     </div>
                     <div className="field"><label>یادداشت</label>
                       <textarea value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} /></div>
-                    <button className="btn btn-accent" style={{ marginTop: 8 }} onClick={saveCompanyDetails}>ذخیره مشخصات شرکت</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+                      <button className="btn btn-accent" onClick={saveCompanyDetails} disabled={saving}>
+                        {saving ? 'در حال ذخیره…' : selected.has_root ? 'ذخیره مشخصات شرکت' : 'ذخیره و ثبت'}
+                      </button>
+                      {savedMsg && <span className="save-flash">{savedMsg}</span>}
+                    </div>
+                    {!selected.has_root && (
+                      <div style={{ marginTop: 10 }}>
+                        <div className="field" style={{ maxWidth: 360 }}><label>نام کاربری حساب سطح‌صفر *</label>
+                          <input dir="ltr" value={rootUsername} onChange={(e) => setRootUsername(e.target.value)} /></div>
+                        <div style={{ fontSize: 12.5, color: 'var(--text-dim)' }}>
+                          «ذخیره و ثبت» حساب سطح‌صفر را با این نام کاربری می‌سازد؛ کد ورود به تلفن همراه شرکت پیامک می‌شود.
+                        </div>
+                        {formError && <div className="pform-error" style={{ marginTop: 8 }}>{formError}</div>}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="pform-section">خودروها و لایه‌های خریداری‌شده</div>
                 <AccessEditor cars={cars} value={accessDraft} onChange={setAccessDraft} />
-                <button className="btn btn-accent" style={{ marginTop: 12 }} onClick={saveAccess}>ذخیره دسترسی شرکت</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
+                  <button className="btn btn-accent" onClick={saveAccess} disabled={saving}>
+                    {saving ? 'در حال ذخیره…' : 'ذخیره دسترسی شرکت'}
+                  </button>
+                  {savedMsg && <span className="save-flash">{savedMsg}</span>}
+                </div>
               </div>
             )}
           </div>
@@ -1182,22 +1443,203 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
 }
 
 // ---------------------------------------------------------------------------
+// Org-role combobox for the admin user editor. Lists a company's roles, lets the
+// admin pick one, type-to-add a new one, and remove any of them. Removing a role
+// that users still hold pops a card to reassign them first (never strips a
+// position silently). Falls back to the static built-in ROLES when no company is
+// chosen yet (e.g. the create form before a company is selected).
+function RolePicker({ companyId, value, onChange, guard, disabled }) {
+  const [opts, setOpts] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [removal, setRemoval] = useState(null); // {value, affected, reassignTo}
+  const [rect, setRect] = useState(null);
+  const boxRef = useRef(null);
+  const btnRef = useRef(null);
+  const popRef = useRef(null);
+
+  const fallback = ROLES.map((r) => ({ value: r.id, label: r.label, builtin: true, in_use: false }));
+
+  const loadRoles = useCallback(async () => {
+    if (!companyId) { setOpts(fallback); return; }
+    const d = await guard(() => adminApi.companyRoles(companyId));
+    if (d?.roles) setOpts(d.roles);
+  }, [companyId, guard]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadRoles(); }, [loadRoles]);
+
+  // The dropdown is portalled to <body> with fixed positioning so it floats
+  // above every user card (sibling cards later in the DOM would otherwise paint
+  // over an in-flow dropdown). Anchor it to the button on open.
+  const openPop = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setRect({ left: r.left, top: r.bottom + 4, width: r.width });
+    setOpen(true);
+  };
+
+  // Close on outside click; close on scroll/resize (fixed pop would drift).
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => {
+      if (btnRef.current?.contains(e.target)) return;
+      if (popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onMove = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [open]);
+
+  const current = opts.find((o) => o.value === value);
+  const currentLabel = current?.label || value || 'انتخاب نقش…';
+  const needle = query.trim().toLowerCase();
+  const filtered = needle
+    ? opts.filter((o) => o.label.toLowerCase().includes(needle) || o.value.toLowerCase().includes(needle))
+    : opts;
+  const exact = opts.some((o) => o.label.trim() === query.trim() || o.value === query.trim());
+
+  const pick = (v) => { onChange(v); setOpen(false); setQuery(''); };
+
+  const addRole = async () => {
+    const v = query.trim();
+    if (!v || !companyId) return;
+    setBusy(true);
+    const d = await guard(() => adminApi.addCompanyRole(companyId, v));
+    setBusy(false);
+    if (d?.roles) { setOpts(d.roles); onChange(v); setOpen(false); setQuery(''); }
+  };
+
+  const startRemove = async (v) => {
+    if (!companyId) return;
+    setBusy(true);
+    const d = await guard(() => adminApi.deleteCompanyRole(companyId, v));
+    setBusy(false);
+    if (!d) return;
+    if (d.requires_reassign) {
+      const target = (d.roles || []).find((o) => o.value !== v);
+      setRemoval({ value: v, affected: d.affected, reassignTo: target ? target.value : '' });
+    } else if (d.roles) {
+      setOpts(d.roles);
+      if (value === v) onChange(d.roles[0]?.value || '');
+    }
+  };
+
+  const confirmRemove = async () => {
+    if (!removal) return;
+    setBusy(true);
+    const d = await guard(() => adminApi.deleteCompanyRole(companyId, removal.value, removal.reassignTo));
+    setBusy(false);
+    if (d?.roles) {
+      setOpts(d.roles);
+      if (value === removal.value) onChange(removal.reassignTo);
+      setRemoval(null);
+    }
+  };
+
+  return (
+    <div className="role-picker" ref={boxRef}>
+      <button type="button" ref={btnRef} className="adm-select role-picker-btn" disabled={disabled}
+        onClick={() => (open ? setOpen(false) : openPop())}>
+        <span>{currentLabel}</span><span className="role-picker-caret">▾</span>
+      </button>
+      {open && rect && typeof document !== 'undefined' && createPortal(
+        <div ref={popRef} className="role-picker-pop"
+          style={{ position: 'fixed', left: rect.left, top: rect.top, width: rect.width }}>
+          <input autoFocus className="role-picker-search" placeholder="جستجو یا نقش جدید…"
+            value={query} onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !exact && query.trim()) { e.preventDefault(); addRole(); } }} />
+          <div className="role-picker-list">
+            {filtered.map((o) => (
+              <div key={o.value} className={`role-picker-item${o.value === value ? ' sel' : ''}`}
+                onClick={() => pick(o.value)}>
+                <span className="role-picker-label">{o.label}{o.in_use ? <span className="role-picker-inuse"> · در حال استفاده</span> : null}</span>
+                {companyId && (
+                  <button type="button" className="role-picker-x" title="حذف این نقش"
+                    disabled={busy}
+                    onClick={(e) => { e.stopPropagation(); startRemove(o.value); }}>✕</button>
+                )}
+              </div>
+            ))}
+            {!filtered.length && !query.trim() && <div className="role-picker-empty">نقشی موجود نیست</div>}
+            {companyId && query.trim() && !exact && (
+              <div className="role-picker-add" onClick={addRole}>
+                + افزودن «{query.trim()}»
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+      {removal && (
+        <div className="role-remove-card">
+          <div className="role-remove-title">حذف نقش «{opts.find((o) => o.value === removal.value)?.label || removal.value}»</div>
+          <div className="role-remove-sub">
+            {removal.affected.length} کاربر این نقش را دارند. برای اینکه جایگاه سازمانی آن‌ها از بین نرود،
+            یک نقش جایگزین انتخاب کنید یا حذف را لغو کنید.
+          </div>
+          <ul className="role-remove-users">
+            {removal.affected.map((a) => (
+              <li key={a.id}>{a.display_name} <span className="muted">({a.username})</span></li>
+            ))}
+          </ul>
+          <div className="role-remove-row">
+            <label>انتقال به نقش:</label>
+            <select className="adm-select" value={removal.reassignTo}
+              onChange={(e) => setRemoval({ ...removal, reassignTo: e.target.value })}>
+              {opts.filter((o) => o.value !== removal.value).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="role-remove-actions">
+            <button type="button" className="btn" onClick={() => setRemoval(null)}>انصراف</button>
+            <button type="button" className="btn btn-accent" disabled={busy || !removal.reassignTo}
+              onClick={confirmRemove}>{busy ? 'در حال انجام…' : 'انتقال و حذف نقش'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 function Users({ guard }) {
   const rs = useAdminRefresh();
   const [users, setUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [cars, setCars] = useState([]);
   const [companyFilter, setCompanyFilter] = useState('');
+  const usersReq = useRef(null);
+  const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ company_id: '', username: '', display_name: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
+  const [form, setForm] = useState({ company_id: '', username: '', display_name: '', phone: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
   const [issued, setIssued] = useState(null);
   const [editingAccess, setEditingAccess] = useState(null);
   const [editingProfile, setEditingProfile] = useState(null);
   const [profileDraft, setProfileDraft] = useState(null);
   const [accessDraft, setAccessDraft] = useState([]);
+  const [savedMsg, setSavedMsg] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const flashSaved = (msg) => {
+    setSavedMsg(msg);
+    setTimeout(() => setSavedMsg(''), 3500);
+  };
 
   const load = useCallback(() => {
-    guard(() => adminApi.users(companyFilter || undefined)).then((d) => d && setUsers(d.items));
+    // Only the reply for the filter still selected may land; a slower
+    // earlier request (e.g. «همه شرکت‌ها») must not overwrite it.
+    const want = companyFilter;
+    usersReq.current = want;
+    guard(() => adminApi.users(want || undefined)).then((d) => {
+      if (d && usersReq.current === want) setUsers(d.items);
+    });
     guard(adminApi.companies).then((d) => d && setCompanies(d.items));
     guard(adminApi.cars).then((d) => d && setCars(d.items));
   }, [guard, companyFilter]);
@@ -1208,7 +1650,7 @@ function Users({ guard }) {
     if (d) {
       setIssued({ username: d.user.username, password: d.password });
       setCreating(false);
-      setForm({ company_id: '', username: '', display_name: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
+      setForm({ company_id: '', username: '', display_name: '', phone: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
       load();
     }
   };
@@ -1227,8 +1669,10 @@ function Users({ guard }) {
     setEditingAccess(null);
     setProfileDraft({
       role: u.role,
+      company_id: u.company_id,
       display_name: u.display_name || '',
       phone: u.phone || '',
+      is_org_root: !!u.is_org_root,
       access_expires_at: u.access_expires_at
         ? new Date(u.access_expires_at).toISOString().slice(0, 16)
         : '',
@@ -1245,13 +1689,19 @@ function Users({ guard }) {
         ? new Date(profileDraft.access_expires_at).toISOString()
         : null,
     };
+    setSaving(true);
     const d = await guard(() => adminApi.updateUser(id, payload));
-    if (d) { setEditingProfile(null); load(); }
+    setSaving(false);
+    // Keep the editor open (like the companies panel) so the confirmation shows
+    // right where the user clicked, instead of silently collapsing the panel.
+    if (d) { load(); flashSaved(`✓ پروفایل کاربر «${d.user?.display_name || d.user?.username || ''}» ذخیره شد.`); }
   };
 
   const saveAccess = async () => {
+    setSaving(true);
     const d = await guard(() => adminApi.setUserAccess(editingAccess, accessDraft, true));
-    if (d) { setEditingAccess(null); load(); }
+    setSaving(false);
+    if (d) { load(); flashSaved('✓ دسترسی کاربر ذخیره شد.'); }
   };
 
   const patch = async (id, payload) => {
@@ -1267,8 +1717,9 @@ function Users({ guard }) {
 
   return (
     <>
+      {savedMsg && <div className="save-toast"><span className="save-flash">{savedMsg}</span></div>}
       <h1 className="page-title">کاربران شرکت‌ها</h1>
-      <div className="page-sub">// COMPANY_USERS_AND_GRANTS</div>
+      <div className="page-sub">کاربران شرکت‌ها و دسترسی خودروها</div>
 
       <div style={{ display: 'flex', gap: 10, margin: '18px 0', flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="btn btn-accent" onClick={() => setCreating((v) => !v)}>
@@ -1278,6 +1729,16 @@ function Users({ guard }) {
           <option value="">همه شرکت‌ها</option>
           {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <label className="vf-search" style={{ maxWidth: 380 }}>
+          <span className="vf-search-ico" aria-hidden="true">⌕</span>
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="جستجوی نام کاربری / نام / شماره…"
+            aria-label="جستجوی کاربران" />
+          {q && (
+            <button type="button" className="vf-search-clear" aria-label="پاک کردن جستجو"
+              onClick={() => setQ('')}>✕</button>
+          )}
+        </label>
       </div>
 
       {issued && (
@@ -1300,17 +1761,18 @@ function Users({ guard }) {
               </select>
             </div>
             <div className="field"><label>نقش سازمانی *</label>
-              <select className="adm-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-              </select>
+              <RolePicker companyId={form.company_id} value={form.role} guard={guard}
+                onChange={(v) => setForm({ ...form, role: v })} />
             </div>
             <div className="field"><label>نام کاربری *</label>
               <input dir="ltr" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="e.g. gostar_manager_01" /></div>
             <div className="field"><label>نام نمایشی</label>
               <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
-            <div className="field"><label>انقضای دسترسی (اختیاری)</label>
-              <input type="datetime-local" dir="ltr" value={form.access_expires_at}
-                onChange={(e) => setForm({ ...form, access_expires_at: e.target.value ? new Date(e.target.value).toISOString() : '' })} /></div>
+            <div className="field"><label>شماره موبایل (ورود پیامکی) *</label>
+              <input dir="ltr" placeholder="09xxxxxxxxx" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            <div className="field"><label>انقضای دسترسی</label>
+              <input dir="ltr" value="از حساب سطح‌صفر شرکت به ارث می‌رسد" readOnly disabled
+                title="پنجرهٔ دسترسی شرکت توسط حساب سطح‌صفر تعیین می‌شود و برای سایر کاربران قابل ویرایش نیست." /></div>
           </div>
           <div className="doc-chips" style={{ margin: '10px 0' }}>
             <button type="button" className={`doc-chip${form.ai_assistant_enabled ? ' active' : ''}`}
@@ -1325,7 +1787,12 @@ function Users({ guard }) {
       )}
 
       <div style={{ display: 'grid', gap: 12 }}>
-        {users.map((u) => (
+        {(() => {
+          const needle = q.trim().toLowerCase();
+          return !needle ? users : users.filter((u) =>
+            [u.username, u.display_name, u.company, u.role_label, u.phone]
+              .some((x) => String(x || '').toLowerCase().includes(needle)));
+        })().map((u) => (
           <div key={u.id} className="card glass" style={{ padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
@@ -1367,10 +1834,8 @@ function Users({ guard }) {
                 <div className="pform-section">ویرایش پروفایل کاربر</div>
                 <div className="pform-grid">
                   <div className="field"><label>نقش سازمانی</label>
-                    <select className="adm-select" value={profileDraft.role}
-                      onChange={(e) => setProfileDraft({ ...profileDraft, role: e.target.value })}>
-                      {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-                    </select></div>
+                    <RolePicker companyId={profileDraft.company_id} value={profileDraft.role} guard={guard}
+                      onChange={(v) => setProfileDraft({ ...profileDraft, role: v })} /></div>
                   <div className="field"><label>نام نمایشی</label>
                     <input value={profileDraft.display_name}
                       onChange={(e) => setProfileDraft({ ...profileDraft, display_name: e.target.value })} /></div>
@@ -1379,13 +1844,20 @@ function Users({ guard }) {
                       <input dir="ltr" placeholder="09xxxxxxxxx" value={profileDraft.phone}
                         onChange={(e) => setProfileDraft({ ...profileDraft, phone: e.target.value })} /></div>
                   )}
-                  <div className="field"><label>انقضای دسترسی</label>
-                    <input type="datetime-local" dir="ltr" value={profileDraft.access_expires_at}
-                      onChange={(e) => setProfileDraft({ ...profileDraft, access_expires_at: e.target.value })} /></div>
+                  <div className="field"><label>انقضای دسترسی{profileDraft.is_org_root ? ' (پنجرهٔ دسترسی شرکت)' : ''}</label>
+                    {profileDraft.is_org_root ? (
+                      <input type="datetime-local" dir="ltr" value={profileDraft.access_expires_at}
+                        onChange={(e) => setProfileDraft({ ...profileDraft, access_expires_at: e.target.value })} />
+                    ) : (
+                      <input dir="ltr" readOnly disabled
+                        value={profileDraft.access_expires_at ? fmtDate(profileDraft.access_expires_at) : 'بدون انقضا — از حساب سطح‌صفر'}
+                        title="این مقدار از حساب سطح‌صفر شرکت به ارث می‌رسد و فقط خواندنی است." />
+                    )}</div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button className="btn btn-accent" onClick={() => saveProfile(u.id)}>ذخیره</button>
-                  <button className="btn" onClick={() => setEditingProfile(null)}>انصراف</button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button className="btn btn-accent" onClick={() => saveProfile(u.id)} disabled={saving}>{saving ? 'در حال ذخیره…' : 'ذخیره'}</button>
+                  <button className="btn" onClick={() => { setEditingProfile(null); setSavedMsg(''); }}>بستن</button>
+                  {savedMsg && <span className="save-flash">{savedMsg}</span>}
                 </div>
               </div>
             )}
@@ -1400,9 +1872,10 @@ function Users({ guard }) {
                   copyFromUsers={users.filter((x) => x.company_id === u.company_id && x.id !== u.id)}
                   onCopyFrom={setAccessDraft}
                 />
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <button className="btn btn-accent" onClick={saveAccess}>ذخیره</button>
-                  <button className="btn" onClick={() => setEditingAccess(null)}>انصراف</button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button className="btn btn-accent" onClick={saveAccess} disabled={saving}>{saving ? 'در حال ذخیره…' : 'ذخیره'}</button>
+                  <button className="btn" onClick={() => { setEditingAccess(null); setSavedMsg(''); }}>بستن</button>
+                  {savedMsg && <span className="save-flash">{savedMsg}</span>}
                 </div>
               </div>
             )}
@@ -1523,6 +1996,9 @@ function Activity({ guard }) {
   const [filters, setFilters] = useState({});   // key -> allowed string[]  (absent = no filter)
   const [sort, setSort] = useState(null);        // { key, dir }
   const [openKey, setOpenKey] = useState(null);  // which column dropdown is open
+  // The log runs to thousands of rows; render a page at a time so the section
+  // stays a screenful instead of an 18,000px scroll.
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     guard(adminApi.companies).then((d) => d && setCompanies(d.items));
@@ -1568,13 +2044,16 @@ function Activity({ guard }) {
   }, [items, columns, filters, sort, valOf]);
 
   const activeCount = Object.keys(filters).length;
+  const pageCount = Math.max(1, Math.ceil(rows.length / ACT_PAGE));
+  const current = Math.min(page, pageCount);
+  const pageRows = rows.slice((current - 1) * ACT_PAGE, current * ACT_PAGE);
 
-  const setSortFor = (key, dir) => { setSort({ key, dir }); setOpenKey(null); };
+  const setSortFor = (key, dir) => { setSort({ key, dir }); setOpenKey(null); setPage(1); };
 
   return (
     <>
       <h1 className="page-title">گزارش فعالیت کاربران</h1>
-      <div className="page-sub">// USER_ACTIVITY_REPORT</div>
+      <div className="page-sub">گزارش فعالیت کاربران</div>
       <div style={{ margin: '18px 0', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <select className="adm-select" value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)}>
           <option value="">همه شرکت‌ها</option>
@@ -1586,7 +2065,7 @@ function Activity({ guard }) {
               نمایش {rows.length.toLocaleString('fa-IR')} از {items.length.toLocaleString('fa-IR')}
             </span>
             <button type="button" className="adm-select" style={{ cursor: 'pointer' }}
-              onClick={() => { setFilters({}); setSort(null); }}>
+              onClick={() => { setFilters({}); setSort(null); setPage(1); }}>
               پاک کردن فیلترها
             </button>
           </>
@@ -1619,11 +2098,11 @@ function Activity({ guard }) {
                         selected={filters[col.key] ?? null}
                         sortDir={sorted ? sort.dir : null}
                         onSort={(dir) => setSortFor(col.key, dir)}
-                        onApply={(vals) => setFilters((prev) => {
+                        onApply={(vals) => { setPage(1); setFilters((prev) => {
                           const next = { ...prev };
                           if (vals === null) delete next[col.key]; else next[col.key] = vals;
                           return next;
-                        })}
+                        }); }}
                         onClose={() => setOpenKey(null)}
                       />
                     )}
@@ -1633,13 +2112,13 @@ function Activity({ guard }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((a) => (
+            {pageRows.map((a) => (
               <tr key={a.id}>
-                <td>{fmtDate(a.created_at)}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(a.created_at)}</td>
                 <td dir="ltr">{a.user}</td>
                 <td>{a.company}</td>
                 <td>{a.role_label}</td>
-                <td>{a.action}</td>
+                <td>{ACTIVITY_FA[a.action] || a.action}</td>
                 <td>{a.category_label || BLANK}</td>
                 <td>{a.detail}</td>
               </tr>
@@ -1652,6 +2131,19 @@ function Activity({ guard }) {
           </tbody>
         </table>
       </div>
+      {rows.length > ACT_PAGE && (
+        <div className="adm-pager">
+          <span>
+            نمایش {(((current - 1) * ACT_PAGE) + 1).toLocaleString('fa-IR')}–
+            {Math.min(current * ACT_PAGE, rows.length).toLocaleString('fa-IR')} از {rows.length.toLocaleString('fa-IR')} رویداد
+          </span>
+          <span className="adm-pager-btns">
+            <button type="button" className="btn" disabled={current <= 1} onClick={() => setPage(current - 1)}>جدیدتر</button>
+            <span style={{ alignSelf: 'center' }}>صفحهٔ {current.toLocaleString('fa-IR')} از {pageCount.toLocaleString('fa-IR')}</span>
+            <button type="button" className="btn" disabled={current >= pageCount} onClick={() => setPage(current + 1)}>قدیمی‌تر</button>
+          </span>
+        </div>
+      )}
     </>
   );
 }
@@ -1678,7 +2170,7 @@ function PlatformAnalytics({ guard }) {
   return (
     <>
       <h1 className="page-title">تحلیل استفاده کل پلتفرم</h1>
-      <div className="page-sub">// PLATFORM_ANALYTICS</div>
+      <div className="page-sub">تحلیل استفاده از سامانه</div>
 
       <div className="range-chips" style={{ margin: '16px 0' }}>
         {AN_RANGES.map((r) => (
@@ -1818,10 +2310,12 @@ function DataQuality({ guard }) {
   const { filtered: vehicles, bar } = useVehicleFilter(allVehicles, { facets: DQ_FACETS });
 
   const s = report?.summary;
+  const dqPage = usePagedRows(vehicles);
+
   return (
     <>
       <h1 className="page-title">سلامت داده‌های خودروها</h1>
-      <div className="page-sub">// DATA_QUALITY — کامل بودن بخش‌ها، تکراری‌ها و فرایندهای درانتظار</div>
+      <div className="page-sub">کامل بودن بخش‌ها، تکراری‌ها و فرایندهای درانتظار</div>
 
       <div style={{ display: 'flex', gap: 10, margin: '16px 0', flexWrap: 'wrap' }}>
         <button className="btn btn-accent" disabled={busy || data?.running} onClick={() => refresh(false)}>
@@ -1849,12 +2343,12 @@ function DataQuality({ guard }) {
 
       {s && (
         <div className="grid3" style={{ marginBottom: 18 }}>
-          <div className="card glass"><div className="num">{s.total_dbs}</div><h3>کل خودروها (فایل داده)</h3></div>
-          <div className="card glass"><div className="num" style={{ color: '#22c55e' }}>{s.complete}</div><h3>کامل</h3></div>
-          <div className="card glass"><div className="num" style={{ color: '#eab308' }}>{s.incomplete}</div><h3>ناقص</h3></div>
-          <div className="card glass"><div className="num" style={{ color: '#ef4444' }}>{(s.duplicates || []).length}</div><h3>تکراری</h3></div>
-          <div className="card glass"><div className="num" style={{ color: '#ef4444' }}>{s.corrupt}</div><h3>فایل خراب</h3></div>
-          <div className="card glass"><div className="num">{s.rag_indexed}/{s.total_dbs}</div><h3>ایندکس هوشمند (RAG)</h3></div>
+          <div className="card glass"><div className="num">{faN(s.total_dbs)}</div><h3>کل خودروها (فایل داده)</h3></div>
+          <div className="card glass"><div className="num ok">{faN(s.complete)}</div><h3>کامل</h3></div>
+          <div className="card glass"><div className="num warn">{faN(s.incomplete)}</div><h3>ناقص</h3></div>
+          <div className="card glass"><div className="num bad">{faN((s.duplicates || []).length)}</div><h3>تکراری</h3></div>
+          <div className="card glass"><div className="num bad">{faN(s.corrupt)}</div><h3>فایل خراب</h3></div>
+          <div className="card glass"><div className="num">{faN(s.rag_indexed)}<span className="num-of"> از {faN(s.total_dbs)}</span></div><h3>ایندکس هوشمند (RAG)</h3></div>
         </div>
       )}
 
@@ -1883,7 +2377,7 @@ function DataQuality({ guard }) {
                 <tr><th>خودرو</th><th>وضعیت</th><th>بخش‌ها</th><th>حجم</th><th>کاتالوگ</th><th>RAG</th><th>عیب‌یاب</th><th>تصاویر</th><th>درانتظار</th></tr>
               </thead>
               <tbody>
-                {vehicles.map((v) => {
+                {dqPage.pageRows.map((v) => {
                   const st = DQ_STATUS[v.status] || { label: v.status, cls: '' };
                   const issues = (v.missing_sections || []).length + (v.empty_sections || []).length;
                   const isOpen = expanded === v.stem;
@@ -1940,6 +2434,7 @@ function DataQuality({ guard }) {
               </tbody>
             </table>
           </div>
+          {dqPage.pager}
         </>
       )}
     </>
@@ -1981,16 +2476,16 @@ function SystemMonitor({ guard }) {
     const d = Math.floor(sec / 86400);
     const h = Math.floor((sec % 86400) / 3600);
     const m = Math.floor((sec % 3600) / 60);
-    if (d > 0) return `${d}روز ${h}ساعت`;
-    if (h > 0) return `${h}ساعت ${m}دقیقه`;
-    return `${m}دقیقه`;
+    if (d > 0) return `${faN(d)} روز و ${faN(h)} ساعت`;
+    if (h > 0) return `${faN(h)} ساعت و ${faN(m)} دقیقه`;
+    return `${faN(m)} دقیقه`;
   };
   const maxDay = Math.max(1, ...((traffic?.series || []).map((x) => x.requests || 0)));
 
   return (
     <>
       <h1 className="page-title">پایش سیستم و ترافیک</h1>
-      <div className="page-sub">// SYSTEM_MONITOR — سلامت سرور، هشدارها و آمار بازدید</div>
+      <div className="page-sub">سلامت سرور، هشدارها و آمار بازدید</div>
 
       <div style={{ display: 'flex', gap: 10, margin: '16px 0' }}>
         <button className="btn" onClick={load}><Icon name="refresh" size={14} /> به‌روزرسانی</button>
@@ -2000,24 +2495,24 @@ function SystemMonitor({ guard }) {
       {!snap ? <div className="empty-state">در حال بارگذاری…</div> : (
         <div className="grid3" style={{ marginBottom: 18 }}>
           <div className="card glass">
-            <div className="num" style={{ color: snap.disk.used_pct > 85 ? '#ef4444' : undefined }}>{snap.disk.used_pct}%</div>
+            <div className={`num${snap.disk.used_pct > 85 ? ' bad' : ''}`}>{faN(snap.disk.used_pct)}٪</div>
             <h3>دیسک ({snap.disk.free_gb}GB آزاد از {snap.disk.total_gb}GB)</h3>
           </div>
           <div className="card glass">
-            <div className="num" style={{ color: (snap.memory.used_pct || 0) > 90 ? '#ef4444' : undefined }}>{snap.memory.used_pct ?? '—'}%</div>
+            <div className={`num${(snap.memory.used_pct || 0) > 90 ? ' bad' : ''}`}>{snap.memory.used_pct == null ? '—' : `${faN(snap.memory.used_pct)}٪`}</div>
             <h3>حافظه ({snap.memory.available_mb ? Math.round(snap.memory.available_mb / 1024) : '—'}GB آزاد)</h3>
           </div>
           <div className="card glass">
-            <div className="num">{snap.load_avg ? snap.load_avg[0].toFixed(1) : '—'}</div>
+            <div className="num">{snap.load_avg ? faN(Number(snap.load_avg[0].toFixed(1))) : '—'}</div>
             <h3>بار پردازنده ({snap.cpu_count} هسته)</h3>
           </div>
           <div className="card glass"><div className="num">{fmtUptime(snap.uptime_s)}</div><h3>مدت فعال بودن سرویس</h3></div>
           <div className="card glass">
-            <div className="num" style={{ color: snap.db_ok ? '#22c55e' : '#ef4444' }}>{snap.db_ok ? '✓' : '✗'}</div>
+            <div className={`num ${snap.db_ok ? 'ok' : 'bad'}`}>{snap.db_ok ? '✓' : '✗'}</div>
             <h3>پایگاه‌داده اصلی ({snap.main_db_mb}MB)</h3>
           </div>
           <div className="card glass">
-            <div className="num" style={{ color: snap.rag_index.present ? '#22c55e' : '#ef4444' }}>{snap.rag_index.present ? '✓' : '✗'}</div>
+            <div className={`num ${snap.rag_index.present ? 'ok' : 'bad'}`}>{snap.rag_index.present ? '✓' : '✗'}</div>
             <h3>ایندکس هوشمند ({snap.rag_index.size_mb}MB)</h3>
           </div>
         </div>
@@ -2166,13 +2661,6 @@ function StageRow({ stage }) {
   );
 }
 
-const DL_STATUS = {
-  pending: { label: 'در صف دانلود', color: '#3b82f6' },
-  running: { label: 'در حال دانلود', color: '#22c55e' },
-  done: { label: 'کامل شد', color: '#22c55e' },
-  failed: { label: 'ناموفق', color: '#ef4444' },
-  canceled: { label: 'لغو شد', color: '#9ca3af' },
-};
 const ZIP_STATUS = {
   pending: { label: 'در صف استخراج', color: '#3b82f6' },
   parsing: { label: 'در حال استخراج', color: '#22c55e' },
@@ -2181,109 +2669,101 @@ const ZIP_STATUS = {
   skipped_duplicate: { label: 'تکراری — رد شد', color: '#9ca3af' },
 };
 
-// Source-download card: check the upstream source for a brand/year (optionally
-// filtered by model name), see what is new vs already on the server, and queue
-// a download request that the pipeline's download stage will execute.
-function DownloadSourceCard({ data, act, busy, guard }) {
-  const [brand, setBrand] = useState('Toyota');
-  const [year, setYear] = useState('');
-  const [filter, setFilter] = useState('');
-  const [listing, setListing] = useState(null);
-  const [checking, setChecking] = useState(false);
-  const [err, setErr] = useState('');
-
-  const check = async () => {
-    setChecking(true); setErr(''); setListing(null);
-    try {
-      const res = await guard(() => adminApi.pipelineAction(
-        { action: 'list_source', brand, year, filter }));
-      if (res) setListing(res.vehicles || []);
-    } catch (e) { setErr(e.message || 'خطا در دریافت فهرست'); }
-    finally { setChecking(false); }
-  };
-
-  const newCount = (listing || []).filter((v) => !v.ingested && !v.downloaded).length;
-  const requests = data?.download_requests || [];
-
+// TIS crawler card: observes the TIS crawler (toyota_tis.py) running on the
+// server against a Chrome session logged in by hand over VNC. Start/stop only:
+// a TIS crawl cannot run unattended, because the TIS login needs an OTP.
+function TisCrawlerCard({ data, act, busy }) {
+  const t = data?.tis;
+  if (!t) return null;
+  const title = <h3 style={{ margin: 0 }}><Icon name="refresh" size={16} /> خزشگر TIS (دانلود مستقیم از TIS تویوتا)</h3>;
+  if (t.error) {
+    return (
+      <div className="card glass" style={{ marginBottom: 16 }}>
+        {title}
+        <div dir="ltr" style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>{t.error}</div>
+      </div>
+    );
+  }
+  const ch = t.chrome || {};
+  const disp = t.display || {};
+  const flag = (ok, yes, no) => (
+    <span className="st-badge" style={{ background: ok ? '#22c55e22' : '#ef444422', color: ok ? '#22c55e' : '#ef4444' }}>{ok ? yes : no}</span>
+  );
+  const vehicles = t.vehicles || [];
   return (
     <div className="card glass" style={{ marginBottom: 16 }}>
-      <h3 style={{ marginTop: 0 }}><Icon name="cart" size={16} /> دانلود بسته‌های جدید از منبع</h3>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input dir="ltr" style={{ width: 110 }} value={brand} placeholder="Toyota"
-          onChange={(e) => setBrand(e.target.value)} />
-        <input dir="ltr" style={{ width: 80 }} value={year} placeholder="2024"
-          onChange={(e) => setYear(e.target.value)} />
-        <input dir="ltr" style={{ width: 180 }} value={filter} placeholder="فیلتر مدل (مثلاً corolla cross)"
-          onChange={(e) => setFilter(e.target.value)} />
-        <button className="btn" disabled={checking || busy || !brand || !year} onClick={check}>
-          {checking ? 'در حال بررسی…' : 'بررسی منبع'}
-        </button>
-        <button className="btn btn-accent" disabled={busy || !brand || !year}
-          onClick={() => act({ action: 'download', brand, year, filter },
-            'درخواست دانلود ثبت شد؛ با شروع پردازش بعدی (یا حالت خودکار) دانلود انجام می‌شود.')}>
-          افزودن به صف دانلود
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        {title}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {!ch.reachable && (
+            <button className="btn" disabled={busy}
+              onClick={() => act({ action: 'tis_chrome' }, 'Chrome روی نمایشگر مجازی سرور اجرا شد؛ اکنون از طریق VNC وارد TIS شوید.')}>راه‌اندازی Chrome</button>
+          )}
+          {t.running
+            ? <button className="btn" disabled={busy}
+                onClick={() => act({ action: 'tis_stop' }, 'خزشگر TIS متوقف شد؛ اجرای بعدی از همان نقطه ادامه می‌یابد.')}>توقف خزشگر</button>
+            : <button className="btn btn-accent" disabled={busy || !t.installed || !ch.logged_in}
+                onClick={() => act({ action: 'tis_start' }, 'خزشگر TIS شروع شد.')}>شروع خزشگر</button>}
+        </div>
       </div>
-      {err && <div style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>{err}</div>}
-
-      {listing && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 6 }}>
-            {listing.length.toLocaleString('fa-IR')} خودرو در منبع — {newCount.toLocaleString('fa-IR')} مورد جدید
-          </div>
-          <div style={{ maxHeight: 220, overflow: 'auto', border: '1px solid rgba(120,120,160,.2)', borderRadius: 8 }}>
-            <table className="adm-table" style={{ margin: 0 }}>
-              <tbody>
-                {listing.map((v) => (
-                  <tr key={v.bundle_url}>
-                    <td dir="ltr" style={{ fontSize: 13 }}>{v.name}</td>
-                    <td>
-                      {v.ingested ? <span className="st-badge st-ok">در سامانه موجود است</span>
-                        : v.downloaded ? <span className="st-badge st-rev">دانلود شده — در انتظار استخراج</span>
-                        : <span className="st-badge st-new">جدید</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '10px 0', fontSize: 13 }}>
+        {flag(t.running, 'در حال اجرا', 'متوقف')}
+        {flag(ch.reachable, 'Chrome در دسترس است', 'Chrome در دسترس نیست')}
+        {flag(ch.logged_in, 'وارد TIS شده', 'وارد TIS نشده')}
+        {flag(disp.vnc, 'VNC فعال', 'VNC غیرفعال')}
+        <span className="st-badge st-rev">{(t.done_pubs || 0).toLocaleString('fa-IR')} نشریهٔ کامل‌شده</span>
+      </div>
+      {t.running && !ch.logged_in && (
+        <div style={{ color: '#eab308', fontSize: 13, marginBottom: 8 }}>
+          خزشگر در حال اجراست اما نشست TIS در مرورگر فعال نیست؛ خزش تا ورود دوباره (با کد یک‌بارمصرف) پیش نمی‌رود.
         </div>
       )}
-
-      {requests.length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 6 }}>درخواست‌های دانلود اخیر</div>
+      {!t.installed && (
+        <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 8 }}>اسکریپت خزشگر در <span dir="ltr">{t.dir}</span> پیدا نشد.</div>
+      )}
+      {t.installed && !ch.logged_in && (
+        <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
+          برای شروع، از طریق VNC به مرورگر سرور وصل شوید و وارد TIS شوید (ورود به TIS کد یک‌بارمصرف لازم دارد).
+          اتصال امن از طریق تونل SSH: <code dir="ltr">ssh -L 6080:127.0.0.1:6080 root@&lt;server&gt;</code> و سپس
+          باز کردن <code dir="ltr">http://localhost:6080/vnc.html</code>.
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
+        پس از پایان خزش یک خودرو، «اسکن پوشه دانلودها» در صف پردازش آن را اضافه می‌کند و پایپلاین آن را به پایگاه دادهٔ خودرو تبدیل می‌کند.
+        خزشی که روی سیستم دیگری انجام شده را همراه پوشهٔ <code dir="ltr">_assets</code> در <code dir="ltr">/root/downloads/tis</code> کپی کنید.
+      </div>
+      {vehicles.length > 0 && (
+        <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid rgba(120,120,160,.2)', borderRadius: 8 }}>
           <table className="adm-table" style={{ margin: 0 }}>
-            <thead><tr><th>#</th><th>منبع</th><th>فیلتر</th><th>وضعیت</th><th>پیشرفت</th><th /></tr></thead>
+            <thead><tr><th>خودرو</th><th>سال</th><th>صفحات ذخیره‌شده</th><th>حجم</th><th>بخش‌ها</th></tr></thead>
             <tbody>
-              {requests.map((r) => {
-                const rs = DL_STATUS[r.status] || {};
-                return (
-                  <tr key={r.id}>
-                    <td>{r.id}</td>
-                    <td dir="ltr" style={{ fontSize: 12 }}>{r.brand} {r.year}</td>
-                    <td dir="ltr" style={{ fontSize: 12 }}>{r.name_filter || '—'}</td>
-                    <td><span className="st-badge" style={{ background: `${rs.color}22`, color: rs.color }}>{rs.label || r.status}</span></td>
-                    <td dir="ltr">{r.vehicles_total ? `${r.vehicles_done}/${r.vehicles_total}` : '—'}</td>
-                    <td>
-                      {['pending', 'running'].includes(r.status) && (
-                        <button className="btn" style={{ fontSize: 12, padding: '2px 10px' }} disabled={busy}
-                          onClick={() => act({ action: 'cancel_download', request_id: r.id }, 'درخواست دانلود لغو شد.')}>لغو</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {vehicles.map((v) => (
+                <tr key={`${v.model}_${v.year}`}>
+                  <td dir="ltr" style={{ fontSize: 13 }}>{v.model}</td>
+                  <td dir="ltr">{v.year}</td>
+                  <td>{v.started ? v.pages.toLocaleString('fa-IR') : <span style={{ color: 'var(--text-dim)' }}>شروع نشده</span>}</td>
+                  <td dir="ltr">{v.started ? `${v.size_mb} MB` : '—'}</td>
+                  <td dir="ltr" style={{ fontSize: 12 }}>{(v.categories || []).filter((c) => !c.startsWith('_')).join(', ') || '—'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+      )}
+      {t.log_tail && (
+        <details style={{ marginTop: 10 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--text-dim)' }}>
+            گزارش خزشگر{t.last_log_at ? ` — آخرین فعالیت: ${new Date(t.last_log_at).toLocaleString('fa-IR')}` : ''}
+          </summary>
+          <pre dir="ltr" style={{ fontSize: 11, maxHeight: 220, overflow: 'auto', background: 'rgba(0,0,0,.25)', padding: 10, borderRadius: 8, whiteSpace: 'pre-wrap' }}>{t.log_tail}</pre>
+        </details>
       )}
     </div>
   );
 }
 
-// The parse queue: every discovered ZIP with its status; scan button registers
-// newly downloaded/copied files (and normalizes legacy names).
+// The parse queue: every discovered ZIP and finished TIS vehicle crawl with its
+// status; the scan button registers newly copied/crawled ones.
 function ZipQueueCard({ data, act, busy }) {
   const [showAll, setShowAll] = useState(false);
   const q = data?.zip_queue;
@@ -2294,9 +2774,9 @@ function ZipQueueCard({ data, act, busy }) {
   return (
     <div className="card glass" style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <h3 style={{ margin: 0 }}><Icon name="catalog" size={16} /> صف بسته‌های فشرده (ZIP)</h3>
+        <h3 style={{ margin: 0 }}><Icon name="catalog" size={16} /> صف پردازش (خزش‌های TIS و بسته‌های ZIP)</h3>
         <button className="btn" disabled={busy}
-          onClick={() => act({ action: 'scan_zips' }, 'پوشه دانلودها اسکن شد و بسته‌های جدید به صف اضافه شدند.')}>
+          onClick={() => act({ action: 'scan_zips' }, 'پوشه‌های دانلود اسکن شد و خزش‌ها و بسته‌های جدید به صف اضافه شدند.')}>
           اسکن پوشه دانلودها
         </button>
       </div>
@@ -2448,7 +2928,7 @@ function Pipeline({ guard }) {
   return (
     <>
       <h1 className="page-title">پردازش داده‌ها</h1>
-      <div className="page-sub">// DATA_PIPELINE — پردازش خودکار داده‌های خودروها روی سرور</div>
+      <div className="page-sub">پردازش خودکار داده‌های خودروها روی سرور</div>
 
       {flash && <div className="pform-error" style={{ margin: '12px 0' }}>{flash}</div>}
 
@@ -2464,7 +2944,6 @@ function Pipeline({ guard }) {
             </div>
             {pending?.has_work && (
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, fontSize: 13 }}>
-                {pending.need_download > 0 && <span className="st-badge st-rev">{pending.need_download.toLocaleString('fa-IR')} خودرو در صف دانلود</span>}
                 {pending.need_parse > 0 && <span className="st-badge st-rev">{pending.need_parse.toLocaleString('fa-IR')} بسته فشرده در انتظار استخراج</span>}
                 {pending.need_catalog.length > 0 && <span className="st-badge st-rev">{pending.need_catalog.length} خودرو خارج از کاتالوگ</span>}
                 {(pending.need_schema || []).length > 0 && <span className="st-badge st-rev">{pending.need_schema.length} خودرو بدون مشخصات ساختاریافته</span>}
@@ -2580,8 +3059,8 @@ function Pipeline({ guard }) {
             </div>
           )}
 
-          {/* Download source (upstream) — list, filter, queue for the pipeline */}
-          <DownloadSourceCard data={data} act={act} busy={busy} guard={guard} />
+          {/* TIS crawler (observed; runs against a VNC-logged-in Chrome) */}
+          <TisCrawlerCard data={data} act={act} busy={busy} />
 
           {/* ZIP parse queue */}
           <ZipQueueCard data={data} act={act} busy={busy} />
@@ -2655,10 +3134,12 @@ function VehicleSpecs({ guard }) {
     } finally { setDetailBusy(false); }
   };
 
+  const specPage = usePagedRows(vehicles);
+
   return (
     <>
       <h1 className="page-title">مشخصات ساختاریافته خودروها</h1>
-      <div className="page-sub">// VEHICLE_SCHEMA — مشخصات هر خودرو به قالب schema.org، با منبع هر مقدار</div>
+      <div className="page-sub">مشخصات هر خودرو به قالب schema.org، با منبع هر مقدار</div>
 
       {!data ? <div className="empty-state">در حال بارگذاری…</div> : (
         <>
@@ -2670,11 +3151,20 @@ function VehicleSpecs({ guard }) {
                 <span>در انتظار به‌روزرسانی: <b style={{ color: '#eab308' }}>{data.stale.length.toLocaleString('fa-IR')}</b></span>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, fontSize: 12 }}>
-              {Object.entries(data.field_coverage || {}).sort((a, b) => b[1] - a[1]).map(([f, n]) => (
-                <span key={f} className="st-badge st-rev" dir="ltr">{f}: {n}</span>
-              ))}
-            </div>
+            <details className="spec-coverage">
+              <summary>پوشش فیلدها در کاتالوگ<span className="spec-coverage-x" aria-hidden="true" /></summary>
+              <div className="spec-coverage-grid">
+                {Object.entries(data.field_coverage || {}).sort((a, b) => b[1] - a[1]).map(([f, n]) => (
+                  <div key={f} className="spec-field">
+                    <span className="spec-field-n">{SPEC_FIELD_FA[f] || f}</span>
+                    <span className="spec-field-v">
+                      {n.toLocaleString('fa-IR')}
+                      <i style={{ width: `${Math.round((n / Math.max(1, data.total)) * 100)}%` }} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
             <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 8 }}>
               فیلدهایی که منبع قابل‌اتکایی ندارند (وزن، ابعاد، قدرت موتور، ظرفیت سرنشین…) عمداً خالی می‌مانند.
             </div>
@@ -2729,7 +3219,7 @@ function VehicleSpecs({ guard }) {
             <table className="adm-table">
               <thead><tr><th>برند</th><th>خودرو</th><th>سال</th><th>فیلدها</th><th>به‌روزرسانی</th><th /></tr></thead>
               <tbody>
-                {vehicles.map((v) => (
+                {specPage.pageRows.map((v) => (
                   <tr key={v.car_id}>
                     <td>{v.brand}</td>
                     <td dir="ltr" style={{ fontSize: 13 }}>{v.display_name}</td>
@@ -2752,6 +3242,7 @@ function VehicleSpecs({ guard }) {
               </tbody>
             </table>
           </div>
+          {specPage.pager}
         </>
       )}
     </>

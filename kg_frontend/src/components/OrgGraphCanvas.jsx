@@ -6,6 +6,7 @@
 // assign them, and set each node's car-database access + AI eligibility.
 // Everyone else sees the same graph read-only, with their own node highlighted.
 
+import Skeleton from './Skeleton';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow, Background, Controls, Handle, Position,
@@ -17,6 +18,7 @@ import {
   orgSetPermission, orgCreateUser,
 } from '@/utils/api';
 import { useVehicleFilter } from './VehicleFilter';
+import { friendlyError } from '@/lib/friendlyError';
 
 const GAP_X = 210;
 const GAP_Y = 165;
@@ -39,6 +41,49 @@ function SeatNode({ data }) {
   );
 }
 const nodeTypes = { seat: SeatNode };
+
+// Indented list of the same tree. The canvas has to zoom far out to fit a
+// 25-seat company (nodes become unreadable) and it cannot be panned usefully
+// on a phone, so the list is the default there and available everywhere.
+function OrgList({ graph, selectedId, onSelect }) {
+  const nodes = graph?.nodes || [];
+  const children = new Map();
+  nodes.forEach((n) => {
+    const key = n.parent_id ?? 'root';
+    if (!children.has(key)) children.set(key, []);
+    children.get(key).push(n);
+  });
+  const roots = nodes.filter((n) => n.is_root || n.parent_id == null);
+
+  const row = (n, depth) => {
+    const occ = n.occupant;
+    const kids = (children.get(n.id) || []).filter((k) => k.id !== n.id);
+    return (
+      <li key={n.id}>
+        <button
+          type="button"
+          className={`org-row${selectedId === n.id ? ' is-on' : ''}${n.is_root ? ' is-root' : ''}`}
+          style={{ paddingInlineStart: `${12 + depth * 22}px` }}
+          onClick={() => onSelect(n.id)}
+        >
+          <span className="org-row-avatar" aria-hidden="true">
+            {(occ?.display_name || occ?.username || '—').trim().slice(0, 2)}
+          </span>
+          <span className="org-row-text">
+            <b>{occ ? (occ.display_name || occ.username) : 'بدون کاربر'}</b>
+            <small>{n.label || '—'}</small>
+          </span>
+          {n.is_root && <span className="org-row-tag">مدیر ارشد</span>}
+          {kids.length > 0 && <span className="org-row-count">{kids.length.toLocaleString('fa-IR')} زیرمجموعه</span>}
+        </button>
+        {kids.length > 0 && <ul>{kids.map((k) => row(k, depth + 1))}</ul>}
+      </li>
+    );
+  };
+
+  if (!nodes.length) return <div className="empty-state">هنوز جایگاهی تعریف نشده است.</div>;
+  return <ul className="org-list">{roots.map((r) => row(r, 0))}</ul>;
+}
 
 // Tidy tree layout: children are centred under (or beside) their parent.
 function tidyLayout(list, dir) {
@@ -75,6 +120,8 @@ function tidyLayout(list, dir) {
 
 export default function OrgGraphCanvas() {
   const [graph, setGraph] = useState(null);
+  // 'chart' | 'list'; the list is the default on narrow screens.
+  const [view, setView] = useState('chart');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
@@ -89,7 +136,13 @@ export default function OrgGraphCanvas() {
       setGraph(g);
       setErr('');
     } catch (e) {
-      setErr(e.message || 'خطا در بارگذاری');
+      // Leaf seats (and seatless users) are denied the team page server-side;
+      // send them back to the fleet instead of showing a bare error.
+      if (e.status === 403 && typeof window !== 'undefined') {
+        window.location.replace('/browse');
+        return;
+      }
+      setErr(friendlyError(e, 'بارگذاری ساختار سازمانی ناموفق بود.'));
     } finally {
       setLoading(false);
     }
@@ -158,12 +211,13 @@ export default function OrgGraphCanvas() {
     } catch (e) { setErr(e.message); }
   }, [canEdit, graph, dir, load]);
 
+  const faN = (n) => Number(n ?? 0).toLocaleString('fa-IR');
   const seatCapLabel = graph?.seat_cap != null
-    ? `${graph.seats_used}/${graph.seat_cap} کاربر`
-    : `${graph?.seats_used ?? 0} کاربر`;
+    ? `${faN(graph.seats_used)} از ${faN(graph.seat_cap)} کاربر`
+    : `${faN(graph?.seats_used)} کاربر`;
   const capReached = graph?.seat_cap != null && graph.seats_used >= graph.seat_cap;
 
-  if (loading) return <div className="org-loading">در حال بارگذاری ساختار…</div>;
+  if (loading) return <Skeleton kind="block" count={1} label="در حال بارگذاری ساختار…" />;
   if (err && !graph) return <div className="org-error">{err}</div>;
 
   return (
@@ -189,8 +243,17 @@ export default function OrgGraphCanvas() {
           <span className="org-readonly">نمای فقط‌خواندنی — تنها مدیر ارشد می‌تواند ویرایش کند</span>
         )}
         {err && <span className="org-error inline">{err}</span>}
+        <div className="org-dirs org-views">
+          <button type="button" className={`org-btn sm${view === 'chart' ? ' on' : ''}`} onClick={() => setView('chart')}>نمودار</button>
+          <button type="button" className={`org-btn sm${view === 'list' ? ' on' : ''}`} onClick={() => setView('list')}>فهرست</button>
+        </div>
       </div>
 
+      {view === 'list' ? (
+        <div className="org-listwrap">
+          <OrgList graph={graph} selectedId={selectedId} onSelect={setSelectedId} />
+        </div>
+      ) : (
       <div className="org-canvas">
         <ReactFlow
           nodes={nodes} edges={edges} nodeTypes={nodeTypes}
@@ -199,6 +262,7 @@ export default function OrgGraphCanvas() {
           onNodeClick={(_e, n) => setSelectedId(Number(n.id))}
           onPaneClick={() => setSelectedId(null)}
           snapToGrid snapGrid={SNAP} fitView
+          fitViewOptions={{ padding: 0.18, maxZoom: 1 }} minZoom={0.55}
           nodesConnectable={!!canEdit} elementsSelectable
           proOptions={{ hideAttribution: true }}
         >
@@ -217,6 +281,7 @@ export default function OrgGraphCanvas() {
           />
         )}
       </div>
+      )}
     </div>
   );
 }

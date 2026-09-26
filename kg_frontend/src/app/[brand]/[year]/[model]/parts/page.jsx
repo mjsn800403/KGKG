@@ -12,6 +12,7 @@ import ActivityBeacon from '@/components/ActivityBeacon';
 import {
   PARTS_LABEL, PartsBreadcrumb, ConfigPicker, FrameInfo, partsHref,
 } from '@/components/PartsNav';
+import { friendlyError } from '@/lib/friendlyError';
 
 const GROUP_ICONS = ['parts', 'gear', 'wrench', 'catalog', 'wiring', 'manual', 'car', 'clock'];
 
@@ -33,7 +34,7 @@ export default async function PartsRootPage({ params, searchParams }) {
   } catch (e) {
     if (e?.status === 401) redirect('/login');
     else if (e?.status === 403) denied = true;
-    else error = e?.message || 'بارگذاری کاتالوگ قطعات ناموفق بود.';
+    else error = friendlyError(e, 'بارگذاری کاتالوگ قطعات ناموفق بود.');
   }
 
   if (denied || error) {
@@ -82,7 +83,7 @@ export default async function PartsRootPage({ params, searchParams }) {
         <UserChip />
       </div>
       <h1 className="page-title">{PARTS_LABEL}</h1>
-      <div className="page-sub" dir="ltr">// PARTS_CATALOG — {model} {year}</div>
+      <div className="page-sub">کاتالوگ قطعات · <bdi dir="ltr">{model} {year}</bdi></div>
       <ActivityBeacon
         action="parts_view"
         detail={`${model} — ${PARTS_LABEL}`}

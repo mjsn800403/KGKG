@@ -12,7 +12,7 @@ export default function TeamPage() {
         <UserChip />
       </div>
       <h1 className="page-title">ساختار سازمانی</h1>
-      <div className="page-sub">// ORG_GRAPH</div>
+      <div className="page-sub">ساختار تیم و سطح دسترسی هر عضو</div>
       <OrgGraphCanvas />
     </DashboardShell>
   );

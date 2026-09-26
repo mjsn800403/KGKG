@@ -37,14 +37,19 @@ def user_can_view_company_stream(user):
 
 
 def require_analytics(view):
-    """Gate a view behind the ``can_view_analytics`` capability."""
+    """Gate the team-analytics views by org-graph position: everyone EXCEPT a
+    leaf seat may see analytics for their own subtree (themselves + everyone
+    below them). Root and any node with children qualify; a leaf — or a seatless
+    user — is denied. See orggraph.user_can_view_team; the data itself is already
+    scoped to the viewer's reach in build_team_analytics."""
     @wraps(view)
     def wrapped(request, *args, **kwargs):
         from .portal import portal_user
+        from .orggraph import user_can_view_team
         user = portal_user(request)
         if not user:
             return JsonResponse({'error': 'unauthorized'}, status=401)
-        if not (user.can_view_analytics or user.can_manage_team):
+        if not user_can_view_team(user):
             return JsonResponse(
                 {'error': 'برای مشاهده تحلیل‌ها دسترسی لازم را ندارید.'}, status=403)
         request.viewer = user

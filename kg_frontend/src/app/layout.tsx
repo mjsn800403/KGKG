@@ -1,12 +1,13 @@
 // app/layout.js
 import './globals.css';
+import './system.css';
 import BackgroundFX from '@/components/BackgroundFX';
 import Modal from '@/components/Modal';
 import Guidance from '@/guidance';
 
 export const metadata = {
-  title: 'KGtechvault | پلتفرم مستندات فنی خودرو',
-  description: 'سامانه یکپارچه مستندات فنی خودرو',
+  title: 'KGTechVault | پلتفرم هوشمند دانش و مستندات فنی',
+  description: 'پلتفرم هوشمند دانش و مستندات فنی خدمات گستر سپهر گیتی',
 };
 
 // Runs before first paint so the stored theme applies immediately — without it
@@ -28,11 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="microbar">
           <div className="track">
             <span>EVERY VEHICLE. EVERY SPEC. ONE PLATFORM.</span>
-            <span>سامانه یکپارچه مستندات فنی خودرو</span>
+            <span>پلتفرم هوشمند دانش و مستندات فنی</span>
             <span>EVERY VEHICLE. EVERY SPEC. ONE PLATFORM.</span>
-            <span>سامانه یکپارچه مستندات فنی خودرو</span>
+            <span>پلتفرم هوشمند دانش و مستندات فنی</span>
             <span>EVERY VEHICLE. EVERY SPEC. ONE PLATFORM.</span>
-            <span>سامانه یکپارچه مستندات فنی خودرو</span>
+            <span>پلتفرم هوشمند دانش و مستندات فنی</span>
           </div>
         </div>
         {children}

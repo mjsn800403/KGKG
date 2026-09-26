@@ -13,11 +13,11 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .admin_auth import require_admin_token
 from .models import (
-    ActivityLog, Car, DataQualityRun, DownloadRequest, PipelineSettings,
+    ActivityLog, Car, DataQualityRun, PipelineSettings,
     ProcessingJob, SystemAlert, TrafficStat, VehicleSpec, VisitorSeen,
     ZipPackage,
 )
-from . import dataquality, monitoring, pipeline
+from . import dataquality, monitoring, pipeline, tis_crawler
 
 
 def _json_body(request):
@@ -199,41 +199,14 @@ def admin_traffic_view(request):
 # Data-processing pipeline (admin-triggered background workflow)
 # ---------------------------------------------------------------------------
 
-_SOURCE_BASE = os.environ.get('KGTV_SOURCE_URL', 'https://source-manuals.example.com')
 
 
-def _source_url(body):
-    """Brand/Year page URL from {url} or {brand, year}. None when invalid.
-    Only the upstream source host is accepted."""
-    url = (body.get('url') or '').strip()
-    if not url:
-        brand = (body.get('brand') or '').strip()
-        year = str(body.get('year') or '').strip()
-        if not (brand and year.isdigit()):
-            return None
-        url = f'{_SOURCE_BASE}/{brand}/{year}/'
-    if _SOURCE_BASE.split('//')[1].split('/')[0] not in url:
-        return None
-    return url
-
-
-def _brand_year_from_url(url):
-    from urllib.parse import unquote, urlparse
-    parts = [unquote(p) for p in urlparse(url).path.strip('/').split('/') if p]
-    brand = parts[0] if parts else ''
-    year = None
-    if len(parts) > 1 and parts[1].isdigit():
-        year = int(parts[1])
-    return brand, year
-
-
-def _download_dict(r):
-    return {'id': r.id, 'url': r.url, 'brand': r.brand, 'year': r.year,
-            'name_filter': r.name_filter, 'status': r.status,
-            'vehicles_total': r.vehicles_total, 'vehicles_done': r.vehicles_done,
-            'listing': r.listing, 'error': r.error,
-            'created_at': r.created_at.isoformat(),
-            'finished_at': r.finished_at.isoformat() if r.finished_at else None}
+def _tis_status():
+    # Observability must never break the pipeline page.
+    try:
+        return tis_crawler.status()
+    except Exception as e:  # noqa: BLE001
+        return {'error': f'{e.__class__.__name__}: {e}'}
 
 
 def _zip_dict(p):
@@ -332,40 +305,23 @@ def admin_pipeline_view(request):
             return JsonResponse({'ok': True, 'restarted': True,
                                  'job': pipeline.job_dict(job)})
 
-        if action == 'list_source':
-            # Synchronous dry-run listing of an upstream Brand/Year page, annotated
-            # with what we already have locally (downloaded / ingested).
-            from . import ingest
-            url = _source_url(body)
-            if url is None:
-                return JsonResponse({'error': 'آدرس منبع یا برند/سال لازم است.'}, status=400)
-            try:
-                listing = ingest.list_source(url, body.get('filter') or '')
-            except Exception as e:
-                return JsonResponse(
-                    {'error': f'دریافت فهرست از منبع ممکن نشد: {e}'}, status=502)
-            return JsonResponse({'ok': True, **listing})
+        if action == 'tis_start':
+            # The crawler attaches to a Chrome session logged in by hand over
+            # VNC; start() refuses unless that session is reachable and inside TIS.
+            pid, err = tis_crawler.start()
+            if err:
+                return JsonResponse({'error': err}, status=409)
+            return JsonResponse({'ok': True, 'pid': pid})
 
-        if action == 'download':
-            # Queue a DownloadRequest; the pipeline's download stage executes it.
-            url = _source_url(body)
-            if url is None:
-                return JsonResponse({'error': 'آدرس منبع یا برند/سال لازم است.'}, status=400)
-            brand, year = _brand_year_from_url(url)
-            req = DownloadRequest.objects.create(
-                url=url, brand=brand or '', year=year,
-                name_filter=(body.get('filter') or '').strip())
-            return JsonResponse({'ok': True, 'request': _download_dict(req)})
+        if action == 'tis_stop':
+            return JsonResponse({'ok': True, 'stopped': tis_crawler.stop()})
 
-        if action == 'cancel_download':
-            req = DownloadRequest.objects.filter(id=body.get('request_id')).first()
-            if req is None:
-                return JsonResponse({'error': 'درخواست یافت نشد.'}, status=404)
-            if req.status in DownloadRequest.ACTIVE:
-                req.status = 'canceled'
-                req.finished_at = timezone.now()
-                req.save(update_fields=['status', 'finished_at', 'updated_at'])
-            return JsonResponse({'ok': True, 'request': _download_dict(req)})
+        if action == 'tis_chrome':
+            # Only ever starts a missing browser; never restarts a live one.
+            ok, err = tis_crawler.start_chrome()
+            if not ok:
+                return JsonResponse({'error': err}, status=409)
+            return JsonResponse({'ok': True})
 
         if action == 'scan_zips':
             from . import ingest
@@ -429,8 +385,7 @@ def admin_pipeline_view(request):
              'error': j.error}
             for j in ProcessingJob.objects.all()[:12]
         ],
-        'download_requests': [_download_dict(r) for r in
-                              DownloadRequest.objects.all()[:10]],
+        'tis': _tis_status(),
         'zip_queue': {
             'counts': zip_counts,
             'rows': [_zip_dict(p) for p in

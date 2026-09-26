@@ -27,7 +27,7 @@ export default async function AssistantPickerPage() {
         <UserChip />
       </div>
       <h1 className="page-title">دستیار هوشمند سرویس</h1>
-      <div className="page-sub">{'// اول خودرو را انتخاب کن، بعد عیب را بگو یا کد خطا را وارد کن'}</div>
+      <div className="page-sub">ابتدا خودرو را انتخاب کنید، سپس علامت یا کد خطا را بنویسید.</div>
       <ActivityBeacon action="open_assistant" detail="ورود به دستیار هوشمند" />
       <VehicleCardGrid vehicles={cars} hrefSuffix="/assistant" go="دستیار این خودرو ←" />
     </DashboardShell>

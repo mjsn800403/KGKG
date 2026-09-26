@@ -45,16 +45,19 @@ export default function SettingsView() {
 
   return (
     <div className="settings-grid">
-      <div className="settings-tabs">
-        <div className={`stab${tab === 'account' ? ' active' : ''}`} onClick={() => setTab('account')}>
-          <Icon name="user" /> اطلاعات حساب
-        </div>
-        <div className={`stab${tab === 'notif' ? ' active' : ''}`} onClick={() => setTab('notif')}>
-          <Icon name="bell" /> اعلان‌ها
-        </div>
-        <div className={`stab${tab === 'security' ? ' active' : ''}`} onClick={() => setTab('security')}>
-          <Icon name="shield" /> امنیت و دسترسی
-        </div>
+      <div className="settings-tabs" role="tablist" aria-label="بخش‌های تنظیمات">
+        {[
+          { id: 'account', icon: 'user', label: 'اطلاعات حساب' },
+          { id: 'notif', icon: 'bell', label: 'اعلان‌ها' },
+          { id: 'security', icon: 'shield', label: 'امنیت و دسترسی' },
+        ].map((t) => (
+          <button
+            key={t.id} type="button" role="tab" aria-selected={tab === t.id}
+            className={`stab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}
+          >
+            <Icon name={t.icon} /> {t.label}
+          </button>
+        ))}
       </div>
 
       <div>
@@ -66,15 +69,21 @@ export default function SettingsView() {
               <div className="acct-row"><span className="k">کاربر</span><span className="v">{me?.display_name || me?.username || '—'}</span></div>
               <div className="acct-row"><span className="k">نقش سازمانی</span><span className="v">{me?.role_label || '—'}</span></div>
               {me?.email && <div className="acct-row"><span className="k">ایمیل</span><span className="v ltr">{me.email}</span></div>}
-              <div className="acct-row"><span className="k">پشتیبانی</span><span className="v ltr">021-92001404</span></div>
+              <div className="acct-row">
+                <span className="k">پشتیبانی</span>
+                <span className="v">
+                  <a href="tel:+982192001404"><bdi dir="ltr">021 9200 1404</bdi></a>
+                  <small style={{ color: 'var(--text-faint)' }}> · داخلی ۳۰۴</small>
+                </span>
+              </div>
             </div>
 
-            {me?.can_manage_team && (
+            {me?.can_view_team && (
               <div className="acct-card">
                 <h3><Icon name="users" /> تیم شما</h3>
                 <div className="acct-row"><span className="k">مدیریت کارکنان</span>
                   <Link className="btn btn-accent" href="/team">مدیریت تیم ←</Link></div>
-                {me?.can_view_analytics && (
+                {me?.can_view_team && (
                   <div className="acct-row" style={{ borderBottom: 'none' }}><span className="k">گزارش استفاده</span>
                     <Link className="btn" href="/team/analytics">مشاهده تحلیل‌ها</Link></div>
                 )}

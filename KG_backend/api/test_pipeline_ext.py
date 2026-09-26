@@ -11,7 +11,7 @@ from unittest import mock
 from django.test import TestCase
 
 from . import ingest, pipeline
-from .models import Car, DownloadRequest, ProcessingJob, ZipPackage
+from .models import Car, ProcessingJob, ZipPackage
 from .rag import config
 
 
@@ -56,7 +56,7 @@ class ScanInboxTest(TestCase):
         inbox.mkdir()
         wh.mkdir()
         return inbox, wh, mock.patch.dict(
-            os.environ, {'KG_ZIP_INBOX': str(inbox)}), mock.patch.object(
+            os.environ, {'KG_ZIP_INBOX': str(inbox), 'KG_TIS_INBOX': str(inbox / '_no_tis')}), mock.patch.object(
             ingest, 'MIN_ZIP_BYTES', 0), mock.patch.object(
             config, 'WAREHOUSE_DIR', wh)
 
@@ -124,33 +124,23 @@ class PendingWorkQueueTest(TestCase):
     def test_queues_feed_pending_work_and_has_work(self):
         with mock.patch.object(pipeline, '_schema_stale_stems', return_value=[]):
             base = pipeline.pending_work()
-            self.assertEqual(base['need_download'], 0)
             self.assertEqual(base['need_parse'], 0)
+            self.assertNotIn('need_download', base)
 
-            DownloadRequest.objects.create(url='https://source-manuals.example.com/Toyota/2024/')
             ZipPackage.objects.create(path='/tmp/x.zip', zip_name='x.zip',
                                       stem='X', status='pending')
             work = pipeline.pending_work()
-        self.assertEqual(work['need_download'], 1)   # listing not fetched -> 1
         self.assertEqual(work['need_parse'], 1)
         self.assertTrue(work['has_work'])
 
-    def test_download_remaining_counts_vehicles(self):
-        DownloadRequest.objects.create(
-            url='u', status='running', vehicles_total=19, vehicles_done=4)
-        with mock.patch.object(pipeline, '_schema_stale_stems', return_value=[]):
-            work = pipeline.pending_work()
-        self.assertEqual(work['need_download'], 15)
-
     def test_stage_definitions_order_and_plans(self):
         keys = [d['key'] for d in pipeline.stage_definitions()]
-        self.assertEqual(keys, ['download', 'parse', 'catalog', 'schema',
+        self.assertEqual(keys, ['parse', 'catalog', 'schema',
                                 'rag', 'diag', 'audit'])
-        work = {'need_download': 3, 'need_parse': 7, 'need_catalog': ['a'],
+        work = {'need_parse': 7, 'need_catalog': ['a'],
                 'need_schema': ['a', 'b'], 'need_rag_ingest': [],
                 'pages_to_embed': 0, 'graph_pending': False, 'need_diag': []}
         plans = {d['key']: d['plan'](work) for d in pipeline.stage_definitions()}
-        self.assertEqual(plans['download'], 3)
         self.assertEqual(plans['parse'], 7)
         self.assertEqual(plans['schema'], 2)
         self.assertEqual(plans['audit'], 1)
@@ -158,12 +148,11 @@ class PendingWorkQueueTest(TestCase):
     def test_estimate_includes_queue_terms(self):
         from .models import PipelineSettings
         st = PipelineSettings.get()
-        work = {'need_download': 2, 'need_parse': 3, 'need_schema': [],
+        work = {'need_parse': 3, 'need_schema': [],
                 'need_catalog': [], 'need_rag_ingest': [], 'pages_to_embed': 0,
                 'graph_pending': False, 'need_diag': []}
         est = pipeline.estimate_duration_s(work, st)
-        self.assertGreaterEqual(
-            est, 2 * st.download_secs_per_vehicle + 3 * st.parse_secs_per_zip)
+        self.assertGreaterEqual(est, 3 * st.parse_secs_per_zip)
 
 
 class LegacyJobToleranceTest(TestCase):
@@ -186,7 +175,7 @@ class LegacyJobToleranceTest(TestCase):
             job, err = pipeline.start_job(trigger='manual')
         self.assertIsNone(err)
         keys = [s['key'] for s in job.stages]
-        self.assertIn('download', keys)
+        self.assertNotIn('download', keys)   # the pipeline no longer downloads
         self.assertIn('parse', keys)
         self.assertIn('schema', keys)
         parse_stage = next(s for s in job.stages if s['key'] == 'parse')

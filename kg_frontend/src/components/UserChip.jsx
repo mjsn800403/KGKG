@@ -1,34 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getPortalUser, portalRefreshMe } from '../utils/api';
-
-// Topbar identity chip. Shows the logged-in seat's company + role; falls back
-// to the platform brand when no portal session exists.
+// The signed-in person and company now live at the bottom of the sidebar, so
+// the top bar keeps only navigation (breadcrumb) and search. Pages still render
+// <UserChip />; it intentionally renders nothing.
 export default function UserChip() {
-  const [user, setUser] = useState(null);
-  useEffect(() => {
-    if (!getPortalUser()) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const fresh = await portalRefreshMe();
-        if (!cancelled) setUser(fresh || getPortalUser());
-      } catch {
-        if (!cancelled) setUser(getPortalUser());
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const label = user
-    ? `${user.company} — ${user.role_label || ''}`
-    : 'KGTECHVAULT Company';
-  const avatar = user?.username ? user.username.slice(0, 2).toUpperCase() : 'KG';
-
-  return (
-    <div className="userchip">
-      <div className="avatar">{avatar}</div> {label}
-    </div>
-  );
+  return null;
 }

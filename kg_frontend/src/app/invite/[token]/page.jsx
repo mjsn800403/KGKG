@@ -56,9 +56,9 @@ export default function InviteAccept() {
       <div className="auth-wrap">
         <motion.div className="auth-card glass" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}>
           <div className="auth-head">
-            <img src="/logo.png" alt="KGtechvault" />
+            <img src="/brand/logo-mark.png" alt="KGtechvault" />
             <h2>فعال‌سازی حساب کاربری</h2>
-            <p>ACCOUNT ACTIVATION</p>
+            <p>فعال‌سازی حساب</p>
           </div>
 
           {state === 'loading' && <div className="empty-state">در حال بررسی دعوت‌نامه…</div>}

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Icon from './Icon';
 import { useVehicleFilter } from './VehicleFilter';
+import VehicleGroupList from './VehicleGroupList';
 
 export default function VehicleCardGrid({
   vehicles = [],
@@ -35,13 +36,13 @@ export default function VehicleCardGrid({
   return (
     <>
       {bar}
-      <Grid items={filtered} hrefSuffix={hrefSuffix} go={go}
+      <Grid items={filtered} hrefSuffix={hrefSuffix} go={go} total={rows.length}
         emptyLabel={vehicles.length ? 'خودرویی مطابق فیلتر یافت نشد.' : emptyLabel} />
     </>
   );
 }
 
-function Grid({ items, hrefSuffix, go, emptyLabel }) {
+function Grid({ items, hrefSuffix, go, emptyLabel, total }) {
   const gridRef = useRef(null);
 
   // Staggered reveal, capped: a 200-card fleet must not take 18 seconds to
@@ -56,25 +57,32 @@ function Grid({ items, hrefSuffix, go, emptyLabel }) {
     return () => timers.forEach(clearTimeout);
   }, [items]);
 
-  if (!items.length) return <div className="empty-state">{emptyLabel}</div>;
+  const card = (v) => {
+    const href = `/${encodeURIComponent(v.brand)}/${v.year}/${encodeURIComponent(v.model)}${hrefSuffix}`;
+    return (
+      <Link key={href} href={href} className="doc-card explode glass">
+        <div className="icon"><Icon name="car" /></div>
+        <div>
+          <h4>{v.display_name || v.model}</h4>
+          <div className="doc-card-sub" dir="ltr">
+            {String(v.brand).toUpperCase()} / {v.year}
+          </div>
+        </div>
+        <div className="go">{go}</div>
+      </Link>
+    );
+  };
 
   return (
-    <div className="doc-grid" ref={gridRef}>
-      {items.map((v) => {
-        const href = `/${encodeURIComponent(v.brand)}/${v.year}/${encodeURIComponent(v.model)}${hrefSuffix}`;
-        return (
-          <Link key={href} href={href} className="doc-card explode glass">
-            <div className="icon"><Icon name="car" /></div>
-            <div>
-              <h4>{v.display_name || v.model}</h4>
-              <div className="doc-card-sub" dir="ltr">
-                {String(v.brand).toUpperCase()} / {v.year}
-              </div>
-            </div>
-            <div className="go">{go}</div>
-          </Link>
-        );
-      })}
+    <div ref={gridRef}>
+      <VehicleGroupList
+        rows={items}
+        total={total}
+        gridClass="doc-grid"
+        itemKey={(v) => `${v.brand}-${v.year}-${v.model}`}
+        renderItem={card}
+        empty={<div className="empty-state">{emptyLabel}</div>}
+      />
     </div>
   );
 }

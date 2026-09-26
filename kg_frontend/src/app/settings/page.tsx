@@ -7,7 +7,7 @@ export default function Settings() {
     <DashboardShell>
       <div className="topbar"><div className="breadcrumb"><b>تنظیمات حساب</b></div></div>
       <h1 className="page-title">تنظیمات حساب کاربری</h1>
-      <div className="page-sub">// ACCOUNT_SETTINGS</div>
+      <div className="page-sub">اطلاعات حساب، نمایش و امنیت</div>
       <SettingsView />
     </DashboardShell>
   );

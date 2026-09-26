@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation';
 import {
   fetchModels, fetchPartsRoot, buildNodeHref, sstCsvUrl, fetchSstAvailable,
+  fetchVehicleSpec,
 } from '@/utils/api';
 import { portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
@@ -10,6 +11,8 @@ import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
 import CarBrowser from '@/components/CarBrowser';
 import SearchBox from '@/components/SearchBox';
+import VehicleCover from '@/components/VehicleCover';
+import { friendlyError } from '@/lib/friendlyError';
 
 // Pick a meaningful icon from the section title; fall back to a rotation so
 // neighbouring cards still look distinct.
@@ -45,13 +48,15 @@ export default async function ModelPage({ params }) {
   let loadError = '';
   // The SST probe rides along in the same round trip; it resolves to a plain
   // boolean and never throws, so it cannot affect whether the page renders.
-  const [manualRes, partsRes, sstRes] = await Promise.allSettled([
+  const [manualRes, partsRes, sstRes, specRes] = await Promise.allSettled([
     // Raw year segment on purpose: parseInt turns a legacy 'unknown' year into
     // NaN; the backend resolves the car by brand+name when the year mismatches.
     fetchModels(brand, year, model, token),
     fetchPartsRoot(brand, year, model, token),
     fetchSstAvailable(brand, year, model, token),
+    fetchVehicleSpec(brand, year, model, token),
   ]);
+  const spec = specRes.status === 'fulfilled' ? specRes.value : null;
   if (manualRes.status === 'fulfilled') {
     nodes = manualRes.value || [];
   } else if (manualRes.reason?.status === 401) {
@@ -74,7 +79,7 @@ export default async function ModelPage({ params }) {
     if (denied) {
       loadError = 'دسترسی به مستندات این خودرو در اشتراک شما نیست. برای افزودن این خودرو با مدیر یا پشتیبانی تماس بگیرید.';
     } else {
-      loadError = reasons[0]?.message || 'بارگذاری مستندات این خودرو ناموفق بود.';
+      loadError = friendlyError(reasons[0], 'بارگذاری مستندات این خودرو ناموفق بود.');
     }
   }
 
@@ -94,28 +99,41 @@ export default async function ModelPage({ params }) {
   // The smart assistant lives inside each car: the customer picks the vehicle
   // first, then diagnoses a fault (Persian symptom or DTC) or asks repair Qs.
   // It grounds in the manual tree, so it only appears when a manual exists.
-  const items = [
+  // These tools sit in the cover's tool row; the grid below holds only the
+  // manual's own sections.
+  const tools = [
     ...(hasManual ? [{
-      href: `${base}/assistant`,
-      icon: 'bot',
-      title: 'دستیار هوشمند',
-      sub: 'تشخیص عیب از روی علائم یا کد خطا (DTC) + راهنمای تعمیر',
-      go: 'گفتگو با دستیار ←',
+      href: `${base}/assistant`, icon: 'bot', primary: true,
+      title: 'دستیار هوشمند', sub: 'عیب‌یابی از علائم یا کد خطا',
     }] : []),
     ...(hasParts ? [{
-      href: `${base}/parts`,
-      icon: 'parts',
-      title: 'کاتالوگ قطعات یدکی',
-      sub: `OEM EPC / ${partsRoot?.frames?.length || 1} CONFIG`,
-      go: 'ورود به کاتالوگ ←',
+      href: `${base}/parts`, icon: 'parts',
+      title: 'کاتالوگ قطعات',
+      sub: `${(partsRoot?.frames?.length || 1).toLocaleString('fa-IR')} پیکربندی`,
     }] : []),
-    ...nodes.map((node, i) => ({
-      href: buildNodeHref(brand, year, model, [node.title]),
-      icon: iconFor(node.title, i),
-      title: node.title,
-      go: 'ورود به مستند ←',
-    })),
+    // Every system in the manual has its own SST page; this merges all of them
+    // into one deduplicated tool list for the whole vehicle. The
+    // kg_portal_token cookie rides the top-level navigation.
+    ...(hasSst ? [{
+      href: sstCsvUrl(brand, year, model), icon: 'download', download: true,
+      title: 'ابزار مخصوص (SST)', sub: 'دانلود فهرست کامل',
+    }] : []),
   ];
+  const items = nodes.map((node, i) => ({
+    href: buildNodeHref(brand, year, model, [node.title]),
+    icon: iconFor(node.title, i),
+    title: node.title,
+    go: 'ورود به مستند ←',
+  }));
+  const sections = (
+    <>
+      {items.length > 0 && <h2 className="section-label">بخش‌های مستندات</h2>}
+      {items.length > 0 ? <CardGrid items={items} /> : null}
+    </>
+  );
+  // A parts-only vehicle has no manual tree to browse: its one way in is the
+  // catalog, shown as a card instead of an empty contents sidebar.
+  const partsOnly = !hasManual && hasParts;
 
   return (
     <DashboardShell>
@@ -124,34 +142,15 @@ export default async function ModelPage({ params }) {
         {hasManual && <SearchBox brand={brand} year={year} model={model} />}
         <UserChip />
       </div>
-      <h1 className="page-title">{model} {year}</h1>
-      <div className="page-sub">// VEHICLE_DOCUMENTS</div>
-      {/* Every system in the manual has its own SST page; this merges all of
-          them into one deduplicated tool list for the whole vehicle, which no
-          single page in the tree can show. Same download mechanics as the
-          Labor Times CSV: the kg_portal_token cookie rides the top-level
-          navigation, so no client-side token handling is needed. */}
-      {hasSst && (
-        <a
-          href={sstCsvUrl(brand, year, model)}
-          download
-          className="back-link"
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-            margin: '0.25rem 0 1rem', padding: '0.5rem 0.9rem',
-            border: '1px solid var(--border, #3a3a3a)', borderRadius: '8px',
-            fontSize: '0.9rem', textDecoration: 'none', width: 'fit-content',
-          }}
-        >
-          <span aria-hidden="true">⭳</span>
-          دانلود فهرست ابزار مخصوص (SST)
-        </a>
-      )}
-      {classic ? (
-        <CardGrid items={items} />
-      ) : (
+      <VehicleCover brand={brand} year={year} model={model} spec={spec} tools={tools} />
+      {partsOnly ? (
+        <CardGrid items={[{
+          href: `${base}/parts`, icon: 'parts', title: 'کاتالوگ قطعات یدکی',
+          sub: `${(partsRoot?.frames?.length || 1).toLocaleString('fa-IR')} پیکربندی`, go: 'ورود به کاتالوگ ←',
+        }]} />
+      ) : classic ? sections : (
         <CarBrowser brand={brand} year={year} model={model} currentPath={[]}>
-          <CardGrid items={items} />
+          {sections}
         </CarBrowser>
       )}
     </DashboardShell>

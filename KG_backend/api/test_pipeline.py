@@ -114,7 +114,7 @@ class JobLifecycleTests(TestCase):
             self.assertIsNone(err)
             self.assertEqual(job.status, 'pending')
             self.assertEqual([s['key'] for s in job.stages],
-                             ['download', 'parse', 'catalog', 'schema',
+                             ['parse', 'catalog', 'schema',
                               'rag', 'diag', 'audit'])
             launch.assert_called_once()
             # Second start while one is active must refuse.

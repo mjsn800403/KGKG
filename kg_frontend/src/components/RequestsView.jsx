@@ -9,7 +9,7 @@ import useEventStream from '../utils/useEventStream';
 const KINDS = [
   { id: 'vehicle_access', label: 'درخواست دسترسی به خودرو' },
   { id: 'seats', label: 'افزایش ظرفیت کاربران' },
-  { id: 'ai_assistant', label: 'فعال‌سازی دستیار هوشمند' },
+  { id: 'ai_assistant', label: 'سهمیهٔ بیشتر دستیار هوشمند' },
   { id: 'documents', label: 'افزودن بستهٔ مستندات' },
   { id: 'support', label: 'پشتیبانی' },
   { id: 'other', label: 'سایر' },
@@ -81,7 +81,15 @@ export default function RequestsView() {
       </AnimatePresence>
 
       {items.length === 0 ? (
-        <div className="inbox-empty glass">هنوز درخواستی ثبت نکرده‌اید.</div>
+        <div className="inbox-empty glass">
+          <span className="inbox-empty-ico" aria-hidden="true"><Icon name="mailplus" /></span>
+          <b>هنوز درخواستی ثبت نکرده‌اید</b>
+          <p>
+            برای افزودن خودرو، افزایش ظرفیت کاربران، سهمیهٔ بیشتر دستیار هوشمند یا هر پرسش دیگری،
+            از همین‌جا درخواست بدهید؛ پاسخ و روند رسیدگی را در همین صفحه می‌بینید.
+          </p>
+          <button type="button" className="btn btn-accent" onClick={() => setShowForm(true)}>ثبت درخواست جدید</button>
+        </div>
       ) : (
         <ul className="inbox-list">
           <AnimatePresence initial={false}>

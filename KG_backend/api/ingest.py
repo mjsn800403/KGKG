@@ -1,11 +1,10 @@
-"""ZIP-inbox ingestion: the bridge between the source downloader and the
+"""ZIP-inbox ingestion: the bridge between manually placed ZIPs and the
 processing pipeline.
 
-Until now the two halves of ingestion were disconnected: the downloader
-(``kgtv-downloader/downloader.py``) was run by hand and dropped ZIPs in
-``/root/downloads``, and the HTML parser (``htmlparser_logical.py``) was run
-by hand on a desktop to turn those ZIPs into warehouse ``.db`` files. This
-module puts both under pipeline control:
+ZIPs are placed in ``/root/downloads`` by hand; the pipeline no longer
+downloads anything itself (the old source downloader was moved off the
+application, and TIS crawls are observed through ``tis_crawler``). This module
+puts the HTML parser (``htmlparser_logical.py``) under pipeline control:
 
 * ``scan_inbox``       — discover vehicle-manual ZIPs in the inbox roots,
   normalize legacy model-only filenames to the ``KGTV <year> <brand>
@@ -17,12 +16,15 @@ module puts both under pipeline control:
   ``Database_warehouse``/``static_warehouse`` + the catalog, then clean up the
   extracted tree and intermediate crawl DB (ZIPs themselves are kept as the
   source archive).
-* ``execute_download_request`` — fetch a queued ``DownloadRequest`` from the
-  upstream source site (with the downloader's own pacing/backoff) and register
-  the resulting ZIPs.
 
-The downloader and parser stay standalone-usable scripts; they are loaded
-here via importlib from their canonical locations in the project root.
+TIS crawls use the same queue. A finished vehicle folder written by the TIS
+crawler (``<Model>_<Year>/`` next to a shared ``_assets/``) — in the TIS inbox
+(``/root/downloads/tis``) or the crawler's own output folder — is registered as
+a ``ZipPackage`` whose path is the folder, and ``parse_zip_package`` sends it
+to ``tis_parser.py`` instead of the ZIP parser. Both produce the same car
+database and media layout, so every later stage is source-agnostic.
+The parser stays a standalone-usable script; it is loaded here via importlib
+from its canonical location in the project root.
 """
 import importlib.util
 import os
@@ -66,11 +68,10 @@ def sanitize_filename(name):
 
 
 # ---------------------------------------------------------------------------
-# External script loading (they live outside the Django package on purpose:
-# both remain standalone CLI tools)
+# External script loading (it lives outside the Django package on purpose:
+# it remains a standalone CLI tool)
 # ---------------------------------------------------------------------------
 _parser_mod = None
-_downloader_mod = None
 
 
 def _load_module(name, path):
@@ -92,18 +93,32 @@ def parser_module():
     return _parser_mod
 
 
-def downloader_module():
-    global _downloader_mod
-    if _downloader_mod is None:
-        path = os.environ.get('KG_DOWNLOADER_PATH',
-                              str(PROJECT_ROOT / 'kgtv-downloader' / 'downloader.py'))
-        _downloader_mod = _load_module('kg_source_downloader', path)
-    return _downloader_mod
-
-
 def warehouse_stem(car_name, year):
     """The parser's stem rule (single source of truth lives in the parser)."""
     return parser_module().warehouse_stem(car_name, year)
+
+
+_tis_mod = None
+
+
+def tis_module():
+    global _tis_mod
+    if _tis_mod is None:
+        path = os.environ.get('KG_TIS_PARSER_PATH',
+                              str(PROJECT_ROOT / 'tis_parser.py'))
+        _tis_mod = _load_module('kg_tis_parser', path)
+    return _tis_mod
+
+
+def tis_roots():
+    """Folders holding TIS vehicle crawls (``<Model>_<Year>/`` + ``_assets/``):
+    the TIS inbox for crawls copied in from elsewhere, and the on-server
+    crawler's own output folder (colon-separated ``KG_TIS_INBOX`` overrides
+    the whole list)."""
+    from . import tis_crawler
+    raw = os.environ.get('KG_TIS_INBOX',
+                         f'/root/downloads/tis:{tis_crawler.OUT_DIR}')
+    return [Path(p).expanduser() for p in raw.split(':') if p.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +244,65 @@ def register_zip(path, normalize=False, dry_run=False):
     return pkg, 'kept'
 
 
+def register_tis_vehicle(vdir, dry_run=False):
+    """Ensure a ZipPackage row for a TIS vehicle folder. Same contract and
+    duplicate guard as ``register_zip``; the folder's signature is the total
+    size / newest mtime of its pages, so a re-crawl requeues it.
+
+    Extra actions: 'empty' (no pages yet, e.g. a crawl that only reached the
+    listings) and 'in_progress' (the on-server crawler is writing to it)."""
+    from .models import ZipPackage
+    from . import tis_crawler
+    tis = tis_module()
+    vdir = Path(vdir)
+    meta = tis.vehicle_meta(vdir)
+    if meta is None:
+        return None, 'unrecognized'
+    brand, year, car_name = meta
+    files = tis.content_files(vdir)
+    if not files:
+        return None, 'empty'
+    if (tis_crawler.OUT_DIR in vdir.parents and tis_crawler.status_running()):
+        return None, 'in_progress'
+    size = mtime = 0
+    for f in files:
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        size += st.st_size
+        mtime = max(mtime, st.st_mtime)
+
+    stem = warehouse_stem(car_name, year)
+    stem_on_disk = (config.WAREHOUSE_DIR / f'{stem}.db').exists()
+    queued_elsewhere = (ZipPackage.objects
+                        .filter(stem=stem, status__in=('pending', 'parsing', 'done'))
+                        .exclude(path=str(vdir)).exists())
+    fresh_status = ('skipped_duplicate' if (stem_on_disk or queued_elsewhere)
+                    else 'pending')
+    fields = dict(zip_name=f'TIS {year} {brand} {car_name}', size=size,
+                  mtime=mtime, brand=brand, year=year, car_name=car_name,
+                  stem=stem)
+
+    pkg = ZipPackage.objects.filter(path=str(vdir)).first()
+    if pkg is None:
+        action = 'duplicate' if fresh_status == 'skipped_duplicate' else 'registered'
+        if dry_run:
+            return None, action
+        pkg = ZipPackage.objects.create(path=str(vdir), status=fresh_status, **fields)
+        return pkg, action
+    if pkg.size != size or abs((pkg.mtime or 0) - mtime) > 1.0:
+        if dry_run:
+            return pkg, 'refreshed'
+        for k, v in fields.items():
+            setattr(pkg, k, v)
+        pkg.status = fresh_status
+        pkg.error = ''
+        pkg.save()
+        return pkg, 'refreshed'
+    return pkg, 'kept'
+
+
 def scan_inbox(normalize=False, dry_run=False, log=None):
     """Walk the inbox roots, (optionally) normalize legacy filenames, and
     register every vehicle-manual ZIP. Returns a summary dict."""
@@ -258,6 +332,26 @@ def scan_inbox(normalize=False, dry_run=False, log=None):
                 if action == 'renamed+registered':
                     summary['renamed'] += 1
                 say(f'++ queued: {pkg.zip_name if pkg else zp.name}')
+            elif action == 'duplicate':
+                summary['duplicates'] += 1
+            elif action == 'refreshed':
+                summary['refreshed'] += 1
+            if pkg is not None:
+                seen.add(pkg.path)
+    for root in tis_roots():
+        if not root.is_dir():
+            continue
+        for vdir in sorted(d for d in root.iterdir() if d.is_dir()):
+            if tis_module().vehicle_meta(vdir) is None:
+                continue
+            pkg, action = register_tis_vehicle(vdir, dry_run=dry_run)
+            if action in ('empty', 'in_progress'):
+                say(f'.. TIS {vdir.name}: {action}, not queued')
+                continue
+            summary['found'] += 1
+            if action == 'registered':
+                summary['registered'] += 1
+                say(f'++ queued: {pkg.zip_name if pkg else vdir.name}')
             elif action == 'duplicate':
                 summary['duplicates'] += 1
             elif action == 'refreshed':
@@ -333,6 +427,9 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
         say(f'skip (stem already in warehouse): {pkg.stem}')
         return 'skipped'
 
+    if zip_path.is_dir():
+        return _parse_tis_package(pkg, log=say)
+
     parser = parser_module()
     backend_dir = Path(settings.BASE_DIR)
     ledger = parser.ProcessingLedger(backend_dir / 'db.sqlite3')
@@ -386,108 +483,27 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
     return 'done'
 
 
-# ---------------------------------------------------------------------------
-# Execute a download request
-# ---------------------------------------------------------------------------
-
-def list_source(url, name_filter=''):
-    """Synchronous listing of a Brand/Year page, annotated with local state.
-    Returns {url, vehicles: [{name, bundle_url, downloaded, ingested}]}."""
-    dl = downloader_module()
-    session = dl.build_session(1)
-    url = dl.correct_brand_case(session, url)
-    vehicles = dl.get_vehicles(session, url)
-    needle = (name_filter or '').strip().lower()
-    if needle:
-        vehicles = [v for v in vehicles if needle in v['name'].lower()]
-
-    out = []
-    save_dir = _save_dir_for(url)
-    for v in vehicles:
-        bp = [unquote(p) for p in urlparse(v['bundle_url']).path.strip('/').split('/')]
-        downloaded = False
-        stem = None
-        if len(bp) == 4:                      # ['bundle', brand, year, model]
-            brand, year, model = bp[1], int(bp[2]), bp[3]
-            stem = warehouse_stem(model, year)
-            for cand in (save_dir / source_zip_name(brand, year, model),
-                         save_dir / f'{sanitize_filename(model)}.zip'):
-                if cand.exists() and zipfile.is_zipfile(cand):
-                    downloaded = True
-                    break
-        out.append({
-            'name': v['name'],
-            'bundle_url': v['bundle_url'],
-            'downloaded': downloaded,
-            'ingested': bool(stem) and (config.WAREHOUSE_DIR / f'{stem}.db').exists(),
-        })
-    return {'url': url, 'vehicles': out}
-
-
-def _save_dir_for(url):
-    """Mirror the downloader CLI's convention: <first inbox root>/<Brand>_<Year>."""
-    dl = downloader_module()
-    parts = [p for p in urlparse(url).path.strip('/').split('/') if p]
-    brand_year = '_'.join(unquote(p) for p in parts[-2:]) if len(parts) >= 2 else 'manuals'
-    return inbox_roots()[0] / dl.sanitize_filename(brand_year)
-
-
-def execute_download_request(req, log=None, check_cancel=None, on_vehicle=None):
-    """Run one DownloadRequest to completion (resumable: already-present valid
-    ZIPs are skipped without hitting the server). Returns {'ok','skip','fail'}
-    counts. ``check_cancel`` may raise to abort cooperatively; the request is
-    left 'running' and re-executed (cheaply) on resume."""
+def _parse_tis_package(pkg, log=None):
+    """Parse one queued TIS vehicle folder into the warehouse + catalog. Uses
+    the ZIP parser's image publisher so both sources share one image store."""
+    from .models import Car
     say = log or (lambda m: None)
-    dl = downloader_module()
-
-    req.status = 'running'
-    req.vehicles_done = 0
-    req.error = ''
-    req.save(update_fields=['status', 'vehicles_done', 'error', 'updated_at'])
-
-    session = dl.build_session(1)
-    url = dl.correct_brand_case(session, req.url)
-    vehicles = dl.get_vehicles(session, url)
-    needle = (req.name_filter or '').strip().lower()
-    if needle:
-        vehicles = [v for v in vehicles if needle in v['name'].lower()]
-    say(f'download request #{req.id}: {len(vehicles)} vehicle(s) '
-        f'from {url}' + (f' (filter: {req.name_filter})' if needle else ''))
-
-    save_dir = _save_dir_for(url)
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-    req.listing = [{'name': v['name'], 'bundle_url': v['bundle_url'],
-                    'state': 'pending'} for v in vehicles]
-    req.vehicles_total = len(vehicles)
-    req.save(update_fields=['listing', 'vehicles_total', 'updated_at'])
-
-    counts = {'ok': 0, 'skip': 0, 'fail': 0}
-    for i, v in enumerate(vehicles):
-        if check_cancel is not None:
-            check_cancel()
-        check_disk_guard()
-        state = dl.download_bundle(session, v, save_dir)
-        counts[state] += 1
-        req.listing[i]['state'] = state
-        req.vehicles_done = i + 1
-        req.save(update_fields=['listing', 'vehicles_done', 'updated_at'])
-        if state in ('ok', 'skip'):
-            bp = [unquote(p) for p in urlparse(v['bundle_url']).path.strip('/').split('/')]
-            if len(bp) == 4:
-                for cand in (save_dir / source_zip_name(bp[1], int(bp[2]), bp[3]),
-                             save_dir / f'{sanitize_filename(v["name"])}.zip'):
-                    if cand.exists():
-                        register_zip(cand, normalize=True)
-                        break
-        if on_vehicle is not None:
-            on_vehicle(v, state)
-
-    failed = [e['name'] for e in req.listing if e['state'] == 'fail']
-    req.status = 'failed' if (vehicles and counts['fail'] == len(vehicles)) else 'done'
-    req.error = ('failed: ' + ', '.join(failed))[:500] if failed else ''
-    req.finished_at = timezone.now()
-    req.save(update_fields=['status', 'error', 'finished_at', 'updated_at'])
-    say(f'download request #{req.id} finished: ok={counts["ok"]} '
-        f'skip={counts["skip"]} fail={counts["fail"]}')
-    return counts
+    pkg.status = 'parsing'
+    pkg.save(update_fields=['status', 'updated_at'])
+    try:
+        result = tis_module().process_vehicle(
+            Path(pkg.path), config.WAREHOUSE_DIR,
+            Path(settings.BASE_DIR) / 'static_warehouse', stem=pkg.stem,
+            publish_images=parser_module()._publish_images, log=say)
+    except Exception as e:
+        pkg.status, pkg.error = 'failed', f'{e.__class__.__name__}: {e}'[:500]
+        pkg.save(update_fields=['status', 'error', 'updated_at'])
+        return 'failed'
+    Car.objects.update_or_create(
+        car_name=result['car_name'],
+        defaults={'brand_name': result['brand'], 'year': result['year'],
+                  'db_address': result['db_address']})
+    pkg.status, pkg.error, pkg.pages_processed = 'done', '', result['pages']
+    pkg.save(update_fields=['status', 'error', 'pages_processed', 'updated_at'])
+    say(f'parsed TIS into warehouse: {result["car_name"]} ({result["pages"]} pages)')
+    return 'done'

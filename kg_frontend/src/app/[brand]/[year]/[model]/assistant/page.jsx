@@ -22,7 +22,7 @@ export default async function CarAssistantPage({ params }) {
         <UserChip />
       </div>
       <h1 className="page-title">دستیار هوشمند — {model} {year}</h1>
-      <div className="page-sub">// AI_DIAGNOSTIC_ASSISTANT</div>
+      <div className="page-sub">پرسش یا کد خطا را بنویسید؛ پاسخ فقط از مستندات همین خودرو و همراه با منبع است.</div>
       <AssistantChat brand={brand} year={year} model={model} car={model} />
     </DashboardShell>
   );

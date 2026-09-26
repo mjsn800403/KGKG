@@ -262,6 +262,10 @@ def purchase_request_view(request):
         return JsonResponse(
             {'error': 'تعداد صندلی با جمع نقش‌های سازمانی همخوانی ندارد.'}, status=400)
     seats_count = plan_total
+    # The free demo and the 2-day pass are single-user plans (see lib/pricing.js).
+    if (_clean(body.get('brand'), 120) == 'همهٔ خودروها'
+            and _clean(body.get('year'), 20) in ('demo', '2day') and seats_count != 1):
+        return JsonResponse({'error': 'حساب دمو و دسترسی ۲ روزه فقط برای ۱ کاربر است.'}, status=400)
 
     raw_docs = body.get('documents') or []
     if not isinstance(raw_docs, list):

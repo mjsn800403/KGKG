@@ -36,6 +36,8 @@ urlpatterns = [
     path('api/auth/fleet/', portal.fleet_view, name='portal_fleet'),
     path('api/auth/verify-otp/', portal.verify_otp_view, name='portal_verify_otp'),
     path('api/auth/resend-otp/', portal.resend_otp_view, name='portal_resend_otp'),
+    path('api/auth/recover/start/', portal.recover_start_view, name='portal_recover_start'),
+    path('api/auth/recover/reset/', portal.recover_reset_view, name='portal_recover_reset'),
     path('api/activity/', portal.activity_view, name='portal_activity'),
 
     # Company self-service team management (manager-gated) + employee invites.
@@ -64,6 +66,8 @@ urlpatterns = [
     path('api/admin/companies/', portal.admin_companies_view, name='admin_companies'),
     path('api/admin/companies/<int:company_id>/', portal.admin_company_detail_view, name='admin_company_detail'),
     path('api/admin/companies/<int:company_id>/access/', portal.admin_company_access_view, name='admin_company_access'),
+    path('api/admin/companies/<int:company_id>/roles/', portal.admin_company_roles_view, name='admin_company_roles'),
+    path('api/admin/companies/<int:company_id>/roles/delete/', portal.admin_company_role_delete_view, name='admin_company_role_delete'),
     path('api/admin/users/', portal.admin_users_view, name='admin_users'),
     path('api/admin/users/<int:user_id>/', portal.admin_user_detail_view, name='admin_user_detail'),
     path('api/admin/users/<int:user_id>/access/', portal.admin_user_access_view, name='admin_user_access'),

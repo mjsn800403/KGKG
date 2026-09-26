@@ -11,7 +11,7 @@ export default function Browse() {
         <UserChip />
       </div>
       <h1 className="page-title">پنل دسترسی به مستندات فنی</h1>
-      <div className="page-sub">// ACTIVE_VEHICLE_ACCESS.LIST</div>
+      <div className="page-sub">خودروهایی که برای شما فعال شده‌اند؛ روی هر خودرو بزنید تا مستندات آن باز شود.</div>
       <FleetView />
     </DashboardShell>
   );

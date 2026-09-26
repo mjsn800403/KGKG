@@ -9,6 +9,7 @@ import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import ContentRenderer from '@/components/ContentRenderer';
+import { friendlyError } from '@/lib/friendlyError';
 
 export default async function RawPage({ params }) {
   const raw = await params;
@@ -27,7 +28,7 @@ export default async function RawPage({ params }) {
   } catch (err) {
     if (err?.status === 401) redirect('/login');
     else if (err?.status === 403) error = 'دسترسی به مستندات این خودرو در اشتراک شما نیست.';
-    else error = err.message;
+    else error = friendlyError(err, 'بارگذاری این صفحه ناموفق بود.');
   }
 
   return (
@@ -37,7 +38,7 @@ export default async function RawPage({ params }) {
         <UserChip />
       </div>
       <h1 className="page-title">{page?.title || file}</h1>
-      <div className="page-sub">// DOCUMENT_VIEW</div>
+      <div className="page-sub">نمایش مستند</div>
 
       {page?.content ? (
         <ContentRenderer content={page.content} brand={brand} year={year} model={model} />

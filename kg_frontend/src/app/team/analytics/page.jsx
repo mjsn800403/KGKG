@@ -11,7 +11,7 @@ export default function TeamAnalyticsPage() {
         <UserChip />
       </div>
       <h1 className="page-title">تحلیل استفاده کارکنان</h1>
-      <div className="page-sub">// USAGE_ANALYTICS</div>
+      <div className="page-sub">آمار استفادهٔ تیم از مستندات</div>
       <AnalyticsView />
     </DashboardShell>
   );

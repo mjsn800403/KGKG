@@ -20,11 +20,13 @@ function relTime(iso) {
   try {
     const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
     if (s < 60) return 'همین حالا';
-    if (s < 3600) return `${Math.floor(s / 60)} دقیقه پیش`;
-    if (s < 86400) return `${Math.floor(s / 3600)} ساعت پیش`;
-    return `${Math.floor(s / 86400)} روز پیش`;
+    if (s < 3600) return `${fmtNum(Math.floor(s / 60))} دقیقه پیش`;
+    if (s < 86400) return `${fmtNum(Math.floor(s / 3600))} ساعت پیش`;
+    return `${fmtNum(Math.floor(s / 86400))} روز پیش`;
   } catch { return ''; }
 }
+
+const SEVERITY_FA = { critical: 'بحرانی', warning: 'هشدار', info: 'اطلاع' };
 
 const ACTION_FA = {
   login: 'ورود', view_node: 'مشاهده سند', view_section: 'مرور بخش',
@@ -190,7 +192,7 @@ export default function AdminDashboard({ go }) {
     <div className="rt-dash">
       <div className="rt-head">
         <div>
-          <h1 className="rt-title">داشبورد بلادرنگ</h1>
+          <h1 className="rt-title">داشبورد آنلاین</h1>
           <p className="rt-sub">وضعیت زندهٔ پلتفرم — به‌روزرسانی لحظه‌ای</p>
         </div>
         <LiveBadge status={status} />
@@ -265,7 +267,7 @@ function ProcessingPanel({ proc, counts, job, flash, go }) {
   ];
 
   return (
-    <Panel title="پردازش داده‌ها" tag="// LIVE" hot={hasWork} flash={flash}
+    <Panel title="پردازش داده‌ها" tag="وضعیت لحظه‌ای" hot={hasWork} flash={flash}
       action={<button className="rt-mini-btn" onClick={() => go?.('pipeline')}>باز کردن</button>}>
       <div className="rt-badges">
         {badges.map((b) => (
@@ -299,7 +301,7 @@ function statusClass(s) {
 
 function RequestsPanel({ requests, flash, go }) {
   return (
-    <Panel title="درخواست‌های شرکت‌ها" tag="// INBOX" hot={requests.length > 0} flash={flash}
+    <Panel title="درخواست‌های شرکت‌ها" tag="در انتظار بررسی" hot={requests.length > 0} flash={flash}
       action={<button className="rt-mini-btn" onClick={() => go?.('company-requests')}>همه</button>}>
       {requests.length === 0 ? (
         <div className="rt-idle">درخواست بازی وجود ندارد.</div>
@@ -326,7 +328,7 @@ function RequestsPanel({ requests, flash, go }) {
 
 function AlertsPanel({ alerts, flash, go }) {
   return (
-    <Panel title="هشدارهای عملیاتی" tag="// OPS" hot={alerts.length > 0} flash={flash}
+    <Panel title="هشدارهای عملیاتی" tag="سلامت سامانه" hot={alerts.length > 0} flash={flash}
       action={<button className="rt-mini-btn" onClick={() => go?.('system')}>پایش</button>}>
       {alerts.length === 0 ? (
         <div className="rt-idle">هیچ هشدار بازی نیست ✓</div>
@@ -334,7 +336,9 @@ function AlertsPanel({ alerts, flash, go }) {
         <ul className="rt-list">
           {alerts.slice(0, 6).map((a) => (
             <li key={a.id}>
-              <span className={`rt-pill rt-pill-${a.severity === 'critical' ? 'bad' : 'warn'}`}>{a.severity}</span>
+              <span className={`rt-pill rt-pill-${a.severity === 'critical' ? 'bad' : 'warn'}`}>
+                {SEVERITY_FA[a.severity] || a.severity}
+              </span>
               <div className="rt-list-main"><b>{a.message}</b><small>{a.key}</small></div>
             </li>
           ))}
@@ -346,7 +350,7 @@ function AlertsPanel({ alerts, flash, go }) {
 
 function ActivityPanel({ activity }) {
   return (
-    <Panel title="فعالیت زنده کاربران" tag="// STREAM">
+    <Panel title="فعالیت زنده کاربران" tag="لحظه‌ای">
       {(!activity || activity.length === 0) ? (
         <div className="rt-idle">فعالیتی ثبت نشده.</div>
       ) : (
@@ -374,7 +378,7 @@ function TrafficPanel({ spark }) {
   const data = spark || [];
   const max = Math.max(1, ...data.map((x) => x.requests || 0));
   return (
-    <Panel title="ترافیک ۱۴ روز اخیر" tag="// TRAFFIC">
+    <Panel title="ترافیک ۱۴ روز اخیر" tag="بازدید روزانه">
       {data.length === 0 ? (
         <div className="rt-idle">داده‌ای برای نمایش نیست.</div>
       ) : (
@@ -392,7 +396,7 @@ function TrafficPanel({ spark }) {
 
 function TickerPanel({ feed }) {
   return (
-    <Panel title="جریان رویدادها" tag="// EVENTS">
+    <Panel title="جریان رویدادها" tag="زنده">
       {feed.length === 0 ? (
         <div className="rt-idle">در انتظار رویداد…</div>
       ) : (

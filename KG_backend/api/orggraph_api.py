@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from .access import PACKAGE_CHOICES
-from .models import Car, NodePermission, OrgGraph, OrgNode, PortalUser
+from .models import ActivityLog, Car, NodePermission, OrgGraph, OrgNode, PortalUser
 from . import orggraph as og
 from .portal import portal_user
 
@@ -88,16 +88,92 @@ def _node_dict(node):
     }
 
 
-def _graph_dict(graph, viewer):
+def _relayout_compact(nodes_out):
+    """Assign tidy top-down tree coordinates to a list of serialised nodes
+    (mutates their 'x'/'y' in place). Used for the scoped read-only view so the
+    visible subset renders as a compact tree instead of inheriting the sparse
+    coordinates from the full-graph layout.
+
+    Standard post-order tree placement: leaves get consecutive columns, each
+    parent centres over its children. Any node whose parent is not in the set is
+    treated as a top-level root (covers the 'father' seat at the top)."""
+    COL_W, LEVEL_H, X0, Y0 = 240, 150, 80, 60
+    ids = {n['id'] for n in nodes_out}
+    children = {}
+    for n in nodes_out:
+        pid = n['parent_id'] if n['parent_id'] in ids else None
+        children.setdefault(pid, []).append(n['id'])
+    pos = {}
+    cursor = [0]
+
+    def place(nid, depth):
+        kids = children.get(nid, [])
+        if not kids:
+            x = cursor[0] * COL_W
+            cursor[0] += 1
+        else:
+            xs = [place(k, depth + 1) for k in kids]
+            x = (min(xs) + max(xs)) / 2
+        pos[nid] = (x, depth * LEVEL_H)
+        return x
+
+    for root_id in children.get(None, []):
+        place(root_id, 0)
+    for n in nodes_out:
+        x, y = pos.get(n['id'], (0, 0))
+        n['x'], n['y'] = X0 + x, Y0 + y
+
+
+def _visible_scope(graph, viewer):
+    """Which nodes ``viewer`` may see on the /team canvas.
+
+    Returns:
+      * ``None``  — the whole graph (the root occupant sees everything);
+      * ``False`` — the viewer must NOT see the team page at all (a leaf seat,
+        i.e. nobody reports to them, or a seatless user);
+      * ``set``   — the exact node ids a non-root, non-leaf viewer may see:
+        their own seat + every descendant seat + their direct parent (father).
+    """
+    if og.is_graph_root(viewer):
+        return None
+    seat = getattr(viewer, 'seat', None)
+    if seat is None:
+        return False
+    children = {}
+    for nid, pid in graph.nodes.values_list('id', 'parent_id'):
+        children.setdefault(pid, []).append(nid)
+    if not children.get(seat.id):
+        return False  # leaf seat — no team page
+    visible = set()
+    frontier = [seat.id]
+    while frontier:
+        nid = frontier.pop()
+        if nid in visible:
+            continue
+        visible.add(nid)
+        frontier.extend(children.get(nid, []))
+    if seat.parent_id:            # the father, but not higher ancestors
+        visible.add(seat.parent_id)
+    return visible
+
+
+def _graph_dict(graph, viewer, scope=None):
     is_root = og.is_graph_root(viewer)
     my_node = getattr(viewer, 'seat', None)
     nodes = list(graph.nodes.select_related('occupant', 'permission').all())
+    if scope is not None:
+        # Non-root viewer: restrict the canvas to their visible subtree + father.
+        nodes = [n for n in nodes if n.id in scope]
     # EVERY active employee of the company is assignable, not just the unseated
     # ones: the root manages the whole organisation, so it can pull anyone into
     # any seat. Seating someone who already sits elsewhere MOVES them (the prior
     # seat is vacated — one seat per person). ``seated_in`` lets the UI say so.
     seat_of = {n.occupant_id: n for n in nodes if n.occupant_id}
     employees = graph.company.users.filter(active=True).order_by('display_name', 'username')
+    if scope is not None:
+        # A scoped viewer can't edit, and must not see the whole company roster:
+        # limit the picker to the occupants of the nodes they can already see.
+        employees = employees.filter(id__in=[oid for oid in seat_of])
 
     # The car picker must cover EVERY car any node already holds, not just the
     # company's purchased ones: the platform admin can grant a company's users
@@ -116,12 +192,19 @@ def _graph_dict(graph, viewer):
     catalog = {c.id: c for c in Car.objects.filter(id__in=car_ids)}
     seat_cap = graph.company.seats_count
     seats_used = sum(1 for n in nodes if not n.is_root)
+    nodes_out = [_node_dict(n) for n in nodes]
+    if scope is not None:
+        # The scoped subset keeps each seat's stored canvas coordinates, which
+        # were laid out for the FULL graph — so a handful of visible nodes end up
+        # spread across the whole canvas and look cropped. Re-layout the visible
+        # nodes as a compact top-down tree just for this read-only view.
+        _relayout_compact(nodes_out)
     return {
         'can_edit': is_root,
         'my_node_id': (my_node.id if my_node else None),
         'seat_cap': seat_cap,
         'seats_used': seats_used,
-        'nodes': [_node_dict(n) for n in nodes],
+        'nodes': nodes_out,
         'employees': [
             {'id': u.id, 'username': u.username, 'display_name': u.display_name,
              'email': u.email,
@@ -152,9 +235,18 @@ def _graph_dict(graph, viewer):
 @csrf_exempt
 @require_authed
 def graph_view(request):
-    """GET /api/org/graph/ — the whole graph document + pickers."""
+    """GET /api/org/graph/ — the graph document + pickers, scoped to the viewer.
+
+    The root occupant sees the whole graph; a non-root, non-leaf seat sees only
+    their own subtree plus their direct parent; a leaf seat is denied entirely
+    (403) so the frontend can keep them off the /team page.
+    """
     graph = _graph_for(request.portal)
-    return JsonResponse(_graph_dict(graph, request.portal))
+    scope = _visible_scope(graph, request.portal)
+    if scope is False:
+        return JsonResponse(
+            {'error': 'شما به بخش «تیم و کارکنان» دسترسی ندارید.'}, status=403)
+    return JsonResponse(_graph_dict(graph, request.portal, scope))
 
 
 @csrf_exempt
@@ -343,6 +435,8 @@ def node_create_user_view(request, node_id):
     phone = (b.get('phone') or '').strip()[:40]
     if not phone:
         return JsonResponse({'error': 'شماره موبایل کاربر لازم است (کد ورود پیامکی به آن ارسال می‌شود).'}, status=400)
+    if PortalUser.phone_taken(phone):
+        return JsonResponse({'error': 'این شماره موبایل قبلاً برای حساب دیگری ثبت شده است.'}, status=400)
     company = graph.company
     raw_username = (b.get('username') or '').strip()[:100]
     username = raw_username or _unique_username(
@@ -363,6 +457,13 @@ def node_create_user_view(request, node_id):
             node.save(update_fields=['occupant'])
             og.sync_node_to_user(node)
             og.sync_reports_to_from_graph(company)
+            # Record every team-member account the root creates in the platform
+            # activity log, so the super-admin's feed captures each new account.
+            creator = request.root_user
+            ActivityLog.objects.create(
+                user=user, action='account_created',
+                detail=(f'ایجاد حساب کاربر «{display_name}» ({username}) '
+                        f'توسط مدیر شرکت {creator.display_name or creator.username}')[:400])
     except IntegrityError:
         return JsonResponse(
             {'error': 'این نام کاربری یا ایمیل قبلاً استفاده شده است.'}, status=400)

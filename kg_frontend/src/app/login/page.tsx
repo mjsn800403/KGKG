@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { portalLogin, verifyOtp, resendOtp } from '@/utils/api';
 
 const TURNSTILE_SITEKEY = '0x4AAAAAAEjnbFG2W2QYf-cE';
-const RESEND_COOLDOWN = 60;
+const RESEND_COOLDOWN = 120; // = OTP_TTL: resend unlocks when the code expires
 // Must match OtpChallenge.DEFAULT_TTL on the backend (minutes=2).
 const OTP_TTL = 120;
 
@@ -48,6 +48,9 @@ export default function Login() {
       callback: (t: string) => setToken(t),
       'expired-callback': () => setToken(''),
       'error-callback': () => setToken(''),
+      // follow the portal's own theme instead of a white box on the dark page
+      theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
+      language: 'fa',
     });
   }, []);
 
@@ -198,9 +201,9 @@ export default function Login() {
           <div className="auth-step" id="step1">
             <div className="auth-card glass">
               <div className="auth-head">
-                <img src="/logo.png" alt="KGtechvault" />
+                <img src="/brand/logo-mark.png" alt="KGtechvault" />
                 <h2>ورود به پورتال</h2>
-                <p>AUTHENTICATION // STEP 1 OF 2</p>
+                <p>مرحلهٔ ۱ از ۲ · نام کاربری و رمز عبور</p>
               </div>
               <div className="steps"><i className="done"></i><i></i></div>
               <div className="field"><label>نام کاربری</label>
@@ -217,7 +220,7 @@ export default function Login() {
               <button className="btn btn-accent full" onClick={submitCredentials} disabled={busy || !token}>
                 {busy ? 'در حال بررسی…' : 'ادامه ←'}
               </button>
-              <div className="auth-foot">رمز را فراموش کرده‌اید؟ <a href="#">بازیابی حساب</a></div>
+              <div className="auth-foot">رمز را فراموش کرده‌اید؟ <a href="/recover">بازیابی حساب</a></div>
             </div>
           </div>
         )}
@@ -226,9 +229,9 @@ export default function Login() {
           <div className="auth-step" id="step2">
             <div className="auth-card glass">
               <div className="auth-head">
-                <img src="/logo.png" alt="KGtechvault" />
+                <img src="/brand/logo-mark.png" alt="KGtechvault" />
                 <h2>تایید دو مرحله‌ای</h2>
-                <p>AUTHENTICATION // STEP 2 OF 2</p>
+                <p>مرحلهٔ ۲ از ۲ · کد تأیید پیامکی</p>
               </div>
               <div className="steps"><i className="done"></i><i className="done"></i></div>
               <div className="field" style={{ textAlign: 'center' }}>
@@ -261,7 +264,7 @@ export default function Login() {
               <div className="auth-foot">
                 کد دریافت نشد؟{' '}
                 {resendCooldown > 0
-                  ? <span style={{ opacity: 0.6 }}>ارسال مجدد ({String(Math.floor(resendCooldown / 60)).padStart(2, '0')}:{String(resendCooldown % 60).padStart(2, '0')})</span>
+                  ? <span style={{ opacity: 0.6 }}>ارسال مجدد</span>
                   : <a href="#" onClick={e => { e.preventDefault(); handleResend(); }}>ارسال مجدد</a>}
               </div>
             </div>

@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { resolveHref } from '@/utils/api';
 import { showModal } from '@/components/Modal';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { enhanceManualRoot } from '@/lib/manualContent';
 
 // The manual's HTML content cross-links to other sections using the
 // original static site's flat "pages/<id>.html" filenames (optionally with
@@ -17,6 +19,10 @@ function isManualPageLink(href) {
 
 export default function ContentRenderer({ content, brand, year, model }) {
   const router = useRouter();
+  const bodyRef = useRef(null);
+
+  // Wide spec tables become scrollers, illustrations get their caption.
+  useEffect(() => { enhanceManualRoot(bodyRef.current); }, [content]);
 
   if (!content) return null;
 
@@ -65,7 +71,7 @@ export default function ContentRenderer({ content, brand, year, model }) {
 
   return (
     <div className="viewer glass">
-      <div className="viewer-body content-renderer" onClick={handleClick}>
+      <div className="viewer-body content-renderer" onClick={handleClick} ref={bodyRef}>
         <div
           className="content-wrapper"
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}

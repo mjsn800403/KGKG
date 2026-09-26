@@ -116,18 +116,10 @@ def _graph_synced_vectors():
 
 
 def _queue_counts():
-    """Remaining work in the download / parse queues (the stages that run
-    BEFORE any warehouse .db exists, so the file scanner cannot see them)."""
-    from .models import DownloadRequest, ZipPackage
-    need_download = 0
-    for total, done in (DownloadRequest.objects
-                        .filter(status__in=DownloadRequest.ACTIVE)
-                        .values_list('vehicles_total', 'vehicles_done')):
-        # An active request always counts at least 1 (its listing may not
-        # have been fetched yet, so vehicles_total can still be 0).
-        need_download += max(1, (total or 0) - (done or 0))
-    need_parse = ZipPackage.objects.filter(status='pending').count()
-    return need_download, need_parse
+    """Remaining work in the parse queue (it runs BEFORE any warehouse .db
+    exists, so the file scanner cannot see it)."""
+    from .models import ZipPackage
+    return ZipPackage.objects.filter(status='pending').count()
 
 
 def _schema_stale_stems():
@@ -148,7 +140,7 @@ def pending_work():
                  if config.DIAG_DIR.exists() else set())
     total_blobs, embedded = _index_counts()
 
-    need_download, need_parse = _queue_counts()
+    need_parse = _queue_counts()
     need_catalog = sorted(s for s in stems if s not in cataloged)
     need_schema = _schema_stale_stems()
     need_ingest = sorted(s for s in stems if s not in occ)
@@ -160,7 +152,6 @@ def pending_work():
 
     return {
         'vehicles_on_disk': len(stems),
-        'need_download': need_download,
         'need_parse': need_parse,
         'need_catalog': need_catalog,
         'need_schema': need_schema,
@@ -170,7 +161,7 @@ def pending_work():
         'embed_done': embedded,
         'graph_pending': graph_pending,
         'need_diag': need_diag,
-        'has_work': bool(need_download or need_parse or need_catalog
+        'has_work': bool(need_parse or need_catalog
                          or need_schema or need_ingest or pages_to_embed
                          or graph_pending or need_diag),
     }
@@ -180,7 +171,6 @@ def estimate_duration_s(work, settings_row):
     """Whole-pipeline duration estimate from this server's observed rates."""
     rate = max(0.2, settings_row.embed_rate_pps or 1.5)
     est = 120.0                                    # catalog + audit overhead
-    est += (settings_row.download_secs_per_vehicle or 120.0) * work.get('need_download', 0)
     est += (settings_row.parse_secs_per_zip or 180.0) * work.get('need_parse', 0)
     est += 5.0 * len(work.get('need_schema', []))
     est += work['pages_to_embed'] / rate
@@ -228,8 +218,6 @@ def recommendation(work, load, est_s):
 
 def stage_definitions():
     return [
-        {'key': 'download', 'label': 'دانلود بسته‌های جدید از منبع',
-         'plan': lambda w: w.get('need_download', 0)},
         {'key': 'parse', 'label': 'استخراج و پردازش بسته‌های فشرده',
          'plan': lambda w: w.get('need_parse', 0)},
         {'key': 'catalog', 'label': 'ثبت خودروهای جدید در کاتالوگ',
@@ -406,7 +394,6 @@ def start_job(trigger='manual', scheduled_for=None):
         scheduled_for=scheduled_for,
         stages=stages,
         progress={'overall_pct': 0, 'planned_work': {
-            'need_download': work.get('need_download', 0),
             'need_parse': work.get('need_parse', 0),
             'pages_to_embed': work['pages_to_embed'],
             'need_diag': len(work['need_diag']),
