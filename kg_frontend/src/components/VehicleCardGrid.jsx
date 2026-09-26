@@ -11,6 +11,8 @@ import Icon from './Icon';
 import { useVehicleFilter } from './VehicleFilter';
 import VehicleGroupList from './VehicleGroupList';
 
+const MODEL_ORDER = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+
 export default function VehicleCardGrid({
   vehicles = [],
   brand = '',
@@ -27,7 +29,7 @@ export default function VehicleCardGrid({
       brand: v.brand ?? v.brand_name ?? brand,
       model: v.model ?? v.car_name ?? '',
       year: v.year ?? year,
-    })),
+    })).sort((a, b) => MODEL_ORDER.compare(a.model, b.model) || (b.year - a.year)),
     [vehicles, brand, year]
   );
 

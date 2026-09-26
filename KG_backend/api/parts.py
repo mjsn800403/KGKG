@@ -14,6 +14,7 @@ in the source EPC, unlike manuals.
 """
 import json
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -183,7 +184,15 @@ def parts_view(request, brand_name, year, model_name):
     # Paid content: the *parts* layer for THIS car — checked before readiness
     # so a granted-but-unbuilt vehicle can't be told from an ungranted one.
     docs = user_car_documents(user, car)
-    if docs is None or 'parts' not in docs:
+    if docs is None:
+        return _forbidden_car()
+    # Manual vehicles have no catalog of their own; the EPC catalogs are
+    # separate "(Parts YYYY)" vehicles. Point at the matching one(s) instead.
+    if not _is_parts_vehicle(car) and not parts_db_ready(car):
+        return JsonResponse({'error': 'no_parts_catalog',
+                             'related': _related_catalogs(user, car)},
+                            status=404)
+    if 'parts' not in docs:
         return _forbidden_car()
 
     if not parts_db_ready(car):
@@ -198,6 +207,89 @@ def parts_view(request, brand_name, year, model_name):
     except sqlite3.Error as e:
         return JsonResponse({'error': 'parts catalog unavailable',
                              'detail': str(e)}, status=503)
+
+
+_PARTS_SUFFIX = re.compile(r'\s*\(Parts \d{4}\)\s*$', re.I)
+_YEAR_SUFFIX = re.compile(r'\s*\(\d{4}\)\s*$')
+
+
+def _is_parts_vehicle(car):
+    return bool(_PARTS_SUFFIX.search(car.car_name or ''))
+
+
+def _trim_base(name):
+    """'Corolla Cross XLE, AWD (2023)' -> 'corolla cross xle'."""
+    name = _YEAR_SUFFIX.sub('', _PARTS_SUFFIX.sub('', name or ''))
+    return name.split(',')[0].strip().lower()
+
+
+def _related_catalogs(user, car):
+    """Parts vehicles of the same brand+year whose trim matches this manual
+    vehicle: an exact trim match, else the longest whole-word prefix (so a
+    'Corolla Cross Hybrid Nightshade' manual finds the 'Corolla Cross Hybrid'
+    catalog, while 'Corolla Cross L' never matches 'Corolla Cross LE').
+    Only catalogs the user may open are returned."""
+    base = _trim_base(car.car_name)
+    cands = []
+    for pc in Car.objects.filter(brand_name__iexact=car.brand_name, year=car.year):
+        if not _is_parts_vehicle(pc):
+            continue
+        pb = _trim_base(pc.car_name)
+        if pb == base or base.startswith(pb + ' '):
+            cands.append((len(pb), pc))
+    if not cands:
+        return []
+    best = max(n for n, _ in cands)
+    out = []
+    for n, pc in cands:
+        if n != best or not parts_db_ready(pc):
+            continue
+        docs = user_car_documents(user, pc)
+        if docs is not None and 'parts' in docs:
+            out.append({'brand': pc.brand_name, 'model': pc.car_name, 'year': pc.year})
+    return out
+
+
+SEARCH_LIMIT = 60
+
+
+def _search_parts(conn, cfg, q):
+    """Part rows of one configuration matching a part number (dashes/spaces
+    ignored) or an English / Persian name fragment."""
+    pn = re.sub(r'[\s-]+', '', q).upper()
+    like = f'%{q}%'
+    rows = conn.execute("""
+        SELECT p.callout, p.pn, p.pn_display, p.name_en, p.name_fa, p.qty_display,
+               p.date_range, n.id AS node_id
+        FROM part_rows p
+        JOIN sections s ON s.id = p.section_id
+        JOIN groups g ON g.id = s.group_id
+        JOIN nodes n ON n.id = g.node_id
+        WHERE g.frame = ?
+          AND ((? != '' AND REPLACE(REPLACE(UPPER(p.pn), '-', ''), ' ', '') LIKE ?)
+               OR p.name_en LIKE ? OR p.name_fa LIKE ?)
+        ORDER BY p.pn, p.id
+        LIMIT ?""", (cfg, pn, pn + '%', like, like, SEARCH_LIMIT * 4)).fetchall()
+    hits, seen, chains = [], set(), {}
+    for r in rows:
+        key = (r['pn'], r['node_id'])
+        if key in seen:
+            continue
+        seen.add(key)
+        if r['node_id'] not in chains:
+            node = conn.execute(
+                f'SELECT {NODE_COLUMNS}, frame, group_id FROM nodes WHERE id=?',
+                (r['node_id'],)).fetchone()
+            chains[r['node_id']] = _title_chain(conn, node) if node else []
+        hits.append({
+            'pn': r['pn'], 'pn_display': r['pn_display'], 'name_en': r['name_en'],
+            'name_fa': r['name_fa'], 'qty_display': r['qty_display'],
+            'callout': r['callout'], 'date_range': r['date_range'],
+            'path_titles': chains[r['node_id']],
+        })
+        if len(hits) >= SEARCH_LIMIT:
+            break
+    return hits
 
 
 def _serve_parts(request, car):
@@ -228,6 +320,12 @@ def _serve_parts(request, car):
 
     if not any(f['code'] == cfg for f in frames):
         return JsonResponse({'error': f'unknown configuration: {cfg}'}, status=404)
+
+    q = (request.GET.get('q') or '').strip()[:80]
+    if q:
+        if len(q) < 2:
+            return JsonResponse({'query': q, 'results': []})
+        return JsonResponse({'query': q, 'results': _search_parts(conn, cfg, q)})
 
     segments = request.GET.getlist('seg')
 

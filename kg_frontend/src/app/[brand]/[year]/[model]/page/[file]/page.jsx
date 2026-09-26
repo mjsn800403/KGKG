@@ -4,7 +4,7 @@
 // from the car's source folder by the backend's ?page= endpoint.
 import { redirect } from 'next/navigation';
 import { fetchRawPage } from '@/utils/api';
-import { portalTokenCookie } from '@/utils/serverAuth';
+import { redirectToLogin, portalTokenCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -19,14 +19,14 @@ export default async function RawPage({ params }) {
   const file = decodeURIComponent(raw.file);
 
   const token = await portalTokenCookie();
-  if (!token) redirect('/login');
+  if (!token) await redirectToLogin();
 
   let page = null;
   let error = null;
   try {
     page = await fetchRawPage(brand, year, model, file, token);
   } catch (err) {
-    if (err?.status === 401) redirect('/login');
+    if (err?.status === 401) await redirectToLogin();
     else if (err?.status === 403) error = 'دسترسی به مستندات این خودرو در اشتراک شما نیست.';
     else error = friendlyError(err, 'بارگذاری این صفحه ناموفق بود.');
   }

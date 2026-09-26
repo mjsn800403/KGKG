@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import {
   fetchNodes, fetchSubtree, buildNodeHref, urlToSeg, laborTimesCsvUrl, FLATTEN_MAX,
 } from '@/utils/api';
-import { portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
+import { redirectToLogin, portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -27,7 +27,7 @@ export default async function NodePage({ params }) {
 
   // Paid content: must be signed in (token in the SSR cookie). No token -> login.
   const token = await portalTokenCookie();
-  if (!token) redirect('/login');
+  if (!token) await redirectToLogin();
 
   // Classic mode = the original card-by-card drill-down, no sidebar and no
   // subtree flattening. Modern mode = sidebar tree + adaptive flatten.
@@ -55,7 +55,7 @@ export default async function NodePage({ params }) {
       }
     }
   } catch (err) {
-    if (err?.status === 401) redirect('/login');
+    if (err?.status === 401) await redirectToLogin();
     else if (err?.forbidden) denied = true;
     else { console.error('Error fetching content:', err); error = friendlyError(err, 'بارگذاری محتوا ناموفق بود.'); }
   }

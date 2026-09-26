@@ -19,6 +19,14 @@ declare global {
   }
 }
 
+// Where to go after login: the page that sent the visitor here (?next=), if it
+// is a same-site path, else the fleet view.
+function safeNext() {
+  const next = new URLSearchParams(window.location.search).get('next') || '';
+  return next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\')
+    && !next.startsWith('/login') ? next : '/browse';
+}
+
 export default function Login() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -166,7 +174,7 @@ export default function Login() {
     setBusy(true);
     try {
       await verifyOtp(otpSession, code);
-      router.push('/browse');
+      router.push(safeNext());
     } catch (e) {
       setError((e as Error).message || 'تأیید ناموفق بود.');
       setOtp(['', '', '', '', '', '']);

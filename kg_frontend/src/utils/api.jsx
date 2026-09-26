@@ -39,6 +39,7 @@ async function contentError(res, fallback) {
   // WITHOUT that body is something else (e.g. a ModSecurity/WAF rule) and must
   // NOT be reported to the user as "not in your subscription".
   err.forbidden = res.status === 403 && data?.error === 'forbidden';
+  err.data = data;
   return err;
 }
 
@@ -350,6 +351,16 @@ export async function fetchPartsNodes(brand, year, model, cfg, pathSegments = []
     }
   }
   return data;
+}
+
+// Search one configuration's parts by part number or English/Persian name.
+// Returns { query, results: [{ pn, pn_display, name_en, name_fa, path_titles, ... }] }.
+export async function fetchPartsSearch(brand, year, model, cfg, q, token) {
+  const qs = new URLSearchParams({ cfg, q });
+  const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to search parts: ${res.status}`);
+  return res.json();
 }
 
 // --- purchase request ------------------------------------------------------

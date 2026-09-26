@@ -24,6 +24,8 @@ export function proxy(request: NextRequest) {
 
   const headers = new Headers(request.headers);
   headers.set('x-nonce', nonce);
+  // Lets server pages send a signed-out visitor to /login?next=<this page>.
+  headers.set('x-pathname', request.nextUrl.pathname + request.nextUrl.search);
   headers.set('Content-Security-Policy', csp);
   const res = NextResponse.next({ request: { headers } });
   res.headers.set('Content-Security-Policy', csp);

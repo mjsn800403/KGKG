@@ -1,7 +1,8 @@
 // Server-only helper: read the portal session token from the request cookie so
 // server components (SSR) can forward it to the paid content API. Importing
 // `next/headers` keeps this out of any client bundle.
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 export async function portalTokenCookie() {
   try {
@@ -22,4 +23,16 @@ export async function browseModeCookie() {
   } catch {
     return 'modern';
   }
+}
+
+// Send a signed-out visitor to /login, remembering the page they asked for so
+// the login page can return them there (src/proxy.ts sets x-pathname).
+export async function redirectToLogin() {
+  let path = '';
+  try {
+    path = (await headers()).get('x-pathname') || '';
+  } catch {}
+  redirect(path.startsWith('/') && !path.startsWith('//')
+    ? `/login?next=${encodeURIComponent(path)}`
+    : '/login');
 }

@@ -24,6 +24,20 @@ export function partsHref(brand, year, model, segments = [], cfg = '') {
   return `${base}${path}${q}`;
 }
 
+// Plain GET form: searching works without client JS and the result page is
+// linkable (/parts?cfg=..&q=..).
+export function PartsSearchForm({ brand, year, model, cfg = '', q = '' }) {
+  return (
+    <form className="search-box" action={partsBase(brand, year, model)} method="get"
+      role="search" style={{ margin: '12px 0' }}>
+      <input type="hidden" name="cfg" value={cfg} />
+      <input type="search" name="q" defaultValue={q} minLength={2} maxLength={80}
+        placeholder="جستجوی شماره فنی یا نام قطعه (فارسی / انگلیسی)…"
+        aria-label="جستجوی قطعه" />
+    </form>
+  );
+}
+
 // Breadcrumb for parts pages. The stock Breadcrumb builds hrefs into the
 // manuals catch-all; parts segments must link back into /parts with the
 // active configuration preserved.

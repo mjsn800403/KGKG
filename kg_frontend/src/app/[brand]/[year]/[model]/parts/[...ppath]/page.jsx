@@ -6,7 +6,7 @@
 // as one segment) but are sent to the backend as ?seg= params.
 import { redirect } from 'next/navigation';
 import { fetchPartsNodes } from '@/utils/api';
-import { portalTokenCookie } from '@/utils/serverAuth';
+import { redirectToLogin, portalTokenCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import CardGrid from '@/components/CardGrid';
@@ -29,7 +29,7 @@ export default async function PartsNodePage({ params, searchParams }) {
   const cfg = typeof sp?.cfg === 'string' ? sp.cfg : '';
 
   const token = await portalTokenCookie();
-  if (!token) redirect('/login');
+  if (!token) await redirectToLogin();
   // No configuration in the URL (hand-edited link) -> restart at the root,
   // which resolves the default configuration.
   if (!cfg) redirect(partsHref(brand, year, model));
@@ -40,7 +40,7 @@ export default async function PartsNodePage({ params, searchParams }) {
   try {
     data = await fetchPartsNodes(brand, year, model, cfg, pathArray, token);
   } catch (e) {
-    if (e?.status === 401) redirect('/login');
+    if (e?.status === 401) await redirectToLogin();
     else if (e?.status === 403) denied = true;
     else error = friendlyError(e, 'بارگذاری این بخش ناموفق بود.');
   }

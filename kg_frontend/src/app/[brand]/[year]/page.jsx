@@ -1,5 +1,5 @@
 // app/[brand]/[year]/page.js — cars for a brand+year, in the dashboard shell
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { fetchYearData } from '@/utils/api';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
@@ -19,6 +19,8 @@ export default async function YearPage({ params }) {
   }
 
   const cars = await fetchYearData(brand, parseInt(year));
+  const canonical = cars[0]?.brand_name;
+  if (canonical && canonical !== brand) permanentRedirect(`/${encodeURIComponent(canonical)}/${year}`);
 
   // schema.org markup for the public catalog: an ItemList of Car objects
   // built from each vehicle's structured identity spec (backend-provided;

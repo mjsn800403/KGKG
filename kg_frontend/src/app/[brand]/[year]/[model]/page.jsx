@@ -4,7 +4,7 @@ import {
   fetchModels, fetchPartsRoot, buildNodeHref, sstCsvUrl, fetchSstAvailable,
   fetchVehicleSpec,
 } from '@/utils/api';
-import { portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
+import { redirectToLogin, portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -36,7 +36,7 @@ export default async function ModelPage({ params }) {
   const model = decodeURIComponent(raw.model);
 
   const token = await portalTokenCookie();
-  if (!token) redirect('/login');
+  if (!token) await redirectToLogin();
   // Classic mode drops the sidebar; modern wraps content in the tree browser.
   const classic = (await browseModeCookie()) === 'classic';
 
@@ -60,16 +60,18 @@ export default async function ModelPage({ params }) {
   if (manualRes.status === 'fulfilled') {
     nodes = manualRes.value || [];
   } else if (manualRes.reason?.status === 401) {
-    redirect('/login');
+    await redirectToLogin();
   }
   if (partsRes.status === 'fulfilled') {
     partsRoot = partsRes.value;
   } else if (partsRes.reason?.status === 401) {
-    redirect('/login');
+    await redirectToLogin();
   }
   const hasManual = manualRes.status === 'fulfilled';
   const hasSst = sstRes.status === 'fulfilled' && sstRes.value === true;
   const hasParts = !!partsRoot;
+  // Manual vehicles: the EPC catalog of the same trim is a separate vehicle.
+  const relatedParts = !hasParts ? (partsRes.reason?.data?.related || []) : [];
   if (!hasManual && !hasParts) {
     // Prefer a 403 from EITHER surface: "not in your subscription" is the
     // actionable message, and a raw backend 404 string would be shown instead
@@ -111,6 +113,10 @@ export default async function ModelPage({ params }) {
       title: 'کاتالوگ قطعات',
       sub: `${(partsRoot?.frames?.length || 1).toLocaleString('fa-IR')} پیکربندی`,
     }] : []),
+    ...relatedParts.map((c) => ({
+      href: `/${encodeURIComponent(c.brand)}/${c.year}/${encodeURIComponent(c.model)}/parts`,
+      icon: 'parts', title: 'کاتالوگ قطعات', sub: c.model,
+    })),
     // Every system in the manual has its own SST page; this merges all of them
     // into one deduplicated tool list for the whole vehicle. The
     // kg_portal_token cookie rides the top-level navigation.

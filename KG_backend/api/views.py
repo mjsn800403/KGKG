@@ -956,6 +956,9 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 # clickable card leading only to an empty "no items" page. A real
                 # page always has content or an href, and a real section always
                 # has children, so this never hides anything navigable.
+                # A section whose only children are such dead ends (e.g.
+                # "External Pages", whose one child is "Different car") would
+                # open an empty page too, so it is hidden as well.
                 cur.execute(f"""
                     SELECT {NODE_COLUMNS}
                     FROM nodes n
@@ -964,6 +967,19 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                               n.content IS NULL AND n.href IS NULL
                               AND NOT EXISTS (
                                   SELECT 1 FROM nodes c WHERE c.parent_id = n.id
+                              )
+                          )
+                          AND NOT (
+                              n.content IS NULL
+                              AND EXISTS (
+                                  SELECT 1 FROM nodes c WHERE c.parent_id = n.id
+                              )
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM nodes c
+                                  WHERE c.parent_id = n.id
+                                        AND (c.content IS NOT NULL OR c.href IS NOT NULL
+                                             OR EXISTS (SELECT 1 FROM nodes g
+                                                        WHERE g.parent_id = c.id))
                               )
                           )
                     ORDER BY n.sort_order

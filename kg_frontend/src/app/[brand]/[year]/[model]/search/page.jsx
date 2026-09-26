@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { searchNodes, buildNodeHref } from '@/utils/api';
-import { portalTokenCookie } from '@/utils/serverAuth';
+import { redirectToLogin, portalTokenCookie } from '@/utils/serverAuth';
 import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -57,7 +57,7 @@ export default async function SearchPage({ params, searchParams }) {
   const only = (sp?.in || '').trim();
 
   const token = await portalTokenCookie();
-  if (!token) redirect('/login');
+  if (!token) await redirectToLogin();
 
   const results = q ? await searchNodes(brand, parseInt(year), model, q, 30, token) : [];
   const words = (q.match(/[A-Za-z0-9][A-Za-z0-9-]+/g) || []).filter((w) => w.length >= 2);
