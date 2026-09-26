@@ -116,6 +116,12 @@ def assist_view(request):
     _user, allowed_stems, deny = _guard_car_content(request, car or model, brand=brand)
     if deny:
         return deny
+    if car:
+        # Hard vehicle scope: a pinned car may only cite its own pages. Another
+        # vehicle's torque values and procedures differ, so its nearest page is
+        # not an acceptable answer.
+        allowed_stems = ({car} if allowed_stems is None
+                         else {car} & set(allowed_stems))
 
     try:
         from .rag import service
@@ -173,6 +179,12 @@ def diagnose_view(request):
     _user, allowed_stems, deny = _guard_car_content(request, car or model, brand=brand)
     if deny:
         return deny
+    if car:
+        # Hard vehicle scope: a pinned car may only cite its own pages. Another
+        # vehicle's torque values and procedures differ, so its nearest page is
+        # not an acceptable answer.
+        allowed_stems = ({car} if allowed_stems is None
+                         else {car} & set(allowed_stems))
 
     try:
         from .rag import service

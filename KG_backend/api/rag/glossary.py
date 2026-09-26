@@ -240,8 +240,12 @@ def _csv_glossary():
         except Exception:
             data = {}
         # precompute token sets for multi-word subset matching
-        toks = {k: set(t for t in k.split() if len(t) >= 3)
-                for k in data if len(k.split()) >= 2}
+        # A key must keep >=2 significant tokens: 'بخش ۱۴ )' reduces to just
+        # {'بخش'}, which made every query containing the word «بخش» pull in
+        # dozens of unrelated section headings (battery, hybrid, DTC codes).
+        toks = {k: ts for k in data if len(k.split()) >= 2
+                for ts in [set(t for t in k.split() if len(t) >= 3)]
+                if len(ts) >= 2}
         _CSV_CACHE.update(mtime=m, data=data, tokens=toks)
     return _CSV_CACHE['data'], _CSV_CACHE['tokens']
 
