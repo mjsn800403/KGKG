@@ -34,24 +34,28 @@ function ewdViewerSrc(model, pathArray) {
     const pub = fs.readdirSync(base).find((d) => /^[A-Z0-9]+$/.test(d)
       && fs.existsSync(nodePath.join(base, d, 'viewer.html')));
     if (!pub) return null;
+    // Deep-link the picked page: the mirror's termdata.xml lists every figure
+    // as "Category: Title" -> linkkey ("ewd_type=...;ewd=...;").
     let hash = '';
-    const leaf = pathArray[pathArray.length - 1];
-    if (pathArray.includes('System Circuit') && leaf !== 'System Circuit') {
-      const treeDir = nodePath.join(base, pub, '_app', pub, 'ewd', 'contents', 'tree');
-      for (const period of fs.readdirSync(treeDir)) {
-        const f = nodePath.join(treeDir, period, 'tree-system.xml');
-        if (!fs.existsSync(f)) continue;
-        const xml = fs.readFileSync(f, 'utf8');
-        for (const m of xml.matchAll(/id="(SYS\d+)">\s*<name>([^<]*)<\/name>/g)) {
-          const title = m[2].replace(/&amp;/g, '&').trim();
-          if (title === leaf || title.replace(/\//g, '⁄') === leaf) {
-            hash = `#ewd_type=system;ewd=${m[1]}`;
-            break;
-          }
-        }
-        if (hash) break;
-      }
+    const rest = pathArray.slice(2);
+    const leaf = rest[rest.length - 1];
+    const norm = (t) => t.replace(/&amp;/g, '&').replace(/[\/⁄]/g, '_').trim();
+    const terms = [];
+    const td = fs.readFileSync(nodePath.join(base, pub, '_app', pub, 'xhtml', 'termdata.xml'), 'utf8');
+    for (const m of td.matchAll(/linkkey="([^"]+)"[^>]*>([^;<]*);/g)) terms.push([m[1], norm(m[2])]);
+    const code = leaf && leaf.match(/^((?:INTRO|RL)\d+(?:-Inn)?)\s/);
+    if (code) {
+      const re = new RegExp(`ewd=(?:[A-Z0-9-]+_)?${code[1]};`);
+      hash = terms.find(([k]) => re.test(k))?.[0] || '';
+    } else if (rest[0] === 'System Circuit' && rest.length > 2) {
+      hash = terms.find(([k, t]) => k.startsWith('ewd_type=system;') && t.endsWith(': ' + norm(leaf).replace(/:/g, '_')))?.[0] || '';
+    } else if (rest[0] === 'Location & Routing' && rest.length === 3) {
+      const want = `${norm(rest[1])}: ${norm(leaf)}`;
+      hash = terms.find(([k, t]) => k.startsWith('ewd_type=routing;') && t === want)?.[0] || '';
+    } else if (rest[0] === 'Connector List') {
+      hash = terms.find(([k]) => k.startsWith('ewd_type=connlist;'))?.[0] || '';
     }
+    if (hash) hash = '#' + hash;
     return `/kg-api/media/${encodeURIComponent(model)}/_ewd/${pub}/viewer.html${hash}`;
   } catch {
     return null;
