@@ -195,7 +195,7 @@ export default function Login() {
   return (
     <div className="screen fade login-screen" id="login">
       <div className="auth-wrap">
-        <span className="backlink" onClick={() => router.push('/')}>→ بازگشت به سایت</span>
+        <a className="backlink" href="/">→ بازگشت به سایت</a>
 
         {step === 1 && (
           <div className="auth-step" id="step1">
@@ -206,12 +206,12 @@ export default function Login() {
                 <p>مرحلهٔ ۱ از ۲ · نام کاربری و رمز عبور</p>
               </div>
               <div className="steps"><i className="done"></i><i></i></div>
-              <div className="field"><label>نام کاربری</label>
-                <input type="text" placeholder="نام کاربری صادرشده توسط ادمین" value={username}
+              <div className="field"><label htmlFor="login-username">نام کاربری</label>
+                <input id="login-username" name="username" autoComplete="username" type="text" placeholder="نام کاربری صادرشده توسط ادمین" value={username}
                   onChange={(e) => setUsername(e.target.value)} />
               </div>
-              <div className="field"><label>رمز عبور</label>
-                <input type="password" placeholder="••••••••••" value={password}
+              <div className="field"><label htmlFor="login-password">رمز عبور</label>
+                <input id="login-password" name="password" autoComplete="current-password" type="password" placeholder="••••••••••" value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && submitCredentials()} />
               </div>
@@ -245,6 +245,8 @@ export default function Login() {
                       ref={el => { otpRefs.current[i] = el; }}
                       maxLength={6}
                       inputMode="numeric"
+                      autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                      aria-label={`رقم ${i + 1} کد تأیید`}
                       value={d}
                       onChange={e => handleOtpChange(i, e.target.value)}
                       onKeyDown={e => handleOtpKey(i, e)}

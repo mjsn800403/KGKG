@@ -1,6 +1,8 @@
 // app/assistant — car picker for the smart assistant. The assistant now lives
 // INSIDE each car (the customer picks the vehicle first, then diagnoses faults /
 // asks repair questions scoped to that car). This page just routes there.
+import { redirect } from 'next/navigation';
+import { portalTokenCookie } from '@/utils/serverAuth';
 import DashboardShell from '@/components/DashboardShell';
 import UserChip from '@/components/UserChip';
 import VehicleCardGrid from '@/components/VehicleCardGrid';
@@ -16,6 +18,7 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function AssistantPickerPage() {
+  if (!(await portalTokenCookie())) redirect('/login');
   const brands = await fetchAllBrands();
   const nested = await Promise.all(brands.map((b) => fetchBrands(b)));
   const cars = nested.flat();

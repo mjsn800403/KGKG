@@ -1,4 +1,5 @@
 // app/layout.js
+import { headers } from 'next/headers';
 import './globals.css';
 import './system.css';
 import BackgroundFX from '@/components/BackgroundFX';
@@ -18,11 +19,14 @@ const THEME_BOOT = `try{var t=localStorage.getItem('kg-theme');if(t!=='light'&&t
 // in each route, exactly like the prototype. The layout only mounts the global
 // signature: fonts, ambient background, the microbar ticker and the modal.
 // Fonts are self-hosted (see globals.css @font-face) — no CDN dependency.
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Set by src/proxy.ts; reading headers() also keeps every page dynamic,
+  // which nonces require (a prerendered page would carry a stale nonce).
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html lang="fa" dir="rtl" data-theme="dark" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body>
         <BackgroundFX />

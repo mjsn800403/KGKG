@@ -613,33 +613,12 @@ async function teamFetch(path, options = {}) {
 }
 
 export const teamApi = {
-  // -> { members: [...], meta: { roles, managers, cars, packages, ... } }
-  members: () => teamFetch('/api/team/members/'),
-  createMember: (payload) =>
-    teamFetch('/api/team/members/', { method: 'POST', body: JSON.stringify(payload) }),
-  updateMember: (id, payload) =>
-    teamFetch(`/api/team/members/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
-  setMemberAccess: (id, accesses) =>
-    teamFetch(`/api/team/members/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses }) }),
-  resendInvite: (id) =>
-    teamFetch(`/api/team/members/${id}/`, { method: 'POST', body: JSON.stringify({ resend_invite: true }) }),
-  org: () => teamFetch('/api/team/org/'),
+  // Member and role management moved to the org graph (api/org/*); the old
+  // /api/team/members|org|roles endpoints no longer exist.
   analytics: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return teamFetch(`/api/team/analytics/${qs ? `?${qs}` : ''}`);
   },
-  // Company-defined positions (the configurable hierarchy).
-  roles: () => teamFetch('/api/team/roles/'),
-  createRole: (payload) =>
-    teamFetch('/api/team/roles/', { method: 'POST', body: JSON.stringify(payload) }),
-  updateRole: (id, payload) =>
-    teamFetch(`/api/team/roles/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
-  deleteRole: (id, reassignTo) =>
-    teamFetch(`/api/team/roles/${id}/`, {
-      method: 'POST', body: JSON.stringify({ delete: true, reassign_to: reassignTo || undefined }),
-    }),
-  reorderRoles: (order) =>
-    teamFetch('/api/team/roles/reorder/', { method: 'POST', body: JSON.stringify({ order }) }),
   // Behavioural insights for the manager dashboard (seat use, idle/top members).
   insights: (range = 30) => teamFetch(`/api/team/insights/?range=${range}`),
   // Company requests the manager files for the platform admin to action.

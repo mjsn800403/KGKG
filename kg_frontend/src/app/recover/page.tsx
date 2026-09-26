@@ -134,7 +134,7 @@ export default function Recover() {
   return (
     <div className="screen fade login-screen" id="recover">
       <div className="auth-wrap">
-        <span className="backlink" onClick={() => router.push('/login')}>→ بازگشت به ورود</span>
+        <a className="backlink" href="/login">→ بازگشت به ورود</a>
         <div className="auth-step">
           <div className="auth-card glass">
             <div className="auth-head">
@@ -145,8 +145,8 @@ export default function Recover() {
             <div className="steps"><i className="done"></i><i className={step === 2 ? 'done' : ''}></i></div>
 
             {step === 1 && (<>
-              <div className="field"><label>نام کاربری، ایمیل یا شماره موبایل</label>
-                <input type="text" dir="auto" placeholder="مثلاً 09121234567" value={identifier}
+              <div className="field"><label htmlFor="rec-identifier">نام کاربری، ایمیل یا شماره موبایل</label>
+                <input id="rec-identifier" name="username" autoComplete="username" type="text" dir="auto" placeholder="مثلاً 09121234567" value={identifier}
                   onChange={e => setIdentifier(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && sendCode()} />
               </div>
@@ -162,17 +162,17 @@ export default function Recover() {
               <div className="auth-foot" style={{ marginTop: 0, marginBottom: 12 }}>
                 اگر حسابی با این مشخصات وجود داشته باشد، کد ۶ رقمی به شماره موبایل ثبت‌شده آن ارسال شد.
               </div>
-              <div className="field"><label>کد تأیید</label>
-                <input type="text" inputMode="numeric" dir="ltr" maxLength={6} value={code}
+              <div className="field"><label htmlFor="rec-code">کد تأیید</label>
+                <input id="rec-code" name="code" autoComplete="one-time-code" type="text" inputMode="numeric" dir="ltr" maxLength={6} value={code}
                   style={{ textAlign: 'center', letterSpacing: '0.4em' }}
                   onChange={e => setCode(toLatin(e.target.value).replace(/\D/g, '').slice(0, 6))} />
               </div>
-              <div className="field"><label>رمز عبور جدید</label>
-                <input type="password" placeholder="حداقل ۸ کاراکتر" value={pw}
+              <div className="field"><label htmlFor="rec-pw">رمز عبور جدید</label>
+                <input id="rec-pw" name="new-password" autoComplete="new-password" type="password" placeholder="حداقل ۸ کاراکتر" value={pw}
                   onChange={e => setPw(e.target.value)} />
               </div>
-              <div className="field"><label>تکرار رمز عبور جدید</label>
-                <input type="password" value={pw2} onChange={e => setPw2(e.target.value)}
+              <div className="field"><label htmlFor="rec-pw2">تکرار رمز عبور جدید</label>
+                <input id="rec-pw2" name="new-password-confirm" autoComplete="new-password" type="password" value={pw2} onChange={e => setPw2(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && reset()} />
               </div>
               <div style={{ marginBottom: 12, fontSize: '0.82rem', opacity: 0.7, textAlign: 'center' }}>

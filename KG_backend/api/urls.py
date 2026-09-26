@@ -1,6 +1,11 @@
-from django.urls import path
+from django.http import JsonResponse
+from django.urls import path, re_path
 from . import adminops, events, recommend, requests_api, views, portal, team
 from . import orggraph_api, parts, labortimes, sst
+
+
+def _api_not_found(request, rest=None):
+    return JsonResponse({'error': 'not found'}, status=404)
 
 urlpatterns = [
     # Liveness probe (public, cheap, no secrets) + operational admin API.
@@ -108,6 +113,10 @@ urlpatterns = [
     # have one?" for the front-page button. Same gate as labor-times above.
     path('api/sst/<str:brand_name>/<str:year>/<str:model_name>/',
          sst.sst_csv_view, name='sst_csv'),
+
+    # Any unmatched api/... path must 404 here, before the <brand>/<year>/
+    # car catch-alls below swallow it as brand "api".
+    re_path(r'^api/(?P<rest>.*)$', _api_not_found),
 
     # /                                            -> distinct list of brands
     path('', views.brands_list_view, name='brands_list'),

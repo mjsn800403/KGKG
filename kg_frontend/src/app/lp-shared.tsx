@@ -2,7 +2,7 @@
 
 // Chrome shared by the public pages (landing, plans): wordmark, header icon
 // buttons and the footer. Styles live in landing.css (.lp-* namespace).
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { applyTheme } from '@/components/ThemeToggle';
 import Icon from '@/components/Icon';
@@ -23,6 +23,15 @@ export function Wordmark() {
       <bdi dir="ltr" className="lp-brand-name">KG<span>techvault</span></bdi>
     </Link>
   );
+}
+
+// Rendered after mount only: Cloudflare Email Obfuscation rewrites any address
+// in the server HTML, which breaks hydration (React #418).
+function MailLink({ user, domain }: { user: string; domain: string }) {
+  const [addr, setAddr] = useState('');
+  useEffect(() => { setAddr(`${user}@${domain}`); }, [user, domain]);
+  if (!addr) return <span className="lp-footer-dim">…</span>;
+  return <a href={`mailto:${addr}`}><L>{addr}</L></a>;
 }
 
 function subscribeTheme(cb: () => void) {
@@ -65,7 +74,7 @@ export function ThemeButton() {
 
 export function LoginButton() {
   return (
-    <Link className="lp-btn lp-btn-ghost lp-login" href="/login" data-tour="login-btn">
+    <Link className="lp-btn lp-btn-ghost lp-login" href="/login" data-tour="login-btn" aria-label="ورود به پورتال">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l-5-5 5-5" /><path d="M5 12h12" /></svg>
       <span>ورود</span>
     </Link>
@@ -103,7 +112,7 @@ export function Footer({ coverageHref = '/#coverage' }: { coverageHref?: string 
             <li>
               <Icon name="mail" />
               <span className="lp-footer-dim">ایمیل:</span>
-              <a href="mailto:mj.salimi@khadamatgostar.com"><L>mj.salimi@khadamatgostar.com</L></a>
+              <MailLink user="mj.salimi" domain="khadamatgostar.com" />
             </li>
           </ul>
         </div>

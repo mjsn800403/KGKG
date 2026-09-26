@@ -179,6 +179,12 @@ def labor_times_csv_view(request, brand_name=None, year=None, model_name=None):
     from .portal import portal_user
     from .views import get_car_db
 
+    # Auth before the car lookup, so anonymous callers cannot probe
+    # which vehicles exist (404 vs 401).
+    user = portal_user(request)
+    if not user:
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+
     # Resolve the car with the same tolerant (brand, name) fallback car_view
     # uses: legacy links can carry a stale/placeholder year segment.
     base_qs = Car.objects.filter(
@@ -190,9 +196,6 @@ def labor_times_csv_view(request, brand_name=None, year=None, model_name=None):
     if car is None:
         return JsonResponse({'error': 'vehicle not found'}, status=404)
 
-    user = portal_user(request)
-    if not user:
-        return JsonResponse({'error': 'unauthorized'}, status=401)
     if not user_can_open_car(user, car):
         return JsonResponse(
             {'error': 'forbidden',

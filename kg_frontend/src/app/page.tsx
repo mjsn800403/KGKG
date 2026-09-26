@@ -8,6 +8,16 @@ import { ENGINE, MANUAL_CONFIGS_FLOOR, SPECIMEN, fa } from './landing-data';
 import { BRAND_LINE, PLANS_HREF, L, Wordmark, HelpButton, ThemeButton, LoginButton, Footer } from './lp-shared';
 import './landing.css';
 
+// useReducedMotion() is null during SSR but true on the client for users who
+// prefer reduced motion, so branching on it during the first render breaks
+// hydration (React #418). Honour the preference only after mount.
+function useHydratedReducedMotion() {
+  const pref = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  return mounted ? pref : null;
+}
+
 // "Service Manual, Engineered" — see landing.css for the token system.
 // Positioning: repair manuals → technical knowledge → diagnostics → repair
 // procedures → intelligent documentation. Parts stay one layer, not the lead.
@@ -105,7 +115,7 @@ function EnginePanel({ tab }: { tab: TabKey }) {
 }
 
 function EngineDrawing({ tab }: { tab: TabKey }) {
-  const reduce = useReducedMotion();
+  const reduce = useHydratedReducedMotion();
   const draw = (i: number) =>
     reduce ? {} : {
       initial: { pathLength: 0, opacity: 0 },
@@ -195,7 +205,7 @@ function EngineDrawing({ tab }: { tab: TabKey }) {
 function EngineManual() {
   const [tab, setTab] = useState<TabKey>('identify');
   const [auto, setAuto] = useState(true);
-  const reduce = useReducedMotion();
+  const reduce = useHydratedReducedMotion();
   const ref = useRef<HTMLElement>(null);
   const inView = useInView(ref, { amount: 0.4 });
 
@@ -235,6 +245,7 @@ function EngineManual() {
             id={`lp-etab-${t.key}`}
             type="button"
             role="tab"
+            aria-label={t.label}
             aria-selected={tab === t.key}
             aria-controls="lp-epanel"
             tabIndex={tab === t.key ? 0 : -1}
@@ -279,7 +290,7 @@ function annulus(r1: number, r2: number, a1: number, a2: number) {
 }
 
 function BrakeDrawing() {
-  const reduce = useReducedMotion();
+  const reduce = useHydratedReducedMotion();
   const ref = useRef<HTMLElement>(null);
   const seen = useInView(ref, { once: true, amount: 0.35 });
   const go = seen || !!reduce;
@@ -492,7 +503,7 @@ function AssistantDemo() {
 
 /* Coverage: brand-neutral, expanding rings — no vehicle-level detail. */
 function CoverageOrbit() {
-  const reduce = useReducedMotion();
+  const reduce = useHydratedReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const seen = useInView(ref, { once: true, amount: 0.35 });
   const go = seen || !!reduce;
@@ -796,10 +807,10 @@ export default function Home() {
                 <motion.p className="lp-eyebrow" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}>
                   {BRAND_LINE}
                 </motion.p>
-                <motion.h1 id="hero-title" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE, delay: 0.05 }}>
+                <motion.h1 id="hero-title" initial={{ y: 14 }} animate={{ y: 0 }} transition={{ duration: 0.45, ease: EASE, delay: 0.05 }}>
                   دقتِ کارخانه،<br />در دستِ <em>تعمیرگاه</em>.
                 </motion.h1>
-                <motion.p className="lp-hero-lead" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE, delay: 0.1 }}>
+                <motion.p className="lp-hero-lead" initial={{ y: 14 }} animate={{ y: 0 }} transition={{ duration: 0.45, ease: EASE, delay: 0.1 }}>
                   منوال‌های تعمیر، رویه‌های عیب‌یابی و تعمیر، نقشه‌های سیم‌کشی و مشخصات فنی در یک پلتفرم دانش — با دستیار هوشمندی که از روی همین مستندات پاسخ می‌دهد.
                 </motion.p>
                 <motion.ol className="lp-chain" aria-label="مسیر دانش در پلتفرم" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.2 }}>

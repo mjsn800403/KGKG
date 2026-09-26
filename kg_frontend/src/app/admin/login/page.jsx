@@ -47,7 +47,7 @@ export default function AdminLogin() {
     <MotionConfig reducedMotion="user">
       <div className="screen fade login-screen" id="admin-login">
         <div className="auth-wrap">
-          <span className="backlink" onClick={() => router.push('/')}>→ بازگشت به سایت</span>
+          <a className="backlink" href="/">→ بازگشت به سایت</a>
           <motion.div
             initial={{ opacity: 0, y: 22, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

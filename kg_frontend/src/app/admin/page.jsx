@@ -2724,13 +2724,12 @@ function TisCrawlerCard({ data, act, busy }) {
       {t.installed && !ch.logged_in && (
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
           برای شروع، از طریق VNC به مرورگر سرور وصل شوید و وارد TIS شوید (ورود به TIS کد یک‌بارمصرف لازم دارد).
-          اتصال امن از طریق تونل SSH: <code dir="ltr">ssh -L 6080:127.0.0.1:6080 root@&lt;server&gt;</code> و سپس
-          باز کردن <code dir="ltr">http://localhost:6080/vnc.html</code>.
+          اتصال VNC فقط از طریق تونل SSH امکان‌پذیر است (جزئیات در راهنمای عملیات).
         </div>
       )}
       <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
         پس از پایان خزش یک خودرو، «اسکن پوشه دانلودها» در صف پردازش آن را اضافه می‌کند و پایپلاین آن را به پایگاه دادهٔ خودرو تبدیل می‌کند.
-        خزشی که روی سیستم دیگری انجام شده را همراه پوشهٔ <code dir="ltr">_assets</code> در <code dir="ltr">/root/downloads/tis</code> کپی کنید.
+        خزشی که روی سیستم دیگری انجام شده را همراه پوشهٔ <code dir="ltr">_assets</code> در پوشهٔ دانلودهای TIS روی سرور کپی کنید.
       </div>
       {vehicles.length > 0 && (
         <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid rgba(120,120,160,.2)', borderRadius: 8 }}>

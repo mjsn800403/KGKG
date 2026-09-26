@@ -844,3 +844,8 @@ html:not(:has(.purchase-topnav)) {
 html:not([data-theme="light"]):not(:has(.purchase-topnav)) img[src="/brand/logo-mark.png"] {
   filter: drop-shadow(0 0 .6px rgba(236, 237, 238, .75)) drop-shadow(0 0 6px rgba(236, 237, 238, .12)) brightness(1.12);
 }
+
+/* Keep "open all" clear of the fixed bottom-left help button on phones. */
+@media (max-width: 640px) {
+  .fleet-groups-bar { padding-inline-end: 56px; }
+}
