@@ -41,8 +41,17 @@ function renderInline(str, keyBase) {
   return out;
 }
 
-function RenderReply({ text }) {
+function RenderReply({ text, streaming = false }) {
   if (!text) return null;
+  // Mid-stream text is unvalidated: show the prose only (no link buttons, no
+  // half-written tokens). The gated final reply replaces it on completion.
+  if (streaming) {
+    const prose = text
+      .replace(/\[BUTTON\]\([^)\n]*\)?/g, '')
+      .replace(/\[BUTTON\][^\n]*$/, '')
+      .replace(/\[([^\]]+)\]\([^)\s]*\)?/g, '$1');
+    return <div className="chat-reply-body">{renderInline(prose, 's')}</div>;
+  }
 
   const nodes = [];
   let lastIndex = 0;
@@ -157,7 +166,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
   useEffect(() => {
     if (!hydratedRef.current) return;
     try {
-      const trimmed = messages.slice(-60);   // cap growth
+      const trimmed = messages.filter((m) => !m.streaming).slice(-60);   // cap growth
       localStorage.setItem(storageKey, JSON.stringify({ messages: trimmed, sessionId }));
     } catch { /* storage full/unavailable — non-fatal */ }
   }, [messages, sessionId, storageKey]);
@@ -187,6 +196,16 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
       .map((s) => s.title_en || s.title).filter(Boolean);
     setMessages((m) => [...m, { role: 'user', content: (displayText ?? text) }]);
     setLoading(true);
+    // Replace the in-flight streaming bubble (if any) or append a new one.
+    const putAi = (msg) => setMessages((m) => (
+      m.length && m[m.length - 1].streaming ? [...m.slice(0, -1), msg] : [...m, msg]));
+    const finalMsg = (data) => ({
+      role: 'ai', content: data.reply || '...', query: text,
+      sources: data.sources || [], confidence: data.confidence || null,
+      grounded: data.grounded, mode: data.mode, topBlobs: data.topBlobs || [],
+      degraded: data.degraded || false, rated: false,
+      suggestions: data.suggestions || [],
+    });
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -194,24 +213,47 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
         body: JSON.stringify({
           message: text, sessionId, userId: userIdRef.current,
           brand, model, car: carName,
-          history: historyPayload, prevSources,
+          history: historyPayload, prevSources, stream: true,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'خطا');
-      if (data.sessionId) setSessionId(data.sessionId);
-      setMessages((m) => [...m, {
-        role: 'ai', content: data.reply || '...', query: text,
-        sources: data.sources || [], confidence: data.confidence || null,
-        grounded: data.grounded, mode: data.mode, topBlobs: data.topBlobs || [],
-        degraded: data.degraded || false, rated: false,
-        suggestions: data.suggestions || [],
-      }]);
+      const ctype = res.headers.get('content-type') || '';
+      if (res.ok && ctype.includes('ndjson') && res.body) {
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        let shown = '';
+        let final = null;
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl);
+            buf = buf.slice(nl + 1);
+            if (!line.trim()) continue;
+            const ev = JSON.parse(line);
+            if (ev.t === 'delta') {
+              shown += ev.d;
+              putAi({ role: 'ai', content: shown, streaming: true });
+            } else if (ev.t === 'done') {
+              final = ev;
+            } else if (ev.t === 'error') {
+              throw new Error(ev.error || 'خطا');
+            }
+          }
+        }
+        if (!final) throw new Error('پاسخ ناقص دریافت شد');
+        if (final.sessionId) setSessionId(final.sessionId);
+        putAi(finalMsg(final));
+      } else {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'خطا');
+        if (data.sessionId) setSessionId(data.sessionId);
+        putAi(finalMsg(data));
+      }
     } catch (err) {
-      setMessages((m) => [
-        ...m,
-        { role: 'ai', content: `متأسفم، ارتباط با دستیار برقرار نشد. (${err.message})`, error: true },
-      ]);
+      putAi({ role: 'ai', content: `متأسفم، ارتباط با دستیار برقرار نشد. (${err.message})`, error: true });
     } finally {
       setLoading(false);
     }
@@ -259,7 +301,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
           <div key={i} className={`chat-msg ${msg.role === 'user' ? 'from-user' : 'from-ai'}`}>
             {msg.role === 'ai' && <div className="chat-avatar">AI</div>}
             <div className={`chat-bubble${msg.error ? ' error' : ''}`}>
-              {msg.role === 'ai' ? <RenderReply text={msg.content} /> : msg.content}
+              {msg.role === 'ai' ? <RenderReply text={msg.content} streaming={!!msg.streaming} /> : msg.content}
               {msg.role === 'ai' && !msg.error && msg.query && msg.mode !== 'clarify' && (
                 <>
                   <EvidencePanel
@@ -300,7 +342,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
             </div>
           </div>
         ))}
-        {loading && (
+        {loading && !messages[messages.length - 1]?.streaming && (
           <div className="chat-msg from-ai">
             <div className="chat-avatar">AI</div>
             <div className="chat-bubble">

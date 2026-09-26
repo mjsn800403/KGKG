@@ -146,12 +146,44 @@ def _no_scope_result(query, brand, model, car_stem, kind, reason):
             'confidence_band': scoring.confidence_band(0.0, 0.0, 0.0)}
 
 
+# Toyota/Lexus engine codes: 2ZR-FXE, M20A-FKS, G16E-GTS, A25A-FXS ... A hybrid
+# (Atkinson) engine carries an X in its suffix.
+_ENGINE_RE = re.compile(r'\b[0-9A-Z]{2,4}-([A-Z]{2,4})\b')
+# Production span in TIS titles: "[06/2018 - 09/2022]" or "[09/2022 - ]".
+_SPAN_RE = re.compile(r'\[\s*(?:\d{1,2}[/\u2044])?(\d{4})\s*-\s*(?:(?:\d{1,2}[/\u2044])?(\d{4}))?\s*\]')
+
+
+def _variant_fit(occ, car_stem):
+    """Multiplier in (0,1]: how well an occurrence's page fits the pinned
+    car's powertrain (hybrid or not) and model year. 1.0 = no evidence
+    against it; only explicit engine codes / date spans can lower it."""
+    text = f"{occ['title_path'] or ''} {occ['title'] or ''}"
+    fit = 1.0
+    suffixes = [m.group(1) for m in _ENGINE_RE.finditer(text)
+                if m.group(1)[0] in 'FG']
+    if suffixes:
+        hybrid_car = 'hybrid' in (car_stem or '').lower()
+        if not any(('X' in sfx) == hybrid_car for sfx in suffixes):
+            fit *= config.VARIANT_ENGINE_PENALTY
+    year = occ['year']
+    if isinstance(year, int) or (isinstance(year, str) and year.isdigit()):
+        year = int(year)
+        spans = _SPAN_RE.findall(text)
+        # a model year is built from roughly the previous autumn onwards
+        if spans and not any(int(a) <= year and (not b or int(b) >= year - 1)
+                             for a, b in spans):
+            fit *= config.VARIANT_YEAR_PENALTY
+    return fit
+
+
 def _pick_occurrence(occs, brand, model, car_stem):
     """Choose which occurrence of a blob to cite, preferring the page context."""
     if car_stem:
-        for o in occs:
-            if o['car_stem'] == car_stem:
-                return o, config.BOOST_CAR
+        mine = [o for o in occs if o['car_stem'] == car_stem]
+        if mine:
+            # same text often sits under several engine/year pages: cite the
+            # one that fits this car (max keeps the first on a tie).
+            return max(mine, key=lambda o: _variant_fit(o, car_stem)), config.BOOST_CAR
     if model:
         for o in occs:
             if (o['model'] or '').lower() == model.lower():
@@ -295,6 +327,21 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
     for rank, r in enumerate(vec):
         bump(r['bid'], rank, wv, sim=1.0 - float(r['dist']))
 
+    # Car-scoped dense pass: the global KNN above ranks all ~301k blobs, so for
+    # a descriptive (often Persian) question none of the pinned car's pages may
+    # make its cut, and the hard vehicle scope then leaves nothing to cite.
+    # A KNN restricted to this car's own blobs (~4k, ~80 ms) reaches them.
+    if car_stem:
+        own = _car_blob_ids(index, car_stem)
+        if own:
+            ids = ','.join(str(int(b)) for b in own)
+            for rank, r in enumerate(index.execute(
+                    "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
+                    "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
+                    f"AND rowid IN ({ids}) ORDER BY distance",
+                    (qblob, config.CAR_VEC_K)).fetchall()):
+                bump(r['bid'], rank, wv, sim=1.0 - float(r['dist']))
+
     if fts_query:
         try:
             # bm25() takes per-column weights (text, title, comp). Ordering by
@@ -382,6 +429,11 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
             signals, w_rrf=config.SCORE_W_RRF, w_sim=config.SCORE_W_SIM,
             w_bm25=config.SCORE_W_BM25, w_cent=config.SCORE_W_CENT)
         cal['explain']['matched_via'] = _matched_via(cls['kind'], s['sim'], bm25_norm, vboost)
+        if car_stem and occ['car_stem'] == car_stem:
+            vfit = _variant_fit(occ, car_stem)
+            if vfit < 1.0:
+                cal['final'] *= vfit
+                cal['explain']['variant_fit'] = round(vfit, 3)
         ranked.append((cal['final'], s['sim'], bid, occ, occs, cal['explain']))
         # Same candidate, scored as if no vehicle were pinned. The pool is
         # already global, so this is the corpus's best match for the query and

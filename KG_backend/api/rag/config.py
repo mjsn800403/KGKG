@@ -411,6 +411,12 @@ RETRIEVE_FTS_K = 40         # chunk candidates from keyword search
 SCOPED_VEC_K = 120          # vector candidates when a scope is given
 SCOPED_FTS_K = 120          # keyword candidates when a scope is given
 SCOPE_PENALTY = 0.85        # multiplier for a blob absent from the active scope
+# A car's manual covers every engine/production span of the model line
+# (a Corolla Hybrid manual also carries M20A-FKS and G16E-GTS pages). When a
+# car is pinned, pages for the other powertrain or for a production span that
+# ended before (or starts after) the car's model year rank lower.
+VARIANT_ENGINE_PENALTY = 0.8
+VARIANT_YEAR_PENALTY = 0.85
 RRF_K = 60                  # reciprocal-rank-fusion constant
 FINAL_K = 8                 # blobs returned to the generator
 GRAPH_EXPAND = 4            # related neighbours pulled in per top hit
@@ -623,3 +629,6 @@ FEEDBACK_DB = RAG_DIR / 'feedback.db'
 RERANK = os.environ.get('RAG_RERANK', '0') == '1'
 RERANK_MODEL = os.environ.get('RAG_RERANK_MODEL', 'BAAI/bge-reranker-v2-m3')
 RERANK_CANDIDATES = 20
+
+# Car-scoped dense pass depth (retrieve.assist, pinned car only).
+CAR_VEC_K = int(os.environ.get('RAG_CAR_VEC_K', '40'))

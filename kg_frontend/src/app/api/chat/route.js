@@ -31,6 +31,42 @@ async function metis(path, body) {
   return res.json();
 }
 
+// Streaming variant: Metis answers `<path>/stream` with SSE lines
+// `data:{"message":{"content":"<piece>"}}`. Calls onDelta per piece and
+// resolves with the whole reply.
+async function metisStream(path, body, onDelta) {
+  const res = await fetch(`${METIS_BASE}/${path}/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': API_KEY },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(90000),
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Metis ${path}/stream failed: ${res.status} ${text}`);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let full = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      let ev;
+      try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+      const piece = ev?.message?.content || '';
+      if (piece) { full += piece; onDelta(piece); }
+    }
+  }
+  return full;
+}
+
 // Query translation before retrieval, behind a flag (off by default).
 //
 // The index is English; a Persian question reaches BM25 as ~9 tokens that match
@@ -384,7 +420,9 @@ const BROKEN_BUTTON_RE = /\[BUTTON\]\([^)\n]*\)?/g;
 function sanitizeButtons(reply, allowed) {
   let stripped = 0;
   let text = (reply || '').replace(BUTTON_RE, (full, title, href) => {
-    if (allowed.has(normHref(href))) return `[BUTTON](title="${title}", href="${href}")`;
+    // Validated links leave as plain [title](href) (the chat renders both
+    // forms), so the broken-token sweep below cannot touch them.
+    if (allowed.has(normHref(href))) return `[${title.replace(/[\[\]]/g, '')}](${href})`;
     stripped += 1;
     return '';            // remove the hallucinated link entirely
   });
@@ -612,7 +650,7 @@ export async function POST(request) {
     }
 
     const { message, sessionId, userId, brand, model, car,
-            history, prevSources } = await request.json();
+            history, prevSources, stream: wantStream } = await request.json();
     if (!message || !message.trim()) {
       return Response.json({ error: 'پیام خالی است.' }, { status: 400 });
     }
@@ -728,6 +766,83 @@ export async function POST(request) {
     let sid = sessionId;
     let rawReply = null;
     let degraded = false;
+
+    // Everything after the LLM text is the same for both transports.
+    const finish = (reply, wasDegraded) => {
+      let text = reply;
+      let deg = wasDegraded;
+      if (deg || !text || !text.trim()) {
+        deg = true;
+        text = mode === 'clarify'
+          ? fallbackClarify(clarifyRoots.map((r) => faTitle(r)))
+          : fallbackReply({ mode, sources, grounded });
+      }
+      // Faithfulness gate: drop any link the model invented that we didn't
+      // actually retrieve, so the UI can never show a fabricated source button.
+      const { text: safeReply, stripped } = sanitizeButtons(text, allowedHrefs);
+      // The scope verdict is prepended AFTER sanitisation so it can never be
+      // stripped, reworded or dropped by the phraser.
+      const banner = grounded ? scopeBanner(rag) : '';
+      return {
+        sessionId: sid,
+        reply: banner + safeReply,
+        evidenceScope: rag?.evidence || null,
+        strippedLinks: stripped,
+        sources,
+        grounded,
+        mode,
+        confidence,
+        degraded: deg,
+        llm: !deg,
+        suggestions: buildSuggestions({ mode, rag, diag, clarifyRoots }),
+        contextualized,
+        topBlobs: (sources || []).map((s) => s.blob_id).filter((b) => b != null),
+      };
+    };
+
+    // Streaming transport (NDJSON): {t:'delta',d} pieces as the phraser writes,
+    // then {t:'done', ...payload} with the validated reply. Deltas are display
+    // only; the client swaps in the final gated text when 'done' arrives.
+    if (wantStream && metisConfigured) {
+      const enc = new TextEncoder();
+      const body = new ReadableStream({
+        async start(ctrl) {
+          const send = (obj) => ctrl.enqueue(enc.encode(JSON.stringify(obj) + '\n'));
+          let reply = null;
+          let deg = false;
+          try {
+            if (!sid) {
+              const session = await metis('session', {
+                botId: BOT_ID,
+                user: { id: userId || `web-${Date.now()}`, name: '_' },
+              });
+              sid = session.id;
+            }
+            reply = await metisStream(`session/${sid}/message`, {
+              message: { type: 'USER', content: prompt },
+            }, (d) => send({ t: 'delta', d }));
+          } catch (e) {
+            console.error('Metis stream failed -> serving no-LLM fallback:', e);
+            deg = true;
+          }
+          try {
+            send({ t: 'done', ...finish(reply, deg) });
+          } catch (e) {
+            console.error('chat finish error:', e);
+            send({ t: 'error', error: 'ارتباط با دستیار ناموفق بود.' });
+          }
+          ctrl.close();
+        },
+      });
+      return new Response(body, {
+        headers: {
+          'Content-Type': 'application/x-ndjson; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Accel-Buffering': 'no',
+        },
+      });
+    }
+
     if (metisConfigured) {
       try {
         if (!sid) {
@@ -750,36 +865,7 @@ export async function POST(request) {
       degraded = true;
     }
 
-    if (degraded || !rawReply || !rawReply.trim()) {
-      degraded = true;
-      rawReply = mode === 'clarify'
-        ? fallbackClarify(clarifyRoots.map((r) => faTitle(r)))
-        : fallbackReply({ mode, sources, grounded });
-    }
-
-    // Faithfulness gate: drop any link the model invented that we didn't
-    // actually retrieve, so the UI can never show a fabricated source button.
-    // (Harmless on the fallback text — its links all come from `sources`.)
-    const { text: safeReply, stripped } = sanitizeButtons(rawReply, allowedHrefs);
-    // The scope verdict is prepended AFTER sanitisation so it can never be
-    // stripped, reworded or dropped by the phraser.
-    const banner = grounded ? scopeBanner(rag) : '';
-
-    return Response.json({
-      sessionId: sid,
-      reply: banner + safeReply,
-      evidenceScope: rag?.evidence || null,
-      strippedLinks: stripped,
-      sources,
-      grounded,
-      mode,
-      confidence,                                    // {band, label} or null
-      degraded,                                      // true => no-LLM fallback used
-      llm: !degraded,
-      suggestions: buildSuggestions({ mode, rag, diag, clarifyRoots }),
-      contextualized,                                // true => follow-up was expanded
-      topBlobs: (sources || []).map((s) => s.blob_id).filter((b) => b != null),
-    });
+    return Response.json(finish(rawReply, degraded));
   } catch (err) {
     console.error('chat proxy error:', err);
     return Response.json({ error: 'ارتباط با دستیار ناموفق بود.' }, { status: 502 });
