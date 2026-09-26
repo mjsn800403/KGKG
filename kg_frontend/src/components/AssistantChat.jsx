@@ -355,6 +355,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
       <div className="chat-inputbar">
         <textarea
           className="chat-input"
+          aria-label="پیام به دستیار هوشمند"
           rows={1}
           placeholder="سؤالت رو بنویس… (فارسی یا English)"
           value={input}

@@ -2312,3 +2312,18 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 .role-picker-pop{right:auto}
 
 .adm-select option{background:var(--bg,#111);color:var(--text,#eee)}
+
+
+/* ---- QA 11/14: keyboard focus + touch targets ---------------------------- */
+/* Every interactive control shows a ring when reached by keyboard (links and
+   .btn already had one; plain buttons, selects and textareas did not). */
+button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,
+[role=button]:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* WCAG 2.5.8: at least 24x24 everywhere */
+.searchbox .search-btn{min-width:24px;min-height:24px}
+/* Touch screens: 44px targets for the small controls */
+@media (pointer:coarse){
+  .searchbox .search-btn{min-width:44px;min-height:44px}
+  .breadcrumb a,.backlink,.auth-foot a,.tour-skip,.chat-reset,.chat-send,
+  .chat-suggestion-chip,.chat-action-btn,.back-link{min-height:44px;display:inline-flex;align-items:center}
+}
