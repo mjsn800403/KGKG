@@ -438,6 +438,14 @@ def node_create_user_view(request, node_id):
     if PortalUser.phone_taken(phone):
         return JsonResponse({'error': 'این شماره موبایل قبلاً برای حساب دیگری ثبت شده است.'}, status=400)
     company = graph.company
+    # Seat cap on USERS, the same rule as admin user creation: the seat cap in
+    # nodes_view only limits empty seats, so without this the admin panel and
+    # the team page together could create about twice the paid users.
+    cap = company.seats_count
+    if cap and company.users.count() >= cap:
+        return JsonResponse(
+            {'error': f'ظرفیت کاربران این شرکت ({cap} نفر) تکمیل است.', 'code': 'seat_cap',
+             'cap': cap, 'used': company.users.count()}, status=403)
     raw_username = (b.get('username') or '').strip()[:100]
     username = raw_username or _unique_username(
         (b.get('email') or display_name).split('@')[0] or 'user', company.id)

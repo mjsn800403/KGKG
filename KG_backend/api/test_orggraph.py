@@ -70,6 +70,20 @@ class OrgGraphTests(TestCase):
             OrgNode.objects.filter(graph=self.graph, is_root=False).count(),
             max(self.company.seats_count, made))
 
+    def test_team_create_user_respects_user_cap(self):
+        # cap 2 is already used by root + the admin-made emp (seatless): an
+        # empty seat may still be made, but no NEW user may go into it.
+        c, h = self._client(self.root_user)
+        r = c.post('/api/org/nodes/', data=json.dumps({'label': 's'}),
+                   content_type='application/json', **h)
+        self.assertEqual(r.status_code, 201)
+        r = c.post(f'/api/org/nodes/{r.json()["id"]}/create-user/',
+                   data=json.dumps({'display_name': 'X', 'phone': '09990000001'}),
+                   content_type='application/json', **h)
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(r.json().get('code'), 'seat_cap')
+        self.assertEqual(PortalUser.objects.filter(company=self.company).count(), 2)
+
     def test_permission_sync_writes_enforcement(self):
         node = OrgNode.objects.create(graph=self.graph, parent=self.graph.root_node,
                                       occupant=self.emp)
