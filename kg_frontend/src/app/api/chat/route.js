@@ -475,6 +475,25 @@ function termsBlock(pairs) {
   );
 }
 
+// Parts-catalog rows and SST tools found by the backend's table lookups.
+function lookupBlock(rag) {
+  let b = '';
+  const parts = rag?.parts || [];
+  if (parts.length) {
+    b += `کاتالوگ قطعات این خودرو (شمارهٔ فنی دقیق؛ همین‌ها را نقل کن):\n` +
+      parts.map((p) => `- ${p.pn} — ${p.name_fa || ''} (${p.name_en || ''})` +
+        (p.qty ? `، تعداد ${p.qty}` : '') + (p.date_range ? `، تولید ${p.date_range}` : '') +
+        ` [${p.catalog}]`).join('\n') + `\n`;
+  }
+  const tools = rag?.sst_tools || [];
+  if (tools.length) {
+    b += `ابزارهای مخصوص (SST) سیستم‌های مرتبط در این خودرو:\n` +
+      tools.map((t) => `- ${t.number} — ${t.name}` + (t.kit_of ? ` (جزء کیت ${t.kit_of})` : '') +
+        (t.used_in?.length ? ` — کاربرد: ${t.used_in.join('، ')}` : '')).join('\n') + `\n`;
+  }
+  return b;
+}
+
 function buildPrompt({ message, contextText, hasContext, terminology, historyText }) {
   if (!hasContext) {
     return (
@@ -505,7 +524,12 @@ function buildPrompt({ message, contextText, hasContext, terminology, historyTex
     `   • زمان تخمینی کار (اگر موجود بود)\n` +
     `   • هشدارها و نکات ایمنی\n` +
     `   اگر سؤال فقط یک «مقدار/مشخصه» می‌خواهد (مثل گشتاور یا ظرفیت روغن)، کوتاه و مستقیم همان عدد را بده.\n` +
-    `7) اگر اطلاعات برای خودروی دقیق کاربر نبود ولی برای تایپ/مدل مشابه هست، شفاف بگو از کدام خودرو نقل می‌کنی.\n\n` +
+    `7) جدول‌های گشتاور چند ردیف دارند (پیچ‌های مختلف یک قطعه). فقط ردیفی را که دقیقاً همان پیچِ پرسیده‌شده است ` +
+    `(مثلاً «کالیپر به براکت/Caliper × Mounting» در برابر «براکت به سگدست/Support × Knuckle») انتخاب کن، ` +
+    `نام همان ردیف را صریح بنویس، و ردیف‌های دیگر همان صفحه را در یک خط جدا با برچسب «پیچ‌های دیگر این مجموعه» بیاور تا اشتباه نشود.\n` +
+    `8) اگر «کاتالوگ قطعات» یا «ابزارهای مخصوص (SST)» آمده، شمارهٔ فنی را دقیقاً همان‌طور نقل کن؛ برای ابزار، ` +
+    `مرتبط‌ترین‌ها را با کار پرسیده‌شده (مثلاً عقب‌بردن پیستون کالیپر) اول بیاور و هیچ شماره‌ای نساز.\n` +
+    `9) اگر اطلاعات برای خودروی دقیق کاربر نبود ولی برای تایپ/مدل مشابه هست، شفاف بگو از کدام خودرو نقل می‌کنی.\n\n` +
     `=== متن‌های دفترچهٔ سرویس ===\n${contextText}\n=== پایان متن‌ها ===\n\n` +
     (historyText || '') +
     `سؤال کاربر: «${message}»\n\nحالا پاسخ بده.`
@@ -673,7 +697,13 @@ export async function POST(request) {
     let rag = null;
     let clarifyRoots = null;   // set => ask ONE clarifying question instead
     let allowedHrefs = new Set();   // hrefs we actually retrieved (link validation)
-    if (car || model) {
+    // Part-number / special-tool / labor-time / spec questions are lookups,
+    // not faults: the diagnose engine would answer them with an unrelated
+    // DTC. Send them straight to retrieval unless they name a DTC code.
+    const hasDtc = /\b[PCBU][0-9A-F]{4}\b/i.test(message);
+    const LOOKUP_RE = /شماره\s*(فنی|قطعه|پارت)|پارت\s*نامبر|کد\s*قطعه|part\s*(no|number|#)|ابزار|\bSST\b|special\s+tool|زمان\s*(کار|تعمیر|استاندارد)|اجرت|labor|گشتاور|torque|ظرفیت|capacity|چند\s*لیتر|مشخصات/i;
+    const isLookup = !hasDtc && LOOKUP_RE.test(message);
+    if ((car || model) && !isLookup) {
       try {
         diag = await backend('/api/diagnose/', { query: retrievalQuery, brand, model, car }, token);
       } catch (e) {
@@ -724,12 +754,18 @@ export async function POST(request) {
       }
       // honour the backend's grounding gate (out-of-domain queries are refused
       // even if a weak nearest neighbour exists).
-      const hasContext = (rag?.hits?.length || 0) > 0 && rag?.grounded !== false;
-      const built = hasContext ? buildContext(rag) : { sources: [], contextText: '' };
+      const hasContext = ((rag?.hits?.length || 0) > 0 && rag?.grounded !== false) ||
+        (rag?.parts?.length || 0) > 0 || (rag?.sst_tools?.length || 0) > 0;
+      const built = (rag?.hits?.length && rag?.grounded !== false)
+        ? buildContext(rag) : { sources: [], contextText: '' };
       // Structured vehicle facts for the pinned car (schema.org-derived,
       // deterministic). Prepended INSIDE the grounding context so the phraser
       // can answer spec questions (fuel type, drivetrain, capacities, tires)
       // while remaining strictly context-only.
+      const lookupText = lookupBlock(rag);
+      if (lookupText) {
+        built.contextText = `${lookupText}---\n${built.contextText}`;
+      }
       if (hasContext && rag?.vehicle_specs) {
         built.contextText = `مشخصات فنی ثبت‌شدهٔ این خودرو (قطعی):\n${rag.vehicle_specs}\n---\n${built.contextText}`;
       }

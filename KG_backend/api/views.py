@@ -141,6 +141,10 @@ def assist_view(request):
                     result['vehicle_specs'] = vehicleschema.compact_block(sp.data)
             except Exception:
                 pass
+            # Part numbers and special tools live in tables text retrieval
+            # misses (parts catalog, SST pages): look them up directly.
+            from .assist_lookup import lookups
+            result.update(lookups(_user, car, query, result.get('hits')))
         return JsonResponse(result)
     except FileNotFoundError as e:
         return JsonResponse(
