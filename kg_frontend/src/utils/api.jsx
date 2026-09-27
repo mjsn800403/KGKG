@@ -881,7 +881,11 @@ function channel() {
   };
   return adminChannel;
 }
-if (typeof window !== 'undefined') channel();
+/** Called by every open admin page so it answers new tabs' requests. (A
+ * module-level call was dropped by the bundler as a side effect.) */
+export function shareAdminToken() {
+  channel();
+}
 
 /** Resolves to a token: this tab's own, or one handed over by another open
  * admin tab within `ms`; '' if none. */
