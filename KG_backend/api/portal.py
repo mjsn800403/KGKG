@@ -1338,12 +1338,12 @@ def admin_users_view(request):
     items, cars = [], {}
     for u in qs:
         d = _user_dict(u, with_access=True)
-        for a in d.get(accesses) or []:
-            car = a.pop(car)
-            cars[car[id]] = car
-            a[car_id] = car[id]
+        for a in d.get('accesses') or []:
+            car = a.pop('car')
+            cars[car['id']] = car
+            a['car_id'] = car['id']
         items.append(d)
-    return JsonResponse({items: items, cars: cars})
+    return JsonResponse({'items': items, 'cars': cars})
 
 
 @csrf_exempt
