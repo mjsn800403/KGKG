@@ -2327,3 +2327,12 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
   .breadcrumb a,.backlink,.auth-foot a,.tour-skip,.chat-reset,.chat-send,
   .chat-suggestion-chip,.chat-action-btn,.back-link{min-height:44px;display:inline-flex;align-items:center}
 }
+/* Parts diagram on touch: once zoomed, a finger drag pans the diagram instead
+   of scrolling the page; controls keep their size in a narrow flex row. */
+.parts-diagram.zoomed{touch-action:none}
+.parts-diagram-tools button{flex:none}
+.parts-copy{min-width:24px;min-height:24px}
+@media (pointer:coarse){
+  .parts-diagram-tools button{width:44px;height:44px}
+  .parts-copy{min-width:44px;min-height:44px}
+}
