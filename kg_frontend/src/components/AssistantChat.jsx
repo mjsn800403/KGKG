@@ -16,9 +16,11 @@ import { rateAnswer } from '../utils/api';
 // The diagnostic index also predates the TIS rebuild, whose manual root is
 // "Repair and Diagnosis" (the old "... (Single Page)" root no longer exists).
 export function fixHref(href) {
+  // Parts-catalog routes keep a literal %2F for in-title slashes: leave them be.
+  if (/\/parts(\/|\?|$)/.test(href)) return href;
   return href
     .replace(/%2F/gi, '%E2%81%84')
-    .replace('/Repair%20and%20Diagnosis%20%28Single%20Page%29/', '/Repair%20and%20Diagnosis/');
+    .replace(/\/Repair%20and%20Diagnosis%20(?:%28|\()Single%20Page(?:%29|\))\//i, '/Repair%20and%20Diagnosis/');
 }
 
 // Minimal markdown for the LLM's prose: **bold** and "#" headings. Everything

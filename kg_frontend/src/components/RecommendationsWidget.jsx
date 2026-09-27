@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import Icon from './Icon';
+import { fixHref } from './AssistantChat';
 import { fetchRecommendations } from '../utils/api';
 import useEventStream from '../utils/useEventStream';
 
@@ -102,7 +103,7 @@ export default function RecommendationsWidget() {
                 {s.items.slice(0, 4).map((it, i) => (
                   <motion.li key={it.app_url || i} layout
                     initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
-                    <Link href={it.app_url || '#'} className="recs-item">
+                    <Link href={it.app_url ? fixHref(it.app_url) : '#'} className="recs-item">
                       <span className="recs-item-title">{it.title || it.car}</span>
                       <span className="recs-item-sub">
                         {it.car ? it.car : ''}
@@ -125,7 +126,7 @@ export default function RecommendationsWidget() {
         <div className="recs-explore">
           <span className="recs-explore-label">خودروهای بازنشده:</span>
           {explore.slice(0, 5).map((e) => (
-            <Link key={e.app_url} href={e.app_url} className="recs-explore-chip">{e.car}</Link>
+            <Link key={e.app_url} href={fixHref(e.app_url)} className="recs-explore-chip">{e.car}</Link>
           ))}
         </div>
       )}
