@@ -156,7 +156,10 @@ export function planIdFromCode(code) {
  */
 export function initialSelection(sp) {
   const raw = (k) => (Array.isArray(sp[k]) ? sp[k][0] : sp[k]) || '';
-  const plan = PLAN_ORDER.includes(raw('plan')) ? raw('plan') : 'annual';
+  // Accept a plan id (pass) or its public code (2day), as links use both.
+  const want = raw('plan');
+  const byCode = PLAN_ORDER.find((id) => PLANS[id].code === want);
+  const plan = PLAN_ORDER.includes(want) ? want : (byCode || 'annual');
   const n = Math.min(1000, Math.max(1, parseInt(raw('seats') || '1', 10) || 1));
   return { plan, seats: SINGLE_SEAT_PLANS.includes(plan) ? 1 : n };
 }

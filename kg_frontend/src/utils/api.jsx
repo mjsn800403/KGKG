@@ -752,7 +752,14 @@ export const adminApi = {
       body: JSON.stringify({ value, reassign_to: reassignTo || undefined }),
     }),
   users: (companyId) =>
-    adminFetch(`/api/admin/users/${companyId ? `?company_id=${companyId}` : ''}`),
+    adminFetch(`/api/admin/users/${companyId ? `?company_id=${companyId}` : ''}`).then((d) => {
+      // The list sends each car once (d.cars) and references it by car_id.
+      const cars = d?.cars || {};
+      (d?.items || []).forEach((u) => (u.accesses || []).forEach((a) => {
+        if (!a.car && a.car_id != null) a.car = cars[a.car_id] || { id: a.car_id };
+      }));
+      return d;
+    }),
   createUser: (payload) =>
     adminFetch('/api/admin/users/', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (id, payload) =>

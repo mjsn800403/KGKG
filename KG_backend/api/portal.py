@@ -1332,7 +1332,18 @@ def admin_users_view(request):
     company_id = request.GET.get('company_id')
     if company_id:
         qs = qs.filter(company_id=company_id)
-    return JsonResponse({'items': [_user_dict(u, with_access=True) for u in qs]})
+    # Each car is sent once in `cars` and referenced by id from every access
+    # row: with ~236 cars per user the repeated car objects made this list
+    # >1 MB. utils/api.jsx puts `car` back on each row after loading.
+    items, cars = [], {}
+    for u in qs:
+        d = _user_dict(u, with_access=True)
+        for a in d.get(accesses) or []:
+            car = a.pop(car)
+            cars[car[id]] = car
+            a[car_id] = car[id]
+        items.append(d)
+    return JsonResponse({items: items, cars: cars})
 
 
 @csrf_exempt
