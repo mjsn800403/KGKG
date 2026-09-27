@@ -775,10 +775,11 @@ export const adminApi = {
       // The list sends each car once (d.cars) and references it by car_id;
       // rebuild the full access rows the admin screens use.
       const cars = d?.cars || {};
+      const allDocs = d?.all_docs || [];
       (d?.items || []).forEach((u) => {
         u.accesses = (u.accesses || []).map((a) => {
           const car = cars[a.car_id] || { id: a.car_id };
-          return { car, documents: a.documents || [], admin_granted: !!a.admin_granted,
+          return { car, documents: a.documents || [...allDocs], admin_granted: !!a.admin_granted,
                    ready: !!car.ready, parts_ready: !!car.parts_ready };
         });
       });

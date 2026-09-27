@@ -1334,9 +1334,11 @@ def admin_users_view(request):
         qs = qs.filter(company_id=company_id)
     # Each car is sent once in `cars` (with its readiness, checked once per car
     # rather than once per user x car) and every access row is just its car id,
-    # plus documents / admin_granted only when set: with ~236 cars per user the
-    # full rows made this list >1 MB. utils/api.jsx rebuilds the full rows.
+    # plus documents (only when not every package) / admin_granted (only when
+    # set): with ~236 cars per user the full rows made this list >1 MB.
+    # utils/api.jsx rebuilds the full rows, filling documents from `all_docs`.
     from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
+    all_docs = [p for p, _ in DOC_TYPE_CHOICES]
     items, cars = [], {}
     for u in qs.prefetch_related('car_accesses__car'):
         d = _user_dict(u)
@@ -1346,7 +1348,7 @@ def admin_users_view(request):
             if c.id not in cars:
                 cars[c.id] = dict(_car_dict(c), ready=car_db_ready(c), parts_ready=parts_db_ready(c))
             row = {'car_id': c.id}
-            if a.documents:
+            if a.documents and set(a.documents) != set(all_docs):
                 row['documents'] = a.documents
             if a.admin_granted:
                 row['admin_granted'] = True
@@ -1354,7 +1356,7 @@ def admin_users_view(request):
         d['accesses'] = rows
         d['packages'] = sorted(user_package_set(u))
         items.append(d)
-    return JsonResponse({'items': items, 'cars': cars})
+    return JsonResponse({'items': items, 'cars': cars, 'all_docs': all_docs})
 
 
 @csrf_exempt
