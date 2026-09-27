@@ -89,6 +89,7 @@ class PortalAdminFlowTests(TestCase):
         r = self._post('/api/admin/companies/', {
             'name': 'گستر', 'seats_count': 2, 'ai_assistant_enabled': True,
             'department_label': 'فنی و مهندسی',
+            'admin_username': 'gostar_root', 'mobile': '09120000123',
         }, **self._admin_headers())
         self.assertEqual(r.status_code, 200)
         cid = r.json()['company']['id']
@@ -97,7 +98,7 @@ class PortalAdminFlowTests(TestCase):
                        **self._admin_headers())
         self.assertEqual(r.status_code, 200)
 
-        r = self._post('/api/admin/users/', {'company_id': cid, 'username': 'gostar_te_01',
+        r = self._post('/api/admin/users/', {'company_id': cid, 'username': 'gostar_te_01', 'phone': '09120000124',
                                              'role': 'after_sales_specialist',
                                              'ai_assistant_enabled': True},
                        **self._admin_headers())

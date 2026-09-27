@@ -295,6 +295,49 @@ def seed_graph_for_company(company):
     return graph
 
 
+def company_scope_access(company):
+    """The company's purchased scope as NodePermission.car_access rows."""
+    return [
+        {'car_id': a.car_id, 'documents': list(a.documents or [])}
+        for a in company.car_accesses.all()
+    ]
+
+
+def grant_root_company_scope(company):
+    """The root (the buyer) holds everything the company bought: every car in
+    the company scope, AI on. Run after the root is seated and after every
+    company-scope save, so the root is never left with an empty fleet."""
+    graph = OrgGraph.objects.filter(company=company).first()
+    root = graph.root_node if graph else None
+    if root is None or root.occupant_id is None:
+        return
+    perm = _permission_for(root)
+    perm.car_access = company_scope_access(company)
+    perm.ai_eligible = True
+    perm.save(update_fields=['car_access', 'ai_eligible', 'updated_at'])
+    sync_node_to_user(root)
+
+
+def seat_new_user(company, user, ai_eligible):
+    """Give an admin-created employee a seat under the root, holding the
+    company's full scope, so /team shows them and they can actually use what
+    the company bought. No-op when the company has no graph/root yet."""
+    graph = OrgGraph.objects.filter(company=company).first()
+    root = graph.root_node if graph else None
+    if root is None or getattr(user, 'seat', None) is not None:
+        return
+    n = graph.nodes.filter(is_root=False).count() + 1
+    with transaction.atomic():
+        node = OrgNode.objects.create(
+            graph=graph, parent=root, label=user.display_name or user.username,
+            occupant=user, canvas_x=(n % 6) * 220 - 550, canvas_y=180 + (n // 6) * 140)
+        NodePermission.objects.create(
+            node=node, car_access=company_scope_access(company),
+            ai_eligible=bool(ai_eligible), admin_panels=[])
+        sync_node_to_user(node)
+        sync_reports_to_from_graph(company)
+
+
 def _current_access(user):
     """Snapshot a user's existing per-car grants as NodePermission.car_access."""
     if user is None:

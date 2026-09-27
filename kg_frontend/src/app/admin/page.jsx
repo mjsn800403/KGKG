@@ -679,9 +679,16 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
   const [drafts, setDrafts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState([]);
+  // Rebuild rows only for a new request/company match, and never after issuing:
+  // onDone() refreshes the companies list, which used to wipe the passwords.
+  const initKey = useRef('');
+  const issued = useRef(false);
 
   useEffect(() => {
     const match = companies.find((c) => c.name === request.company);
+    const key = `${request.id}:${match?.id || ''}`;
+    if (issued.current || initKey.current === key) return;
+    initKey.current = key;
     const cid = match?.id ? String(match.id) : '';
     setCompanyId(cid);
     const rows = [];
@@ -689,12 +696,14 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
     // manager seat; issuing it again would exceed the seats the buyer paid for.
     let skipManager = match?.has_root ? 1 : 0;
     (request.seat_plan || []).forEach((row, ri) => {
-      const slug = (request.company || 'co').replace(/\s+/g, '_').slice(0, 12).toLowerCase();
+      // Unique per company (a name prefix is not: two companies sharing their
+      // first characters used to get identical usernames).
+      const slug = match?.id ? `co${match.id}` : `req${request.id}`;
       for (let i = 0; i < (row.count || 0); i += 1) {
         if (skipManager && row.role === 'after_sales_manager') { skipManager -= 1; continue; }
         rows.push({
           key: `${ri}-${i}`,
-          username: `${slug}_${row.role}_${ri + 1}_${i + 1}`,
+          username: `${slug}_${row.role.replace(/^after_sales_/, '')}_${ri + 1}_${i + 1}`,
           display_name: '',
           phone: '',
           role: row.role,
@@ -710,6 +719,7 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
   const issue = async () => {
     if (!companyId) return;
     setBusy(true);
+    issued.current = true;
     const out = [];
     for (const d of drafts) {
       if (!d.username.trim()) continue;
@@ -719,6 +729,7 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
         display_name: d.display_name.trim(),
         phone: d.phone.trim(),
         role: d.role,
+        ai_assistant_enabled: request.wants_ai_assistant !== false,
       }));
       if (r) out.push({ username: r.user.username, password: r.password });
     }
@@ -773,7 +784,7 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
       </button>
       {results.length > 0 && (
         <div style={{ marginTop: 12, fontSize: 13 }}>
-          <b>رمزهای صادرشده:</b>
+          <b>رمزهای صادرشده — همین حالا ذخیره کنید؛ دوباره نمایش داده نمی‌شوند:</b>
           {results.map((r) => (
             <div key={r.username} dir="ltr" style={{ fontFamily: 'monospace', marginTop: 4 }}>
               {r.username} / {r.password}
@@ -939,6 +950,7 @@ function PlanRequestCard({ r, st, onStatus, onCreateCompany, wizardOpen, onWizar
             name: r.company, reg_no: r.reg_no, landline: r.landline, mobile: r.mobile,
             employees_count: r.employees_count ?? '', seats_count: r.seats_count ?? '',
             is_demo: r.wants_demo, ai_assistant_enabled: true,
+            purchase_request_id: r.id,
             admin_phone: r.mobile || '', admin_display_name: contact || r.company || '',
             admin_access_expires_at: plusDaysLocal(PLAN_DAYS[q.plan.id] || 1),
             note: `اشتراک: ${q.plan.title} — ${(r.seats_count || 1).toLocaleString('fa-IR')} کاربر${shownPrice ? ` — ${shownPrice}` : ''}`,

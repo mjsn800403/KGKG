@@ -964,6 +964,8 @@ def _create_root_account(c, b, is_new_company=False):
     # Seat the buyer on the company's root node (creates the graph).
     from .orggraph import reassign_root
     reassign_root(c, root_user)
+    from .orggraph import grant_root_company_scope
+    grant_root_company_scope(c)
     events.emit('admin_changed', {'entity': 'user', 'id': root_user.id, 'action': 'create',
                                   'company_id': c.id})
     return {'username': root_user.username, 'password': password, 'user_id': root_user.id}, None
@@ -978,6 +980,10 @@ def admin_companies_view(request):
         name = (str(b.get('name') or '')).strip()[:200]
         if not name:
             return JsonResponse({'error': 'نام شرکت الزامی است.'}, status=400)
+        # Provisioning a paid request must seat the buyer as root (the root owns
+        # the company's access window). A bare company may get its root later.
+        if b.get('purchase_request_id') and not (str(b.get('admin_username') or '')).strip():
+            return JsonResponse({'error': 'نام کاربری حساب سطح‌صفر الزامی است.'}, status=400)
         try:
             with transaction.atomic():
               c = Company.objects.create(
@@ -1006,6 +1012,9 @@ def admin_companies_view(request):
             admin_result, err = _create_root_account(c, b, is_new_company=True)
             if err:
                 return err
+        req_id = b.get('purchase_request_id')
+        if req_id:
+            PurchaseRequest.objects.filter(id=req_id).update(status='approved', handled=True)
 
         return JsonResponse({'ok': True, 'company': _company_dict(c, deep=True),
                              'admin': admin_result})
@@ -1097,6 +1106,8 @@ def admin_company_access_view(request, company_id):
 
     # Prune user grants that fell outside the company's new scope.
     UserCarAccess.objects.filter(user__company=c).exclude(car_id__in=keep_car_ids).delete()
+    from .orggraph import grant_root_company_scope
+    grant_root_company_scope(c)
     events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'access'})
     return JsonResponse({'company': _company_dict(c, deep=True)})
 
@@ -1213,6 +1224,17 @@ def admin_users_view(request):
         company = Company.objects.filter(id=b.get('company_id')).first()
         if not company:
             return JsonResponse({'error': 'شرکت یافت نشد.'}, status=400)
+        # Users inherit the root's expiry; with no root they would never expire.
+        if not PortalUser.objects.filter(company=company, seat__is_root=True).exists():
+            return JsonResponse(
+                {'error': 'ابتدا حساب سطح‌صفر (مدیر ارشد) این شرکت را بسازید؛ کاربران انقضای خود را از آن می‌گیرند.'},
+                status=400)
+        # Seat cap: seats_count is the number of users the company paid for.
+        cap = company.seats_count
+        if cap and company.users.count() >= cap:
+            return JsonResponse(
+                {'error': f'ظرفیت کاربران این شرکت ({cap} نفر) تکمیل است. ابتدا تعداد صندلی شرکت را افزایش دهید.'},
+                status=400)
         # Custom (per-company) roles are allowed: accept any non-empty label and
         # make sure it exists in the company's picker (auto-add on first use).
         role = (normalize_role(b.get('role')) or '').strip()[:80]
@@ -1241,7 +1263,9 @@ def admin_users_view(request):
             reports_to=reports_to,
             can_manage_team=bool(b.get('can_manage_team')),
             can_view_analytics=bool(b.get('can_view_analytics')),
-            ai_assistant_enabled=bool(b.get('ai_assistant_enabled')),
+            ai_assistant_enabled=(bool(b.get('ai_assistant_enabled'))
+                                  if 'ai_assistant_enabled' in b
+                                  else bool(company.ai_assistant_enabled)),
             locked=bool(b.get('locked')),
             access_expires_at=access_expires_at,
         )
@@ -1255,6 +1279,9 @@ def admin_users_view(request):
             u.save()
         except IntegrityError:
             return JsonResponse({'error': 'این نام کاربری یا ایمیل قبلاً استفاده شده است.'}, status=400)
+        from .orggraph import seat_new_user
+        seat_new_user(company, u, u.ai_assistant_enabled)
+        u.refresh_from_db()
         events.emit('admin_changed', {'entity': 'user', 'id': u.id, 'action': 'create', 'company_id': u.company_id})
         return JsonResponse({'ok': True, 'user': _user_dict(u, with_access=True), 'password': password})
 

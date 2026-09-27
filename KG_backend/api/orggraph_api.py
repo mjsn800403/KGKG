@@ -257,11 +257,11 @@ def nodes_view(request):
         return JsonResponse({'error': 'method'}, status=405)
     b = _body(request)
     graph = _graph_for(request.root_user)
-    # Seat cap: the platform super-admin bounds how many seats a root may create
-    # via Company.seats_count (the root's own node does not count). None = no cap.
+    # Seat cap: Company.seats_count is the number of users the company paid
+    # for, the root included (same rule as admin user creation). None = no cap.
     cap = graph.company.seats_count
     if cap is not None:
-        used = graph.nodes.filter(is_root=False).count()
+        used = graph.nodes.filter(is_root=False).count() + 1
         if used >= cap:
             return JsonResponse(
                 {'error': f'به سقف مجاز صندلی‌ها رسیده‌اید ({cap}).', 'code': 'seat_cap',
