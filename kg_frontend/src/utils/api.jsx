@@ -694,7 +694,26 @@ export async function acceptInvite(token, password) {
 // --- admin panel API ---------------------------------------------------------
 // All gated server-side by KG_ADMIN_TOKEN (Bearer). Uses the same stored token
 // as the review queue below.
+// Several admin sections load /companies/ and /cars/ at the same time; share
+// one request for identical GETs within a few seconds. Any write clears it.
+const ADMIN_GET_CACHE = new Map();
+const ADMIN_GET_TTL = 3000;
+
 async function adminFetch(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  if (method !== 'GET') {
+    ADMIN_GET_CACHE.clear();
+    return adminFetchRaw(path, options);
+  }
+  const hit = ADMIN_GET_CACHE.get(path);
+  if (hit && Date.now() - hit.at < ADMIN_GET_TTL) return hit.p.then((d) => structuredClone(d));
+  const p = adminFetchRaw(path, options);
+  ADMIN_GET_CACHE.set(path, { at: Date.now(), p });
+  p.catch(() => ADMIN_GET_CACHE.delete(path));
+  return p.then((d) => structuredClone(d));
+}
+
+async function adminFetchRaw(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -753,11 +772,16 @@ export const adminApi = {
     }),
   users: (companyId) =>
     adminFetch(`/api/admin/users/${companyId ? `?company_id=${companyId}` : ''}`).then((d) => {
-      // The list sends each car once (d.cars) and references it by car_id.
+      // The list sends each car once (d.cars) and references it by car_id;
+      // rebuild the full access rows the admin screens use.
       const cars = d?.cars || {};
-      (d?.items || []).forEach((u) => (u.accesses || []).forEach((a) => {
-        if (!a.car && a.car_id != null) a.car = cars[a.car_id] || { id: a.car_id };
-      }));
+      (d?.items || []).forEach((u) => {
+        u.accesses = (u.accesses || []).map((a) => {
+          const car = cars[a.car_id] || { id: a.car_id };
+          return { car, documents: a.documents || [], admin_granted: !!a.admin_granted,
+                   ready: !!car.ready, parts_ready: !!car.parts_ready };
+        });
+      });
       return d;
     }),
   createUser: (payload) =>
@@ -838,8 +862,50 @@ export function setAdminToken(token, admin = null) {
   } catch { /* sessionStorage unavailable */ }
 }
 
+// A new admin tab has an empty sessionStorage. Instead of widening storage
+// to localStorage (which outlives the browser session), an open admin tab
+// hands its token to the new tab over a same-origin BroadcastChannel.
+const ADMIN_CHANNEL = 'kg_admin_auth';
+let adminChannel = null;
+function channel() {
+  if (adminChannel || typeof BroadcastChannel === 'undefined') return adminChannel;
+  adminChannel = new BroadcastChannel(ADMIN_CHANNEL);
+  adminChannel.onmessage = (e) => {
+    const m = e.data || {};
+    if (m.type === 'need' && getAdminToken()) {
+      adminChannel.postMessage({ type: 'token', token: getAdminToken(), admin: getAdminUser() });
+    } else if (m.type === 'logout') {
+      setAdminToken('', null);
+    }
+  };
+  return adminChannel;
+}
+if (typeof window !== 'undefined') channel();
+
+/** Resolves to a token: this tab's own, or one handed over by another open
+ * admin tab within `ms`; '' if none. */
+export function obtainAdminToken(ms = 400) {
+  const own = getAdminToken();
+  const ch = channel();
+  if (own || !ch) return Promise.resolve(own);
+  return new Promise((resolve) => {
+    let timer = null;
+    const done = (t) => { clearTimeout(timer); ch.removeEventListener('message', onMsg); resolve(t); };
+    const onMsg = (e) => {
+      if (e.data?.type === 'token' && e.data.token) {
+        setAdminToken(e.data.token, e.data.admin || null);
+        done(e.data.token);
+      }
+    };
+    timer = setTimeout(() => done(''), ms);
+    ch.addEventListener('message', onMsg);
+    ch.postMessage({ type: 'need' });
+  });
+}
+
 export function adminLogout() {
   setAdminToken('', null);
+  try { channel()?.postMessage({ type: 'logout' }); } catch { /* noop */ }
 }
 
 function adminHeaders() {

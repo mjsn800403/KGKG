@@ -1332,16 +1332,27 @@ def admin_users_view(request):
     company_id = request.GET.get('company_id')
     if company_id:
         qs = qs.filter(company_id=company_id)
-    # Each car is sent once in `cars` and referenced by id from every access
-    # row: with ~236 cars per user the repeated car objects made this list
-    # >1 MB. utils/api.jsx puts `car` back on each row after loading.
+    # Each car is sent once in `cars` (with its readiness, checked once per car
+    # rather than once per user x car) and every access row is just its car id,
+    # plus documents / admin_granted only when set: with ~236 cars per user the
+    # full rows made this list >1 MB. utils/api.jsx rebuilds the full rows.
+    from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
     items, cars = [], {}
-    for u in qs:
-        d = _user_dict(u, with_access=True)
-        for a in d.get('accesses') or []:
-            car = a.pop('car')
-            cars[car['id']] = car
-            a['car_id'] = car['id']
+    for u in qs.prefetch_related('car_accesses__car'):
+        d = _user_dict(u)
+        rows = []
+        for a in u.car_accesses.all():
+            c = a.car
+            if c.id not in cars:
+                cars[c.id] = dict(_car_dict(c), ready=car_db_ready(c), parts_ready=parts_db_ready(c))
+            row = {'car_id': c.id}
+            if a.documents:
+                row['documents'] = a.documents
+            if a.admin_granted:
+                row['admin_granted'] = True
+            rows.append(row)
+        d['accesses'] = rows
+        d['packages'] = sorted(user_package_set(u))
         items.append(d)
     return JsonResponse({'items': items, 'cars': cars})
 

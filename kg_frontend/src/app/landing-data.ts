@@ -2,8 +2,9 @@
 // databases on 2026-09-16. Nothing is estimated — if the source pages change,
 // re-read them rather than editing values by hand.
 
-/** Vehicle configurations with a repair manual on disk (main_db, 2026-09-16). */
-export const MANUAL_CONFIGS = 221;
+/** Vehicle configurations with a repair manual on disk (main_db, 2026-09-27).
+ * The DB's 236 cars also hold 14 parts-only catalogs, which have no manual. */
+export const MANUAL_CONFIGS = 222;
 /** Shown publicly as a floor ("۲۲۰+"), so the figure stays true as coverage grows. */
 export const MANUAL_CONFIGS_FLOOR = Math.floor(MANUAL_CONFIGS / 10) * 10;
 

@@ -22,7 +22,7 @@ import Icon from '@/components/Icon';
 import AdminDashboard from '@/components/AdminDashboard';
 import RequestsInbox from '@/components/RequestsInbox';
 import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
-import { adminApi, adminLogout, getAdminToken, getAdminUser } from '@/utils/api';
+import { adminApi, adminLogout, getAdminUser, obtainAdminToken } from '@/utils/api';
 import useEventStream from '@/utils/useEventStream';
 import { DEPARTMENT_PRESETS, PACKAGES, ROLES, packageLabel, roleWithDepartment } from '@/lib/packages';
 import { isPlanRequest, planIdFromCode, quote, faMillion, PLAN_DAYS } from '@/lib/pricing';
@@ -252,13 +252,17 @@ export default function AdminPage() {
   const bumpRefresh = useCallback(() => setRefreshSignal((n) => n + 1), []);
 
   useEffect(() => {
-    if (!getAdminToken()) { router.replace('/admin/login'); return; }
-    setAdminUser(getAdminUser());
-    setSection(readHashSection());
-    setAuthReady(true);
+    let alive = true;
     const onHash = () => setSection(readHashSection());
+    obtainAdminToken().then((t) => {
+      if (!alive) return;
+      if (!t) { router.replace('/admin/login'); return; }
+      setAdminUser(getAdminUser());
+      setSection(readHashSection());
+      setAuthReady(true);
+    });
     window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    return () => { alive = false; window.removeEventListener('hashchange', onHash); };
   }, [router]);
 
   // Safety net for the two-tab / two-admin case: when this tab regains focus or

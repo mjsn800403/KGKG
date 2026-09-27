@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
-import { adminLogin, getAdminToken } from '@/utils/api';
+import { adminLogin, obtainAdminToken } from '@/utils/api';
 
 const EASE = [0.22, 1, 0.36, 1];
 const TURNSTILE_SITEKEY = '0x4AAAAAAEjnbFG2W2QYf-cE';
@@ -25,7 +25,7 @@ export default function AdminLogin() {
   const widgetId = useRef(null);
 
   useEffect(() => {
-    if (getAdminToken()) router.replace('/admin');
+    obtainAdminToken().then((t) => { if (t) router.replace('/admin'); });
   }, [router]);
 
   const renderWidget = useCallback(() => {
