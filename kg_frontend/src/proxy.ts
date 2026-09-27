@@ -15,9 +15,9 @@ const BRAND_ROUTE = /^\/[A-Z][^/]*\/\d{4}(\/|$)/;
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if ((PROTECTED.test(path) || BRAND_ROUTE.test(path)) &&
-      !request.cookies.get(kg_portal_token)?.value) {
+      !request.cookies.get('kg_portal_token')?.value) {
     const url = request.nextUrl.clone();
-    url.pathname = /login;
+    url.pathname = '/login';
     url.search = `?next=${encodeURIComponent(path + request.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
