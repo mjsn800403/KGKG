@@ -102,6 +102,9 @@ class Company(models.Model):
     employees_count = models.PositiveIntegerField(null=True, blank=True)
     seats_count = models.PositiveIntegerField(null=True, blank=True)
     is_demo = models.BooleanField(default=False)
+    # Subscription plan id (demo / pass / monthly / annual); sets the AI
+    # question allowance (api.quota). Blank = inferred for older companies.
+    plan = models.CharField(max_length=20, blank=True, default='')
     ai_assistant_enabled = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     note = models.TextField(blank=True, default='')

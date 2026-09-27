@@ -56,7 +56,7 @@ class PortalAdminFlowTests(TestCase):
 
     def test_purchase_request_requires_seat_plan(self):
         base = dict(brand='Toyota', model='bZ4X', year='2023', documents=['manual'],
-                    company='گستر', landline='021', mobile='0912', reg_no='1',
+                    company='گستر', landline='021', mobile='09120000001', reg_no='1',
                     employees_count=100, seats_count=5)
         r = self._post('/api/purchase-request/', base, REMOTE_ADDR='10.0.0.1')
         self.assertEqual(r.status_code, 400)
@@ -79,7 +79,7 @@ class PortalAdminFlowTests(TestCase):
     def test_admin_full_flow(self):
         pr = PurchaseRequest.objects.create(
             brand='Toyota', model='bZ4X', year='2023', documents=['manual'],
-            company='گستر', landline='021', mobile='0912', reg_no='1',
+            company='گستر', landline='021', mobile='09120000001', reg_no='1',
             employees_count=10, seats_count=3,
             seat_plan=SAMPLE_SEAT_PLAN,
         )
@@ -155,7 +155,7 @@ class PortalAdminFlowTests(TestCase):
     def test_admin_requests_include_seat_plan(self):
         PurchaseRequest.objects.create(
             brand='Toyota', model='bZ4X', year='2023', documents=['manual'],
-            company='گستر', landline='021', mobile='0912', reg_no='1',
+            company='گستر', landline='021', mobile='09120000001', reg_no='1',
             employees_count=10, seats_count=3, seat_plan=SAMPLE_SEAT_PLAN,
         )
         r = self.c.get('/api/admin/requests/', **self._admin_headers())
@@ -331,3 +331,17 @@ class ManagedAccessDocClampTests(TestCase):
                              [{'car_id': self.car.id, 'documents': ['manual', 'parts']}])
         row = self.emp.car_accesses.get(car=self.car)
         self.assertEqual(set(row.documents), {'manual'})   # 'parts' clamped away
+
+
+# Turnstile is verified against Cloudflare when TURNSTILE_SECRET is set (it is
+# on the server); tests exercise the login logic, not Cloudflare.
+from unittest import mock as _ts_mock
+_TS_PATCH = _ts_mock.patch('api.portal._verify_turnstile', return_value=True)
+
+
+def setUpModule():
+    _TS_PATCH.start()
+
+
+def tearDownModule():
+    _TS_PATCH.stop()

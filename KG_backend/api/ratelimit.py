@@ -86,7 +86,55 @@ def _sweep(now):
             _HITS.pop(ip, None)
 
 
+# Shared store: gunicorn runs several workers, and in-process counters let
+# each worker grant the full limit (3 workers = 3x the configured value). A
+# tiny sqlite file on local disk is shared by every worker and needs no new
+# service. Falls back to the in-process window if the store is unusable.
+_STORE = os.environ.get('KG_RL_STORE', '/tmp/kg_ratelimit.sqlite3')
+import sys as _sys
+if 'test' in _sys.argv[1:2]:
+    _STORE = None   # tests keep the in-process window (they reset _HITS)
+_STORE_LOCAL = threading.local()
+
+
+def _store():
+    conn = getattr(_STORE_LOCAL, 'conn', None)
+    if conn is None:
+        import sqlite3
+        conn = sqlite3.connect(_STORE, timeout=2, isolation_level=None)
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('CREATE TABLE IF NOT EXISTS hits (k TEXT, ts REAL)')
+        conn.execute('CREATE INDEX IF NOT EXISTS hits_k_ts ON hits (k, ts)')
+        _STORE_LOCAL.conn = conn
+    return conn
+
+
+def _allow_shared(key, limit, window):
+    now = time.time()
+    conn = _store()
+    conn.execute('BEGIN IMMEDIATE')
+    try:
+        if int(now) % 60 == 0:
+            conn.execute('DELETE FROM hits WHERE ts < ?', (now - 3600,))
+        row = conn.execute('SELECT COUNT(*), MIN(ts) FROM hits WHERE k=? AND ts>=?',
+                           (key, now - window)).fetchone()
+        if row[0] >= limit:
+            conn.execute('COMMIT')
+            return False, max(1, int(row[1] + window - now) + 1)
+        conn.execute('INSERT INTO hits VALUES (?, ?)', (key, now))
+        conn.execute('COMMIT')
+        return True, 0
+    except Exception:
+        conn.execute('ROLLBACK')
+        raise
+
+
 def _allow(ip, limit, window):
+    try:
+        if _STORE:
+            return _allow_shared(ip, limit, window)
+    except Exception:
+        pass            # store unusable -> per-process window below
     now = time.monotonic()
     with _LOCK:
         _sweep(now)
@@ -117,7 +165,7 @@ def rate_limited(name, default_limit, default_window):
             if limit <= 0:
                 return view(request, *args, **kwargs)
             try:
-                ok, retry = _allow(_client_ip(request), limit, window)
+                ok, retry = _allow(f'{name}:{_client_ip(request)}', limit, window)
             except Exception:
                 ok, retry = True, 0     # fail open — never block on a guard bug
             if not ok:

@@ -216,6 +216,13 @@ def labor_times_csv_view(request, brand_name=None, year=None, model_name=None):
             '%s\n' % NO_DATA_MESSAGE, status=404,
             content_type='text/plain; charset=utf-8')
     body = build_csv(conn, car.car_name, car.brand_name, car.year)
+    try:
+        from .models import ActivityLog
+        ActivityLog.objects.create(user=user, action='download_csv', car=car,
+                                   detail='labor_times')
+    except Exception:
+        pass
+
 
     resp = HttpResponse(body, content_type='text/csv; charset=utf-8')
     fname = _sanitize_filename(

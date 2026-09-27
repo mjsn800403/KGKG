@@ -298,6 +298,13 @@ def sst_csv_view(request, brand_name=None, year=None, model_name=None):
     if request.GET.get('probe'):
         return JsonResponse({'available': has_sst(conn)})
 
+    try:
+        from .models import ActivityLog
+        ActivityLog.objects.create(user=user, action='download_csv', car=car,
+                                   detail='sst')
+    except Exception:
+        pass
+
     if not has_sst(conn):
         return JsonResponse(
             {'error': 'no SST section',

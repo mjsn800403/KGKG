@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.urls import path, re_path
 from . import adminops, events, recommend, requests_api, views, portal, team
-from . import orggraph_api, parts, labortimes, sst
+from . import orggraph_api, parts, labortimes, sst, quota
 from . import mediaauth
 
 
@@ -38,6 +38,7 @@ urlpatterns = [
     path('api/auth/login/', portal.login_view, name='portal_login'),
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
+    path('api/auth/ai-usage/', quota.ai_usage_view, name='ai_usage'),
     path('api/auth/me/prefs/', portal.me_prefs_view, name='portal_me_prefs'),
     path('api/auth/fleet/', portal.fleet_view, name='portal_fleet'),
     path('api/auth/verify-otp/', portal.verify_otp_view, name='portal_verify_otp'),

@@ -17,8 +17,30 @@ export const metadata = {
 // statically prerender at build time (when the backend isn't running).
 export const dynamic = 'force-dynamic';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+
 export default async function AssistantPickerPage() {
-  if (!(await portalTokenCookie())) redirect('/login');
+  const token = await portalTokenCookie();
+  if (!token) redirect('/login');
+  const meRes = await fetch(`${BACKEND_URL}/api/auth/me/`, {
+    headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+  }).catch(() => null);
+  if (!meRes || !meRes.ok) redirect('/login');
+  const me = await meRes.json().catch(() => ({}));
+  if (!me?.user?.ai_eligible) {
+    return (
+      <DashboardShell>
+        <div className="topbar">
+          <div className="breadcrumb"><b>دستیار هوشمند</b></div>
+          <UserChip />
+        </div>
+        <h1 className="page-title">دستیار هوشمند سرویس</h1>
+        <div className="empty-state">
+          دستیار هوش مصنوعی برای حساب شما فعال نیست. برای فعال‌سازی با مدیر شرکت یا پشتیبانی تماس بگیرید.
+        </div>
+      </DashboardShell>
+    );
+  }
   const brands = await fetchAllBrands();
   const nested = await Promise.all(brands.map((b) => fetchBrands(b)));
   const cars = nested.flat();

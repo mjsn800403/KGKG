@@ -227,6 +227,39 @@ def _is_expired(user):
     return bool(exp and exp <= timezone.now())
 
 
+def _tehran_day_start():
+    """Midnight today in Tehran as an aware datetime (the site's users' day)."""
+    from zoneinfo import ZoneInfo
+    now = timezone.now().astimezone(ZoneInfo('Asia/Tehran'))
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _denied_reason(request):
+    """Why a presented token no longer authenticates: 'locked', 'expired',
+    'inactive' or None (no/unknown/expired session). Only for the message."""
+    key = _portal_token(request)
+    if not key:
+        return None
+    token = AuthToken.resolve(key, select_related=('user', 'user__company'))
+    if not token:
+        return None
+    u = token.user
+    if u.locked:
+        return 'locked'
+    if not u.active or not u.company.active:
+        return 'inactive'
+    if _is_expired(u):
+        return 'expired'
+    return None
+
+
+DENIED_MESSAGES = {
+    'expired': 'مهلت اشتراک شرکت شما به پایان رسیده است. برای تمدید با مدیر شرکت یا پشتیبانی تماس بگیرید.',
+    'locked': 'حساب کاربری شما قفل شده است. با مدیر شرکت یا پشتیبانی تماس بگیرید.',
+    'inactive': 'حساب کاربری یا شرکت شما غیرفعال است. با پشتیبانی تماس بگیرید.',
+}
+
+
 def portal_user(request):
     """Resolve the PortalUser from a Bearer token or session cookie, or None.
 
@@ -683,6 +716,10 @@ def me_view(request):
     """
     user = portal_user(request)
     if not user:
+        reason = _denied_reason(request)
+        if reason:
+            return JsonResponse({'error': 'unauthorized', 'reason': reason,
+                                 'detail': DENIED_MESSAGES[reason]}, status=401)
         return JsonResponse({'error': 'unauthorized'}, status=401)
     resp = JsonResponse({'user': _user_dict(user, with_access=True)})
     try:
@@ -818,6 +855,8 @@ def admin_login_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
+    if not _verify_turnstile(request, b.get('turnstile_token') or '', 'login'):
+        return JsonResponse({'error': 'تأیید «ربات نیستم» ناموفق بود؛ دوباره تلاش کنید.'}, status=403)
     username = (b.get('username') or '').strip()
     password = b.get('password') or ''
     admin = PlatformAdmin.objects.filter(username__iexact=username).first()
@@ -843,7 +882,7 @@ def admin_overview_view(request):
         'users': PortalUser.objects.count(),
         'cars': Car.objects.count(),
         'activities_today': ActivityLog.objects.filter(
-            created_at__date=timezone.now().date()).count(),
+            created_at__gte=_tehran_day_start()).count(),
     })
 
 
@@ -1015,6 +1054,10 @@ def admin_companies_view(request):
         req_id = b.get('purchase_request_id')
         if req_id:
             PurchaseRequest.objects.filter(id=req_id).update(status='approved', handled=True)
+            from .quota import REQUEST_PLAN
+            pr = PurchaseRequest.objects.filter(id=req_id).first()
+            if pr and REQUEST_PLAN.get(pr.year):
+                Company.objects.filter(id=c.id).update(plan=REQUEST_PLAN[pr.year])
 
         return JsonResponse({'ok': True, 'company': _company_dict(c, deep=True),
                              'admin': admin_result})

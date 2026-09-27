@@ -279,8 +279,9 @@ def purchase_request_view(request):
             {'error': 'تعداد صندلی با جمع نقش‌های سازمانی همخوانی ندارد.'}, status=400)
     seats_count = plan_total
     # The free demo and the 2-day pass are single-user plans (see lib/pricing.js).
-    if (_clean(body.get('brand'), 120) == 'همهٔ خودروها'
-            and _clean(body.get('year'), 20) in ('demo', '2day') and seats_count != 1):
+    # Keyed on the plan code alone: the brand label is free text and spelling
+    # it differently used to skip this check.
+    if year in ('demo', '2day') and seats_count != 1:
         return JsonResponse({'error': 'حساب دمو و دسترسی ۲ روزه فقط برای ۱ کاربر است.'}, status=400)
 
     raw_docs = body.get('documents') or []
@@ -292,6 +293,15 @@ def purchase_request_view(request):
         return JsonResponse({'error': 'برند، مدل و سال خودرو الزامی است.'}, status=400)
     if not documents:
         return JsonResponse({'error': 'حداقل یک نوع مستند را انتخاب کنید.'}, status=400)
+    # Iranian mobile: 09xxxxxxxxx (Persian/Arabic digits and +98 accepted).
+    import re as _re_m
+    _digits = mobile.translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789'))
+    _digits = _re_m.sub(r'[\s-]', '', _digits)
+    if _digits.startswith('+98'):
+        _digits = '0' + _digits[3:]
+    if mobile and not _re_m.fullmatch(r'09\d{9}', _digits):
+        return JsonResponse({'error': 'شمارهٔ تلفن همراه نامعتبر است (مثال: 09121234567).'}, status=400)
+    mobile = _digits or mobile
     if not (company and landline and mobile and reg_no):
         return JsonResponse(
             {'error': 'برای اشخاص حقوقی، نام شرکت، تلفن ثابت، تلفن همراه و شماره ثبتی الزامی است.'},
@@ -309,8 +319,10 @@ def purchase_request_view(request):
             seat_plan=seat_plan,
             wants_demo=wants_demo, wants_ai_assistant=wants_ai_assistant,
         )
-    except Exception as e:
-        return JsonResponse({'error': f'ثبت درخواست ناموفق بود: {e}'}, status=500)
+    except Exception:
+        import logging
+        logging.getLogger('kgkg.purchase').exception('purchase request save failed')
+        return JsonResponse({'error': 'ثبت درخواست ناموفق بود؛ لطفاً دوباره تلاش کنید.'}, status=500)
 
     return JsonResponse({'ok': True, 'id': pr.id})
 

@@ -713,11 +713,11 @@ async function adminFetch(path, options = {}) {
   return data;
 }
 
-export async function adminLogin(username, password) {
+export async function adminLogin(username, password, turnstileToken) {
   const res = await fetch(`${API_BASE}/api/admin/login/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, turnstile_token: turnstileToken }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `ورود ادمین ناموفق بود: ${res.status}`);

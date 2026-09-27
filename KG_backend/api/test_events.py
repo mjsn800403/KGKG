@@ -150,3 +150,17 @@ class DetectAndEmitTests(TestCase):
         events.detect_and_emit()          # identical state -> no new event
         self.assertEqual(Event.objects.count(), n0)
         self.assertTrue(SystemState.objects.filter(key='pending_fingerprint').exists())
+
+
+# Turnstile is verified against Cloudflare when TURNSTILE_SECRET is set (it is
+# on the server); tests exercise the login logic, not Cloudflare.
+from unittest import mock as _ts_mock
+_TS_PATCH = _ts_mock.patch('api.portal._verify_turnstile', return_value=True)
+
+
+def setUpModule():
+    _TS_PATCH.start()
+
+
+def tearDownModule():
+    _TS_PATCH.stop()

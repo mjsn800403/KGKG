@@ -660,10 +660,18 @@ export async function POST(request) {
       return Response.json({ error: 'برای استفاده از دستیار هوشمند ابتدا وارد شوید.' }, { status: 401 });
     }
     let me;
-    try {
-      me = await backendGet('/api/auth/me/', token);
-    } catch {
-      return Response.json({ error: 'نشست شما منقضی شده؛ دوباره وارد شوید.' }, { status: 401 });
+    {
+      // Read /me directly so an expired / locked account gets its real reason
+      // instead of a generic "session expired".
+      const mr = await fetch(`${BACKEND_URL}/api/auth/me/`, {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30000),
+      }).catch(() => null);
+      const mj = mr ? await mr.json().catch(() => ({})) : {};
+      if (!mr || !mr.ok) {
+        return Response.json({ error: mj?.detail || 'نشست شما منقضی شده؛ دوباره وارد شوید.',
+                               reason: mj?.reason || null }, { status: 401 });
+      }
+      me = mj;
     }
     if (!me?.user) {
       return Response.json({ error: 'نشست شما منقضی شده؛ دوباره وارد شوید.' }, { status: 401 });
@@ -672,6 +680,23 @@ export async function POST(request) {
       return Response.json(
         { error: 'دستیار هوش مصنوعی برای حساب شما فعال نیست. با مدیر یا پشتیبانی تماس بگیرید.' },
         { status: 403 });
+    }
+    // Plan allowance (demo 5 / 2-day 20 / monthly 150 / annual 200). Consumed
+    // up front and logged as activity; 429 with a Persian message when spent.
+    let quota = null;
+    {
+      let peek = {};
+      try { peek = await request.clone().json(); } catch { /* validated below */ }
+      const qr = await fetch(`${BACKEND_URL}/api/auth/ai-usage/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ detail: String(peek?.message || '').slice(0, 300) }),
+      }).catch(() => null);
+      const qj = qr ? await qr.json().catch(() => ({})) : {};
+      if (qr && qr.status === 429) {
+        return Response.json({ error: qj.error, quota: qj.quota }, { status: 429 });
+      }
+      quota = qj?.quota || null;
     }
 
     const { message, sessionId, userId, brand, model, car,
@@ -833,6 +858,7 @@ export async function POST(request) {
         llm: !deg,
         suggestions: buildSuggestions({ mode, rag, diag, clarifyRoots }),
         contextualized,
+        quota,
         topBlobs: (sources || []).map((s) => s.blob_id).filter((b) => b != null),
       };
     };

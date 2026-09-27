@@ -411,3 +411,17 @@ class SecuritySettingsTests(TestCase):
     def test_debug_is_off(self):
         from django.conf import settings
         self.assertFalse(settings.DEBUG)
+
+
+# Turnstile is verified against Cloudflare when TURNSTILE_SECRET is set (it is
+# on the server); tests exercise the login logic, not Cloudflare.
+from unittest import mock as _ts_mock
+_TS_PATCH = _ts_mock.patch('api.portal._verify_turnstile', return_value=True)
+
+
+def setUpModule():
+    _TS_PATCH.start()
+
+
+def tearDownModule():
+    _TS_PATCH.stop()

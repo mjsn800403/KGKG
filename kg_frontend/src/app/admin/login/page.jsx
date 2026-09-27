@@ -4,13 +4,14 @@
 // A successful login lands on the admin hub (/admin), which never renders
 // for unauthenticated visitors.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
 import { adminLogin, getAdminToken } from '@/utils/api';
 
 const EASE = [0.22, 1, 0.36, 1];
+const TURNSTILE_SITEKEY = '0x4AAAAAAEjnbFG2W2QYf-cE';
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -19,10 +20,44 @@ export default function AdminLogin() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [entered, setEntered] = useState(false);
+  const [token, setToken] = useState('');
+  const boxRef = useRef(null);
+  const widgetId = useRef(null);
 
   useEffect(() => {
     if (getAdminToken()) router.replace('/admin');
   }, [router]);
+
+  const renderWidget = useCallback(() => {
+    if (!boxRef.current || widgetId.current || !window.turnstile) return;
+    widgetId.current = window.turnstile.render(boxRef.current, {
+      sitekey: TURNSTILE_SITEKEY,
+      action: 'login',
+      callback: (t) => setToken(t),
+      'expired-callback': () => setToken(''),
+      'error-callback': () => setToken(''),
+      theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
+      language: 'fa',
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!document.querySelector('script[data-cf-turnstile]')) {
+      const s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      s.async = true; s.defer = true;
+      s.setAttribute('data-cf-turnstile', '1');
+      document.head.appendChild(s);
+    }
+    const iv = setInterval(() => { if (window.turnstile) { renderWidget(); clearInterval(iv); } }, 300);
+    return () => {
+      clearInterval(iv);
+      try {
+        if (widgetId.current && boxRef.current?.isConnected) window.turnstile?.remove(widgetId.current);
+      } catch { /* noop */ }
+      widgetId.current = null;
+    };
+  }, [renderWidget]);
 
   async function submit(e) {
     e?.preventDefault();
@@ -32,14 +67,20 @@ export default function AdminLogin() {
       setError('نام کاربری و رمز عبور مدیر سامانه را وارد کنید.');
       return;
     }
+    if (!token) {
+      setError('لطفاً تأیید کنید که ربات نیستید.');
+      return;
+    }
     setBusy(true);
     try {
-      await adminLogin(username.trim(), password);
+      await adminLogin(username.trim(), password, token);
       setEntered(true);
       setTimeout(() => router.replace('/admin'), 650);
     } catch (err) {
       setError(err?.message || 'ورود ناموفق بود.');
       setBusy(false);
+      setToken('');
+      try { window.turnstile?.reset(widgetId.current || undefined); } catch { /* noop */ }
     }
   }
 
@@ -94,6 +135,7 @@ export default function AdminLogin() {
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && submit(e)} />
                     </div>
+                    <div ref={boxRef} style={{ margin: '4px 0 12px', minHeight: 65 }} />
                     <AnimatePresence>
                       {error && (
                         <motion.div className="pform-error" style={{ marginBottom: 12 }}
