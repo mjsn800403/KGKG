@@ -48,7 +48,7 @@ const FAQ = [
   { q: 'قیمت‌های این صفحه نهایی است؟', a: 'قیمت‌ها برآورد رسمی ما برای هر پلن است. مبلغ نهایی، به‌همراه جزئیات پرداخت، در پیش‌فاکتوری که کارشناس فروش برایتان ارسال می‌کند اعلام می‌شود.' },
   { q: 'اشتراک شامل کدام خودروها می‌شود؟', a: 'همهٔ خودروها و همهٔ لایه‌های مستند موجود در پلتفرم؛ خودروهایی که در طول اشتراک اضافه می‌شوند نیز بدون هزینهٔ اضافه در دسترس شما قرار می‌گیرند.' },
   { q: 'سهمیهٔ دستیار هوشمند چطور کار می‌کند؟', a: 'هر کاربر در اشتراک ماهانه ۱۵۰ و در اشتراک سالانه ۲۰۰ پرسش در ماه دارد؛ دسترسی ۲ روزه ۲۰ پرسش و حساب دمو ۵ پرسش دارد. سهمیهٔ کاربران یک شرکت با هم جمع می‌شود. اگر سهمیه تمام شود فقط دستیار متوقف می‌شود و دسترسی به مستندات ادامه دارد؛ برای سهمیهٔ بیشتر کافی است از پورتال درخواست ثبت کنید.' },
-  { q: 'حساب دمو چیست؟', a: 'یک حساب رایگان ۱ روزه برای یک نفر، تا پیش از خرید با پلتفرم و مستندات آن آشنا شوید. درخواست دمو پس از بررسی کارشناس فعال می‌شود و برای هر شماره موبایل فقط یک حساب صادر می‌شود.' },
+  { q: 'حساب دمو چیست؟', a: 'یک حساب دمو ۱ روزه برای یک نفر، تا پیش از خرید با پلتفرم و مستندات آن آشنا شوید. درخواست دمو پس از بررسی کارشناس فعال می‌شود و برای هر شماره موبایل فقط یک حساب صادر می‌شود.' },
   { q: 'دسترسی ۲ روزه برای چه کسانی است؟', a: 'برای تعمیرکارانی که می‌خواهند پیش از خرید اشتراک، پلتفرم را در کار واقعی بیازمایند. اگر ظرف ۷ روز پس از آن اشتراک ماهانه یا سالانه بخرید، مبلغ دسترسی ۲ روزه از قیمت اشتراک کسر می‌شود.' },
   { q: 'بعداً می‌توانم کاربر اضافه کنم؟', a: 'بله. مدیر شرکت از پورتال درخواست افزایش ظرفیت کاربران را ثبت می‌کند و قیمت هر کاربر اضافه بر اساس همین جدول محاسبه می‌شود.' },
   { q: 'تیم ما بیش از ۵۰ نفر است.', a: 'برای تیم‌های بزرگ‌تر از ۵۰ نفر و شبکه‌های نمایندگی، قیمت سازمانی جداگانه ارائه می‌شود. در فرم، تعداد کاربران را وارد کنید تا کارشناس ما با شما تماس بگیرد.' },
@@ -65,7 +65,7 @@ function nextSeatPrice(seats: number) {
 
 function Price({ value, big = false }: { value: number | null; big?: boolean }) {
   // Cross-fade the figure when it changes so the eye catches the update.
-  const text = value == null ? 'قیمت سازمانی' : value === 0 ? 'رایگان' : faMillion(value, { unit: false });
+  const text = value == null ? 'قیمت سازمانی' : value === 0 ? 'دمو ۱ روزه' : faMillion(value, { unit: false });
   return (
     <span className={`pl-price${big ? ' pl-price-big' : ''}`}>
       <AnimatePresence mode="popLayout" initial={false}>
@@ -92,7 +92,7 @@ function PlanCards({ plan, onPlan }: { plan: PlanId; onPlan: (p: PlanId) => void
   const cards = [
     {
       id: 'demo' as PlanId, badge: null,
-      from: 'رایگان', fromUnit: `${fa(DEMO_DAYS)} روز`,
+      from: 'دمو', fromUnit: `${fa(DEMO_DAYS)} روز`,
       facts: ['فقط ۱ کاربر', `${fa(PLANS.demo.aiPerSeat)} پرسش دستیار`, 'پس از تأیید کارشناس فعال می‌شود'],
     },
     {
@@ -106,7 +106,7 @@ function PlanCards({ plan, onPlan }: { plan: PlanId; onPlan: (p: PlanId) => void
       facts: ['تمدید ماه‌به‌ماه', `هر کاربر: ${fa(PLANS.monthly.aiPerSeat)} پرسش دستیار در ماه`, 'افزودن کاربر در هر زمان'],
     },
     {
-      id: 'annual' as PlanId, badge: '۲ ماه رایگان',
+      id: 'annual' as PlanId, badge: '۲ ماه تخفیف',
       from: `از ${faMillion(LIST_MONTHLY[1] * 10)}`, fromUnit: 'در سال',
       facts: ['پرداخت ۱۰ ماه، استفادهٔ ۱۲ ماه', `هر کاربر: ${fa(PLANS.annual.aiPerSeat)} پرسش دستیار در ماه`, 'پیشنهاد ما برای تعمیرگاه‌ها'],
     },
@@ -216,7 +216,7 @@ function Summary({ q, onSubmitLabel, submitting, formId }: { q: Quote; onSubmitL
         {!q.custom && <span className="pl-sum-period">{period}</span>}
       </div>
       {q.plan.id === 'demo' ? (
-        <p className="pl-sum-sub">دسترسی آزمایشی رایگان؛ پس از بررسی درخواست توسط کارشناس فعال می‌شود.</p>
+        <p className="pl-sum-sub">دسترسی آزمایشی ۱ روزه؛ پس از بررسی درخواست توسط کارشناس فعال می‌شود.</p>
       ) : q.custom ? (
         <p className="pl-sum-sub">قیمت تیم‌های بیش از {fa(MAX_LISTED_SEATS)} کاربر پس از تماس کارشناس اعلام می‌شود.</p>
       ) : (
@@ -339,7 +339,7 @@ function SuccessDialog({ open, onClose, data }: { open: boolean; onClose: () => 
               )}
               <div><dt>پلن</dt><dd>{data.q.plan.title}</dd></div>
               <div><dt>تعداد کاربران</dt><dd>{fa(data.q.seats)} کاربر</dd></div>
-              <div><dt>برآورد هزینه</dt><dd>{data.q.custom ? 'قیمت سازمانی' : data.q.total === 0 ? 'رایگان' : faMillion(data.q.total as number)}</dd></div>
+              <div><dt>برآورد هزینه</dt><dd>{data.q.custom ? 'قیمت سازمانی' : data.q.total === 0 ? 'دمو ۱ روزه' : faMillion(data.q.total as number)}</dd></div>
             </dl>
             <ol className="pl-ok-next" aria-label="مراحل بعدی">
               <li className="is-done"><span>{fa(1)}</span>ثبت درخواست</li>
@@ -452,7 +452,7 @@ export default function PlansPage({ initialPlan = 'annual', initialSeats = 1 }: 
     const landline = latinDigits(f.landline).replace(/[\s-]/g, '');
     const priceLine = q.custom
       ? 'برآورد قیمت: قیمت سازمانی (بیش از ۵۰ کاربر)'
-      : q.plan.id === 'demo' ? 'برآورد قیمت: رایگان (حساب دمو)'
+      : q.plan.id === 'demo' ? 'برآورد قیمت: حساب دمو ۱ روزه'
       : `برآورد قیمت نمایش‌داده‌شده به مشتری: ${faMillion(q.total as number)} (${q.plan.id === 'pass' ? 'برای ۲ روز' : q.plan.id === 'monthly' ? 'ماهانه' : 'سالانه'})`;
     const note = [
       `پلن: ${q.plan.title} · ${fa(q.seats)} کاربر`,
@@ -678,7 +678,7 @@ export default function PlansPage({ initialPlan = 'annual', initialSeats = 1 }: 
                     <tr>
                       <th scope="col">تعداد کاربران</th>
                       <th scope="col">ماهانه</th>
-                      <th scope="col">سالانه <span className="pl-th-note">۲ ماه رایگان</span></th>
+                      <th scope="col">سالانه <span className="pl-th-note">۲ ماه تخفیف</span></th>
                       <th scope="col">هر کاربر در ماه <span className="pl-th-note">با اشتراک سالانه</span></th>
                       <th scope="col"><span className="lp-visually-hidden">انتخاب</span></th>
                     </tr>
@@ -705,7 +705,7 @@ export default function PlansPage({ initialPlan = 'annual', initialSeats = 1 }: 
                 </table>
               </div>
               <div className="pl-table-notes">
-                <p><b>حساب دمو:</b> رایگان، {fa(DEMO_DAYS)} روز، فقط ۱ کاربر.</p>
+                <p><b>حساب دمو:</b> {fa(DEMO_DAYS)} روز، فقط ۱ کاربر.</p>
                 <p><b>دسترسی ۲ روزه:</b> {faMillion(TWO_DAY_PER_SEAT)}، فقط ۱ کاربر.</p>
                 <p><b>سایر تعدادها:</b> برای هر تعداد کاربر تا {fa(MAX_LISTED_SEATS)} نفر، قیمت در بخش انتخاب پلن محاسبه می‌شود.</p>
                 <p><b>بیش از {fa(MAX_LISTED_SEATS)} کاربر:</b> قیمت سازمانی، پس از تماس کارشناس.</p>
@@ -759,7 +759,7 @@ export default function PlansPage({ initialPlan = 'annual', initialSeats = 1 }: 
         <div className={`pl-dock${dockOn ? ' is-on' : ''}`} inert={!dockOn}>
           <div className="pl-dock-price">
             <small>{q.plan.short} · {fa(q.seats)} کاربر</small>
-            <b>{q.custom ? 'قیمت سازمانی' : q.total === 0 ? 'رایگان' : faMillion(q.total as number)}</b>
+            <b>{q.custom ? 'قیمت سازمانی' : q.total === 0 ? 'دمو ۱ روزه' : faMillion(q.total as number)}</b>
           </div>
           <button
             type="button" className="lp-btn lp-btn-primary"

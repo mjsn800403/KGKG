@@ -36,7 +36,8 @@ from . import config, store, embed, ingest
 # "DTC P0300-00: ...; DTC P0301-00: Cylinder 1 Misfire Detected; ..."). Match
 # every "DTC <code>:" segment so each code is individually indexed, all pointing
 # at the same node (same diagnostic steps / procedure).
-_MULTI_DTC_RE = re.compile(r'DTC\s+([A-Za-z][0-9A-Za-z]{3,4}(?:-\d{1,3})?)\s*:\s*')
+_MULTI_DTC_RE = re.compile(r'DTC\s+([A-Za-z][0-9A-Za-z]{3,4}(?:-[0-9A-Fa-f]{1,3})?)\s*:\s*')
+_RUN_TOGETHER_RE = re.compile(r'^([A-Z][0-9A-F]{4})([0-9A-F]{2})$')
 
 
 def _parse_codes_from_title(t):
@@ -122,7 +123,9 @@ def init_diag_schema(conn):
 # --- helpers ---------------------------------------------------------------
 def norm_code(s):
     """Canonical DTC code key for matching: upper-case, '-' as the separator."""
-    return (s or '').strip().upper().replace(':', '-')
+    k = (s or '').strip().upper().replace(':', '-')
+    m = _RUN_TOGETHER_RE.match(k)          # P060794 (scan tool / TIS) -> P0607-94
+    return f'{m.group(1)}-{m.group(2)}' if m else k
 
 
 def _taxonomy(chain):
@@ -135,6 +138,10 @@ def _taxonomy(chain):
         if (t or '').strip().lower() in config.DIAG_SECTION_ROOTS:
             sec = i
             break
+    else:
+        # TIS: the publication (chain[2]) is the section root.
+        if len(chain) > 3 and (chain[1] or '').strip().lower() in config.DIAG_MANUAL_ROOTS:
+            sec = 2
     levels = chain[sec + 1:-1]          # below the section, excluding the node
     system = levels[0] if levels else ''
     subsystem = levels[1] if len(levels) > 1 else ''
@@ -170,6 +177,7 @@ def _app_url(meta, car_stem, chain):
 _TRIGGER_HINTS = (
     'is output when', 'is set when', 'sets when', 'is stored when',
     'is detected when', 'output when', 'set when', 'detected when',
+    'stores dtc', 'store dtc',             # TIS: "... the ECU stores DTC P0607-94"
 )
 
 
@@ -203,7 +211,7 @@ def _aspect_rank(aspect):
 def _load_tree(src):
     """Light tree load (no content): maps for breadcrumbs + children + parent."""
     rows = src.execute(
-        "SELECT id, parent_id, title, file_type, sort_order FROM nodes").fetchall()
+        "SELECT id, parent_id, title, file_type, sort_order, href FROM nodes").fetchall()
     crumbs = ingest.build_breadcrumbs(rows)
     title = {r['id']: (r['title'] or '') for r in rows}
     parent = {r['id']: r['parent_id'] for r in rows}
@@ -217,7 +225,12 @@ def _load_tree(src):
     title2ids = {}
     for r in rows:
         title2ids.setdefault((r['title'] or '').strip(), []).append(r['id'])
-    return rows, crumbs, title, parent, children, title2ids
+    # leaf href -> node id: TIS symptom tables link by href (icon, no text)
+    href2id = {}
+    for r in rows:
+        if r['href'] and r['file_type'] == 'end_path':
+            href2id.setdefault(r['href'].split('#', 1)[0], r['id'])
+    return rows, crumbs, title, parent, children, title2ids, href2id
 
 
 def _fetch_content(src, node_ids):
@@ -281,6 +294,14 @@ def _extract_dtcs(src, meta, car_stem, crumbs, title, parent, children):
         aspect_map[nid] = aspects
 
     contents = _fetch_content(src, set(desc_target.values()))
+    # A childless DTC (TIS: one page per code) holds its whole chain as page
+    # sections; read which ones it has from the section headings.
+    page_has = {}
+    for nid, aspects in aspect_map.items():
+        if len(aspects) == 1 and aspects[0][3] == nid:
+            up = contents.get(nid, '').upper()
+            page_has[nid] = {'procedure': int('PROCEDURE' in up),
+                             'wiring': int('WIRING DIAGRAM' in up)}
 
     dtc_rows, step_rows = [], []
     did = 0
@@ -300,6 +321,8 @@ def _extract_dtcs(src, meta, car_stem, crumbs, title, parent, children):
             cchain = crumbs.get(cid, chain + [aspect])
             step_rows.append((key, len(step_rows), aspect, cid,
                               _app_url(meta, car_stem, cchain)))
+        for kk, v in page_has.get(nid, {}).items():
+            has[kk] = has[kk] or v
         # the DTC's own link points at its Description (a real leaf)
         desc_chain = crumbs.get(desc_target.get(nid), chain)
         dtc_rows.append((
@@ -335,16 +358,34 @@ def _parse_symptom_table(html):
                 s_idx = i
             elif 'suspect' in h:
                 a_idx = i
+        ncols = len(headers)
+        span_left, last_symptom = 0, ''
         for tr in table.find_all('tr'):
             tds = tr.find_all('td')
             if len(tds) < 2:
                 continue
-            symptom = tds[s_idx].get_text(' ', strip=True) if s_idx < len(tds) else ''
-            suspected = tds[a_idx].get_text(' ', strip=True) if a_idx < len(tds) else ''
+            if span_left > 0 and ncols and len(tds) < ncols:
+                # Continuation of a Symptom cell with rowspan (TIS): this row
+                # starts at the Suspected Area column.
+                span_left -= 1
+                tds = [None] * (ncols - len(tds)) + tds
+                symptom = last_symptom
+            else:
+                sc = tds[s_idx] if s_idx < len(tds) else None
+                symptom = sc.get_text(' ', strip=True) if sc is not None else ''
+                try:
+                    span_left = max(0, int((sc.get('rowspan') if sc is not None else 1) or 1) - 1)
+                except ValueError:
+                    span_left = 0
+                last_symptom = symptom
+            ac = tds[a_idx] if a_idx < len(tds) else None
+            suspected = ac.get_text(' ', strip=True) if ac is not None else ''
             if not symptom:
                 continue
             link_text, link_href = '', ''
             for td in tds:
+                if td is None:
+                    continue
                 a = td.find('a')
                 if a is not None:
                     link_text = a.get_text(' ', strip=True)
@@ -354,7 +395,7 @@ def _parse_symptom_table(html):
 
 
 def _extract_symptoms(src, meta, car_stem, crumbs, title, title2ids,
-                      code_by_node, dtc_by_subsystem):
+                      code_by_node, dtc_by_subsystem, href2id=None):
     """Return (symptom_rows, link_rows). Symptom rows come from Problem Symptoms
     Table pages; links are (a) the table's own <a> target resolved by title, and
     (b) inheritance proximity to DTCs in the same subsystem."""
@@ -371,7 +412,7 @@ def _extract_symptoms(src, meta, car_stem, crumbs, title, title2ids,
         chain = crumbs.get(nid, [title.get(nid, '')])
         system, subsystem, component = _taxonomy(chain)
         app_url = _app_url(meta, car_stem, chain)
-        for symptom, suspected, link_text, _href in _parse_symptom_table(html[0]):
+        for symptom, suspected, link_text, link_href in _parse_symptom_table(html[0]):
             dedup_key = (symptom.strip().lower(), subsystem.lower(),
                          (suspected or '').strip().lower())
             if dedup_key in seen:
@@ -386,6 +427,10 @@ def _extract_symptoms(src, meta, car_stem, crumbs, title, title2ids,
                 cands = title2ids.get(link_text.strip())
                 if cands:
                     target_id = cands[0]
+            if target_id is None and link_href and href2id:
+                target_id = href2id.get(link_href.split('#', 1)[0])
+                if target_id is not None and not link_text:
+                    link_text = title.get(target_id, '')
             if target_id is not None:
                 tcode = code_by_node.get(target_id)
                 tchain = crumbs.get(target_id, [link_text])
@@ -434,7 +479,7 @@ def build_car(car_stem, rebuild=False, log=print):
     t0 = time.time()
     src = store.open_car_ro(src_path)
     try:
-        rows, crumbs, title, parent, children, title2ids = _load_tree(src)
+        rows, crumbs, title, parent, children, title2ids, href2id = _load_tree(src)
         log(f"    {car_stem[:38]:38s} nodes={len(title)}")
 
         dtc_rows, step_rows = _extract_dtcs(src, meta, car_stem, crumbs, title, parent, children)
@@ -445,7 +490,7 @@ def build_car(car_stem, rebuild=False, log=print):
 
         symptom_rows, link_rows = _extract_symptoms(
             src, meta, car_stem, crumbs, title, title2ids,
-            code_by_node, dtc_by_subsystem)
+            code_by_node, dtc_by_subsystem, href2id)
     finally:
         src.close()
 

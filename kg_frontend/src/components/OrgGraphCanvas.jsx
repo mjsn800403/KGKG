@@ -19,6 +19,7 @@ import {
 } from '@/utils/api';
 import { useVehicleFilter } from './VehicleFilter';
 import { friendlyError } from '@/lib/friendlyError';
+import { normalizePhone } from '@/utils/phone';
 
 const GAP_X = 210;
 const GAP_Y = 165;
@@ -311,6 +312,7 @@ function NodePanel({ node, graph, canEdit, onClose, onAddChild, capReached, onCh
   const saveLabel = () => guard(() => orgUpdateNode(node.id, { label }));
   const assign = (uid) => guard(() => orgUpdateNode(node.id, { occupant_id: uid }));
   const vacate = () => guard(() => orgUpdateNode(node.id, { occupant_id: null }));
+  const setOtp = (on) => guard(() => orgUpdateNode(node.id, { occupant_otp_enabled: on }));
   const setParent = (pid) => guard(() => orgUpdateNode(node.id, { parent_id: pid || null }));
   const del = () => {
     if (confirm('این گره حذف شود؟ زیرمجموعه‌ها به گره بالادست منتقل می‌شوند.')) {
@@ -320,7 +322,7 @@ function NodePanel({ node, graph, canEdit, onClose, onAddChild, capReached, onCh
 
   const createUser = () => guard(async () => {
     const r = await orgCreateUser(node.id, form);
-    if (r?.credentials) setCreds(r.credentials);
+    if (r?.credentials) setCreds({ ...r.credentials, sms_sent: r.sms_sent });
     setForm({ display_name: '', phone: '', username: '', password: '' });
   });
 
@@ -332,10 +334,11 @@ function NodePanel({ node, graph, canEdit, onClose, onAddChild, capReached, onCh
     facets: [
       {
         id: 'granted',
-        label: 'دسترسی',
+        label: 'نمایش',
+        all: 'همهٔ خودروهای شرکت',
         options: [
-          { id: 'on', label: 'انتخاب‌شده', test: (c) => !!access[c.car_id] },
-          { id: 'off', label: 'انتخاب‌نشده', test: (c) => !access[c.car_id] },
+          { id: 'on', label: 'دارای دسترسی', test: (c) => !!access[c.car_id] },
+          { id: 'off', label: 'بدون دسترسی', test: (c) => !access[c.car_id] },
         ],
       },
     ],
@@ -449,6 +452,19 @@ function NodePanel({ node, graph, canEdit, onClose, onAddChild, capReached, onCh
                   {!readonly && !node.is_root &&
                     <button className="org-btn ghost" onClick={vacate} disabled={busy}>برداشتن</button>}
                 </div>
+              ) : null}
+              {node.occupant ? (
+                <div className="org-occ" style={{ marginTop: 8 }}>
+                  <div className="org-panel-sub">
+                    ورود دو مرحله‌ای: {!node.occupant.has_phone ? 'غیرفعال (بدون موبایل)'
+                      : (node.occupant.otp_enabled !== false ? 'فعال' : 'غیرفعال')}
+                  </div>
+                  {!readonly && node.occupant.has_phone &&
+                    <button className="org-btn ghost" disabled={busy}
+                      onClick={() => setOtp(!(node.occupant.otp_enabled !== false))}>
+                      {node.occupant.otp_enabled !== false ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
+                    </button>}
+                </div>
               ) : readonly ? <span className="seat-empty">بدون کاربر</span> : (
                 <>
                   <div className="org-sec-t sm">انتخاب از کاربران شرکت</div>
@@ -467,8 +483,8 @@ function NodePanel({ node, graph, canEdit, onClose, onAddChild, capReached, onCh
                   <div className="org-sec-t sm" style={{ marginTop: 10 }}>یا ساخت کاربر جدید</div>
                   <input className="org-select" placeholder="نام و نام خانوادگی *" value={form.display_name}
                     onChange={(e) => setForm({ ...form, display_name: e.target.value })} />
-                  <input className="org-select ltr" placeholder="شماره موبایل * (09xxxxxxxxx)" value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                  <input className="org-select ltr" placeholder="شماره موبایل * (نام کاربری و رمز به آن پیامک می‌شود)" value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: normalizePhone(e.target.value) })} />
                   <input className="org-select ltr" placeholder="نام کاربری (اختیاری)" value={form.username}
                     onChange={(e) => setForm({ ...form, username: e.target.value })} />
                   <input className="org-select ltr" placeholder="رمز عبور (خالی = خودکار)" value={form.password}
@@ -477,7 +493,9 @@ function NodePanel({ node, graph, canEdit, onClose, onAddChild, capReached, onCh
                     disabled={busy || !form.display_name.trim() || !form.phone.trim()}>ساخت کاربر</button>
                   {creds && (
                     <div className="org-creds">
-                      <div>کاربر ساخته شد — این اطلاعات را ذخیره کنید:</div>
+                      <div>{creds.sms_sent
+                        ? 'کاربر ساخته شد و نام کاربری و رمز عبور به موبایل او پیامک شد.'
+                        : 'کاربر ساخته شد، اما ارسال پیامک ناموفق بود — این اطلاعات را به او بدهید:'}</div>
                       <div className="ltr"><b>{creds.username}</b> / <b>{creds.password}</b></div>
                     </div>
                   )}

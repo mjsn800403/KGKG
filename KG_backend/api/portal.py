@@ -28,6 +28,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from django.db.models import Count, Q
 
+from .models import normalize_phone
 from .models import (
     ActivityLog, AdminAuthToken, AuthToken, Car, Company, CompanyCarAccess,
     CompanyRole, OtpChallenge, OtpEvent, PlatformAdmin, PortalUser,
@@ -60,15 +61,6 @@ _DUMMY_PASSWORD_HASH = _make_password('kg-login-timing-equalizer')
 _logger_sms = logging.getLogger("kgkg.sms")
 
 
-def _otp_debug_expose() -> bool:
-    """TEMPORARY debug switch. When env OTP_DEBUG_EXPOSE is truthy, the login
-    and resend endpoints return the freshly generated OTP code in the JSON
-    response (field ``debug_code``) so an admin can log into any account for
-    testing without needing the SMS. OFF by default; remove the env line and
-    restart kgkg-backend to revert. Never leave this on in normal operation."""
-    return os.environ.get('OTP_DEBUG_EXPOSE', '').strip().lower() in ('1', 'true', 'yes', 'on')
-
-
 def _otp_phone_hint(phone: str) -> str:
     if len(phone) > 6:
         return phone[:3] + '*' * (len(phone) - 5) + phone[-2:]
@@ -97,7 +89,7 @@ def _post_sms(phone: str, text: str):
     payload = json.dumps({
         "username": sms_user,
         "password": sms_key,
-        "to": phone,
+        "to": normalize_phone(phone),
         "from": sms_from,
         "text": text,
         "isFlash": False,
@@ -338,6 +330,10 @@ def _user_dict(u, with_access=False):
         # Lets the admin UI show the phone field only where it matters:
         # a phone is required to log in only for org-graph root seats.
         'otp_required': _otp_required(u),
+        'otp_enabled': bool(getattr(u, 'otp_enabled', True)),
+        'notify_manual_update': bool(getattr(u, 'notify_manual_update', True)),
+        'notify_new_device': bool(getattr(u, 'notify_new_device', True)),
+        'has_phone': bool((u.phone or '').strip()),
         'invite_status': u.invite_status, 'password_set': u.password_set,
         # Effective expiry: the company's 0-level (root) seat owns the access
         # window; every seat below inherits it. Only the root occupant's own
@@ -362,6 +358,9 @@ def _user_dict(u, with_access=False):
     return d
 
 
+PLAN_CHOICES = ('demo', 'pass', 'monthly', 'annual')
+
+
 def _company_dict(c, deep=False):
     d = {
         'id': c.id, 'name': c.name, 'department_label': c.department_label,
@@ -378,13 +377,59 @@ def _company_dict(c, deep=False):
     d['access_expires_at'] = (_root.access_expires_at.isoformat()
                               if (_root and _root.access_expires_at) else None)
     d['has_root'] = bool(_root)
+    from .quota import company_plan, PLAN_AI
+    d['plan'] = company_plan(c)
+    d['plan_explicit'] = bool(c.plan)
+    d['ai_limit'] = PLAN_AI[d['plan']][0]
+    d['all_cars'] = c.all_cars
+    d['quota_reset_at'] = c.quota_reset_at.isoformat() if c.quota_reset_at else None
     if deep:
         d['accesses'] = [
             {'car': _car_dict(a.car), 'documents': a.documents}
             for a in c.car_accesses.select_related('car')
         ]
-        d['users'] = [_user_dict(u, with_access=True) for u in c.users.all()]
+        from .quota import usage
+        users = []
+        for u in c.users.all():
+            ud = _user_dict(u, with_access=True)
+            try:
+                ud['ai_usage'] = usage(u)
+            except Exception:
+                ud['ai_usage'] = None
+            users.append(ud)
+        d['users'] = users
     return d
+
+
+def grant_all_cars(company):
+    """Give ``company`` every car on the platform with every document layer
+    (the paid plans' «همهٔ خودروها» promise), keeping existing rows, then hand
+    the root the new scope. Used on provisioning and when a car is added."""
+    have = set(company.car_accesses.values_list('car_id', flat=True))
+    new = [CompanyCarAccess(company=company, car_id=cid, documents=[])
+           for cid in Car.objects.exclude(id__in=have).values_list('id', flat=True)]
+    if new:
+        CompanyCarAccess.objects.bulk_create(new)
+    from .orggraph import grant_root_company_scope
+    grant_root_company_scope(company)
+    return len(new)
+
+
+_WELCOME_SMS = 'خدمات گستر\nحساب شما فعال شد\nنام کاربری: {u}\nرمز عبور: {p}\nورود: kgtechvault.com/login\nلغو11'
+
+
+def _notify_provisioned(phone, username, password):
+    """Tell the buyer their account is live (username + password). Best effort;
+    retries without the address if the operator rejects links."""
+    if not phone:
+        return False
+    body = _WELCOME_SMS.format(u=username, p=password)
+    sent, value = _post_sms(phone, body)
+    if not sent:
+        sent, value = _post_sms(phone, body.replace('\nورود: kgtechvault.com/login', ''))
+    if not sent:
+        _logger_sms.warning('welcome SMS failed for %s (Value=%s)', phone, value)
+    return sent
 
 
 # ---------------------------------------------------------------------------
@@ -445,11 +490,14 @@ def _otp_required(user):
     a phone on file. The admin who owns a seat is the one who sets it: the root
     admin fills in the admins below them, and each admin fills in their own
     seats. Kept as a function so the login gate and the admin UI can never
-    disagree about who needs a number."""
-    return True
+    disagree about who needs a number.
+
+    OTP applies only when the account has a phone AND has it switched on;
+    an account without a phone logs in with password (+Turnstile) only."""
+    return bool((user.phone or '').strip()) and bool(getattr(user, 'otp_enabled', True))
 
 
-def _issue_session(user):
+def _issue_session(user, request=None):
     """Mint the portal session for an authenticated user (shared by the direct
     login path and the post-OTP path)."""
     user.last_login_at = timezone.now()
@@ -464,7 +512,32 @@ def _issue_session(user):
     except Exception:
         pass
     resp = JsonResponse({'token': token.key, 'user': _user_dict(user, with_access=True)})
+    from .notify import check_login_device
+    check_login_device(user, request, resp, keep_token_id=token.pk)
     return _set_portal_cookie(resp, token.key)
+
+
+def _tehran_str():
+    """Now as a Jalali date + time in Asia/Tehran, e.g. 1405/07/06 17:30."""
+    from zoneinfo import ZoneInfo
+    t = timezone.now().astimezone(ZoneInfo('Asia/Tehran'))
+    gy, gm, gd = t.year, t.month, t.day
+    g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    gy2 = gy + 1 if gm > 2 else gy
+    days = (355666 + 365 * gy + (gy2 + 3) // 4 - (gy2 + 99) // 100
+            + (gy2 + 399) // 400 + gd + g_d_m[gm - 1])
+    jy = -1595 + 33 * (days // 12053)
+    days %= 12053
+    jy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        jy += (days - 1) // 365
+        days = (days - 1) % 365
+    if days < 186:
+        jm, jd = 1 + days // 31, 1 + days % 31
+    else:
+        jm, jd = 7 + (days - 186) // 30, 1 + (days - 186) % 30
+    return f'{jy}/{jm:02d}/{jd:02d} {t.hour:02d}:{t.minute:02d}'
 
 
 @csrf_exempt
@@ -500,9 +573,10 @@ def login_view(request):
         return JsonResponse({'error': 'این حساب قفل شده است. با پشتیبانی تماس بگیرید.'}, status=403)
     if _is_expired(user):
         return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
+    if not _otp_required(user):
+        # No phone on file, or the second factor switched off: password-only.
+        return _issue_session(user, request)
     phone = (user.phone or '').strip()
-    if not phone:
-        return JsonResponse({'error': 'شماره موبایل برای این حساب ثبت نشده است. با پشتیبانی تماس بگیرید.'}, status=403)
     # Per-user SMS throttle: a live challenge sent < RESEND_INTERVAL ago blocks a
     # fresh send, so re-submitting the login form cannot spam a user with codes.
     if OtpEvent.sends_exhausted(user) or OtpEvent.fails_exhausted(user):
@@ -513,22 +587,15 @@ def login_view(request):
         resp['Retry-After'] = str(_wait)
         return resp
     code = secrets.randbelow(900000) + 100000
-    if _otp_debug_expose():
-        # Debug switch on: skip the real SMS entirely (no send, no credit).
-        _logger_sms.warning("OTP_DEBUG_EXPOSE on: SMS skipped for %s", user.username)
-    else:
-        sent = _send_sms_otp(phone, code)
-        if not sent:
-            from django.conf import settings as _s
-            if not getattr(_s, 'DEBUG', False):
-                return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود. لطفاً دوباره تلاش کنید.'}, status=503)
-            _logger_sms.warning("DEBUG OTP for %s: %s", user.username, code)
+    sent = _send_sms_otp(phone, code)
+    if not sent:
+        from django.conf import settings as _s
+        if not getattr(_s, 'DEBUG', False):
+            return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود. لطفاً دوباره تلاش کنید.'}, status=503)
+        _logger_sms.warning("DEBUG OTP for %s: %s", user.username, code)
     OtpEvent.record(user, OtpEvent.SEND)
     _challenge, otp_session = OtpChallenge.issue(user, phone, code)
     payload = {'otp_session': otp_session, 'phone_hint': _otp_phone_hint(phone)}
-    if _otp_debug_expose():
-        _logger_sms.warning("OTP_DEBUG_EXPOSE on: returning code for %s", user.username)
-        payload['debug_code'] = f'{code:06d}'
     return JsonResponse(payload)
 
 
@@ -566,7 +633,7 @@ def verify_otp_view(request):
         return JsonResponse({'error': 'این حساب غیرفعال شده است.'}, status=403)
     if _is_expired(user):
         return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
-    return _issue_session(user)
+    return _issue_session(user, request)
 
 
 _TOO_MANY = ('تعداد تلاش‌ها برای این حساب بیش از حد مجاز است. لطفاً ۲۴ ساعت بعد '
@@ -670,7 +737,7 @@ def recover_reset_view(request):
     AuthToken.objects.filter(user=user).delete()
     ActivityLog.objects.create(user=user, action='password_reset',
                                detail='بازیابی رمز عبور با پیامک')
-    return _issue_session(user)
+    return _issue_session(user, request)
 
 
 @csrf_exempt
@@ -693,10 +760,6 @@ def resend_otp_view(request):
     code = secrets.randbelow(900000) + 100000
     OtpEvent.record(challenge.user, OtpEvent.SEND)
     challenge.rotate(code)
-    if _otp_debug_expose():
-        # Debug switch on: skip the real SMS entirely (no send, no credit).
-        _logger_sms.warning("OTP_DEBUG_EXPOSE on: resend SMS skipped")
-        return JsonResponse({'ok': True, 'debug_code': f'{code:06d}'})
     sent = _send_sms_otp(challenge.phone, code)
     if not sent:
         from django.conf import settings as _s
@@ -746,6 +809,16 @@ def me_prefs_view(request):
             return JsonResponse({'error': 'invalid browse_mode'}, status=400)
         user.browse_mode = mode
         user.save(update_fields=['browse_mode'])
+    if 'otp_enabled' in b:
+        on = bool(b.get('otp_enabled'))
+        if on and not (user.phone or '').strip():
+            return JsonResponse({'error': 'برای فعال‌سازی ورود دو مرحله‌ای ابتدا شماره موبایل باید ثبت شود.'}, status=400)
+        user.otp_enabled = on
+        user.save(update_fields=['otp_enabled'])
+    for f in ('notify_manual_update', 'notify_new_device'):
+        if f in b:
+            setattr(user, f, bool(b.get(f)))
+            user.save(update_fields=[f])
     return JsonResponse({'user': _user_dict(user, with_access=True)})
 
 
@@ -800,6 +873,10 @@ def activity_view(request):
         return JsonResponse({'error': 'unauthorized'}, status=401)
     b = _body(request)
     action = (str(b.get('action') or '')).strip()[:60]
+    if action == 'ask_assistant':
+        # Reserved for api.quota — a client must not be able to burn (or forge)
+        # assistant-quota rows through the generic activity log.
+        return JsonResponse({'error': 'invalid action'}, status=400)
     detail = (str(b.get('detail') or '')).strip()[:400]
     category = (str(b.get('category') or '')).strip()
     if not category and b.get('segments'):
@@ -864,6 +941,39 @@ def admin_login_view(request):
         return JsonResponse({'error': 'نام کاربری یا رمز عبور ادمین اشتباه است.'}, status=401)
     if not admin.active:
         return JsonResponse({'error': 'حساب ادمین غیرفعال است.'}, status=403)
+    phone = (admin.phone or '').strip()
+    if not phone:
+        if os.environ.get('ADMIN_REQUIRE_2FA') == '1':
+            return JsonResponse({'error': 'برای ورود ادمین، شمارهٔ موبایل حساب ادمین باید ثبت شده باشد.'},
+                                status=403)
+        _logger_sms.warning('admin %s logged in without SMS 2FA (no phone set)', admin.username)
+        token = AdminAuthToken.issue(admin)
+        return JsonResponse({'token': token.key, 'admin': {'username': admin.username}})
+    # Second factor: a 6-digit SMS code; the token is minted only by
+    # admin_verify_otp_view. One SMS per admin per code lifetime.
+    from .models import AdminOtpChallenge
+    if AdminOtpChallenge.recent(admin):
+        return JsonResponse({'error': 'کد قبلی هنوز معتبر است؛ کمی بعد دوباره تلاش کنید.'}, status=429)
+    code = secrets.randbelow(900000) + 100000
+    otp_session = AdminOtpChallenge.issue(admin, code)
+    if not _send_sms_otp(phone, code):
+        AdminOtpChallenge.objects.filter(admin=admin).delete()
+        return JsonResponse({'error': 'ارسال پیامک کد تأیید ناموفق بود.'}, status=502)
+    return JsonResponse({'otp_required': True, 'otp_session': otp_session,
+                         'phone_hint': _otp_phone_hint(phone)})
+
+
+@csrf_exempt
+@rate_limited('admin_otp', 10, 60)
+def admin_verify_otp_view(request):
+    """POST /api/admin/verify-otp/ {otp_session, code} -> {token, admin}"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    from .models import AdminOtpChallenge
+    b = _body(request)
+    admin = AdminOtpChallenge.verify(b.get('otp_session'), b.get('code'))
+    if admin is None or not admin.active:
+        return JsonResponse({'error': 'کد تأیید نادرست یا منقضی است.'}, status=401)
     token = AdminAuthToken.issue(admin)
     return JsonResponse({'token': token.key, 'admin': {'username': admin.username}})
 
@@ -918,6 +1028,18 @@ def admin_request_status_view(request, req_id):
     return JsonResponse({'ok': True})
 
 
+@csrf_exempt
+@require_admin_token
+def admin_request_delete_view(request, req_id):
+    """POST /api/admin/requests/<id>/delete/ -> permanently remove a purchase request."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    deleted, _ = PurchaseRequest.objects.filter(id=req_id).delete()
+    if not deleted:
+        return JsonResponse({'error': 'not found'}, status=404)
+    return JsonResponse({'ok': True})
+
+
 # ---------------------------------------------------------------------------
 # Admin: catalog / companies / access
 # ---------------------------------------------------------------------------
@@ -962,7 +1084,7 @@ def admin_cars_view(request):
     })
 
 
-def _create_root_account(c, b, is_new_company=False):
+def _create_root_account(c, b, is_new_company=False, on_top=False):
     """Create company ``c``'s 0-level (root) account from admin_* fields and
     seat it on the org-graph root. Returns (result, None) or (None, error
     response). On a brand-new company a failure deletes the company again, so
@@ -1001,8 +1123,8 @@ def _create_root_account(c, b, is_new_company=False):
     except IntegrityError:
         return fail('این نام کاربری قبلاً استفاده شده است.')
     # Seat the buyer on the company's root node (creates the graph).
-    from .orggraph import reassign_root
-    reassign_root(c, root_user)
+    from .orggraph import reassign_root, add_root_on_top
+    (add_root_on_top if on_top else reassign_root)(c, root_user)
     from .orggraph import grant_root_company_scope
     grant_root_company_scope(c)
     events.emit('admin_changed', {'entity': 'user', 'id': root_user.id, 'action': 'create',
@@ -1036,6 +1158,8 @@ def admin_companies_view(request):
                 is_demo=bool(b.get('is_demo')),
                 ai_assistant_enabled=bool(b.get('ai_assistant_enabled')),
                 note=(str(b.get('note') or '')).strip()[:2000],
+                plan=(b.get('plan') if b.get('plan') in PLAN_CHOICES else ''),
+                all_cars=bool(b.get('all_cars', True)),  # every plan includes all cars
             )
         except IntegrityError:
             return JsonResponse({'error': 'شرکتی با این نام قبلاً ثبت شده است.'}, status=400)
@@ -1056,11 +1180,23 @@ def admin_companies_view(request):
             PurchaseRequest.objects.filter(id=req_id).update(status='approved', handled=True)
             from .quota import REQUEST_PLAN
             pr = PurchaseRequest.objects.filter(id=req_id).first()
-            if pr and REQUEST_PLAN.get(pr.year):
-                Company.objects.filter(id=c.id).update(plan=REQUEST_PLAN[pr.year])
+            if pr and REQUEST_PLAN.get(pr.year) and not c.plan:
+                c.plan = REQUEST_PLAN[pr.year]
+            # Plan requests are for «همهٔ خودروها»: every car, now and later.
+            if pr and pr.brand == 'همهٔ خودروها':
+                c.all_cars = True
+            c.save(update_fields=['plan', 'all_cars'])
+        if c.all_cars:
+            grant_all_cars(c)
 
+        notified = False
+        if admin_result and b.get('notify', True):
+            notified = _notify_provisioned(
+                (str(b.get('admin_phone') or '')).strip() or c.mobile,
+                admin_result['username'], admin_result['password'])
+        c.refresh_from_db()
         return JsonResponse({'ok': True, 'company': _company_dict(c, deep=True),
-                             'admin': admin_result})
+                             'admin': admin_result, 'notified': notified})
     return JsonResponse({'items': [_company_dict(c) for c in Company.objects.all()]})
 
 
@@ -1090,9 +1226,18 @@ def admin_company_detail_view(request, company_id):
         for f in ('employees_count', 'seats_count'):
             if f in b:
                 setattr(c, f, b[f] or None)
-        for f in ('is_demo', 'ai_assistant_enabled', 'active'):
+        for f in ('is_demo', 'ai_assistant_enabled', 'active', 'all_cars'):
             if f in b:
                 setattr(c, f, bool(b[f]))
+        if 'plan' in b:
+            new_plan = b.get('plan') or ''
+            if new_plan and new_plan not in PLAN_CHOICES:
+                return JsonResponse({'error': 'پلن نامعتبر است.'}, status=400)
+            if new_plan != c.plan:
+                c.plan = new_plan
+                c.quota_reset_at = timezone.now()   # upgrade = fresh allowance
+        if b.get('reset_quota'):
+            c.quota_reset_at = timezone.now()
         try:
             c.save()
         except IntegrityError:
@@ -1104,16 +1249,45 @@ def admin_company_detail_view(request, company_id):
             created, err = _create_root_account(c, b)
             if err:
                 return err
+        # «انتقال مالکیت سطح صفر»: a new 0-level account on top of the chart;
+        # the current root and everything under it stay as they are.
+        if b.get('transfer_root') and not created:
+            if _company_root_user(c) is None:
+                return JsonResponse({'error': 'این شرکت حساب سطح‌صفر ندارد؛ ابتدا آن را بسازید.'}, status=400)
+            if not (str(b.get('admin_phone') or '')).strip():
+                return JsonResponse({'error': 'تلفن همراه مدیر جدید الزامی است.'}, status=400)
+            created, err = _create_root_account(c, b, on_top=True)
+            if err:
+                return err
+            _notify_provisioned(str(b.get('admin_phone')).strip(),
+                                created['username'], created['password'])
         # The company access window (demo length) is stored on the root seat's
         # occupant; every user inherits it. Editable here from the companies panel.
         if 'access_expires_at' in b:
             root = _company_root_user(c)
             if root is None:
+                only = list(c.users.filter(active=True)[:2])
+                if len(only) == 1:
+                    from .orggraph import reassign_root, grant_root_company_scope
+                    reassign_root(c, only[0])
+                    grant_root_company_scope(c)
+                    root = _company_root_user(c)
+            if root is None:
                 return JsonResponse(
                     {'error': 'برای تنظیم پنجرهٔ دسترسی، ابتدا باید حساب سطح‌صفر (مدیر) شرکت ساخته شود.'},
                     status=400)
-            root.access_expires_at = _parse_expiry(b.get('access_expires_at'))
+            new_exp = _parse_expiry(b.get('access_expires_at'))
+            old_exp = root.access_expires_at
+            root.access_expires_at = new_exp
             root.save(update_fields=['access_expires_at'])
+            # Renewing a whole-window plan (demo / 2-day) restarts its allowance.
+            from .quota import company_plan, PLAN_AI
+            if (new_exp and (old_exp is None or new_exp > old_exp)
+                    and PLAN_AI[company_plan(c)][1] is None):
+                Company.objects.filter(id=c.id).update(quota_reset_at=timezone.now())
+        if b.get('all_cars'):
+            grant_all_cars(c)
+        c.refresh_from_db()
         events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'update'})
         if created:
             return JsonResponse({'company': _company_dict(c, deep=True), 'admin': created})
@@ -1137,20 +1311,35 @@ def admin_company_access_view(request, company_id):
     if not isinstance(accesses, list):
         return JsonResponse({'error': 'accesses must be a list'}, status=400)
 
-    keep_car_ids = set()
-    c.car_accesses.all().delete()
-    for a in accesses:
-        car = Car.objects.filter(id=a.get('car_id')).first()
-        if not car:
-            continue
-        docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
-        CompanyCarAccess.objects.create(company=c, car=car, documents=docs)
-        keep_car_ids.add(car.id)
-
-    # Prune user grants that fell outside the company's new scope.
-    UserCarAccess.objects.filter(user__company=c).exclude(car_id__in=keep_car_ids).delete()
+    from .models import NodePermission
     from .orggraph import grant_root_company_scope
-    grant_root_company_scope(c)
+    with transaction.atomic():
+        keep_car_ids = set()
+        c.car_accesses.all().delete()
+        for a in accesses:
+            car = Car.objects.filter(id=a.get('car_id')).first()
+            if not car or car.id in keep_car_ids:
+                continue
+            docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
+            CompanyCarAccess.objects.create(company=c, car=car, documents=docs)
+            keep_car_ids.add(car.id)
+        # An explicit list ends «all cars» mode unless the admin keeps it on.
+        c.all_cars = bool(_body(request).get('all_cars'))
+        c.save(update_fields=['all_cars'])
+
+        # Prune user grants outside the new scope, and the seats' stored
+        # permissions too — otherwise the next /team save of a seat would hand
+        # the removed cars straight back.
+        UserCarAccess.objects.filter(user__company=c).exclude(car_id__in=keep_car_ids).delete()
+        for perm in NodePermission.objects.filter(node__graph__company=c):
+            rows = [r for r in (perm.car_access or []) if r.get('car_id') in keep_car_ids]
+            if rows != (perm.car_access or []):
+                perm.car_access = rows
+                perm.save(update_fields=['car_access', 'updated_at'])
+        if c.all_cars:
+            grant_all_cars(c)
+        else:
+            grant_root_company_scope(c)
     events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'access'})
     return JsonResponse({'company': _company_dict(c, deep=True)})
 
@@ -1170,7 +1359,11 @@ def _parse_expiry(value):
         return None
     try:
         dt = timezone.datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-        return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+        if timezone.is_naive(dt):
+            # Admin forms send Tehran wall-clock time (datetime-local).
+            from zoneinfo import ZoneInfo
+            dt = dt.replace(tzinfo=ZoneInfo('Asia/Tehran'))
+        return dt
     except (ValueError, TypeError):
         return None
 
@@ -1274,7 +1467,7 @@ def admin_users_view(request):
                 status=400)
         # Seat cap: seats_count is the number of users the company paid for.
         cap = company.seats_count
-        if cap and company.users.count() >= cap:
+        if cap and company.users.filter(active=True).count() >= cap:
             return JsonResponse(
                 {'error': f'ظرفیت کاربران این شرکت ({cap} نفر) تکمیل است. ابتدا تعداد صندلی شرکت را افزایش دهید.'},
                 status=400)
@@ -1322,6 +1515,13 @@ def admin_users_view(request):
             u.save()
         except IntegrityError:
             return JsonResponse({'error': 'این نام کاربری یا ایمیل قبلاً استفاده شده است.'}, status=400)
+        # Re-check after the insert: two concurrent creates both passed the
+        # pre-check; the one that overflowed the cap is rolled back.
+        if cap and company.users.filter(active=True).count() > cap:
+            u.delete()
+            return JsonResponse(
+                {'error': f'ظرفیت کاربران این شرکت ({cap} نفر) تکمیل است. ابتدا تعداد صندلی شرکت را افزایش دهید.'},
+                status=400)
         from .orggraph import seat_new_user
         seat_new_user(company, u, u.ai_assistant_enabled)
         u.refresh_from_db()
@@ -1385,6 +1585,8 @@ def admin_user_detail_view(request, user_id):
                 u.tokens.all().delete()
         if 'ai_assistant_enabled' in b:
             u.ai_assistant_enabled = bool(b['ai_assistant_enabled'])
+        if 'otp_enabled' in b:
+            u.otp_enabled = bool(b['otp_enabled'])
         if 'can_manage_team' in b:
             u.can_manage_team = bool(b['can_manage_team'])
         if 'can_view_analytics' in b:
@@ -1432,10 +1634,17 @@ def admin_user_detail_view(request, user_id):
         except IntegrityError:
             return JsonResponse({'error': 'این ایمیل قبلاً استفاده شده است.'}, status=400)
         if b.get('role') or 'reports_to_id' in b:
-            # Admin edits obey the same org-chart invariant as the team module:
-            # reporting edges must point strictly upward in rank.
-            from .access import enforce_org_consistency
-            enforce_org_consistency(u.company_id)
+            from .models import OrgGraph
+            from . import orggraph as _og  # lazy: avoids import cycle
+            if b.get('role'):
+                _og.sync_user_title_to_seat(u)
+            if OrgGraph.objects.filter(company_id=u.company_id).exists():
+                # The canvas is the live structure: reporting lines follow it,
+                # never a rank-based re-parenting that /team would not show.
+                _og.sync_reports_to_from_graph(u.company)
+            else:
+                from .access import enforce_org_consistency
+                enforce_org_consistency(u.company_id)
             u.refresh_from_db()
         if 'ai_assistant_enabled' in b:
             # Mirror the AI toggle onto the user's seat (see orggraph.sync_user_to_node).

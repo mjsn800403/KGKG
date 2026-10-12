@@ -74,9 +74,9 @@ def _resolve_parts_db():
 
 
 PARTS_DB = _resolve_parts_db()
-# Book1.csv export artifact written by build_terms (terms.export_book1); the
-# glossary itself now reads PARTS_DB.
-PARTS_CSV = Path(os.environ.get('RAG_PARTS_CSV') or (BASE_DIR.parent / 'Book1.csv'))
+# Book1.csv: the fa->en pairs build_terms exports from terms.db (an artifact /
+# hand-edit source; the live glossary reads PARTS_DB above).
+PARTS_CSV = BASE_DIR.parent / 'Book1.csv'
 # Minimum normalised length (chars) for a CSV Persian phrase to be used as a
 # query-expansion key -- guards against very short, ambiguous parts (e.g. "بست")
 # polluting unrelated queries. The hand-curated map keeps its own short keys.
@@ -569,12 +569,17 @@ import re as _re
 # DTC codes are 1 letter + 4 alphanumerics (P0301, B27C0, U0129, C1A34), with an
 # optional manufacturer sub-code suffix '-NN'. The body is alphanumeric, NOT
 # digits-only (B27C0 has a letter in it), so match [0-9A-Za-z].
+# Sub-code is hex in TIS manuals (C1000-1C), decimal in the older ones.
 DTC_TITLE_RE = _re.compile(
-    r'^DTC\s+([A-Za-z][0-9A-Za-z]{3,4}(?:-\d{1,3})?)\s*:\s*(.+?)\s*$')
+    r'^DTC\s+([A-Za-z][0-9A-Za-z]{3,4}(?:-[0-9A-Fa-f]{1,3})?)\s*:\s*(.+?)\s*$')
 # A bare code as typed by a user / read off a scan tool: P0301, b27c0-57, U0129:87
-DTC_CODE_RE = _re.compile(r'\b([A-Za-z][0-9A-Za-z]{3,4}(?:[-:]\d{1,3})?)\b')
+# ... or run together the way Toyota scan tools / TIS print it: P060794.
+DTC_CODE_RE = _re.compile(
+    r'\b([A-Za-z][0-9A-Za-z]{3,4}(?:[-:][0-9A-Fa-f]{1,3})?|[A-Za-z][0-9A-Fa-f]{6})\b')
 # Section roots under which DTC subtrees and Problem Symptoms Tables live.
 DIAG_SECTION_ROOTS = ('repair and diagnosis', 'repair and diagnosis (single page)')
+# TIS cars: <car>/Repair Manual/<publication>/<system>/<subsystem>/...
+DIAG_MANUAL_ROOTS = ('repair manual',)
 # Aspect ordering for a DTC's diagnostic chain (the manufacturer's flow). Lower
 # rank = earlier step. Anything unlisted sorts after these by node sort_order.
 DTC_ASPECT_ORDER = (

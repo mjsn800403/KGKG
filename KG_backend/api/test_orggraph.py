@@ -1,6 +1,7 @@
 """Org-graph canvas: root-only editing, seat cap, permission→enforcement sync,
 one-seat-per-person, and break-glass root reassignment."""
 import json
+from unittest import mock
 
 from django.test import TestCase, Client
 
@@ -99,7 +100,9 @@ class OrgGraphTests(TestCase):
         self.assertTrue(self.emp.ai_assistant_enabled)
         rows = list(UserCarAccess.objects.filter(user=self.emp)
                     .values_list('car_id', 'admin_granted'))
-        self.assertEqual(rows, [(self.car.id, True)])  # root grants bypass purchase
+        # A /team grant stays inside the company's purchase scope (QA11): it is
+        # a purchase grant, not a platform-admin bypass.
+        self.assertEqual(rows, [(self.car.id, False)])
 
     def test_one_seat_per_person(self):
         n1 = OrgNode.objects.create(graph=self.graph, parent=self.graph.root_node)
@@ -170,10 +173,19 @@ class OrgGraphV2Tests(TestCase):
         node = OrgNode.objects.create(graph=self.graph, parent=self.graph.root_node)
         NodePermission.objects.create(node=node)
         c, h = self._root_client()
+        # A phone is required: the credentials are sent to it by SMS.
         r = c.post(f'/api/org/nodes/{node.id}/create-user/',
                    data=json.dumps({'display_name': 'کارمند تازه'}),
                    content_type='application/json', **h)
+        self.assertEqual(r.status_code, 400)
+        with mock.patch('api.notify.send_welcome_credentials', return_value=True) as sms:
+            r = c.post(f'/api/org/nodes/{node.id}/create-user/',
+                       data=json.dumps({'display_name': 'کارمند تازه',
+                                        'phone': '09990000077'}),
+                       content_type='application/json', **h)
         self.assertEqual(r.status_code, 201)
+        self.assertTrue(sms.called)
+        self.assertTrue(r.json()['sms_sent'])
         creds = r.json()['credentials']
         self.assertTrue(creds['username'] and creds['password'])
         node.refresh_from_db()
@@ -232,3 +244,41 @@ class OrgGraphV2Tests(TestCase):
         self.other.save(update_fields=['ai_assistant_enabled'])
         og.sync_user_to_node(self.other)
         self.assertTrue(NodePermission.objects.get(node=node).ai_eligible)
+
+
+class RootGuardTests(TestCase):
+    setUp = OrgGraphTests.setUp
+    _client = OrgGraphTests._client
+
+    def test_root_seat_cannot_be_vacated_or_root_moved(self):
+        c, h = self._client(self.root_user)
+        root = self.graph.root_node
+        r = c.patch(f'/api/org/nodes/{root.id}/', data=json.dumps({'occupant_id': None}),
+                    content_type='application/json', **h)
+        self.assertEqual(r.status_code, 400)
+        seat = OrgNode.objects.create(graph=self.graph, parent=root, label='s')
+        r = c.patch(f'/api/org/nodes/{seat.id}/', data=json.dumps({'occupant_id': self.root_user.id}),
+                    content_type='application/json', **h)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.graph.root_node.occupant_id, self.root_user.id)
+
+    def test_add_root_on_top_keeps_chart(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        exp = timezone.now() + timedelta(days=30)
+        self.root_user.access_expires_at = exp
+        self.root_user.save(update_fields=['access_expires_at'])
+        old_root = self.graph.root_node
+        child = OrgNode.objects.create(graph=self.graph, parent=old_root, label='c', occupant=self.emp)
+        new = PortalUser.objects.create(company=self.company, username='boss',
+                                        role='after_sales_manager', password_hash='x', active=True)
+        og.add_root_on_top(self.company, new)
+        old_root.refresh_from_db(); child.refresh_from_db(); new.refresh_from_db()
+        top = self.graph.root_node
+        self.assertEqual(top.occupant_id, new.id)
+        self.assertFalse(old_root.is_root)
+        self.assertEqual(old_root.parent_id, top.id)
+        self.assertEqual(old_root.occupant_id, self.root_user.id)
+        self.assertEqual(child.parent_id, old_root.id)
+        self.assertEqual(new.access_expires_at, exp)
+        self.assertEqual(OrgNode.objects.filter(graph=self.graph, is_root=True).count(), 1)

@@ -171,14 +171,20 @@ def _decayed_counts():
                 "SELECT blob_id, top_blobs, verdict, "
                 "(julianday('now') - julianday(ts)) AS age FROM ratings"):
             w = 0.5 ** (max(0.0, float(age_d or 0.0)) / hl)
-            targets = [blob_id] if blob_id is not None else \
-                [int(b) for b in (top_blobs or '').split(',') if b.strip().isdigit()]
-            for b in targets:
+            # A per-source vote (blob_id set) counts fully for that source. An
+            # answer-level vote is shared by every source shown, weighted by
+            # rank (1, 1/2, 1/3 ...), since the answer was written from all of them.
+            if blob_id is not None:
+                targets = [(blob_id, 1.0)]
+            else:
+                ids = [int(b) for b in (top_blobs or '').split(',') if b.strip().isdigit()]
+                targets = [(b, 1.0 / (r + 1)) for r, b in enumerate(ids)]
+            for b, rw in targets:
                 slot = agg.setdefault(int(b), [0.0, 0.0, 0.0])
                 if int(verdict) >= 0:
-                    slot[0] += w
+                    slot[0] += w * rw
                 else:
-                    slot[1] += w
+                    slot[1] += w * rw
         # clicks are a weak implicit positive
         for blob_id, age_d in c.execute(
                 "SELECT blob_id, (julianday('now') - julianday(ts)) AS age FROM clicks "

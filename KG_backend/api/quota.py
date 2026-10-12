@@ -44,6 +44,10 @@ def usage(user):
     qs = ActivityLog.objects.filter(user=user, action=ACTION)
     if days:
         qs = qs.filter(created_at__gte=timezone.now() - timedelta(days=days))
+    # A plan change, renewal or admin reset restarts the count.
+    reset_at = getattr(user.company, 'quota_reset_at', None)
+    if reset_at:
+        qs = qs.filter(created_at__gte=reset_at)
     used = qs.count()
     return {'plan': plan, 'limit': limit, 'used': used,
             'remaining': max(0, limit - used), 'period_days': days}
@@ -66,13 +70,20 @@ def ai_usage_view(request):
         return JsonResponse({'error': 'unauthorized'}, status=401)
     u = usage(user)
     if request.method != 'POST':
+        if u['remaining'] <= 0:
+            return JsonResponse({**u, 'error': exhausted_message(u)}, status=429)
         return JsonResponse(u)
     if u['remaining'] <= 0:
         return JsonResponse({'error': exhausted_message(u), 'quota': u}, status=429)
     from .views import _post_body
     b = _post_body(request)
-    ActivityLog.objects.create(user=user, action=ACTION,
-                               detail=str(b.get('detail') or '')[:400])
-    u['used'] += 1
-    u['remaining'] -= 1
+    # Insert first, then re-count: two concurrent requests (different gunicorn
+    # workers) can't both slip past the limit — the loser rolls its row back.
+    row = ActivityLog.objects.create(user=user, action=ACTION,
+                                     detail=str(b.get('detail') or '')[:400])
+    u = usage(user)
+    if u['used'] > u['limit']:
+        row.delete()
+        u = usage(user)
+        return JsonResponse({'error': exhausted_message(u), 'quota': u}, status=429)
     return JsonResponse({'ok': True, 'quota': u})

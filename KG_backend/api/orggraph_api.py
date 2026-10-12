@@ -80,6 +80,8 @@ def _node_dict(node):
             'display_name': occ.display_name,
             'email': occ.email,
             'invite_status': occ.invite_status,
+            'has_phone': bool((occ.phone or '').strip()),
+            'otp_enabled': bool(getattr(occ, 'otp_enabled', True)),
         } if occ else None),
         'permission': {
             'car_access': (perm.car_access if perm else []),
@@ -338,6 +340,11 @@ def node_detail_view(request, node_id):
     occupant_changed = False
     if 'occupant_id' in b:
         raw = b.get('occupant_id')
+        if node.is_root and node.occupant_id and str(raw) != str(node.occupant_id):
+            return JsonResponse({'error': 'جایگاه سطح‌صفر (مدیر ارشد) نمی‌تواند خالی یا جابه‌جا شود.'}, status=400)
+        root_uid = graph.root_node.occupant_id if graph.root_node else None
+        if not node.is_root and raw is not None and root_uid and str(raw) == str(root_uid):
+            return JsonResponse({'error': 'مدیر ارشد نمی‌تواند به جایگاه دیگری منتقل شود.'}, status=400)
         if raw is None:
             node.occupant = None
         else:
@@ -350,8 +357,18 @@ def node_detail_view(request, node_id):
         fields.append('occupant')
         occupant_changed = True
 
+    if 'occupant_otp_enabled' in b and node.occupant_id:
+        occ = node.occupant
+        on = bool(b.get('occupant_otp_enabled'))
+        if on and not (occ.phone or '').strip():
+            return JsonResponse({'error': 'این کاربر شماره موبایل ندارد؛ ورود دو مرحله‌ای قابل فعال‌سازی نیست.'}, status=400)
+        occ.otp_enabled = on
+        occ.save(update_fields=['otp_enabled'])
+
     if fields:
         node.save(update_fields=list(set(fields)))
+    if node.occupant_id and ('label' in fields or occupant_changed):
+        og.reconcile_seat_title(node)
     if occupant_changed:
         og.sync_node_to_user(node)
     if occupant_changed or 'parent' in fields:
@@ -387,12 +404,26 @@ def node_permission_view(request, node_id):
 
     if 'car_access' in b:
         ca = b.get('car_access') or []
+        # Clamp to what the company bought (cars and document layers), so the
+        # root can't hand anyone — itself included — more than the purchase.
+        from .access import VALID_DOCS
+        scope = {a.car_id: (set(a.documents) if a.documents else set(VALID_DOCS))
+                 for a in graph.company.car_accesses.all()}
+        occ = node.occupant
+        if occ is not None:   # keep platform-admin exceptions visible on the seat
+            for a in occ.car_accesses.filter(admin_granted=True):
+                scope.setdefault(a.car_id, set(a.documents or []))
         clean = []
         for row in ca if isinstance(ca, list) else []:
-            cid = row.get('car_id')
-            if cid is None:
+            if not isinstance(row, dict):
                 continue
-            docs = [d for d in (row.get('documents') or []) if isinstance(d, str)]
+            try:
+                cid = int(row.get('car_id'))
+            except (TypeError, ValueError):
+                continue
+            if cid not in scope:
+                continue
+            docs = [d for d in (row.get('documents') or []) if d in scope[cid]]
             clean.append({'car_id': cid, 'documents': docs})
         perm.car_access = clean
     if 'ai_eligible' in b:
@@ -400,6 +431,10 @@ def node_permission_view(request, node_id):
     perm.save()
     og.sync_node_to_user(node)
     return JsonResponse(_node_dict(node))
+
+
+class _SeatCapExceeded(Exception):
+    pass
 
 
 @csrf_exempt
@@ -430,11 +465,11 @@ def node_create_user_view(request, node_id):
     display_name = (b.get('display_name') or '').strip()[:150]
     if not display_name:
         return JsonResponse({'error': 'نام کاربر لازم است.'}, status=400)
-    # Every account logs in through the SMS second factor, so a seat created
-    # without a number would be unusable from the moment it exists.
+    # The company admin must give every new seat its own mobile: the login
+    # credentials are sent to it by SMS (notify.send_welcome_credentials).
     phone = (b.get('phone') or '').strip()[:40]
     if not phone:
-        return JsonResponse({'error': 'شماره موبایل کاربر لازم است (کد ورود پیامکی به آن ارسال می‌شود).'}, status=400)
+        return JsonResponse({'error': 'شماره موبایل کاربر لازم است (نام کاربری و رمز عبور به آن پیامک می‌شود).'}, status=400)
     if PortalUser.phone_taken(phone):
         return JsonResponse({'error': 'این شماره موبایل قبلاً برای حساب دیگری ثبت شده است.'}, status=400)
     company = graph.company
@@ -442,10 +477,11 @@ def node_create_user_view(request, node_id):
     # nodes_view only limits empty seats, so without this the admin panel and
     # the team page together could create about twice the paid users.
     cap = company.seats_count
-    if cap and company.users.count() >= cap:
+    used = company.users.filter(active=True).count()
+    if cap and used >= cap:
         return JsonResponse(
             {'error': f'ظرفیت کاربران این شرکت ({cap} نفر) تکمیل است.', 'code': 'seat_cap',
-             'cap': cap, 'used': company.users.count()}, status=403)
+             'cap': cap, 'used': used}, status=403)
     raw_username = (b.get('username') or '').strip()[:100]
     username = raw_username or _unique_username(
         (b.get('email') or display_name).split('@')[0] or 'user', company.id)
@@ -461,8 +497,12 @@ def node_create_user_view(request, node_id):
                 invite_status='active', active=True)
             user.set_password(password)
             user.save()
+            # Race-safe cap: re-count inside the transaction, roll back on overflow.
+            if cap and company.users.filter(active=True).count() > cap:
+                raise _SeatCapExceeded()
             node.occupant = user
             node.save(update_fields=['occupant'])
+            og.reconcile_seat_title(node)
             og.sync_node_to_user(node)
             og.sync_reports_to_from_graph(company)
             # Record every team-member account the root creates in the platform
@@ -475,8 +515,14 @@ def node_create_user_view(request, node_id):
     except IntegrityError:
         return JsonResponse(
             {'error': 'این نام کاربری یا ایمیل قبلاً استفاده شده است.'}, status=400)
+    except _SeatCapExceeded:
+        return JsonResponse(
+            {'error': f'ظرفیت کاربران این شرکت ({cap} نفر) تکمیل است.', 'code': 'seat_cap',
+             'cap': cap}, status=403)
 
-    return JsonResponse({'ok': True, 'node': _node_dict(node),
+    from .notify import send_welcome_credentials
+    sms_sent = send_welcome_credentials(user, password)
+    return JsonResponse({'ok': True, 'node': _node_dict(node), 'sms_sent': sms_sent,
                          'credentials': {'username': username, 'password': password}},
                         status=201)
 

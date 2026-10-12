@@ -9,6 +9,8 @@ class ApiConfig(AppConfig):
     name = 'api'
 
     def ready(self):
+        from . import signals  # noqa: F401  (auto-grant new cars)
+
         # Warm the embedding model + index connection in the background so the
         # first assistant query is fast (cold model load is ~10-15s). Opt-in via
         # KG_WARMUP=1 (set in run_server.sh) so it never fires during migrations,

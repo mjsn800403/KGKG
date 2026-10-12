@@ -91,6 +91,19 @@ class PurchaseRequest(models.Model):
 from .access import DOC_TYPE_CHOICES, ROLE_CHOICES  # noqa: E402
 
 
+_PHONE_DIGITS = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
+
+
+def normalize_phone(raw):
+    """Persian/Arabic digits -> ASCII, spaces/dashes/brackets and bidi marks
+    dropped, a leading + kept. The SMS operator rejects non-ASCII numbers
+    (Value 18), so every stored phone goes through this."""
+    s = str(raw or '').translate(_PHONE_DIGITS).strip()
+    plus = s.startswith('+')
+    s = ''.join(ch for ch in s if ch.isdigit())
+    return ('+' + s) if (plus and s) else s
+
+
 class Company(models.Model):
     """A legal entity that bought (or is evaluating) documentation access."""
     name = models.CharField(max_length=200, unique=True)
@@ -105,6 +118,12 @@ class Company(models.Model):
     # Subscription plan id (demo / pass / monthly / annual); sets the AI
     # question allowance (api.quota). Blank = inferred for older companies.
     plan = models.CharField(max_length=20, blank=True, default='')
+    # Paid plans promise every car on the platform, including ones added
+    # later: when set, new cars are granted automatically (api.signals).
+    all_cars = models.BooleanField(default=False)
+    # AI allowance is counted from here (set on plan change / renewal / reset),
+    # so an upgrade or renewal starts with a fresh quota.
+    quota_reset_at = models.DateTimeField(null=True, blank=True)
     ai_assistant_enabled = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     note = models.TextField(blank=True, default='')
@@ -192,6 +211,12 @@ class PortalUser(models.Model):
     # Per-user capabilities (seeded from role at creation, individually editable).
     can_manage_team = models.BooleanField(default=False)
     can_view_analytics = models.BooleanField(default=False)
+    # SMS second factor on login. Only effective while a phone is on file
+    # (see portal._otp_required); without a phone the login is password-only.
+    otp_enabled = models.BooleanField(default=True)
+    # SMS notifications (settings → اعلان‌ها). Only sent when a phone is on file.
+    notify_manual_update = models.BooleanField(default=True)
+    notify_new_device = models.BooleanField(default=True)
     ai_assistant_enabled = models.BooleanField(default=False)
     # Which car-content UI this user prefers: 'modern' (sidebar tree +
     # adaptive flatten) or 'classic' (the original card-by-card drill-down,
@@ -215,6 +240,10 @@ class PortalUser(models.Model):
     def set_password(self, raw):
         self.password_hash = make_password(raw)
         self.password_set = True
+
+    def save(self, *args, **kwargs):
+        self.phone = normalize_phone(self.phone)
+        super().save(*args, **kwargs)
 
     @staticmethod
     def phone_key(raw):
@@ -471,8 +500,14 @@ class PlatformAdmin(models.Model):
     """Platform superuser (separate from company portal seats)."""
     username = models.CharField(max_length=100, unique=True)
     password_hash = models.CharField(max_length=256)
+    # Mobile for the SMS second factor. Admin login requires it.
+    phone = models.CharField(max_length=40, blank=True, default='')
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        self.phone = normalize_phone(self.phone)
+        super().save(*args, **kwargs)
 
     def set_password(self, raw):
         self.password_hash = make_password(raw)
@@ -1163,3 +1198,104 @@ class OtpEvent(models.Model):
     def fails_exhausted(cls, user):
         return cls._count(user, cls.FAIL) >= cls._cap(
             'KG_OTP_MAX_FAILS_PER_DAY', 15)
+
+
+class AdminOtpChallenge(models.Model):
+    """SMS second factor for platform-admin login (same scheme as OtpChallenge)."""
+    TTL = datetime.timedelta(minutes=2)
+    MAX_ATTEMPTS = 5
+
+    key_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    admin = models.ForeignKey(PlatformAdmin, on_delete=models.CASCADE, related_name='otp_challenges')
+    code_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+
+    @staticmethod
+    def _hash(raw):
+        return hashlib.sha256(str(raw).encode('utf-8')).hexdigest()
+
+    @classmethod
+    def issue(cls, admin, code):
+        cls.objects.filter(admin=admin).delete()
+        raw = secrets.token_urlsafe(32)
+        cls.objects.create(key_hash=cls._hash(raw), admin=admin, code_hash=cls._hash(code),
+                           expires_at=timezone.now() + cls.TTL)
+        return raw
+
+    @classmethod
+    def recent(cls, admin):
+        return cls.objects.filter(admin=admin, expires_at__gt=timezone.now()).exists()
+
+    @classmethod
+    def verify(cls, raw, code):
+        """Return the admin on a correct code (challenge consumed), else None."""
+        obj = cls.objects.filter(key_hash=cls._hash(raw or '')).select_related('admin').first()
+        if not obj or obj.expires_at <= timezone.now() or obj.attempts >= cls.MAX_ATTEMPTS:
+            return None
+        if not secrets.compare_digest(obj.code_hash, cls._hash(str(code).strip())):
+            cls.objects.filter(id=obj.id).update(attempts=models.F('attempts') + 1)
+            return None
+        admin = obj.admin
+        obj.delete()
+        return admin
+
+
+class KnownDevice(models.Model):
+    """A browser a portal user has logged in from (random ``kg_dev`` cookie,
+    stored hashed). A login from a device not in this list triggers the
+    new-device SMS alert (api/notify.py)."""
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='known_devices')
+    device_hash = models.CharField(max_length=64, db_index=True)
+    user_agent = models.CharField(max_length=300, blank=True, default='')
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('user', 'device_hash')]
+
+
+class NotificationLog(models.Model):
+    """One SMS notification sent to a user; also the dedupe ledger (one
+    manual-update SMS per user per car per day)."""
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='notifications')
+    kind = models.CharField(max_length=30)
+    key = models.CharField(max_length=300, blank=True, default='')
+    sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class RetiredDevice(models.Model):
+    """A device ID that was rotated away at a later login. Seeing one again
+    means the device cookie was copied (api/notify.py: reuse detection)."""
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='retired_devices')
+    device_hash = models.CharField(max_length=64, db_index=True)
+    retired_at = models.DateTimeField(auto_now_add=True)
+
+
+class ChatLog(models.Model):
+    """One assistant exchange (question + final gated answer), written by the
+    Next chat route after it replies. Read by platform admins (everything) and
+    company managers (their org-graph reach only) — see api/chatlog.py."""
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='chat_logs')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='chat_logs')
+    session_id = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    question = models.TextField()
+    answer = models.TextField(blank=True, default='')
+    mode = models.CharField(max_length=20, blank=True, default='')
+    grounded = models.BooleanField(default=False)
+    degraded = models.BooleanField(default=False)
+    vehicle = models.CharField(max_length=200, blank=True, default='')
+    sources = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'created_at']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username}: {self.question[:40]}'

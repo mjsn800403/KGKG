@@ -177,13 +177,90 @@ def _table_rows(html):
     return rows
 
 
+# TIS repair manuals: fluids/tires in General/SPECIFICATIONS/MAINTENANCE/
+# SERVICE DATA (one table per fluid under an <h4 class="tbltitle"> heading),
+# fuel tank / engine / hybrid facts in MAJOR TECHNICAL SPECIFICATIONS/GENERAL.
+_TIS_FLUID_WORDS = _FLUID_KEYWORDS + ('transfer', 'oil', 'fluid')
+_TIS_VALUE_RE = re.compile(r'\bliters?\b|\bSAE\b|\bATF\b|\bDOT\s?\d|\bGL-\d|\d+W-\d+', re.I)
+
+
+def _tis_fluids(html):
+    """[(name, value)] from a TIS MAINTENANCE/SERVICE DATA page."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'html.parser')
+    out = []
+    for table in soup.find_all('table'):
+        if 'frame' in (table.get('class') or []):
+            continue
+        h = table.find_previous('h4', class_='tbltitle')
+        heading = re.sub(r'\s+', ' ', h.get_text(' ', strip=True)) if h else ''
+        if not any(k in heading.lower() for k in _TIS_FLUID_WORDS):
+            continue
+        for tr in table.find_all('tr'):
+            cells = [re.sub(r'\s+', ' ', c.get_text(' ', strip=True))
+                     for c in tr.find_all('td')]
+            cells = [c for c in cells if c]
+            if not cells or not any(_TIS_VALUE_RE.search(c) for c in cells):
+                continue
+            label = f'{heading}: {cells[0]}' if len(cells) > 1 else heading
+            value = ' ; '.join(cells[1:]) if len(cells) > 1 else cells[0]
+            out.append((label, value))
+    return out
+
+
+def _tis_major(html):
+    """{label: [values]} rows of the MAJOR TECHNICAL SPECIFICATIONS page."""
+    rows = {}
+    for cells in _table_rows(html):
+        if len(cells) >= 2:
+            rows.setdefault(cells[0], cells[1:])
+    return rows
+
+
+def _parse_tis_specs(con, out):
+    ms = _find_leaf(con, ['%/SPECIFICATIONS/MAINTENANCE/SERVICE DATA'])
+    major = _find_leaf(con, ['%/MAJOR TECHNICAL SPECIFICATIONS/GENERAL'])
+    if not ms and not major:
+        return
+    out['source'] = 'tis'
+    if ms:
+        out['sections'].append(ms[0])
+        for label, value in _tis_fluids(ms[1])[:_MAX_FLUID_ROWS]:
+            out['fluids'].append({'name': label, 'value': value})
+            if 'transmission fluid' in label.lower() or 'ATF' in value:
+                out['auto_trans'] = True
+        sizes = sorted(set(_TIRE_RE.findall(re.sub(r'<[^>]+>', ' ', ms[1]))))[:8]
+        out['tires'] = sizes
+    if major:
+        out['sections'].append(major[0])
+        rows = _tis_major(major[1])
+        tank = rows.get('Fuel Tank Capacity') or []
+        if len(tank) >= 2 and tank[0].startswith('L'):
+            m = re.match(r'(\d+(?:\.\d+)?)', tank[1])
+            if m:
+                out['fuel_tank_l'] = float(m.group(1))
+                out['fluids'].append({'name': 'Fuel Tank Capacity',
+                                      'value': f'{tank[1]} {tank[0]}'})
+        disp = rows.get('Displacement') or []
+        if len(disp) >= 2:
+            m = re.match(r'(\d{3,4})\b', disp[1])
+            if m:
+                out['displacement_l'] = round(int(m.group(1)) / 1000.0, 1)
+        eng = rows.get('Engine Type') or []
+        if eng:
+            out['engine_code'] = eng[0]
+        if any(k.startswith(('HV Battery', 'Hybrid System')) for k in rows):
+            out['hybrid'] = True
+
+
 def parse_manual_specs(stem):
     """Extract the reliably-parseable spec facts from one car's manual.
     Returns {'fluids': [{name, value}], 'tires': [..], 'auto_trans': bool,
     'fuel_tank_l': float|None, 'sections': [paths]} — empty when the car DB
     or the sections are absent."""
     out = {'fluids': [], 'tires': [], 'auto_trans': False,
-           'fuel_tank_l': None, 'sections': []}
+           'fuel_tank_l': None, 'sections': [], 'source': 'lemon',
+           'displacement_l': None, 'engine_code': None, 'hybrid': False}
     path = config.WAREHOUSE_DIR / f'{stem}.db'
     if not path.exists():
         return out
@@ -214,6 +291,9 @@ def parse_manual_specs(stem):
                     lm = re.search(r'(\d+(?:\.\d+)?)\s*L\b', value)
                     if lm:
                         out['fuel_tank_l'] = float(lm.group(1))
+        if not fl:
+            _parse_tis_specs(con, out)
+            return out
         tf = _find_leaf(con, ['%Quick Lookups/Tire Fitment%'])
         tire_html = tf[1] if tf else (fl[1] if fl else None)
         if tire_html:
@@ -297,6 +377,13 @@ def derive(car):
 
     # Manual-derived facts.
     specs = parse_manual_specs(stem)
+    tis = specs.get('source') == 'tis'
+    src_detail = '; '.join(specs['sections'])
+    if tis and specs.get('hybrid') and prov.get('fuelType', {}).get('source') == 'derived':
+        put('fuelType', 'Gasoline/Electric Hybrid', 'manual',
+            'HV battery / hybrid system rows in Major Technical Specifications')
+    if tis and p['displacement_l'] is None and specs.get('displacement_l'):
+        p['displacement_l'] = specs['displacement_l']
 
     is_ev = data.get('fuelType') == 'Electric'
     engine = {}
@@ -311,11 +398,16 @@ def derive(car):
             engine['engineType'] = (
                 f'{p["displacement_l"]}L engine, VIN code {p["engine_vin"]}'
                 if p['displacement_l'] else f'Engine VIN code {p["engine_vin"]}')
+        if tis and specs.get('engine_code'):
+            engine['engineType'] = (
+                f'{specs["engine_code"]} ({p["displacement_l"]}L)'
+                if p['displacement_l'] else specs['engine_code'])
         if engine:
             engine['@type'] = 'EngineSpecification'
             engine['fuelType'] = data.get('fuelType', 'Gasoline')
-            prov['vehicleEngine'] = {'source': 'stem',
-                                     'detail': 'displacement / VIN-code tokens'}
+            prov['vehicleEngine'] = (
+                {'source': 'manual', 'detail': src_detail} if tis else
+                {'source': 'stem', 'detail': 'displacement / VIN-code tokens'})
     if engine:
         data['vehicleEngine'] = engine
 
@@ -323,11 +415,12 @@ def derive(car):
         put('vehicleTransmission', 'Manual', 'stem', 'token "Standard Trans"')
     elif specs['auto_trans']:
         put('vehicleTransmission', 'Automatic', 'manual',
+            src_detail if tis else
             'Automatic Transmission Fluid row in Quick Lookups/Fluids')
 
     if specs['fuel_tank_l'] is not None:
         put('fuelCapacity', _qv(specs['fuel_tank_l'], 'LTR', 'L'),
-            'manual', 'Fuel Tank row in Quick Lookups/Fluids')
+            'manual', src_detail if tis else 'Fuel Tank row in Quick Lookups/Fluids')
 
     extras = []
     if p['engine_vin']:

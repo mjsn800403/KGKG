@@ -2,8 +2,9 @@
 
 Covers: display-form cleaning (ZWNJ preserved, Arabic chars unified), noise-
 prefix stripping, legacy import parsing + idempotency, upsert precedence,
-artifact export (Book1.csv parseable by glossary._parse_csv; display JSON
-shape), and an end-to-end glossary.expand() regression over a regenerated CSV.
+artifact export (Book1.csv rows load into the Book1 table glossary._parse_db
+reads; display JSON shape), and an end-to-end glossary.expand() regression over
+a dictionary DB regenerated from the export.
 """
 import csv
 import json
@@ -18,24 +19,24 @@ from . import config, glossary, terms
 ZWNJ = '‌'
 
 
+def _csv_to_db(csv_path, db_path):
+    """Load an exported Book1.csv into the translation.db layout the glossary
+    reads (Book1 table: field1=English, field2=Persian)."""
+    con = sqlite3.connect(db_path)
+    con.execute('CREATE TABLE Book1 (field1 TEXT, field2 TEXT)')
+    with open(csv_path, encoding='utf-8-sig') as f:
+        con.executemany('INSERT INTO Book1 VALUES (?, ?)',
+                        [r[:2] for r in csv.reader(f) if len(r) >= 2])
+    con.commit()
+    con.close()
+    return Path(db_path)
+
+
 def _mem_store():
     con = sqlite3.connect(':memory:')
     terms.ensure_schema(con)
     return con
 
-
-
-def _csv_to_db(csv_path):
-    """Load an exported Book1.csv into a translation.db-shaped SQLite file
-    (Book1 table, field1=English, field2=Persian) next to it."""
-    import sqlite3
-    db = Path(csv_path).with_suffix('.db')
-    con = sqlite3.connect(db)
-    con.execute('CREATE TABLE Book1(field1 TEXT, field2 TEXT)')
-    con.executemany('INSERT INTO Book1 VALUES (?,?)',
-                    list(csv.reader(open(csv_path, encoding='utf-8-sig'))))
-    con.commit(); con.close()
-    return db
 
 class CleaningTest(SimpleTestCase):
     def test_arabic_chars_unified_for_display(self):
@@ -186,7 +187,7 @@ class ExportTest(SimpleTestCase):
         with tempfile.TemporaryDirectory() as d2:
             p2 = Path(d2) / 'Book1.csv'
             terms.export_book1(con, p2)
-            data = glossary._parse_db(_csv_to_db(p2))
+            data = glossary._parse_db(_csv_to_db(p2, Path(d2) / 'translation.db'))
         self.assertIn('لنت ترمز', data)
         self.assertEqual(set(data['لنت ترمز'].split()), {'brake', 'pad'})
 
@@ -269,7 +270,7 @@ class GlossaryRoundTripTest(SimpleTestCase):
         terms.upsert_term(con, 'BRAKE PAD KIT', 'لنت ترمز جلو', source='curated')
         p = Path(self._tmp.name) / 'Book1.csv'
         terms.export_book1(con, p)
-        config.PARTS_DB = _csv_to_db(p)
+        config.PARTS_DB = _csv_to_db(p, Path(self._tmp.name) / 'translation.db')
         glossary._CSV_CACHE.update(mtime=None, data={}, tokens={})
         got, matched = glossary.expand('قیمت زه جلو پنجره ماشین')
         self.assertIn('grille', matched)

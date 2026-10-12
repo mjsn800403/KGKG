@@ -121,6 +121,13 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  // Remaining assistant questions on the plan ({used, limit, remaining, period_days}).
+  const [quota, setQuota] = useState(null);
+  useEffect(() => {
+    fetch('/kg-api/api/auth/ai-usage/', { credentials: 'include' })
+      .then((r) => r.json()).then((d) => { if (d && d.limit != null) setQuota(d); })
+      .catch(() => {});
+  }, []);
   const userIdRef = useRef(null);
   const scrollRef = useRef(null);
   const hydratedRef = useRef(false);
@@ -247,9 +254,11 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
         }
         if (!final) throw new Error('پاسخ ناقص دریافت شد');
         if (final.sessionId) setSessionId(final.sessionId);
+        if (final.quota) setQuota(final.quota);
         putAi(finalMsg(final));
       } else {
         const data = await res.json();
+        if (data?.quota) setQuota(data.quota);
         if (!res.ok) throw new Error(data?.error || 'خطا');
         if (data.sessionId) setSessionId(data.sessionId);
         putAi(finalMsg(data));
@@ -278,10 +287,25 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
   function rate(msg, idx, { verdict, reason, comment }) {
     rateAnswer({
       query: msg.query, verdict, reason, comment, mode: msg.mode,
-      topBlobs: msg.topBlobs, blobId: msg.topBlobs?.[0] ?? null,
+      // no blobId: the backend shares an answer-level vote across all the
+      // sources shown, weighted by rank
+      topBlobs: msg.topBlobs, blobId: null,
       brand, model, car: carName,
     });
     setMessages((m) => m.map((x, i) => (i === idx ? { ...x, rated: true } : x)));
+  }
+
+  // 👍/👎 on one source: counts fully for that source only.
+  function rateSource(msg, idx, source, verdict) {
+    if (source?.blob_id == null || msg.ratedSources?.[source.blob_id] != null) return;
+    rateAnswer({
+      query: msg.query, verdict, reason: 'source', mode: msg.mode,
+      topBlobs: msg.topBlobs, blobId: source.blob_id,
+      brand, model, car: carName,
+    });
+    setMessages((m) => m.map((x, i) => (i === idx
+      ? { ...x, ratedSources: { ...(x.ratedSources || {}), [source.blob_id]: verdict } }
+      : x)));
   }
 
   return (
@@ -312,6 +336,8 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
                     grounded={msg.grounded}
                     mode={msg.mode}
                     degraded={msg.degraded}
+                    ratedSources={msg.ratedSources || {}}
+                    onRateSource={(s, v) => rateSource(msg, i, s, v)}
                   />
                   {!msg.rated
                     ? <FeedbackBar onRate={(v) => rate(msg, i, v)} />
@@ -354,6 +380,11 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
         )}
       </div>
 
+      {quota && (
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '0 12px 6px', textAlign: 'left' }}>
+          پرسش باقی‌مانده: {quota.remaining} از {quota.limit}{quota.period_days ? ' (۳۰ روز اخیر)' : ''}
+        </div>
+      )}
       <div className="chat-inputbar">
         <textarea
           className="chat-input"

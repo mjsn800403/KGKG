@@ -261,8 +261,8 @@ class AppUrlTest(unittest.TestCase):
         # structural separators only: /brand/year/stem/seg/seg/seg
         self.assertEqual(url.count('/'), 6)
         from urllib.parse import unquote
+        # an in-title '/' travels as U+2044 (the frontend swaps it back)
         decoded = [unquote(p) for p in url.split('/')[4:]]
-        # in-title '/' is shipped as U+2044 (fraction slash), never a raw '/'
         self.assertEqual(decoded, ['Repair', 'Service Data [11⁄2022 -  ]', 'A⁄C'])
 
     def test_missing_year_falls_back_to_title_path_year(self):

@@ -87,6 +87,13 @@ def brands_list_view(request):
     return JsonResponse(brands, safe=False)
 
 
+
+def _log_err(e, msg='خطای داخلی سرور؛ کمی بعد دوباره تلاش کنید.'):
+    """Log the real exception server-side; hand the client only a generic message."""
+    import logging
+    logging.getLogger('kgkg.api').error('request failed: %r', e, exc_info=e)
+    return msg
+
 @csrf_exempt
 @rate_limited('assist', 60, 60)
 def assist_view(request):
@@ -148,10 +155,9 @@ def assist_view(request):
         return JsonResponse(result)
     except FileNotFoundError as e:
         return JsonResponse(
-            {'error': 'RAG index not built yet. Run: python manage.py build_rag',
-             'detail': str(e)}, status=503)
+            {'error': _log_err(e, 'سرویس جست‌وجو موقتاً در دسترس نیست.')}, status=503)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _log_err(e)}, status=500)
 
 
 @csrf_exempt
@@ -197,10 +203,9 @@ def diagnose_view(request):
         return JsonResponse(result)
     except FileNotFoundError as e:
         return JsonResponse(
-            {'error': 'Diagnostic index not built yet. Run: python manage.py build_diag',
-             'detail': str(e)}, status=503)
+            {'error': _log_err(e, 'سرویس عیب‌یابی موقتاً در دسترس نیست.')}, status=503)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _log_err(e)}, status=500)
 
 
 @csrf_exempt
@@ -311,6 +316,21 @@ def purchase_request_view(request):
             {'error': 'تعداد پرسنل شرکت و تعداد کاربران مورد نیاز را وارد کنید.'},
             status=400)
 
+    # One purchase request per legal entity: a registration number / national
+    # code that already has a live request (or is already a customer company)
+    # is refused. A rejected request does not block a new one.
+    key = _reg_key(reg_no)
+    if key:
+        from .models import Company
+        live = PurchaseRequest.objects.exclude(status='rejected').values_list('reg_no', flat=True)
+        customers = Company.objects.exclude(reg_no='').values_list('reg_no', flat=True)
+        if any(_reg_key(r) == key for r in live) or any(_reg_key(r) == key for r in customers):
+            return JsonResponse(
+                {'error': 'برای این شماره ثبت / کد ملی قبلاً درخواست خرید ثبت شده است. '
+                          'هر شرکت فقط یک درخواست خرید می‌تواند داشته باشد؛ '
+                          'برای تغییر یا تمدید با پشتیبانی تماس بگیرید.'},
+                status=409)
+
     try:
         pr = PurchaseRequest.objects.create(
             brand=brand, model=model, year=year, documents=documents,
@@ -325,6 +345,13 @@ def purchase_request_view(request):
         return JsonResponse({'error': 'ثبت درخواست ناموفق بود؛ لطفاً دوباره تلاش کنید.'}, status=500)
 
     return JsonResponse({'ok': True, 'id': pr.id})
+
+
+def _reg_key(raw):
+    """Comparable form of a registration number / national code: ASCII digits,
+    no spaces, dashes or other separators."""
+    s = str(raw or '').translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789'))
+    return ''.join(ch for ch in s if ch.isalnum()).lower()
 
 
 def _post_body(request):
@@ -390,7 +417,7 @@ def feedback_pin_view(request):
             service.clear_cache()
         return JsonResponse({'ok': bool(ok)})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _log_err(e)}, status=500)
 
 
 @require_admin_token
@@ -416,7 +443,7 @@ def eval_report_view(request):
         from .rag import evalreport
         return JsonResponse(evalreport.latest_report())
     except Exception as e:
-        return JsonResponse({'error': str(e), 'runs': []}, status=200)
+        return JsonResponse({'error': _log_err(e, 'گزارش در دسترس نیست.'), 'runs': []}, status=200)
 
 
 @rate_limited('search', 90, 60)
@@ -454,9 +481,9 @@ def search_view(request):
         try:
             return _search_like_fallback(brand, model, car, q, limit)
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({'error': _log_err(e)}, status=500)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _log_err(e)}, status=500)
 
 
 def _search_like_fallback(brand, model, car, q, limit):
@@ -1013,8 +1040,8 @@ def car_view(request, brand_name=None, year=None, model_name=None):
         except Car.DoesNotExist:
             return JsonResponse({'error': 'Car not found'}, status=404)
         except FileNotFoundError as e:
-            return JsonResponse({'error': str(e)}, status=404)
+            return JsonResponse({'error': _log_err(e, 'محتوا یافت نشد.')}, status=404)
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({'error': _log_err(e)}, status=500)
 
     return JsonResponse({'error': 'Invalid URL'}, status=400)

@@ -9,13 +9,14 @@ import { fetchGrantedFleet, getPortalUser, logActivity, portalRefreshMe } from '
 import RecommendationsWidget from './RecommendationsWidget';
 import { useVehicleFilter } from './VehicleFilter';
 import VehicleGroupList from './VehicleGroupList';
+import { frmVehicleRows, FRM_TITLE } from '@/utils/frmSets';
 
 const MotionLink = motion.create(Link);
 
 function FleetCard({ c, i }) {
   return (
     <MotionLink
-      href={`/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
+      href={c.frm ? `/frm/${c.frm}` : `/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
       className="fleet-card glass"
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
@@ -29,6 +30,7 @@ function FleetCard({ c, i }) {
       {c.has_parts && (
         <div className="fleet-parts-chip">کاتالوگ قطعات</div>
       )}
+      {c.frm && <div className="frm-chip">{FRM_TITLE}</div>}
       <div className="yrs">
         {c.has_parts && c.has_manual === false
           ? 'مشاهده کاتالوگ قطعات ←'
@@ -61,7 +63,7 @@ export default function FleetView() {
         const me = await portalRefreshMe();
         const items = await fetchGrantedFleet();
         if (cancelled) return;
-        setCars(items);
+        setCars([...items, ...frmVehicleRows(items, (r) => ({ brand: r.brand_name, model: r.car_name, year: r.year }))]);
         if (items.length) logActivity('view_fleet', 'مشاهده فهرست خودروهای فعال');
       } catch (e) {
         if (cancelled) return;

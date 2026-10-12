@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
-import { adminLogin, obtainAdminToken } from '@/utils/api';
+import { adminLogin, adminVerifyOtp, obtainAdminToken } from '@/utils/api';
 
 const EASE = [0.22, 1, 0.36, 1];
 const TURNSTILE_SITEKEY = '0x4AAAAAAEjnbFG2W2QYf-cE';
@@ -21,6 +21,8 @@ export default function AdminLogin() {
   const [busy, setBusy] = useState(false);
   const [entered, setEntered] = useState(false);
   const [token, setToken] = useState('');
+  const [otp, setOtp] = useState(null); // {session, hint} after the password step
+  const [code, setCode] = useState('');
   const boxRef = useRef(null);
   const widgetId = useRef(null);
 
@@ -63,6 +65,19 @@ export default function AdminLogin() {
     e?.preventDefault();
     if (busy) return;
     setError('');
+    if (otp) {
+      if (!/^\d{6}$/.test(code.trim())) { setError('کد ۶ رقمی پیامک‌شده را وارد کنید.'); return; }
+      setBusy(true);
+      try {
+        await adminVerifyOtp(otp.session, code.trim());
+        setEntered(true);
+        setTimeout(() => router.replace('/admin'), 650);
+      } catch (err) {
+        setError(err?.message || 'تأیید کد ناموفق بود.');
+        setBusy(false);
+      }
+      return;
+    }
     if (!username.trim() || !password) {
       setError('نام کاربری و رمز عبور مدیر سامانه را وارد کنید.');
       return;
@@ -73,7 +88,12 @@ export default function AdminLogin() {
     }
     setBusy(true);
     try {
-      await adminLogin(username.trim(), password, token);
+      const d = await adminLogin(username.trim(), password, token);
+      if (d?.otp_required) {
+        setOtp({ session: d.otp_session, hint: d.phone_hint });
+        setBusy(false);
+        return;
+      }
       setEntered(true);
       setTimeout(() => router.replace('/admin'), 650);
     } catch (err) {
@@ -126,6 +146,20 @@ export default function AdminLogin() {
                       <Icon name="shield" size={15} />
                       <span>این بخش مخصوص مدیر پلتفرم است؛ کاربران شرکتی از <a onClick={() => router.push('/login')}>صفحه ورود پورتال</a> وارد شوند.</span>
                     </div>
+                    {otp && (
+                      <div className="field"><label>
+                        کد تأیید ارسال‌شده به <bdi dir="ltr" style={{ unicodeBidi: 'isolate' }}>{otp.hint}</bdi>
+                      </label>
+                        <input dir="ltr" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                          value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus />
+                        <a style={{ fontSize: 12, cursor: 'pointer' }}
+                          onClick={() => { setOtp(null); setCode(''); setToken('');
+                            try { window.turnstile?.reset(widgetId.current || undefined); } catch { /* noop */ } }}>
+                          ← بازگشت و ارسال دوباره
+                        </a>
+                      </div>
+                    )}
+                    <div style={otp ? { display: 'none' } : undefined}>
                     <div className="field"><label>نام کاربری</label>
                       <input dir="ltr" type="text" autoComplete="username" value={username}
                         onChange={(e) => setUsername(e.target.value)} placeholder="admin" />
@@ -136,6 +170,7 @@ export default function AdminLogin() {
                         onKeyDown={(e) => e.key === 'Enter' && submit(e)} />
                     </div>
                     <div ref={boxRef} style={{ margin: '4px 0 12px', minHeight: 65 }} />
+                    </div>
                     <AnimatePresence>
                       {error && (
                         <motion.div className="pform-error" style={{ marginBottom: 12 }}
@@ -146,7 +181,7 @@ export default function AdminLogin() {
                     </AnimatePresence>
                     <motion.button className="btn btn-accent full" type="submit" disabled={busy}
                       whileTap={{ scale: 0.97 }}>
-                      {busy ? 'در حال بررسی…' : 'ورود به میز مدیریت ←'}
+                      {busy ? 'در حال بررسی…' : otp ? 'تأیید کد و ورود ←' : 'ورود به میز مدیریت ←'}
                     </motion.button>
                   </motion.form>
                 )}

@@ -22,7 +22,7 @@ function bandClass(band) {
   return band === 'high' ? 'conf-high' : band === 'low' ? 'conf-low' : 'conf-medium';
 }
 
-function SourceRow({ s }) {
+function SourceRow({ s, rated, onRate }) {
   const sim = typeof s.similarity === 'number' ? Math.max(0, Math.min(1, s.similarity)) : null;
   const internal = (s.url || '').startsWith('/');
   const tag = MATCHED_VIA_FA[s.matched_via] || null;
@@ -43,6 +43,18 @@ function SourceRow({ s }) {
           )}
           {tag && <span className={`evi-via evi-via-${s.matched_via}`}>{tag}</span>}
           {s.band && <span className={`evi-band ${bandClass(s.band)}`}>{s.band_label || s.band}</span>}
+          {onRate && s.blob_id != null && (
+            rated != null ? (
+              <span className="evi-rated">{rated > 0 ? '👍' : '👎'} ثبت شد</span>
+            ) : (
+              <span className="evi-rate">
+                <button type="button" className="evi-rate-btn" onClick={() => onRate(s, 1)}
+                        aria-label="این منبع مفید بود" title="این منبع مفید بود">👍</button>
+                <button type="button" className="evi-rate-btn" onClick={() => onRate(s, -1)}
+                        aria-label="این منبع مفید نبود" title="این منبع مفید نبود">👎</button>
+              </span>
+            )
+          )}
         </div>
         {sim != null && (
           <div className="evi-bar" title={`شباهت ${(sim * 100).toFixed(0)}٪`}>
@@ -54,7 +66,8 @@ function SourceRow({ s }) {
   );
 }
 
-export default function EvidencePanel({ sources = [], confidence, grounded, mode, degraded }) {
+export default function EvidencePanel({ sources = [], confidence, grounded, mode, degraded,
+                                        ratedSources = {}, onRateSource }) {
   const [open, setOpen] = useState(false);
   const hasSources = sources && sources.length > 0;
   if (!hasSources && grounded !== false && !degraded) return null;
@@ -92,7 +105,9 @@ export default function EvidencePanel({ sources = [], confidence, grounded, mode
           </button>
           {open && (
             <ul className="evi-sources">
-              {sources.map((s, i) => <SourceRow key={i} s={s} />)}
+              {sources.map((s, i) => (
+                <SourceRow key={i} s={s} rated={ratedSources[s.blob_id]} onRate={onRateSource} />
+              ))}
             </ul>
           )}
         </>

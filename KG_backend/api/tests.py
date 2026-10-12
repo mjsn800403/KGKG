@@ -115,6 +115,9 @@ class PortalAdminFlowTests(TestCase):
         u = PortalUser.objects.get(id=uid)
         self.assertTrue(user_ai_eligible(u))
 
+        # With a phone on file the login goes through SMS OTP; switch the
+        # second factor off so the password login hands back a session token.
+        PortalUser.objects.filter(id=uid).update(otp_enabled=False)
         r = self._post('/api/auth/login/', {'username': 'gostar_te_01', 'password': password})
         self.assertEqual(r.status_code, 200)
         token = r.json()['token']

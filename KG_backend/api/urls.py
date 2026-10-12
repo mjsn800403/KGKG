@@ -1,8 +1,10 @@
 from django.http import JsonResponse
 from django.urls import path, re_path
 from . import adminops, events, recommend, requests_api, views, portal, team
-from . import orggraph_api, parts, labortimes, sst, quota
+from . import orggraph_api, parts, labortimes, sst, quota, frm
 from . import mediaauth
+from . import vncauth
+from . import chatlog
 
 
 def _api_not_found(request, rest=None):
@@ -38,6 +40,9 @@ urlpatterns = [
     path('api/auth/login/', portal.login_view, name='portal_login'),
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
+    path('api/auth/chat-log/', chatlog.record_view, name='chat_log_record'),
+    path('api/team/chat-logs/', chatlog.team_view, name='team_chat_logs'),
+    path('api/admin/chat-logs/', chatlog.admin_view, name='admin_chat_logs'),
     path('api/auth/ai-usage/', quota.ai_usage_view, name='ai_usage'),
     path('api/auth/me/prefs/', portal.me_prefs_view, name='portal_me_prefs'),
     path('api/auth/fleet/', portal.fleet_view, name='portal_fleet'),
@@ -65,10 +70,12 @@ urlpatterns = [
 
     # Admin panel API (gated by KG_ADMIN_TOKEN; open in DEBUG without one).
     path('api/admin/login/', portal.admin_login_view, name='admin_login'),
+    path('api/admin/verify-otp/', portal.admin_verify_otp_view, name='admin_verify_otp'),
     path('api/admin/overview/', portal.admin_overview_view, name='admin_overview'),
     path('api/admin/packages/', portal.admin_packages_view, name='admin_packages'),
     path('api/admin/requests/', portal.admin_requests_view, name='admin_requests'),
     path('api/admin/requests/<int:req_id>/status/', portal.admin_request_status_view, name='admin_request_status'),
+    path('api/admin/requests/<int:req_id>/delete/', portal.admin_request_delete_view, name='admin_request_delete'),
     path('api/admin/cars/', portal.admin_cars_view, name='admin_cars'),
     path('api/admin/companies/', portal.admin_companies_view, name='admin_companies'),
     path('api/admin/companies/<int:company_id>/', portal.admin_company_detail_view, name='admin_company_detail'),
@@ -110,6 +117,7 @@ urlpatterns = [
     # per-car access gate as car_view). Declared before the <brand> catch-alls.
     # nginx auth_request for /kg-api/media/ (see mediaauth.py)
     path('api/media-auth/', mediaauth.media_auth_view, name='media_auth'),
+    path('api/vnc-auth/', vncauth.vnc_auth_view, name='vnc_auth'),
     path('api/labor-times/<str:brand_name>/<str:year>/<str:model_name>/',
          labortimes.labor_times_csv_view, name='labor_times_csv'),
     # Per-vehicle SST (Special Service Tools) CSV export: merges every system's
@@ -117,6 +125,8 @@ urlpatterns = [
     # have one?" for the front-page button. Same gate as labor-times above.
     path('api/sst/<str:brand_name>/<str:year>/<str:model_name>/',
          sst.sst_csv_view, name='sst_csv'),
+    # Flat-rate manual sets (زمان استاندارد تعمیراتی), see api/frm.py.
+    path('api/frm/<slug:slug>/', frm.frm_view, name='frm'),
 
     # Any unmatched api/... path must 404 here, before the <brand>/<year>/
     # car catch-alls below swallow it as brand "api".

@@ -271,9 +271,22 @@ def _looks_like_repair(query):
     return any(r in n for r in _REPAIR_MARKERS)
 
 
+# Persian (U+06F0..) and Arabic-Indic (U+0660..) digits -> ASCII. A Persian
+# keyboard types "P۰۳۰۱" by default, which [0-9] never matches.
+_FA_DIGITS = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
+# "P 0301" / "p  0A80" -> "P0301": a lone system letter split from its 4 digits.
+_SPLIT_CODE_RE = re.compile(r'\b([PCBUpcbu])\s+([0-9][0-9A-Fa-f]{3})\b')
+
+
+def normalize_code_text(text):
+    """Canonicalise how a user may type a DTC, for code detection only."""
+    t = (text or '').translate(_FA_DIGITS)
+    return _SPLIT_CODE_RE.sub(r'\1\2', t)
+
+
 def _detect_code(query, diag):
     """Return (code, known). `known` is True if the code exists in this car."""
-    for m in config.DTC_CODE_RE.finditer(query or ''):
+    for m in config.DTC_CODE_RE.finditer(normalize_code_text(query)):
         key = norm_code(m.group(1))
         row = diag.execute("SELECT code FROM dtc WHERE code=? OR code LIKE ? LIMIT 1",
                            (key, key + '-%')).fetchone()
