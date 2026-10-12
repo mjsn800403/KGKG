@@ -1,0 +1,11 @@
+.venv
+**/__pycache__
+*.pyc
+Database_warehouse
+static_warehouse
+staticfiles
+db.sqlite3*
+*.sqbpro
+.env*
+*.bak
+*.pre-*

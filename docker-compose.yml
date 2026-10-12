@@ -1,0 +1,39 @@
+# Run on the VPS:  docker compose up -d   (images come from GHCR, built by CI)
+# Ports bind to loopback, so nginx keeps proxying 127.0.0.1:8000 / :3000 as today.
+# Stop the systemd units (kgkg-backend / kgkg-frontend) before the first `up`.
+services:
+  backend:
+    image: ghcr.io/mjsn800403/kgkg-backend:${TAG:-latest}
+    build: ./KG_backend
+    env_file: ./KG_backend/.env.prod
+    environment:
+      RAG_EMBED_MODEL: bge-m3
+      KG_WARMUP: "1"
+      HF_HOME: /hf
+    volumes:
+      - ./KG_backend/Database_warehouse:/app/Database_warehouse
+      - ./KG_backend/static_warehouse:/app/static_warehouse
+      - ./KG_backend/db.sqlite3:/app/db.sqlite3
+      - ./downloads:/downloads
+      - /var/log/kgkg:/var/log/kgkg
+      - /root/.cache/huggingface:/hf:ro
+    ports: ["127.0.0.1:8000:8000"]
+    restart: always
+
+  frontend:
+    image: ghcr.io/mjsn800403/kgkg-frontend:${TAG:-latest}
+    build:
+      context: ./kg_frontend
+      args: { NEXT_PUBLIC_API_BASE: /kg-api }
+    env_file: ./kg_frontend/.env.production
+    environment:
+      BACKEND_URL: http://backend:8000
+      API_BASE_INTERNAL: http://backend:8000
+      KG_MEDIA_ROOT: /media
+      TERMS_JSON_PATH: /data/_rag/terms_en_fa.json
+    volumes:
+      - ./KG_backend/static_warehouse:/media:ro
+      - ./KG_backend/Database_warehouse/_rag/terms_en_fa.json:/data/_rag/terms_en_fa.json:ro
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [backend]
+    restart: always
