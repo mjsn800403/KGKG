@@ -74,6 +74,9 @@ def _resolve_parts_db():
 
 
 PARTS_DB = _resolve_parts_db()
+# Book1.csv export artifact written by build_terms (terms.export_book1); the
+# glossary itself now reads PARTS_DB.
+PARTS_CSV = Path(os.environ.get('RAG_PARTS_CSV') or (BASE_DIR.parent / 'Book1.csv'))
 # Minimum normalised length (chars) for a CSV Persian phrase to be used as a
 # query-expansion key -- guards against very short, ambiguous parts (e.g. "بست")
 # polluting unrelated queries. The hand-curated map keeps its own short keys.

@@ -24,6 +24,19 @@ def _mem_store():
     return con
 
 
+
+def _csv_to_db(csv_path):
+    """Load an exported Book1.csv into a translation.db-shaped SQLite file
+    (Book1 table, field1=English, field2=Persian) next to it."""
+    import sqlite3
+    db = Path(csv_path).with_suffix('.db')
+    con = sqlite3.connect(db)
+    con.execute('CREATE TABLE Book1(field1 TEXT, field2 TEXT)')
+    con.executemany('INSERT INTO Book1 VALUES (?,?)',
+                    list(csv.reader(open(csv_path, encoding='utf-8-sig'))))
+    con.commit(); con.close()
+    return db
+
 class CleaningTest(SimpleTestCase):
     def test_arabic_chars_unified_for_display(self):
         self.assertEqual(terms.clean_fa_display('كيسه هوا'), 'کیسه هوا')
@@ -173,7 +186,7 @@ class ExportTest(SimpleTestCase):
         with tempfile.TemporaryDirectory() as d2:
             p2 = Path(d2) / 'Book1.csv'
             terms.export_book1(con, p2)
-            data = glossary._parse_csv(p2)
+            data = glossary._parse_db(_csv_to_db(p2))
         self.assertIn('لنت ترمز', data)
         self.assertEqual(set(data['لنت ترمز'].split()), {'brake', 'pad'})
 
@@ -241,12 +254,12 @@ class GlossaryRoundTripTest(SimpleTestCase):
     hand-maintained Book1.csv would (the hot-reload contract)."""
 
     def setUp(self):
-        self._old_csv = config.PARTS_CSV
+        self._old_db = config.PARTS_DB
         self._old_cache = dict(glossary._CSV_CACHE)
         self._tmp = tempfile.TemporaryDirectory()
 
     def tearDown(self):
-        config.PARTS_CSV = self._old_csv
+        config.PARTS_DB = self._old_db
         glossary._CSV_CACHE.update(self._old_cache)
         self._tmp.cleanup()
 
@@ -256,7 +269,7 @@ class GlossaryRoundTripTest(SimpleTestCase):
         terms.upsert_term(con, 'BRAKE PAD KIT', 'لنت ترمز جلو', source='curated')
         p = Path(self._tmp.name) / 'Book1.csv'
         terms.export_book1(con, p)
-        config.PARTS_CSV = p
+        config.PARTS_DB = _csv_to_db(p)
         glossary._CSV_CACHE.update(mtime=None, data={}, tokens={})
         got, matched = glossary.expand('قیمت زه جلو پنجره ماشین')
         self.assertIn('grille', matched)

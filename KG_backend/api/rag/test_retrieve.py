@@ -262,7 +262,8 @@ class AppUrlTest(unittest.TestCase):
         self.assertEqual(url.count('/'), 6)
         from urllib.parse import unquote
         decoded = [unquote(p) for p in url.split('/')[4:]]
-        self.assertEqual(decoded, ['Repair', 'Service Data [11/2022 -  ]', 'A/C'])
+        # in-title '/' is shipped as U+2044 (fraction slash), never a raw '/'
+        self.assertEqual(decoded, ['Repair', 'Service Data [11⁄2022 -  ]', 'A⁄C'])
 
     def test_missing_year_falls_back_to_title_path_year(self):
         occ = self._occ(year=None)

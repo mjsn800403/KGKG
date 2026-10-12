@@ -150,12 +150,13 @@ def rate(query, scope, mode, top_blobs, verdict, blob_id=None, reason=None,
         pass
 
 
-_BOOST_CACHE = {'at': 0.0, 'map': {}}
+_BOOST_CACHE = {'at': float('-inf'), 'map': {}}
 _BOOST_LOCK = threading.Lock()
 
 
 def invalidate_boost_cache():
-    _BOOST_CACHE['at'] = 0.0
+    # -inf, not 0.0: time.monotonic() can be < FB_CACHE_TTL on a freshly booted host
+    _BOOST_CACHE['at'] = float('-inf')
 
 
 def _decayed_counts():
