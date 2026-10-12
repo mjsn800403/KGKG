@@ -15,6 +15,7 @@ import os
 import signal
 import subprocess
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -96,8 +97,49 @@ def _chrome():
     except (OSError, ValueError):
         return {'reachable': False, 'logged_in': False}
     urls = [t.get('url', '') for t in tabs if t.get('type') == 'page']
+    # TIS allows one login per account; a second login elsewhere bounces this
+    # tab to /t3Portal/resources/jsp/concurrentLoginFailure.html -- still under
+    # /t3Portal/, so the path alone would wrongly read as "logged in".
+    def _dead(u):
+        low = u.lower()
+        return any(m in low for m in ('concurrentlogin', 'loginpage', 'prelogin',
+                                      'login.html', 'loginfailure'))
+    tis = [u for u in urls if '/t3Portal/' in u]
     return {'reachable': True,
-            'logged_in': any('/t3Portal/' in u for u in urls)}
+            'logged_in': any(not _dead(u) for u in tis),
+            'session_lost': bool(tis) and all(_dead(u) for u in tis)}
+
+
+# Any TIS portal URL bounces an anonymous browser to the TIS login form.
+LOGIN_URL = 'https://techinfo.toyota.com/t3Portal/appmanager/t3/ti'
+
+
+def open_login():
+    """Put the TIS login form on screen when Chrome is not logged in.
+
+    Opens a fresh tab on the login URL and closes the stale ones (e.g. the
+    concurrent-login page). Never touches a live TIS session or a running
+    crawler. Returns True when it navigated.
+    """
+    ch = _chrome()
+    if not ch['reachable'] or ch['logged_in'] or status_running():
+        return False
+    base = CDP_URL.rsplit('/json', 1)[0]
+    try:
+        with urllib.request.urlopen(CDP_URL, timeout=2) as resp:
+            old = [t['id'] for t in json.loads(resp.read().decode('utf-8'))
+                   if t.get('type') == 'page']
+        req = urllib.request.Request(
+            base + '/json/new?' + urllib.parse.quote(LOGIN_URL, safe=':/'), method='PUT')
+        urllib.request.urlopen(req, timeout=5).read()
+        for tid in old:
+            try:
+                urllib.request.urlopen(base + '/json/close/' + tid, timeout=2).read()
+            except OSError:
+                pass
+    except (OSError, ValueError):
+        return False
+    return True
 
 
 def _pgrep(pattern):
@@ -234,17 +276,30 @@ def start():
     if not chrome['reachable']:
         return None, ('Chrome در دسترس نیست. ابتدا از طریق VNC مرورگر را باز '
                       'کرده و وارد TIS شوید.')
+    if chrome.get('session_lost'):
+        return None, ('نشست TIS از دست رفته است (ورود هم‌زمان از جای دیگر). '
+                      'از طریق VNC دوباره وارد TIS شوید و سپس شروع کنید.')
     if not chrome['logged_in']:
         return None, 'Chrome باز است اما وارد TIS نشده است. ابتدا از طریق VNC وارد شوید.'
-    log = open(RUN_LOG, 'a', encoding='utf-8')
+    # Run as its own transient systemd unit: a child of gunicorn would sit in
+    # kgkg-backend's cgroup and be killed by every backend restart/deploy.
+    unit = 'kgkg-tis-crawl-%d' % int(time.time())
     try:
-        proc = subprocess.Popen([str(PYTHON), str(SCRIPT)], cwd=str(TIS_DIR),
-                                stdin=subprocess.DEVNULL, stdout=log,
-                                stderr=subprocess.STDOUT, start_new_session=True)
-    finally:
-        log.close()
+        subprocess.run(['systemd-run', '--unit', unit, '--collect', '--quiet',
+                        '-p', 'WorkingDirectory=%s' % TIS_DIR,
+                        '-p', 'StandardOutput=append:%s' % RUN_LOG,
+                        '-p', 'StandardError=append:%s' % RUN_LOG,
+                        str(PYTHON), str(SCRIPT)],
+                       check=True, capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, 'اجرای خزشگر ناموفق بود: %s' % e
     _progress_cache['data'] = None
-    return proc.pid, None
+    for _ in range(20):
+        pids = _pids()
+        if pids:
+            return pids[0], None
+        time.sleep(0.25)
+    return None, 'خزشگر اجرا شد اما فرایند آن پیدا نشد؛ گزارش اجرا را بررسی کنید.'
 
 
 def stop():

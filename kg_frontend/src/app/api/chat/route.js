@@ -686,29 +686,39 @@ export async function POST(request) {
         { error: 'دستیار هوش مصنوعی برای حساب شما فعال نیست. با مدیر یا پشتیبانی تماس بگیرید.' },
         { status: 403 });
     }
-    // Plan allowance (demo 5 / 2-day 20 / monthly 150 / annual 200). Consumed
-    // up front and logged as activity; 429 with a Persian message when spent.
-    let quota = null;
-    {
-      let peek = {};
-      try { peek = await request.clone().json(); } catch { /* validated below */ }
-      const qr = await fetch(`${BACKEND_URL}/api/auth/ai-usage/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ detail: String(peek?.message || '').slice(0, 300) }),
-      }).catch(() => null);
-      const qj = qr ? await qr.json().catch(() => ({})) : {};
-      if (qr && qr.status === 429) {
-        return Response.json({ error: qj.error, quota: qj.quota }, { status: 429 });
-      }
-      quota = qj?.quota || null;
-    }
-
     const { message, sessionId, userId, brand, model, car,
             history, prevSources, stream: wantStream } = await request.json();
     if (!message || !message.trim()) {
       return Response.json({ error: 'پیام خالی است.' }, { status: 400 });
     }
+    // Plan allowance (demo 5 / 2-day 20 / monthly 150 / annual 200). Checked
+    // here (fail closed: no answer if the allowance can't be read) and charged
+    // only once a real answer has been produced — an empty message, a failed
+    // retrieval or an LLM outage never costs the user a question.
+    const quotaCall = (method, payload) => fetch(`${BACKEND_URL}/api/auth/ai-usage/`, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: payload ? JSON.stringify(payload) : undefined,
+    }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }))
+      .catch(() => ({ status: 0, body: {} }));
+    let quota = null;
+    {
+      const q = await quotaCall('GET');
+      if (q.status === 429) {
+        return Response.json({ error: q.body.error, quota: q.body }, { status: 429 });
+      }
+      if (q.status !== 200) {
+        return Response.json({ error: 'بررسی سهمیهٔ دستیار ممکن نشد؛ کمی بعد دوباره تلاش کنید.' },
+          { status: 503 });
+      }
+      quota = q.body;
+    }
+    const charge = async (payload) => {
+      if (payload.degraded) return payload;
+      const q = await quotaCall('POST', { detail: String(message).slice(0, 300) });
+      if (q.body?.quota) quota = q.body.quota;
+      return { ...payload, quota };
+    };
     const metisConfigured = !!(API_KEY && BOT_ID);
 
     // Multi-turn: sanitize the client-sent thread, then resolve short
@@ -906,7 +916,7 @@ export async function POST(request) {
             deg = true;
           }
           try {
-            send({ t: 'done', ...finish(reply, deg) });
+            send({ t: 'done', ...(await charge(finish(reply, deg))) });
           } catch (e) {
             console.error('chat finish error:', e);
             send({ t: 'error', error: 'ارتباط با دستیار ناموفق بود.' });
@@ -945,7 +955,7 @@ export async function POST(request) {
       degraded = true;
     }
 
-    return Response.json(finish(rawReply, degraded));
+    return Response.json(await charge(finish(rawReply, degraded)));
   } catch (err) {
     console.error('chat proxy error:', err);
     return Response.json({ error: 'ارتباط با دستیار ناموفق بود.' }, { status: 502 });

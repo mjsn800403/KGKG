@@ -16,11 +16,24 @@ Edge types (all blob -> blob):
 "Same procedure across brand / model / type" is NOT stored as an edge: it is
 simply the other rows in `occurrences` for the same blob (exact + free).
 """
+import multiprocessing as mp
+import os
 import re
+import signal
 
 from . import config, store
 
 _HREF_RE = re.compile(r'href="([^"]+)"')
+
+# Same columns as store.init_index_schema's `edges`; the full rebuild writes
+# into this staging table and swaps it in only when complete.
+_EDGES_BUILD_DDL = """
+    CREATE TABLE edges_build (
+        src_blob INTEGER NOT NULL,
+        dst_blob INTEGER NOT NULL,
+        relation TEXT NOT NULL,
+        weight   REAL DEFAULT 1.0
+    )"""
 
 
 def _ensure_edge_uniq(index):
@@ -44,19 +57,44 @@ def _vec_table(index):
 
 
 def build_all(index, log=print):
-    index.execute("DELETE FROM edges")
+    """Full rebuild. The new graph is written to `edges_build` and swapped in
+    at the end, so the served `edges` stay intact if the run is interrupted
+    (the old code deleted `edges` first, and a cancel left the graph empty).
+    The sync marker is set stale up front so an interrupted run is resumed."""
+    index.execute("INSERT OR REPLACE INTO meta(k,v) VALUES('graph_synced_vectors','-1')")
+    index.execute("DROP TABLE IF EXISTS edges_build")
+    index.execute(_EDGES_BUILD_DDL)
+    index.execute("CREATE UNIQUE INDEX idx_edges_build_uniq "
+                  "ON edges_build(src_blob, dst_blob, relation)")
     index.commit()
-    _ensure_edge_uniq(index)
     seen = set()                          # (src, dst, relation) dedup
-    n_sem, _ = _semantic_edges(index, seen, log)
-    n_xl = _crosslink_edges(index, seen, log)
+    n_sem, _ = _semantic_edges(index, seen, log, table='edges_build')
+    n_xl = _crosslink_edges(index, seen, log, table='edges_build')
     index.commit()
-    n_lt = rebuild_labor_edges(index, log=log, seen=seen)
+    n_lt = rebuild_labor_edges(index, log=log, seen=seen, table='edges_build')
+    _swap_edges(index)
     log(f"    edges: semantic={n_sem}  crosslink={n_xl}  labor_time={n_lt}")
     return {'semantic': n_sem, 'labor_time': n_lt, 'crosslink': n_xl}
 
 
-def _add(index, seen, src, dst, relation, weight):
+def _swap_edges(index):
+    """Replace `edges` with the finished `edges_build` in one transaction.
+    WAL readers keep seeing the old graph until the commit."""
+    index.commit()
+    index.execute("BEGIN IMMEDIATE")
+    try:
+        index.execute("DROP TABLE edges")
+        index.execute("ALTER TABLE edges_build RENAME TO edges")
+        index.execute("DROP INDEX idx_edges_build_uniq")
+        index.execute("CREATE UNIQUE INDEX idx_edges_uniq ON edges(src_blob, dst_blob, relation)")
+        index.execute("CREATE INDEX idx_edges_src ON edges(src_blob)")
+        index.execute("COMMIT")
+    except Exception:
+        index.execute("ROLLBACK")
+        raise
+
+
+def _add(index, seen, src, dst, relation, weight, table='edges'):
     if src == dst:
         return 0
     key = (src, dst, relation)
@@ -64,30 +102,50 @@ def _add(index, seen, src, dst, relation, weight):
         return 0
     seen.add(key)
     cur = index.execute(
-        "INSERT OR IGNORE INTO edges(src_blob, dst_blob, relation, weight) VALUES (?,?,?,?)",
+        f"INSERT OR IGNORE INTO {table}(src_blob, dst_blob, relation, weight) VALUES (?,?,?,?)",
         (src, dst, relation, weight))
     return cur.rowcount or 0
 
 
-# --- semantic: same-kind "see also" kNN over blob vectors -------------------
-def _semantic_edges(index, seen, log):
-    """Connect conceptually-related, same-kind pages. labor<->repair links are
-    NOT made here -- they are built by the dedicated, verb/scope-aware
-    rebuild_labor_edges() pass, because the labor and repair taxonomies phrase
-    the same component differently and need precision filters the raw cosine
-    floor can't provide."""
-    vtab = _vec_table(index)
-    # a float column takes a raw float32 query; an int8 column needs vec_int8()
+def _graph_workers():
+    """Processes for the semantic kNN pass (RAG_GRAPH_WORKERS; default leaves
+    4 cores for the site)."""
+    try:
+        n = int(os.environ.get('RAG_GRAPH_WORKERS', '0'))
+    except ValueError:
+        n = 0
+    if n <= 0:
+        n = (os.cpu_count() or 1) - 4
+    return max(1, n)
+
+
+# Per-worker state. `kind` is set in the parent before the pool forks, so the
+# 300k-entry map is inherited instead of pickled to every worker.
+_W = {}
+
+
+def _sem_init(path, vtab):
+    # the pipeline's SIGTERM handler raises _Canceled; workers must just exit
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    conn = store.open_index(path, write=False)
+    conn.execute('PRAGMA query_only=1')
+    _W['conn'] = conn
+    _W['vtab'] = vtab
+
+
+def _sem_chunk(blob_ids):
+    """kNN for a slice of blobs -> [(src, dst, 'semantic', sim)]. Same rules as
+    the old sequential loop."""
+    conn, vtab, blob_kind = _W['conn'], _W['vtab'], _W['kind']
     qexpr = '?' if vtab == 'vec_build' else 'vec_int8(?)'
-    blob_kind = {r['blob_id']: r['kind']
-                 for r in index.execute("SELECT blob_id, kind FROM blobs")}
-    n_sem = 0
     k = config.SEMANTIC_K + 1
-    for blob in list(blob_kind.keys()):
-        row = index.execute(f"SELECT embedding FROM {vtab} WHERE rowid=?", (blob,)).fetchone()
+    out = []
+    for blob in blob_ids:
+        row = conn.execute(f"SELECT embedding FROM {vtab} WHERE rowid=?", (blob,)).fetchone()
         if row is None:
             continue
-        res = index.execute(
+        res = conn.execute(
             f"SELECT rowid, distance FROM {vtab} WHERE embedding MATCH {qexpr} AND k=? ORDER BY distance",
             (row['embedding'], k)).fetchall()
         for nb in res:
@@ -100,8 +158,51 @@ def _semantic_edges(index, seen, log):
             # skip cross-kind (labor<->non-labor); the labor pass owns those
             if (blob_kind.get(blob) == 'labor') != (blob_kind.get(nbid) == 'labor'):
                 continue
-            if _add(index, seen, blob, nbid, 'semantic', round(sim, 4)):
-                n_sem += 1
+            out.append((blob, nbid, 'semantic', round(sim, 4)))
+    return out
+
+
+# --- semantic: same-kind "see also" kNN over blob vectors -------------------
+def _semantic_edges(index, seen, log, table='edges'):
+    """Connect conceptually-related, same-kind pages. labor<->repair links are
+    NOT made here -- they are built by the dedicated, verb/scope-aware
+    rebuild_labor_edges() pass, because the labor and repair taxonomies phrase
+    the same component differently and need precision filters the raw cosine
+    floor can't provide.
+
+    Each blob's kNN is independent, so the queries run in a process pool (one
+    read-only connection per worker); only this process writes. Edges are keyed
+    (src, dst, 'semantic'), which no other pass produces, so `seen` is not
+    needed here -- the unique index dedups."""
+    vtab = _vec_table(index)
+    blob_kind = {r['blob_id']: r['kind']
+                 for r in index.execute("SELECT blob_id, kind FROM blobs")}
+    ids = list(blob_kind.keys())
+    path = index.execute("PRAGMA database_list").fetchone()['file']
+    workers = _graph_workers()
+    chunk = 500
+    chunks = [ids[i:i + chunk] for i in range(0, len(ids), chunk)]
+    log(f"    semantic kNN: {len(ids)} blobs, {workers} workers")
+    _W['kind'] = blob_kind
+    n_sem = 0
+    done = 0
+    step = max(1, len(chunks) // 20)
+    try:
+        with mp.get_context('fork').Pool(workers, initializer=_sem_init,
+                                         initargs=(path, vtab)) as pool:
+            for i, rows in enumerate(pool.imap_unordered(_sem_chunk, chunks), 1):
+                if rows:
+                    before = index.total_changes
+                    index.executemany(
+                        f"INSERT OR IGNORE INTO {table}(src_blob, dst_blob, relation, weight) "
+                        "VALUES (?,?,?,?)", rows)
+                    n_sem += index.total_changes - before
+                done += 1
+                if i % step == 0:
+                    index.commit()
+                    log(f"    semantic kNN: {done}/{len(chunks)} chunks, {n_sem} edges")
+    finally:
+        _W.pop('kind', None)
     index.commit()
     return n_sem, 0
 
@@ -169,7 +270,7 @@ def _blob_cars(index):
     return cars
 
 
-def rebuild_labor_edges(index, log=print, seen=None):
+def rebuild_labor_edges(index, log=print, seen=None, table='edges'):
     """(Re)build labor_time edges only -- the work-model link between a repair
     procedure and its Labor-Times entry.
 
@@ -183,7 +284,7 @@ def rebuild_labor_edges(index, log=print, seen=None):
     _ensure_edge_uniq(index)
     if seen is None:
         seen = set()
-    index.execute("DELETE FROM edges WHERE relation='labor_time'")
+    index.execute(f"DELETE FROM {table} WHERE relation='labor_time'")
     index.commit()
 
     kind = {r['blob_id']: r['kind'] for r in index.execute("SELECT blob_id, kind FROM blobs")}
@@ -233,7 +334,7 @@ def rebuild_labor_edges(index, log=print, seen=None):
                 continue
             added = False
             for a, b in ((lb, rid), (rid, lb)):
-                if _add(index, seen, a, b, 'labor_time', round(sim, 4)):
+                if _add(index, seen, a, b, 'labor_time', round(sim, 4), table=table):
                     added = True
                     n += 1
             if added:
@@ -295,7 +396,7 @@ def add_for_blobs(index, new_ids, new_cars, log=print):
 
 
 # --- crosslink: the manual's own href references ----------------------------
-def _crosslink_edges(index, seen, log, cars=None):
+def _crosslink_edges(index, seen, log, cars=None, table='edges'):
     n = 0
     files = config.car_db_files()
     if cars is not None:
@@ -332,6 +433,6 @@ def _crosslink_edges(index, seen, log, cars=None):
                     continue
                 d_blob = node2blob.get(tgt_node)
                 if d_blob is not None:
-                    n += _add(index, seen, s_blob, d_blob, 'crosslink', 1.0)
+                    n += _add(index, seen, s_blob, d_blob, 'crosslink', 1.0, table=table)
     index.commit()
     return n

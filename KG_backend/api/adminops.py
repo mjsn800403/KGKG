@@ -316,6 +316,12 @@ def admin_pipeline_view(request):
         if action == 'tis_stop':
             return JsonResponse({'ok': True, 'stopped': tis_crawler.stop()})
 
+        if action == 'vnc_ticket':
+            # Cookie that lets this browser open the TIS screen at /kg-vnc/.
+            from . import vncauth
+            tis_crawler.open_login()
+            return vncauth.issue_ticket(request, JsonResponse({'ok': True, 'path': vncauth.PATH}))
+
         if action == 'tis_chrome':
             # Only ever starts a missing browser; never restarts a live one.
             ok, err = tis_crawler.start_chrome()

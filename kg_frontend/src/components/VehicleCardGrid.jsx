@@ -10,6 +10,7 @@ import Link from 'next/link';
 import Icon from './Icon';
 import { useVehicleFilter } from './VehicleFilter';
 import VehicleGroupList from './VehicleGroupList';
+import { frmVehicleRows, FRM_TITLE } from '@/utils/frmSets';
 
 const MODEL_ORDER = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 
@@ -24,7 +25,9 @@ export default function VehicleCardGrid({
   // Brand/year live on the route for the browse step and on each row for the
   // assistant picker — fold both into the shape the filter reads.
   const rows = useMemo(
-    () => vehicles.map((v) => ({
+    () => [...vehicles, ...(hrefSuffix ? [] : frmVehicleRows(vehicles, (v) => ({
+      brand: v.brand ?? v.brand_name ?? brand, model: v.model ?? v.car_name ?? '', year: v.year ?? year,
+    })))].map((v) => ({
       ...v,
       brand: v.brand ?? v.brand_name ?? brand,
       model: v.model ?? v.car_name ?? '',
@@ -60,12 +63,13 @@ function Grid({ items, hrefSuffix, go, emptyLabel, total }) {
   }, [items]);
 
   const card = (v) => {
-    const href = `/${encodeURIComponent(v.brand)}/${v.year}/${encodeURIComponent(v.model)}${hrefSuffix}`;
+    const href = v.frm ? `/frm/${v.frm}` : `/${encodeURIComponent(v.brand)}/${v.year}/${encodeURIComponent(v.model)}${hrefSuffix}`;
     return (
       <Link key={href} href={href} className="doc-card explode glass">
         <div className="icon"><Icon name="car" /></div>
         <div>
           <h4>{v.display_name || v.model}</h4>
+          {v.frm && <div className="frm-chip" style={{ margin: '6px 0 4px' }}>{FRM_TITLE}</div>}
           <div className="doc-card-sub" dir="ltr">
             {String(v.brand).toUpperCase()} / {v.year}
           </div>

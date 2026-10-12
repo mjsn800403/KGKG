@@ -20,10 +20,20 @@ import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
 import AdminDashboard from '@/components/AdminDashboard';
+import JalaliDateTimeInput from '@/components/JalaliDateTimeInput';
 import RequestsInbox from '@/components/RequestsInbox';
 import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
 import { adminApi, adminLogout, getAdminUser, obtainAdminToken, shareAdminToken } from '@/utils/api';
+
+// <input type="datetime-local"> shows and returns LOCAL wall time; loading it
+// with toISOString() (UTC) shifted every saved expiry by the UTC offset.
+const toLocalInput = (iso) => {
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 import useEventStream from '@/utils/useEventStream';
+import { normalizePhone } from '@/utils/phone';
 import { DEPARTMENT_PRESETS, PACKAGES, ROLES, packageLabel, roleWithDepartment } from '@/lib/packages';
 import { isPlanRequest, planIdFromCode, quote, faMillion, PLAN_DAYS } from '@/lib/pricing';
 
@@ -78,7 +88,7 @@ const ACTIVITY_FA = {
 };
 
 const REQ_STATUS = {
-  new: { label: 'جدید', cls: 'st-new' },
+  new: { label: 'در انتظار بررسی', cls: 'st-new' },
   reviewing: { label: 'در حال بررسی', cls: 'st-rev' },
   approved: { label: 'تأیید شده', cls: 'st-ok' },
   rejected: { label: 'رد شده', cls: 'st-no' },
@@ -690,7 +700,11 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
   const issued = useRef(false);
 
   useEffect(() => {
-    const match = companies.find((c) => c.name === request.company);
+    // Tolerant match: spacing / ZWNJ / Arabic-vs-Persian ی and ک / case differ
+    // between what the buyer typed and what the admin saved.
+    const norm = (x) => String(x || '').replace(/[\u200c\s]+/g, ' ').replace(/ي/g, 'ی')
+      .replace(/ك/g, 'ک').trim().toLowerCase();
+    const match = companies.find((c) => norm(c.name) === norm(request.company));
     const key = `${request.id}:${match?.id || ''}`;
     if (issued.current || initKey.current === key) return;
     initKey.current = key;
@@ -772,7 +786,7 @@ function IssueUsersWizard({ request, companies, guard, onDone }) {
           <div className="field">
             <label>شماره موبایل (ورود پیامکی) *</label>
             <input dir="ltr" value={d.phone}
-              onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, phone: e.target.value } : x))} />
+              onChange={(e) => setDrafts((prev) => prev.map((x, i) => i === idx ? { ...x, phone: normalizePhone(e.target.value) } : x))} />
           </div>
           <div className="field">
             <label>نقش</label>
@@ -808,7 +822,11 @@ function Requests({ guard, onCreateCompany }) {
   const [companies, setCompanies] = useState([]);
   const [wizardFor, setWizardFor] = useState(null);
   const load = useCallback(() => {
-    guard(adminApi.requests).then((d) => d && setItems(d.items));
+    // Open work on top: new, then under review, then the closed ones; newest
+    // first within each group (the API already returns newest first).
+    const rank = { new: 0, reviewing: 1 };
+    guard(adminApi.requests).then((d) => d && setItems(
+      [...d.items].sort((x, y) => (rank[x.status] ?? 2) - (rank[y.status] ?? 2))));
     guard(adminApi.companies).then((d) => d && setCompanies(d.items));
   }, [guard]);
   useEffect(load, [load, rs]);
@@ -818,19 +836,25 @@ function Requests({ guard, onCreateCompany }) {
     load();
   };
 
+  const removeRequest = async (r) => {
+    if (!window.confirm(`حذف درخواست «${r.company}»؟\nاین درخواست برای همیشه حذف می‌شود و قابل بازگشت نیست.`)) return;
+    const d = await guard(() => adminApi.deleteRequest(r.id));
+    if (d) load();
+  };
+
   return (
     <>
       <h1 className="page-title">درخواست‌های خرید و دمو</h1>
       <div className="page-sub">
         درخواست‌های خرید اشتراک از صفحهٔ «پلن‌ها و قیمت» و درخواست‌های قدیمی بررسی موجودی
-        {items.some((r) => r.status === 'new') && <> — <b>{items.filter((r) => r.status === 'new').length.toLocaleString('fa-IR')} درخواست جدید</b></>}
+        {items.some((r) => r.status === 'new') && <> — <b>{items.filter((r) => r.status === 'new').length.toLocaleString('fa-IR')} درخواست در انتظار بررسی</b></>}
       </div>
       <div style={{ display: 'grid', gap: 14, marginTop: 20 }}>
         {items.map((r) => {
           const st = REQ_STATUS[r.status] || REQ_STATUS.new;
           if (isPlanRequest(r)) {
             return (
-              <PlanRequestCard key={r.id} r={r} st={st} onStatus={setStatus} onCreateCompany={onCreateCompany}
+              <PlanRequestCard key={r.id} r={r} st={st} onStatus={setStatus} onRemove={removeRequest} onCreateCompany={onCreateCompany}
                 wizardOpen={wizardFor === r.id} onWizard={() => setWizardFor(wizardFor === r.id ? null : r.id)}
                 wizard={<IssueUsersWizard request={r} companies={companies} guard={guard} onDone={load} />} />
             );
@@ -871,6 +895,8 @@ function Requests({ guard, onCreateCompany }) {
                     {REQ_STATUS[s].label}
                   </button>
                 ))}
+                <button className="btn" style={{ borderColor: '#e05252', color: '#ff6b6b' }}
+                  onClick={() => removeRequest(r)}>حذف درخواست</button>
                 <button
                   className="btn btn-accent"
                   onClick={() => onCreateCompany?.({
@@ -910,7 +936,7 @@ function Requests({ guard, onCreateCompany }) {
 // A subscription request from the public plans page. It rides the legacy
 // purchase-request fields (see lib/pricing.js): brand = marker, year = plan
 // code, seats_count = team size; the note carries the price the buyer saw.
-function PlanRequestCard({ r, st, onStatus, onCreateCompany, wizardOpen, onWizard, wizard }) {
+function PlanRequestCard({ r, st, onStatus, onRemove, onCreateCompany, wizardOpen, onWizard, wizard }) {
   const q = quote(planIdFromCode(r.year), r.seats_count || 1);
   const lines = String(r.note || '').split('\n').filter(Boolean);
   const pick = (prefix) => lines.find((l) => l.startsWith(prefix))?.slice(prefix.length).trim();
@@ -930,7 +956,7 @@ function PlanRequestCard({ r, st, onStatus, onCreateCompany, wizardOpen, onWizar
         </div>
         <span className={`adm-status ${st.cls}`}>{st.label}</span>
       </div>
-      {r.wants_demo && <div className="adm-plan-note">درخواست حساب دمو (رایگان، ۱ کاربر، ۱ روز)</div>}
+      {r.wants_demo && <div className="adm-plan-note">درخواست حساب دمو (۱ کاربر، ۱ روز)</div>}
       <div className="adm-plan-grid">
         <div><small>پلن</small><b>{q.plan.title}</b></div>
         <div><small>کاربران</small><b>{(r.seats_count || 1).toLocaleString('fa-IR')} نفر</b></div>
@@ -949,6 +975,8 @@ function PlanRequestCard({ r, st, onStatus, onCreateCompany, wizardOpen, onWizar
         {['reviewing', 'approved', 'rejected'].filter((s) => s !== r.status).map((s) => (
           <button key={s} className="btn" onClick={() => onStatus(r.id, s)}>{REQ_STATUS[s].label}</button>
         ))}
+        <button className="btn" style={{ borderColor: '#e05252', color: '#ff6b6b' }}
+          onClick={() => onRemove?.(r)}>حذف درخواست</button>
         <button
           className="btn btn-accent"
           onClick={() => onCreateCompany?.({
@@ -1170,6 +1198,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
   // flash sits at the top and is off-screen when this long form is scrolled.
   const [formError, setFormError] = useState('');
   const [rootUsername, setRootUsername] = useState('');
+  const [transfer, setTransfer] = useState(null);
   const tryAdmin = async (fn) => {
     setFormError('');
     try { return await fn(); } catch (e) {
@@ -1219,7 +1248,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
       seats_count: co.seats_count ?? '',
       note: co.note || '',
       access_expires_at: co.access_expires_at
-        ? new Date(co.access_expires_at).toISOString().slice(0, 16) : '',
+        ? toLocalInput(co.access_expires_at) : '',
     });
   };
 
@@ -1244,16 +1273,54 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
     }
   };
 
+  const transferRoot = async () => {
+    if (!selected || !transfer) return;
+    if (!transfer.username.trim() || !transfer.phone.trim()) {
+      setFormError('نام کاربری و تلفن همراه مدیر جدید الزامی است.'); return;
+    }
+    if (!window.confirm('حساب سطح‌صفر جدید بالای نمودار سازمانی فعلی ساخته می‌شود و مدیر فعلی زیر آن قرار می‌گیرد. ادامه؟')) return;
+    setSaving(true);
+    const d = await tryAdmin(() => adminApi.updateCompany(selected.id, {
+      transfer_root: true,
+      admin_username: transfer.username.trim(),
+      admin_display_name: transfer.display_name.trim(),
+      admin_phone: transfer.phone.trim(),
+    }));
+    setSaving(false);
+    if (d) {
+      setSelected(d.company); load(); setTransfer(null);
+      if (d.admin) { setCreatedAdmin(d.admin); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      flashSaved('✓ مالکیت سطح صفر منتقل شد.');
+    }
+  };
+
   const saveAccess = async () => {
     setSaving(true);
-    const d = await guard(() => adminApi.setCompanyAccess(selected.id, accessDraft));
+    const d = await guard(() => adminApi.setCompanyAccess(selected.id, accessDraft, !!selected.all_cars));
     setSaving(false);
-    if (d) { setSelected(d.company); load(); flashSaved('✓ دسترسی خودروهای شرکت ذخیره شد.'); }
+    if (d) { setSelected(d.company); syncDraft(d.company); load(); flashSaved('✓ دسترسی خودروهای شرکت ذخیره شد.'); }
   };
+
+  const syncDraft = (co) => setAccessDraft((co.accesses || []).map((a) => ({
+    car_id: a.car.id,
+    documents: a.documents?.length ? a.documents : [...ALL_DOC_IDS],
+  })));
 
   const toggleField = async (field) => {
     const d = await guard(() => adminApi.updateCompany(selected.id, { [field]: !selected[field] }));
-    if (d) { setSelected(d.company); load(); }
+    if (d) { setSelected(d.company); syncDraft(d.company); load(); }
+  };
+
+  const setPlan = async (plan) => {
+    if (!window.confirm('تغییر پلن سهمیهٔ دستیار همهٔ کاربران این شرکت را از صفر شروع می‌کند. ادامه؟')) return;
+    const d = await guard(() => adminApi.updateCompany(selected.id, { plan }));
+    if (d) { setSelected(d.company); load(); flashSaved('✓ پلن شرکت به‌روز شد.'); }
+  };
+
+  const resetQuota = async () => {
+    if (!window.confirm('سهمیهٔ دستیار همهٔ کاربران این شرکت از صفر شروع شود؟')) return;
+    const d = await guard(() => adminApi.updateCompany(selected.id, { reset_quota: true }));
+    if (d) { setSelected(d.company); flashSaved('✓ سهمیهٔ دستیار بازنشانی شد.'); }
   };
 
   const remove = async (c) => {
@@ -1276,7 +1343,11 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
       setForm({ name: '', department_label: 'خدمات پس از فروش', reg_no: '', landline: '', mobile: '', seats_count: '', is_demo: false, ai_assistant_enabled: false, note: '', admin_username: '', admin_display_name: '', admin_phone: '', admin_access_expires_at: '' });
       load();
       setSelected(d.company);
-      setAccessDraft([]);
+      syncDraft(d.company);
+      if (d.admin) {
+        flashSaved(d.notified ? '✓ نام کاربری و رمز عبور برای مشتری پیامک شد.'
+          : '⚠ پیامک اطلاعات ورود ارسال نشد؛ اطلاعات را دستی به مشتری بدهید.');
+      }
     }
   };
 
@@ -1306,7 +1377,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
             <div className="field"><label>تلفن ثابت</label>
               <input dir="ltr" value={form.landline} onChange={(e) => setForm({ ...form, landline: e.target.value })} /></div>
             <div className="field"><label>تلفن همراه</label>
-              <input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></div>
+              <input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: normalizePhone(e.target.value) })} /></div>
             <div className="field"><label>تعداد صندلی (کاربر)</label>
               <input type="number" dir="ltr" value={form.seats_count} onChange={(e) => setForm({ ...form, seats_count: e.target.value })} /></div>
           </div>
@@ -1335,8 +1406,8 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
             <div className="field"><label>نام کاربری حساب سطح‌صفر *</label>
               <input dir="ltr" value={form.admin_username} onChange={(e) => setForm({ ...form, admin_username: e.target.value })} /></div>
             <div className="field"><label>انقضای دسترسی (پنجرهٔ دسترسی شرکت)</label>
-              <input type="datetime-local" dir="ltr" value={form.admin_access_expires_at}
-                onChange={(e) => setForm({ ...form, admin_access_expires_at: e.target.value })} /></div>
+              <JalaliDateTimeInput value={form.admin_access_expires_at}
+                onChange={(v) => setForm({ ...form, admin_access_expires_at: v })} /></div>
           </div>
 
           <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 8 }}>حساب سطح‌صفر با نام کاربری بالا ساخته می‌شود؛ کد ورود به تلفن همراه شرکت پیامک می‌شود. بدون نام کاربری، شرکت بدون حساب سطح‌صفر ساخته می‌شود.</div>
@@ -1380,7 +1451,35 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
                   <button className="btn" onClick={() => toggleField('active')}>{selected.active ? 'غیرفعال‌سازی شرکت' : 'فعال‌سازی شرکت'}</button>
                   <button className="btn" onClick={() => toggleField('ai_assistant_enabled')}>{selected.ai_assistant_enabled ? 'حذف دستیار AI' : 'فعال‌سازی دستیار AI'}</button>
                   <button className="btn" onClick={() => toggleField('is_demo')}>{selected.is_demo ? 'خروج از حالت دمو' : 'تبدیل به دمو'}</button>
+                  <button className="btn" onClick={() => toggleField('all_cars')}>{selected.all_cars ? 'لغو «همهٔ خودروها»' : 'همهٔ خودروها (فعلی و آینده)'}</button>
                   <button className="btn" style={{ marginRight: 'auto', borderColor: '#e05252', color: '#ff6b6b' }} onClick={() => remove(selected)}>حذف شرکت</button>
+                </div>
+                <div className="admin-edit-panel" style={{ marginBottom: 12 }}>
+                  <div className="pform-section">پلن و سهمیهٔ دستیار هوشمند</div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                    <label>پلن:</label>
+                    <select value={selected.plan} onChange={(e) => setPlan(e.target.value)}>
+                      <option value="demo">دمو (۵ پرسش در کل دوره)</option>
+                      <option value="pass">۲ روزه (۲۰ پرسش در کل دوره)</option>
+                      <option value="monthly">ماهانه (۱۵۰ پرسش در ۳۰ روز)</option>
+                      <option value="annual">سالانه (۲۰۰ پرسش در ۳۰ روز)</option>
+                    </select>
+                    {!selected.plan_explicit && <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>(حدس‌زده از یادداشت — برای ثبت قطعی انتخاب کنید)</span>}
+                    <button className="btn" onClick={resetQuota} title="شمارندهٔ پرسش‌های دستیار هوشمند همهٔ کاربران این شرکت صفر می‌شود؛ پلن و تاریخ انقضا تغییر نمی‌کند.">صفر کردن سهمیهٔ دستیار هوشمند (همهٔ کاربران شرکت)</button>
+                    {selected.all_cars && <span className="adm-status st-ok">همهٔ خودروها</span>}
+                  </div>
+                  {(selected.users || []).length > 0 && (
+                    <div style={{ marginTop: 10, fontSize: 13, display: 'grid', gap: 4 }}>
+                      {selected.users.map((u) => (
+                        <div key={u.id} style={{ display: 'flex', gap: 10 }}>
+                          <span dir="ltr">{u.username}</span>
+                          <span style={{ color: 'var(--text-dim)' }}>
+                            {u.ai_usage ? `${u.ai_usage.used} / ${u.ai_usage.limit} پرسش${u.ai_usage.period_days ? ' (۳۰ روز اخیر)' : ''}` : '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {editForm && (
                   <div className="admin-edit-panel">
@@ -1398,7 +1497,7 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
                       <div className="field"><label>تلفن ثابت</label>
                         <input dir="ltr" value={editForm.landline} onChange={(e) => setEditForm({ ...editForm, landline: e.target.value })} /></div>
                       <div className="field"><label>تلفن همراه</label>
-                        <input dir="ltr" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })} /></div>
+                        <input dir="ltr" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: normalizePhone(e.target.value) })} /></div>
                       <div className="field"><label>تعداد صندلی</label>
                         <input type="number" dir="ltr" value={editForm.seats_count}
                           onChange={(e) => setEditForm({ ...editForm, seats_count: e.target.value })} /></div>
@@ -1406,8 +1505,8 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
                         <label>{selected.is_demo ? 'پایان دورهٔ دمو (پنجرهٔ دسترسی شرکت)' : 'انقضای دسترسی شرکت'}</label>
                         {true ? (
                           <>
-                            <input type="datetime-local" dir="ltr" value={editForm.access_expires_at}
-                              onChange={(e) => setEditForm({ ...editForm, access_expires_at: e.target.value })} />
+                            <JalaliDateTimeInput value={editForm.access_expires_at}
+                              onChange={(v) => setEditForm({ ...editForm, access_expires_at: v })} />
                             {selected.is_demo && (
                               <button type="button" className="btn" style={{ marginTop: 6 }}
                                 onClick={() => setEditForm({ ...editForm, access_expires_at: plusDaysLocal(1, selected.created_at) })}>
@@ -1429,6 +1528,38 @@ function Companies({ guard, prefilled, onPrefillUsed }) {
                       </button>
                       {savedMsg && <span className="save-flash">{savedMsg}</span>}
                     </div>
+                    {selected.has_root && (
+                      <div style={{ marginTop: 14 }}>
+                        {!transfer ? (
+                          <button type="button" className="btn"
+                            onClick={() => setTransfer({ username: '', display_name: '', phone: '' })}>
+                            انتقال مالکیت سطح صفر
+                          </button>
+                        ) : (
+                          <div>
+                            <div className="pform-section">انتقال مالکیت سطح صفر</div>
+                            <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 8 }}>
+                              یک حساب سطح‌صفر جدید بالای نمودار سازمانی فعلی ساخته می‌شود؛ مدیر فعلی و کل ساختار زیر آن بدون تغییر باقی می‌مانند. پنجرهٔ دسترسی شرکت به مدیر جدید منتقل می‌شود.
+                            </div>
+                            <div className="pform-grid">
+                              <div className="field"><label>نام کاربری مدیر جدید *</label>
+                                <input dir="ltr" value={transfer.username} onChange={(e) => setTransfer({ ...transfer, username: e.target.value })} /></div>
+                              <div className="field"><label>تلفن همراه مدیر جدید *</label>
+                                <input dir="ltr" value={transfer.phone} onChange={(e) => setTransfer({ ...transfer, phone: e.target.value })} /></div>
+                              <div className="field"><label>نام نمایشی</label>
+                                <input value={transfer.display_name} onChange={(e) => setTransfer({ ...transfer, display_name: e.target.value })} /></div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                              <button className="btn btn-accent" onClick={transferRoot} disabled={saving}>
+                                {saving ? 'در حال ذخیره…' : 'ساخت مدیر سطح صفر جدید'}
+                              </button>
+                              <button className="btn" onClick={() => setTransfer(null)}>انصراف</button>
+                            </div>
+                            {formError && <div className="pform-error" style={{ marginTop: 8 }}>{formError}</div>}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {!selected.has_root && (
                       <div style={{ marginTop: 10 }}>
                         <div className="field" style={{ maxWidth: 360 }}><label>نام کاربری حساب سطح‌صفر *</label>
@@ -1635,7 +1766,7 @@ function Users({ guard }) {
   const usersReq = useRef(null);
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ company_id: '', username: '', display_name: '', phone: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
+  const [form, setForm] = useState({ company_id: '', username: '', display_name: '', phone: '', role: 'after_sales_specialist', ai_assistant_enabled: null, access_expires_at: '' });
   const [issued, setIssued] = useState(null);
   const [editingAccess, setEditingAccess] = useState(null);
   const [editingProfile, setEditingProfile] = useState(null);
@@ -1663,11 +1794,13 @@ function Users({ guard }) {
   useEffect(load, [load, rs]);
 
   const create = async () => {
-    const d = await guard(() => adminApi.createUser(form));
+    const payload = { ...form };
+    if (payload.ai_assistant_enabled == null) delete payload.ai_assistant_enabled;
+    const d = await guard(() => adminApi.createUser(payload));
     if (d) {
       setIssued({ username: d.user.username, password: d.password });
       setCreating(false);
-      setForm({ company_id: '', username: '', display_name: '', phone: '', role: 'after_sales_specialist', ai_assistant_enabled: false, access_expires_at: '' });
+      setForm({ company_id: '', username: '', display_name: '', phone: '', role: 'after_sales_specialist', ai_assistant_enabled: null, access_expires_at: '' });
       load();
     }
   };
@@ -1691,7 +1824,7 @@ function Users({ guard }) {
       phone: u.phone || '',
       is_org_root: !!u.is_org_root,
       access_expires_at: u.access_expires_at
-        ? new Date(u.access_expires_at).toISOString().slice(0, 16)
+        ? toLocalInput(u.access_expires_at)
         : '',
     });
   };
@@ -1786,16 +1919,23 @@ function Users({ guard }) {
             <div className="field"><label>نام نمایشی</label>
               <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
             <div className="field"><label>شماره موبایل (ورود پیامکی) *</label>
-              <input dir="ltr" placeholder="09xxxxxxxxx" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+              <input dir="ltr" placeholder="09xxxxxxxxx" value={form.phone} onChange={(e) => setForm({ ...form, phone: normalizePhone(e.target.value) })} /></div>
             <div className="field"><label>انقضای دسترسی</label>
               <input dir="ltr" value="از حساب سطح‌صفر شرکت به ارث می‌رسد" readOnly disabled
                 title="پنجرهٔ دسترسی شرکت توسط حساب سطح‌صفر تعیین می‌شود و برای سایر کاربران قابل ویرایش نیست." /></div>
           </div>
           <div className="doc-chips" style={{ margin: '10px 0' }}>
-            <button type="button" className={`doc-chip${form.ai_assistant_enabled ? ' active' : ''}`}
-              onClick={() => setForm({ ...form, ai_assistant_enabled: !form.ai_assistant_enabled })}>
+            {(() => {
+              // Unset = follow the company's AI flag (what the plan includes).
+              const co = companies.find((c) => String(c.id) === String(form.company_id));
+              const on = form.ai_assistant_enabled ?? !!co?.ai_assistant_enabled;
+              return (
+            <button type="button" className={`doc-chip${on ? ' active' : ''}`}
+              onClick={() => setForm({ ...form, ai_assistant_enabled: !on })}>
               <span className="tick">✓</span>دستیار AI (نیازمند پکیج راهنمای تعمیرات)
             </button>
+              );
+            })()}
           </div>
           <button className="btn btn-accent" onClick={create} disabled={!form.company_id || !form.username}>
             صدور کاربر (رمز خودکار)
@@ -1813,6 +1953,7 @@ function Users({ guard }) {
           <div key={u.id} className="card glass" style={{ padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
+                {u.is_org_root && <span className="adm-root-badge" title="حساب سطح‌صفر (مدیر شرکت)">★ مدیر شرکت · سطح ۰</span>}
                 <b dir="ltr">{u.username}</b>
                 {u.display_name && <span style={{ marginRight: 8 }}>({u.display_name})</span>}
                 <span style={{ color: 'var(--text-dim)', marginRight: 10 }}>{u.company} · {u.role_label}</span>
@@ -1841,6 +1982,11 @@ function Users({ guard }) {
               <button className="btn" onClick={() => patch(u.id, { ai_assistant_enabled: !u.ai_assistant_enabled })}>
                 {u.ai_assistant_enabled ? 'حذف AI' : 'فعال‌سازی AI'}
               </button>
+              <button className="btn" disabled={!u.has_phone}
+                title={u.has_phone ? '' : 'شماره موبایل ثبت نشده؛ ورود دو مرحله‌ای غیرفعال است'}
+                onClick={() => patch(u.id, { otp_enabled: !(u.otp_enabled !== false) })}>
+                {!u.has_phone ? 'OTP: بدون موبایل' : (u.otp_enabled !== false ? 'غیرفعال‌سازی OTP' : 'فعال‌سازی OTP')}
+              </button>
               <button className="btn" style={{ color: '#e5484d' }} onClick={() => {
                 if (window.confirm(`حذف کاربر ${u.username}؟`)) patch(u.id, { delete: true });
               }}>حذف</button>
@@ -1856,15 +2002,13 @@ function Users({ guard }) {
                   <div className="field"><label>نام نمایشی</label>
                     <input value={profileDraft.display_name}
                       onChange={(e) => setProfileDraft({ ...profileDraft, display_name: e.target.value })} /></div>
-                  {u.otp_required && (
-                    <div className="field"><label>شماره موبایل (کد ورود پیامکی)</label>
-                      <input dir="ltr" placeholder="09xxxxxxxxx" value={profileDraft.phone}
-                        onChange={(e) => setProfileDraft({ ...profileDraft, phone: e.target.value })} /></div>
-                  )}
+                  <div className="field"><label>شماره موبایل (کد ورود پیامکی)</label>
+                    <input dir="ltr" placeholder="09xxxxxxxxx" value={profileDraft.phone}
+                      onChange={(e) => setProfileDraft({ ...profileDraft, phone: normalizePhone(e.target.value) })} /></div>
                   <div className="field"><label>انقضای دسترسی{profileDraft.is_org_root ? ' (پنجرهٔ دسترسی شرکت)' : ''}</label>
                     {profileDraft.is_org_root ? (
-                      <input type="datetime-local" dir="ltr" value={profileDraft.access_expires_at}
-                        onChange={(e) => setProfileDraft({ ...profileDraft, access_expires_at: e.target.value })} />
+                      <JalaliDateTimeInput value={profileDraft.access_expires_at}
+                        onChange={(v) => setProfileDraft({ ...profileDraft, access_expires_at: v })} />
                     ) : (
                       <input dir="ltr" readOnly disabled
                         value={profileDraft.access_expires_at ? fmtDate(profileDraft.access_expires_at) : 'بدون انقضا — از حساب سطح‌صفر'}
@@ -2691,7 +2835,18 @@ const ZIP_STATUS = {
 // a TIS crawl cannot run unattended, because the TIS login needs an OTP.
 function TisCrawlerCard({ data, act, busy }) {
   const t = data?.tis;
+  const [screen, setScreen] = useState(false);
+  const [screenErr, setScreenErr] = useState('');
   if (!t) return null;
+  const openScreen = async () => {
+    setScreenErr('');
+    try {
+      await adminApi.pipelineAction({ action: 'vnc_ticket' });
+      setScreen(true);
+    } catch (e) {
+      setScreenErr(e.message || 'خطا');
+    }
+  };
   const title = <h3 style={{ margin: 0 }}><Icon name="refresh" size={16} /> خزشگر TIS (دانلود مستقیم از TIS تویوتا)</h3>;
   if (t.error) {
     return (
@@ -2712,6 +2867,10 @@ function TisCrawlerCard({ data, act, busy }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         {title}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {disp.novnc && (
+            <button className="btn" onClick={() => (screen ? setScreen(false) : openScreen())}>
+              {screen ? 'بستن صفحهٔ مرورگر' : 'نمایش مرورگر TIS'}</button>
+          )}
           {!ch.reachable && (
             <button className="btn" disabled={busy}
               onClick={() => act({ action: 'tis_chrome' }, 'Chrome روی نمایشگر مجازی سرور اجرا شد؛ اکنون از طریق VNC وارد TIS شوید.')}>راه‌اندازی Chrome</button>
@@ -2730,6 +2889,16 @@ function TisCrawlerCard({ data, act, busy }) {
         {flag(disp.vnc, 'VNC فعال', 'VNC غیرفعال')}
         <span className="st-badge st-rev">{(t.done_pubs || 0).toLocaleString('fa-IR')} نشریهٔ کامل‌شده</span>
       </div>
+      {screenErr && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 8 }}>{screenErr}</div>}
+      {screen && (
+        <div style={{ marginBottom: 12 }}>
+          <iframe title="TIS browser" src="/kg-vnc/vnc.html?autoconnect=1&resize=scale&reconnect=1&path=kg-vnc/websockify"
+            style={{ width: '100%', height: '70vh', border: '1px solid rgba(120,120,160,.3)', borderRadius: 8, background: '#000' }} />
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.8 }}>
+            در این صفحه وارد TIS شوید و کد یک‌بارمصرف را وارد کنید، سپس «شروع خزشگر» را بزنید. هم‌زمان از جای دیگری وارد TIS نشوید.
+          </div>
+        </div>
+      )}
       {t.running && !ch.logged_in && (
         <div style={{ color: '#eab308', fontSize: 13, marginBottom: 8 }}>
           خزشگر در حال اجراست اما نشست TIS در مرورگر فعال نیست؛ خزش تا ورود دوباره (با کد یک‌بارمصرف) پیش نمی‌رود.
@@ -2740,8 +2909,7 @@ function TisCrawlerCard({ data, act, busy }) {
       )}
       {t.installed && !ch.logged_in && (
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
-          برای شروع، از طریق VNC به مرورگر سرور وصل شوید و وارد TIS شوید (ورود به TIS کد یک‌بارمصرف لازم دارد).
-          اتصال VNC فقط از طریق تونل SSH امکان‌پذیر است (جزئیات در راهنمای عملیات).
+          برای شروع، «نمایش مرورگر TIS» را بزنید و وارد TIS شوید (ورود به TIS کد یک‌بارمصرف لازم دارد).
         </div>
       )}
       <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
@@ -3008,8 +3176,8 @@ function Pipeline({ guard }) {
           {showSchedule && (
             <div className="card glass" style={{ marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 14 }}>اجرا در:</span>
-              <input type="datetime-local" dir="ltr" value={scheduleAt}
-                onChange={(e) => setScheduleAt(e.target.value)} />
+              <div style={{ minWidth: 240 }}><JalaliDateTimeInput value={scheduleAt} defaultTime="now" clearable={false}
+                onChange={(v) => setScheduleAt(v)} /></div>
               <button className="btn btn-accent" disabled={busy || !scheduleAt}
                 onClick={() => { act({ action: 'schedule', at: scheduleAt }, 'زمان‌بندی ثبت شد؛ در زمان مقرر خودکار اجرا می‌شود.'); setShowSchedule(false); }}>
                 ثبت زمان‌بندی

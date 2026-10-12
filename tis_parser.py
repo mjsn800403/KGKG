@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
-from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
+from bs4 import BeautifulSoup, Comment, MarkupResemblesLocatorWarning
 
 warnings.filterwarnings('ignore', category=MarkupResemblesLocatorWarning)
 
@@ -62,6 +62,11 @@ DROP_TAGS = ('script', 'style', 'link', 'meta', 'title', 'head', 'noscript',
 
 _VEH_RE = re.compile(r'^(?P<model>.+)_(?P<year>\d{4})$')
 _DOCID_RE = re.compile(r'Doc ID:\s*</b>\s*([A-Z0-9]+)', re.I)
+# TIS names a DTC page by its bare code list ('C1A3108,C1A3187',
+# 'C10001C,...,C1A9500'); the names live in the page's <table class="dtc">.
+_CODE_TITLE_RE = re.compile(r'^[PBCU][0-9A-F]{4}(?:[0-9A-F]{2})?(?:\s*,|\s*$)')
+_TIS_FTB_RE = re.compile(r'^([PBCU][0-9A-F]{4})([0-9A-F]{2})$')
+_WS_RE = re.compile(r'[ \t\r\n\f]+')       # not \s: keeps &nbsp;
 
 
 def vehicle_meta(vehicle_dir):
@@ -103,6 +108,36 @@ def clean_title(text):
     return t.replace('/', SLASH) or '(untitled)'
 
 
+def tis_code(code):
+    """TIS runs code and failure-type byte together (P060794); the diag index
+    and lookups use the 'P0607-94' form the LEMON manuals used."""
+    code = (code or '').strip().upper()
+    m = _TIS_FTB_RE.match(code)
+    return f'{m.group(1)}-{m.group(2)}' if m else code
+
+
+def dtc_title(html):
+    """'DTC P0607-94: Engine Control ...; DTC ...' from a TIS DTC page's
+    <table class="dtc"> header(s) -- the title form the diag index reads.
+    None when the page has no DTC header."""
+    soup = BeautifulSoup(html, 'html.parser')
+    out, seen = [], set()
+    for t in soup.find_all('table', class_='dtc'):
+        for tr in t.find_all('tr'):
+            cells = [_WS_RE.sub(' ', td.get_text(' ', strip=True))
+                     for td in tr.find_all('td')]
+            cells = [c for c in cells if c]
+            if cells and cells[0].upper() == 'DTC':
+                cells = cells[1:]
+            if len(cells) < 2 or not re.match(r'^[PBCU][0-9A-F]{4,6}$', cells[0].upper()):
+                continue
+            code = tis_code(cells[0])
+            if code not in seen:
+                seen.add(code)
+                out.append(f'DTC {code}: {cells[1]}')
+    return '; '.join(out) or None
+
+
 class TisParser:
     def __init__(self, vehicle_dir, stem, db_path, images_dir, log=None):
         self.vdir = Path(vehicle_dir).resolve()
@@ -135,6 +170,10 @@ class TisParser:
         return path
 
     def _leaf(self, parent_path, title, order, file, kind):
+        if kind == 'manual' and _CODE_TITLE_RE.match(title):
+            better = dtc_title(Path(file).read_text('utf-8', 'replace'))
+            if better:
+                title = better.replace('/', SLASH)
         path = self._add(f'{parent_path}/{title}', title, 'leaf', 'end_path',
                          parent_path.count('/') + 1, order, source=str(file))
         self.leaves.append((path, Path(file), kind))
@@ -344,6 +383,18 @@ class TisParser:
         for el in body.find_all(True):
             for attr in [k for k in el.attrs if k.lower().startswith('on')]:
                 del el[attr]
+        # TIS pages are deeply indented XSLT output: collapsing whitespace runs
+        # (outside <pre>) and dropping comments shrinks the stored HTML a lot
+        # without changing how it renders.
+        for s in body.find_all(string=True):
+            if isinstance(s, Comment):
+                s.extract()
+                continue
+            if s.find_parent(('pre', 'textarea')) is not None:
+                continue
+            t = _WS_RE.sub(' ', s)
+            if t != s:
+                s.replace_with(t)
         return body.decode_contents().strip()
 
     # ---------------------------------------------------------------- run

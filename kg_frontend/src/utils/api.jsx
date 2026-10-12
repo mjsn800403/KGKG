@@ -461,7 +461,9 @@ export async function portalLogin(username, password, turnstileToken) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `ورود ناموفق بود: ${res.status}`);
-  // login now returns {otp_session, phone_hint} — token issued after OTP verify
+  // login returns {otp_session, phone_hint} when the SMS step applies, or
+  // {token, user} directly for password-only accounts (no phone / OTP off).
+  if (data.token) setPortalSession(data.token, data.user);
   return data;
 }
 
@@ -542,6 +544,33 @@ export async function updateBrowseMode(mode) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), },
     body: JSON.stringify({ browse_mode: mode }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `prefs: ${res.status}`);
+  setPortalSession(token, data.user);
+  return data.user;
+}
+
+/** Save SMS notification prefs, e.g. {notify_manual_update: false}. */
+export async function updateNotifyPrefs(prefs) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/auth/me/prefs/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+    body: JSON.stringify(prefs),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `prefs: ${res.status}`);
+  setPortalSession(token, data.user);
+  return data.user;
+}
+
+export async function updateOtpEnabled(on) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/auth/me/prefs/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+    body: JSON.stringify({ otp_enabled: !!on }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `prefs: ${res.status}`);
@@ -740,6 +769,20 @@ export async function adminLogin(username, password, turnstileToken) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `ورود ادمین ناموفق بود: ${res.status}`);
+  // With SMS 2FA the password step returns {otp_required, otp_session}; the
+  // token only comes from adminVerifyOtp.
+  if (data.token) setAdminToken(data.token, data.admin);
+  return data;
+}
+
+export async function adminVerifyOtp(otpSession, code) {
+  const res = await fetch(`${API_BASE}/api/admin/verify-otp/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_session: otpSession, code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `تأیید کد ناموفق بود: ${res.status}`);
   setAdminToken(data.token, data.admin);
   return data;
 }
@@ -750,6 +793,7 @@ export const adminApi = {
   requests: () => adminFetch('/api/admin/requests/'),
   setRequestStatus: (id, status) =>
     adminFetch(`/api/admin/requests/${id}/status/`, { method: 'POST', body: JSON.stringify({ status }) }),
+  deleteRequest: (id) => adminFetch(`/api/admin/requests/${id}/delete/`, { method: 'POST' }),
   cars: () => adminFetch('/api/admin/cars/'),
   companies: () => adminFetch('/api/admin/companies/'),
   createCompany: (payload) =>
@@ -759,8 +803,8 @@ export const adminApi = {
     adminFetch(`/api/admin/companies/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
   deleteCompany: (id) =>
     adminFetch(`/api/admin/companies/${id}/`, { method: 'POST', body: JSON.stringify({ delete: true }) }),
-  setCompanyAccess: (id, accesses) =>
-    adminFetch(`/api/admin/companies/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses }) }),
+  setCompanyAccess: (id, accesses, allCars = false) =>
+    adminFetch(`/api/admin/companies/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses, all_cars: allCars }) }),
   companyRoles: (companyId) =>
     adminFetch(`/api/admin/companies/${companyId}/roles/`),
   addCompanyRole: (companyId, value) =>
@@ -1116,4 +1160,14 @@ export function orgSetPermission(id, payload) {
 }
 export function orgCreateUser(id, payload) {
   return orgFetch(`/api/org/nodes/${id}/create-user/`, { method: 'POST', body: payload });
+}
+
+// Flat-rate manual set ("زمان استاندارد تعمیراتی", api/frm.py). `part` narrows
+// the payload to one sheet: lts | car_models | op_types.
+export async function fetchFrm(slug, part, token) {
+  const q = part ? `?part=${encodeURIComponent(part)}` : '';
+  const res = await fetch(`${API_BASE}/api/frm/${encodeURIComponent(slug)}/${q}`,
+    { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `HTTP ${res.status}`);
+  return res.json();
 }

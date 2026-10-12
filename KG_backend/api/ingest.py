@@ -468,10 +468,17 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
 
     # Authoritative catalog upsert: brand/year/name come from the ZIP itself.
     # car_name == warehouse stem (the fleet-wide identity invariant).
-    Car.objects.update_or_create(
+    _car, _created = Car.objects.update_or_create(
         car_name=result['car_name'],
         defaults={'brand_name': result['brand'], 'year': result['year'],
                   'db_address': result['db_address']})
+    if not _created:
+        # Existing car re-parsed = its manual was updated: SMS opted-in users.
+        try:
+            from .notify import notify_manual_update
+            say(f'manual-update SMS sent to {notify_manual_update(_car)} user(s)')
+        except Exception as _e:
+            say(f'manual-update notify failed: {_e}')
 
     _cleanup_after_parse(parser, zip_path, log=say)
 
@@ -499,10 +506,17 @@ def _parse_tis_package(pkg, log=None):
         pkg.status, pkg.error = 'failed', f'{e.__class__.__name__}: {e}'[:500]
         pkg.save(update_fields=['status', 'error', 'updated_at'])
         return 'failed'
-    Car.objects.update_or_create(
+    _car, _created = Car.objects.update_or_create(
         car_name=result['car_name'],
         defaults={'brand_name': result['brand'], 'year': result['year'],
                   'db_address': result['db_address']})
+    if not _created:
+        # Existing car re-parsed = its manual was updated: SMS opted-in users.
+        try:
+            from .notify import notify_manual_update
+            say(f'manual-update SMS sent to {notify_manual_update(_car)} user(s)')
+        except Exception as _e:
+            say(f'manual-update notify failed: {_e}')
     pkg.status, pkg.error, pkg.pages_processed = 'done', '', result['pages']
     pkg.save(update_fields=['status', 'error', 'pages_processed', 'updated_at'])
     say(f'parsed TIS into warehouse: {result["car_name"]} ({result["pages"]} pages)')

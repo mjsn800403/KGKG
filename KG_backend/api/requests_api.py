@@ -27,6 +27,14 @@ VALID_STATUSES = {s for s, _ in CompanyRequest.STATUS_CHOICES}
 VALID_PRIORITIES = {p for p, _ in CompanyRequest.PRIORITY_CHOICES}
 
 
+def _payload_cars(payload):
+    ids = (payload or {}).get('car_ids') or []
+    if not ids:
+        return []
+    return [{'id': c.id, 'name': f'{c.car_name} {c.year}'.strip()}
+            for c in Car.objects.filter(id__in=ids).order_by('car_name', 'year')]
+
+
 def _request_dict(r, include_company=False):
     d = {
         'id': r.id,
@@ -35,6 +43,7 @@ def _request_dict(r, include_company=False):
         'subject': r.subject,
         'body': r.body,
         'payload': r.payload or {},
+        'cars': _payload_cars(r.payload),
         'status': r.status,
         'status_label': dict(CompanyRequest.STATUS_CHOICES).get(r.status, r.status),
         'priority': r.priority,
@@ -120,7 +129,8 @@ def _sanitize_payload(kind, payload):
         if isinstance(ids, list):
             valid = list(Car.objects.filter(id__in=[i for i in ids if isinstance(i, int)])
                          .values_list('id', flat=True))
-            out['car_ids'] = valid
+            if valid:
+                out['car_ids'] = valid
         docs = payload.get('documents')
         if isinstance(docs, list):
             out['documents'] = [d for d in docs if isinstance(d, str)][:10]

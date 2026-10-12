@@ -23,8 +23,16 @@ declare global {
 // is a same-site path, else the fleet view.
 function safeNext() {
   const next = new URLSearchParams(window.location.search).get('next') || '';
-  return next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\')
-    && !next.startsWith('/login') ? next : '/browse';
+  // Resolve like the browser will (it strips tabs/newlines and treats "\\"
+  // as "/"), and accept only a path on this same origin.
+  if (!next.startsWith('/')) return '/browse';
+  try {
+    const u = new URL(next, window.location.origin);
+    if (u.origin !== window.location.origin || u.pathname.startsWith('/login')) return '/browse';
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return '/browse';
+  }
 }
 
 export default function Login() {
@@ -121,6 +129,7 @@ export default function Login() {
     setBusy(true);
     try {
       const data = await portalLogin(username.trim(), password, token);
+      if (data.token) { router.push(safeNext()); return; }
       setOtpSession(data.otp_session);
       setPhoneHint(data.phone_hint || '');
       startCooldown();

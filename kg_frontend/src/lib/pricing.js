@@ -28,7 +28,7 @@ export const LIST_SEATS = Object.keys(LIST_MONTHLY).map(Number);
 export const PLANS = {
   demo: {
     id: 'demo', code: 'demo', title: 'حساب دمو', short: 'دمو',
-    tagline: 'آشنایی رایگان با پلتفرم، پیش از خرید',
+    tagline: 'آشنایی ۱ روزه با پلتفرم، پیش از خرید',
     aiPerSeat: 5, aiUnit: 'پرسش برای کل دوره',
   },
   pass: {
@@ -43,7 +43,7 @@ export const PLANS = {
   },
   annual: {
     id: 'annual', code: 'annual', title: 'اشتراک سالانه', short: 'سالانه',
-    tagline: 'دو ماه رایگان و سهمیهٔ بیشتر دستیار',
+    tagline: 'دو ماه تخفیف و سهمیهٔ بیشتر دستیار',
     aiPerSeat: 200, aiUnit: 'پرسش در ماه',
   },
 };
@@ -80,7 +80,7 @@ export function quote(planId, seats) {
   if (plan.id === 'demo') {
     return {
       plan, seats: 1, custom: false, total: 0,
-      perSeat: 0, perSeatLabel: 'رایگان',
+      perSeat: 0, perSeatLabel: 'دمو ۱ روزه',
       savings: 0, ai: plan.aiPerSeat, aiPerSeat: plan.aiPerSeat,
     };
   }

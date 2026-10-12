@@ -91,8 +91,12 @@ export default function RequestsInbox() {
                   {r.priority === 'high' && <span className="inbox-prio">اولویت بالا</span>}
                 </div>
                 {r.body && <p className="inbox-body">{r.body}</p>}
-                {r.payload && Object.keys(r.payload).length > 0 && (
-                  <pre className="inbox-payload">{JSON.stringify(r.payload, null, 1)}</pre>
+                {(r.cars?.length > 0 || r.payload?.documents?.length > 0 || r.payload?.seats) && (
+                  <div className="inbox-meta">
+                    {r.cars?.length > 0 && <span>خودروها: <b>{r.cars.map((c) => c.name).join("، ")}</b></span>}
+                    {r.payload?.documents?.length > 0 && <span>مستندات: <b>{r.payload.documents.join("، ")}</b></span>}
+                    {r.payload?.seats && <span>ظرفیت درخواستی: <b>{r.payload.seats}</b></span>}
+                  </div>
                 )}
                 {r.admin_note && <div className="inbox-adminnote">پاسخ: {r.admin_note}</div>}
                 {NEXT[r.status]?.length > 0 && (
