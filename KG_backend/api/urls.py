@@ -4,6 +4,7 @@ from . import adminops, events, recommend, requests_api, views, portal, team
 from . import orggraph_api, parts, labortimes, sst, quota, frm
 from . import mediaauth
 from . import vncauth
+from . import chatlog
 
 
 def _api_not_found(request, rest=None):
@@ -39,6 +40,9 @@ urlpatterns = [
     path('api/auth/login/', portal.login_view, name='portal_login'),
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
+    path('api/auth/chat-log/', chatlog.record_view, name='chat_log_record'),
+    path('api/team/chat-logs/', chatlog.team_view, name='team_chat_logs'),
+    path('api/admin/chat-logs/', chatlog.admin_view, name='admin_chat_logs'),
     path('api/auth/ai-usage/', quota.ai_usage_view, name='ai_usage'),
     path('api/auth/me/prefs/', portal.me_prefs_view, name='portal_me_prefs'),
     path('api/auth/fleet/', portal.fleet_view, name='portal_fleet'),

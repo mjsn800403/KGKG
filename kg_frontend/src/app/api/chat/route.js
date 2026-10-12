@@ -720,6 +720,24 @@ export async function POST(request) {
       return { ...payload, quota };
     };
     const metisConfigured = !!(API_KEY && BOT_ID);
+    // Chat log for admins / managers (api/chatlog.py). Best-effort: a logging
+    // failure never touches the user's answer.
+    const record = (payload) => {
+      fetch(`${BACKEND_URL}/api/auth/chat-log/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          question: String(message).slice(0, 4000),
+          answer: payload.reply || '',
+          session_id: payload.sessionId || '',
+          mode: payload.mode, grounded: !!payload.grounded, degraded: !!payload.degraded,
+          vehicle: car || [brand, model].filter(Boolean).join(' '),
+          sources: (payload.sources || []).map((s) => ({ title: s.title, href: s.url || s.href || '' })),
+        }),
+        signal: AbortSignal.timeout(10000),
+      }).catch((e) => console.error('chat-log record failed:', e));
+      return payload;
+    };
 
     // Multi-turn: sanitize the client-sent thread, then resolve short
     // anaphoric follow-ups into a self-contained RETRIEVAL query (the prompt
@@ -916,7 +934,7 @@ export async function POST(request) {
             deg = true;
           }
           try {
-            send({ t: 'done', ...(await charge(finish(reply, deg))) });
+            send({ t: 'done', ...record(await charge(finish(reply, deg))) });
           } catch (e) {
             console.error('chat finish error:', e);
             send({ t: 'error', error: 'ارتباط با دستیار ناموفق بود.' });
@@ -955,7 +973,7 @@ export async function POST(request) {
       degraded = true;
     }
 
-    return Response.json(await charge(finish(rawReply, degraded)));
+    return Response.json(record(await charge(finish(rawReply, degraded))));
   } catch (err) {
     console.error('chat proxy error:', err);
     return Response.json({ error: 'ارتباط با دستیار ناموفق بود.' }, { status: 502 });

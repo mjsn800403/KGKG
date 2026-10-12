@@ -17,9 +17,10 @@ export default function Sidebar() {
   const onSettings = pathname.startsWith('/settings');
   const onAssistant = pathname.startsWith('/assistant');
   const onRequests = pathname.startsWith('/requests');
-  const onTeam = pathname.startsWith('/team') && !pathname.startsWith('/team/analytics');
   const onAnalytics = pathname.startsWith('/team/analytics');
-  const onFleet = !onSettings && !onAssistant && !onTeam && !onAnalytics && !onRequests;
+  const onChats = pathname.startsWith('/team/chats');
+  const onTeam = pathname.startsWith('/team') && !onAnalytics && !onChats;
+  const onFleet = !onSettings && !onAssistant && !onTeam && !onAnalytics && !onChats && !onRequests;
 
   // Capability flags + identity come from the cached portal user (resolved
   // after mount to avoid an SSR hydration mismatch).
@@ -101,6 +102,11 @@ export default function Sidebar() {
           {analytics && (
             <Link className={`sb-link${onAnalytics ? ' active' : ''}`} href="/team/analytics" data-tour="nav-analytics">
               <Icon name="chart" /> تحلیل و گزارش‌ها
+            </Link>
+          )}
+          {analytics && (
+            <Link className={`sb-link${onChats ? ' active' : ''}`} href="/team/chats">
+              <Icon name="bot" /> گفتگوهای دستیار
             </Link>
           )}
         </div>

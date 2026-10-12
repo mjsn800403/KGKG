@@ -659,6 +659,11 @@ export const teamApi = {
     const qs = new URLSearchParams(params).toString();
     return teamFetch(`/api/team/analytics/${qs ? `?${qs}` : ''}`);
   },
+  // Assistant conversations of the users in the viewer's org reach.
+  chatLogs: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return teamFetch(`/api/team/chat-logs/${qs ? `?${qs}` : ''}`);
+  },
   // Behavioural insights for the manager dashboard (seat use, idle/top members).
   insights: (range = 30) => teamFetch(`/api/team/insights/?range=${range}`),
   // Company requests the manager files for the platform admin to action.
@@ -843,6 +848,10 @@ export const adminApi = {
   activity: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/activity/${qs ? `?${qs}` : ''}`);
+  },
+  chatLogs: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/chat-logs/${qs ? `?${qs}` : ''}`);
   },
   analytics: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

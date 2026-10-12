@@ -1272,3 +1272,30 @@ class RetiredDevice(models.Model):
     user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='retired_devices')
     device_hash = models.CharField(max_length=64, db_index=True)
     retired_at = models.DateTimeField(auto_now_add=True)
+
+
+class ChatLog(models.Model):
+    """One assistant exchange (question + final gated answer), written by the
+    Next chat route after it replies. Read by platform admins (everything) and
+    company managers (their org-graph reach only) — see api/chatlog.py."""
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, related_name='chat_logs')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='chat_logs')
+    session_id = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    question = models.TextField()
+    answer = models.TextField(blank=True, default='')
+    mode = models.CharField(max_length=20, blank=True, default='')
+    grounded = models.BooleanField(default=False)
+    degraded = models.BooleanField(default=False)
+    vehicle = models.CharField(max_length=200, blank=True, default='')
+    sources = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'created_at']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username}: {self.question[:40]}'

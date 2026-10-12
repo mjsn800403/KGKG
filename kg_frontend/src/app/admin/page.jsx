@@ -22,6 +22,7 @@ import Icon from '@/components/Icon';
 import AdminDashboard from '@/components/AdminDashboard';
 import JalaliDateTimeInput from '@/components/JalaliDateTimeInput';
 import RequestsInbox from '@/components/RequestsInbox';
+import ChatLogsView from '@/components/ChatLogsView';
 import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
 import { adminApi, adminLogout, getAdminUser, obtainAdminToken, shareAdminToken } from '@/utils/api';
 
@@ -211,6 +212,7 @@ const SECTIONS = [
   { id: 'users', label: 'کاربران', icon: 'users', desc: 'صدور و مدیریت حساب‌های شرکتی' },
   { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart', desc: 'میزان استفاده به تفکیک شرکت و حوزه فنی' },
   { id: 'activity', label: 'گزارش فعالیت', icon: 'clock', desc: 'ریز رویدادهای کاربران در سامانه' },
+  { id: 'chats', label: 'گفتگوهای دستیار', icon: 'bot', desc: 'پرسش‌ها و پاسخ‌های دستیار هوشمند برای همهٔ کاربران' },
   { id: 'dataquality', label: 'سلامت داده‌ها', icon: 'shield', desc: 'ممیزی کامل بودن و کیفیت مستندات هر خودرو' },
   { id: 'pipeline', label: 'پردازش داده‌ها', icon: 'refresh', desc: 'دانلود، استخراج، ایندکس RAG و پردازش داده‌های جدید' },
   { id: 'vehicle-specs', label: 'مشخصات خودروها', icon: 'car', desc: 'مشخصات ساختاریافته (schema.org) هر خودرو و منبع هر مقدار' },
@@ -222,7 +224,7 @@ const SECTIONS = [
 const SECTION_GROUPS = [
   { title: 'آنلاین', tag: 'داشبورد و درخواست‌ها', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
   { title: 'مشتریان و فروش', tag: 'درخواست خرید، شرکت‌ها، کاربران', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
-  { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'activity'] },
+  { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت، گفتگوها', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'activity', 'chats'] },
   { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system'] },
 ];
 
@@ -427,6 +429,7 @@ export default function AdminPage() {
               {section === 'users' && <Users guard={guard} />}
               {section === 'analytics' && <PlatformAnalytics guard={guard} />}
               {section === 'activity' && <Activity guard={guard} />}
+              {section === 'chats' && <AdminChats guard={guard} />}
               {section === 'dataquality' && <DataQuality guard={guard} />}
               {section === 'pipeline' && <Pipeline guard={guard} />}
               {section === 'vehicle-specs' && <VehicleSpecs guard={guard} />}
@@ -2148,6 +2151,21 @@ const cancelBtn = {
   flex: 1, padding: '6px', cursor: 'pointer', borderRadius: 6,
   border: '1px solid var(--border, #2a333f)', background: 'transparent', color: 'inherit', fontSize: 13,
 };
+
+function AdminChats({ guard }) {
+  const [companies, setCompanies] = useState([]);
+  useEffect(() => {
+    guard(adminApi.companies).then((d) => d && setCompanies(d.items));
+  }, [guard]);
+  const fetcher = useCallback((params) => guard(() => adminApi.chatLogs(params)), [guard]);
+  return (
+    <>
+      <h1 className="page-title">گفتگوهای دستیار</h1>
+      <div className="page-sub">پرسش‌ها و پاسخ‌های دستیار هوشمند برای همهٔ کاربران و شرکت‌ها</div>
+      <ChatLogsView fetcher={fetcher} companies={companies} />
+    </>
+  );
+}
 
 function Activity({ guard }) {
   const rs = useAdminRefresh();
