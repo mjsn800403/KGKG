@@ -1,72 +1,254 @@
 // app/[brand]/[year]/[model]/[[...path]]/page.js
-import { fetchNodes } from '@/utils/api';
+import { redirect } from 'next/navigation';
+import {
+  fetchNodes, fetchSubtree, buildNodeHref, urlToSeg, laborTimesCsvUrl, FLATTEN_MAX,
+} from '@/utils/api';
+import { redirectToLogin, portalTokenCookie, browseModeCookie } from '@/utils/serverAuth';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
-import CardGrid from '@/components/CardGrid';
+import StackedContent from '@/components/StackedContent';
 import ContentRenderer from '@/components/ContentRenderer';
+import CarBrowser from '@/components/CarBrowser';
+import SearchBox from '@/components/SearchBox';
+import ActivityBeacon from '@/components/ActivityBeacon';
+import { friendlyError } from '@/lib/friendlyError';
+import SectionList from '@/components/SectionList';
+import { faTitle } from '@/lib/faTerms';
+import fs from 'fs';
+import nodePath from 'path';
 
-const ICONS = ['▣', '⌖', '◷', '⚙', '◧', '◩', '⬡', '⊞'];
+// Cars whose TIS wiring diagrams were mirrored with the real interactive
+// viewer (tis_crawler/ewd_app_mirror.py) have it at
+// <media>/<car>/_ewd/<EWDNO>/viewer.html. The wiring section embeds that
+// instead of the flat per-page SVG pictures: its own tree, zoom, clickable
+// wires and connector navigation.
+const MEDIA_ROOT = process.env.KG_MEDIA_ROOT || '/opt/KGKG/KG_backend/static_warehouse';
+const EWD_SECTION = 'Electrical Wiring Diagram';
+
+function ewdViewerSrc(model, pathArray) {
+  if (pathArray[0] !== EWD_SECTION) return null;
+  if (!model || model !== nodePath.basename(model) || model.startsWith('.')) return null;
+  try {
+    const base = nodePath.join(MEDIA_ROOT, model, '_ewd');
+    const pub = fs.readdirSync(base).find((d) => /^[A-Z0-9]+$/.test(d)
+      && fs.existsSync(nodePath.join(base, d, 'viewer.html')));
+    if (!pub) return null;
+    // Deep-link the picked page: the mirror's termdata.xml lists every figure
+    // as "Category: Title" -> linkkey ("ewd_type=...;ewd=...;").
+    let hash = '';
+    const rest = pathArray.slice(2);
+    const leaf = rest[rest.length - 1];
+    const norm = (t) => t.replace(/&amp;/g, '&').replace(/[\/⁄]/g, '_').trim();
+    const terms = [];
+    const td = fs.readFileSync(nodePath.join(base, pub, '_app', pub, 'xhtml', 'termdata.xml'), 'utf8');
+    for (const m of td.matchAll(/linkkey="([^"]+)"[^>]*>([^;<]*);/g)) terms.push([m[1], norm(m[2])]);
+    const code = leaf && leaf.match(/^((?:INTRO|RL)\d+(?:-Inn)?)\s/);
+    if (code) {
+      const re = new RegExp(`ewd=(?:[A-Z0-9-]+_)?${code[1]};`);
+      hash = terms.find(([k]) => re.test(k))?.[0] || '';
+    } else if (rest[0] === 'System Circuit' && rest.length > 2) {
+      hash = terms.find(([k, t]) => k.startsWith('ewd_type=system;') && t.endsWith(': ' + norm(leaf).replace(/:/g, '_')))?.[0] || '';
+    } else if (rest[0] === 'Location & Routing' && rest.length === 3) {
+      const want = `${norm(rest[1])}: ${norm(leaf)}`;
+      hash = terms.find(([k, t]) => k.startsWith('ewd_type=routing;') && t === want)?.[0] || '';
+    } else if (rest[0] === 'Connector List') {
+      hash = terms.find(([k]) => k.startsWith('ewd_type=connlist;'))?.[0] || '';
+    }
+    if (hash) hash = '#' + hash;
+    return `/kg-api/media/${encodeURIComponent(model)}/_ewd/${pub}/viewer.html${hash}`;
+  } catch {
+    return null;
+  }
+}
+
+// Only show the Persian subtitle when it is fully translated; a half-done
+// mix ("فیوز List & رله Location") reads worse than the English alone.
+function fullFa(title) {
+  const t = faTitle(title);
+  return /[A-Za-z]*[a-z][A-Za-z]*/.test(t) ? null : t;
+}
+
+
 
 export default async function NodePage({ params }) {
   const raw = await params;
   const brand = decodeURIComponent(raw.brand);
   const year = raw.year;
   const model = decodeURIComponent(raw.model);
-  const pathArray = (raw.path || []).map(decodeURIComponent);
+  const pathArray = (raw.path || []).map((s) => urlToSeg(decodeURIComponent(s)));
 
+  // Paid content: must be signed in (token in the SSR cookie). No token -> login.
+  const token = await portalTokenCookie();
+  if (!token) await redirectToLogin();
+
+  // Classic mode = the original card-by-card drill-down, no sidebar and no
+  // subtree flattening. Modern mode = sidebar tree + adaptive flatten.
+  const classic = (await browseModeCookie()) === 'classic';
+
+  const inLaborTimes = pathArray[0] === 'Labor Times';
+  const laborCsvHref = laborTimesCsvUrl(brand, year, model);
+
+  // Adaptive flatten: try to stack this node's whole subtree onto one page. The
+  // backend returns mode 'stack' when the subtree is small enough, or mode
+  // 'cards' (no bodies) when it's too big to render at once — in which case we
+  // fetch this node's immediate children and show a drill-down index instead.
+  let subtree = null;
   let nodes = [];
   let error = null;
+  let denied = false;
+  let noLaborData = false;
 
   try {
-    nodes = await fetchNodes(brand, parseInt(year), model, pathArray);
+    if (classic) {
+      nodes = await fetchNodes(brand, year, model, pathArray, token);
+    } else {
+      subtree = await fetchSubtree(brand, year, model, pathArray, token, FLATTEN_MAX);
+      if (subtree?.mode !== 'stack') {
+        nodes = await fetchNodes(brand, year, model, pathArray, token);
+      }
+    }
   } catch (err) {
-    console.error('Error fetching nodes:', err);
-    error = err.message;
+    if (err?.status === 401) await redirectToLogin();
+    else if (err?.forbidden) denied = true;
+    else if (inLaborTimes && pathArray.length === 1 && err?.status === 404) noLaborData = true;
+    else { console.error('Error fetching content:', err); error = friendlyError(err, 'بارگذاری محتوا ناموفق بود.'); }
   }
-
-  const isLeafWithContent =
-    nodes && nodes.length === 1 && nodes[0]?.content &&
-    (!nodes[0]?.children || nodes[0].children.length === 0);
 
   const currentTitle = pathArray.length ? pathArray[pathArray.length - 1] : model;
 
-  if (error) {
+  if (denied) {
     return (
       <DashboardShell>
         <div className="topbar">
           <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
-          <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+          <UserChip />
         </div>
-        <h1 className="page-title">خطا</h1>
+        <h1 className="page-title">دسترسی محدود</h1>
         <div className="error-box">
-          <p>بارگذاری محتوا ناموفق بود: {error}</p>
-          <p>لطفاً مطمئن شوید سرور بک‌اند روی http://127.0.0.1:8000 در حال اجراست.</p>
+          <p>دسترسی به مستندات این خودرو در اشتراک شما نیست. برای افزودن این خودرو با مدیر یا پشتیبانی تماس بگیرید.</p>
+          <a href="/browse" className="back-link">← بازگشت به خودروهای فعال</a>
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (noLaborData) {
+    return (
+      <DashboardShell>
+        <div className="topbar">
+          <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
+          <UserChip />
+        </div>
+        <h1 className="page-title">Labor Times</h1>
+        <div className="empty-state" style={{ marginTop: 24 }}>
+          <p>زمان‌های کارکرد (Labor Times) برای این خودرو موجود نیست.</p>
           <a href={`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`} className="back-link">← بازگشت</a>
         </div>
       </DashboardShell>
     );
   }
 
-  const items = (nodes || []).map((node, i) => ({
-    href: `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/${[...pathArray, node.title].map(encodeURIComponent).join('/')}`,
-    icon: ICONS[i % ICONS.length],
-    title: node.title,
-    go: 'ورود به مستند ←',
-  }));
+  if (error) {
+    return (
+      <DashboardShell>
+        <div className="topbar">
+          <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
+          <SearchBox brand={brand} year={year} model={model} />
+          <UserChip />
+        </div>
+        <h1 className="page-title">خطا</h1>
+        <div className="error-box">
+          <p>{error}</p>
+          <a href={`/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`} className="back-link">← بازگشت</a>
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  const ewdSrc = ewdViewerSrc(model, pathArray);
+  const stacked = !ewdSrc && subtree?.mode === 'stack';
+
+  let body;
+  let mode;
+  if (ewdSrc) {
+    mode = 'نمایشگر تعاملی نقشهٔ سیم‌کشی';
+    body = (
+      <iframe
+        src={ewdSrc}
+        title={`${model} — ${EWD_SECTION}`}
+        style={{
+          width: '100%', height: 'calc(100vh - 170px)', minHeight: '520px',
+          border: '1px solid var(--border, #ddd)', borderRadius: '10px',
+          background: '#fff', direction: 'ltr',
+        }}
+      />
+    );
+  } else if (stacked) {
+    mode = 'همهٔ صفحه‌های این بخش، پشت سر هم';
+    body = <StackedContent payload={subtree} brand={brand} year={year} model={model} />;
+  } else if ((nodes || []).length === 1 && nodes[0].content != null) {
+    // A resolved leaf: car_view returns the content node itself as a
+    // single-element list (any node with content short-circuits the children
+    // query). It is NOT a child to link into — carding it would build a
+    // self-referential .../X/X URL that 404s. Render its content directly.
+    mode = 'صفحهٔ منوال';
+    body = (
+      <ContentRenderer content={nodes[0].content} brand={brand} year={year} model={model} />
+    );
+  } else {
+    const list = nodes || [];
+    mode = `${list.length.toLocaleString('fa-IR')} زیربخش`;
+    const items = list.map((node) => ({
+      href: buildNodeHref(brand, year, model, [...pathArray, node.title]),
+      title: node.title,
+      // Persian equivalent from the terminology store (server-side only);
+      // shown under the original when the store knows the term.
+      titleFa: fullFa(node.title),
+      isPage: node.has_content === true || node.file_type != null,
+    }));
+    body = <SectionList items={items} />;
+  }
 
   return (
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} path={pathArray} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <SearchBox brand={brand} year={year} model={model} />
+        <UserChip />
       </div>
       <h1 className="page-title">{currentTitle}</h1>
-      <div className="page-sub">// {isLeafWithContent ? 'DOCUMENT_VIEW' : 'SECTION_INDEX'}</div>
-
-      {isLeafWithContent ? (
-        <ContentRenderer content={nodes[0].content} brand={brand} year={year} model={model} />
-      ) : (
-        <CardGrid items={items} />
+      <div className="page-sub">{mode}</div>
+      {inLaborTimes && (
+        <a
+          href={laborCsvHref}
+          download
+          className="back-link"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+            margin: '0.25rem 0 1rem', padding: '0.5rem 0.9rem',
+            border: '1px solid var(--border, #3a3a3a)', borderRadius: '8px',
+            fontSize: '0.9rem', textDecoration: 'none', width: 'fit-content',
+          }}
+        >
+          <span aria-hidden="true">⭳</span>
+          دانلود گزارش CSV زمان‌های کارکرد
+        </a>
+      )}
+      <ActivityBeacon
+        action={stacked ? 'view_node' : 'view_section'}
+        detail={`${model} — ${currentTitle}`}
+        segments={pathArray}
+        nodeTitle={currentTitle}
+        appUrl={buildNodeHref(brand, year, model, pathArray)}
+        brand={brand}
+        year={String(year)}
+        model={model}
+      />
+      {classic ? body : (
+        <CarBrowser brand={brand} year={year} model={model} currentPath={pathArray}>
+          {body}
+        </CarBrowser>
       )}
     </DashboardShell>
   );

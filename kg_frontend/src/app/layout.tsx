@@ -1,40 +1,48 @@
 // app/layout.js
+import { headers } from 'next/headers';
 import './globals.css';
+import './system.css';
 import BackgroundFX from '@/components/BackgroundFX';
 import Modal from '@/components/Modal';
+import Guidance from '@/guidance';
 
 export const metadata = {
-  title: 'KGtechvault | پلتفرم مستندات فنی خودرو',
-  description: 'سامانه یکپارچه مستندات فنی خودرو',
+  title: 'KGTechVault | پلتفرم هوشمند دانش و مستندات فنی',
+  description: 'پلتفرم هوشمند دانش و مستندات فنی خدمات گستر سپهر گیتی',
 };
+
+// Runs before first paint so the stored theme applies immediately — without it
+// the SSR default flashes in and the user's saved choice "resets" on reload.
+const THEME_BOOT = `try{var t=localStorage.getItem('kg-theme');if(t!=='light'&&t!=='dark')t='dark';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}`;
 
 // Per-screen chrome (landing topnav, login backlink, dashboard sidebar) lives
 // in each route, exactly like the prototype. The layout only mounts the global
 // signature: fonts, ambient background, the microbar ticker and the modal.
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// Fonts are self-hosted (see globals.css @font-face) — no CDN dependency.
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Set by src/proxy.ts; reading headers() also keeps every page dynamic,
+  // which nonces require (a prerendered page would carry a stale nonce).
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
-    <html lang="fa" dir="rtl" data-theme="dark">
+    <html lang="fa" dir="rtl" data-theme="dark" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap"
-          rel="stylesheet"
-        />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body>
         <BackgroundFX />
         <div className="microbar">
           <div className="track">
             <span>EVERY VEHICLE. EVERY SPEC. ONE PLATFORM.</span>
-            <span>سامانه یکپارچه مستندات فنی خودرو</span>
+            <span>پلتفرم هوشمند دانش و مستندات فنی</span>
             <span>EVERY VEHICLE. EVERY SPEC. ONE PLATFORM.</span>
-            <span>سامانه یکپارچه مستندات فنی خودرو</span>
+            <span>پلتفرم هوشمند دانش و مستندات فنی</span>
             <span>EVERY VEHICLE. EVERY SPEC. ONE PLATFORM.</span>
-            <span>سامانه یکپارچه مستندات فنی خودرو</span>
+            <span>پلتفرم هوشمند دانش و مستندات فنی</span>
           </div>
         </div>
         {children}
         <Modal />
+        <Guidance />
       </body>
     </html>
   );

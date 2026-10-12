@@ -1,0 +1,186 @@
+"""Dependency-free request guards: a per-IP sliding-window rate limiter and a
+shared-secret admin gate.
+
+Why hand-rolled (no DRF / django-ratelimit / redis):
+  * the rest of this project deliberately stays dependency-light and runs from a
+    single local process, so an in-process limiter is both sufficient and the
+    least-surprising fit;
+  * the two things we actually need to protect are cheap to express: cap how
+    often any one client can hit the cost/abuse-sensitive endpoints, and refuse
+    write/admin endpoints to anyone without the configured secret.
+
+Scope / honesty about limits:
+  * counters live in this process's memory. With one worker (the documented dev
+    setup) that is exactly right. Under multiple workers each worker keeps its
+    own window, so the effective limit is N x the configured value — fine as an
+    abuse backstop, not a billing-grade quota. Swap in a shared store if you
+    scale out.
+  * the limiter is fail-OPEN (a bug in the guard never blocks a real answer);
+    the admin gate is fail-CLOSED in production (no token configured => deny).
+"""
+import hmac
+import os
+import threading
+import time
+from collections import defaultdict, deque
+from functools import wraps
+
+from django.conf import settings
+from django.http import JsonResponse
+
+# ---------------------------------------------------------------------------
+# Per-IP sliding-window limiter
+# ---------------------------------------------------------------------------
+_LOCK = threading.Lock()
+_HITS = defaultdict(deque)        # ip -> deque[monotonic timestamps]
+_LAST_SWEEP = 0.0
+
+# Trust proxy headers only when explicitly told to (i.e. you actually run behind
+# a reverse proxy you control). Off by default: otherwise any client can spoof
+# the headers and rotate IPs to dodge the limit. IMPORTANT behind nginx:
+# REMOTE_ADDR is always the proxy (127.0.0.1), so WITHOUT this the per-IP limiter
+# collapses to one global bucket. Enable KG_TRUST_PROXY=1 in that setup.
+_TRUST_PROXY = (os.environ.get('KG_TRUST_PROXY')
+                or os.environ.get('KG_TRUST_XFF', '0')) == '1'
+
+
+def _client_ip(request):
+    if _TRUST_PROXY:
+        # nginx sets X-Real-IP to the true client ($remote_addr) — trustworthy.
+        xri = (request.META.get('HTTP_X_REAL_IP') or '').strip()
+        if xri:
+            return xri
+        # Fallback: the LAST X-Forwarded-For entry is the hop our own proxy
+        # appended ($proxy_add_x_forwarded_for). Earlier entries are attacker-
+        # supplied and must NOT be trusted (taking [0] was the spoofable bug).
+        xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        if xff:
+            return xff.split(',')[-1].strip()
+    return request.META.get('REMOTE_ADDR', '') or 'unknown'
+
+
+def _parse_rule(raw, default):
+    """'30/60' -> (30 requests, 60 seconds). Falls back to `default` on garbage."""
+    try:
+        n, win = raw.split('/')
+        n, win = int(n), float(win)
+        if n > 0 and win > 0:
+            return n, win
+    except (ValueError, AttributeError):
+        pass
+    return default
+
+
+def _sweep(now):
+    """Drop empty/stale buckets occasionally so memory can't grow unbounded
+    from one-off IPs. Cheap: runs at most once a minute."""
+    global _LAST_SWEEP
+    if now - _LAST_SWEEP < 60.0:
+        return
+    _LAST_SWEEP = now
+    for ip in list(_HITS.keys()):
+        dq = _HITS[ip]
+        while dq and dq[0] < now - 3600.0:
+            dq.popleft()
+        if not dq:
+            _HITS.pop(ip, None)
+
+
+# Shared store: gunicorn runs several workers, and in-process counters let
+# each worker grant the full limit (3 workers = 3x the configured value). A
+# tiny sqlite file on local disk is shared by every worker and needs no new
+# service. Falls back to the in-process window if the store is unusable.
+_STORE = os.environ.get('KG_RL_STORE', '/tmp/kg_ratelimit.sqlite3')
+import sys as _sys
+if 'test' in _sys.argv[1:2]:
+    _STORE = None   # tests keep the in-process window (they reset _HITS)
+_STORE_LOCAL = threading.local()
+
+
+def _store():
+    conn = getattr(_STORE_LOCAL, 'conn', None)
+    if conn is None:
+        import sqlite3
+        conn = sqlite3.connect(_STORE, timeout=2, isolation_level=None)
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('CREATE TABLE IF NOT EXISTS hits (k TEXT, ts REAL)')
+        conn.execute('CREATE INDEX IF NOT EXISTS hits_k_ts ON hits (k, ts)')
+        _STORE_LOCAL.conn = conn
+    return conn
+
+
+def _allow_shared(key, limit, window):
+    now = time.time()
+    conn = _store()
+    conn.execute('BEGIN IMMEDIATE')
+    try:
+        if int(now) % 60 == 0:
+            conn.execute('DELETE FROM hits WHERE ts < ?', (now - 3600,))
+        row = conn.execute('SELECT COUNT(*), MIN(ts) FROM hits WHERE k=? AND ts>=?',
+                           (key, now - window)).fetchone()
+        if row[0] >= limit:
+            conn.execute('COMMIT')
+            return False, max(1, int(row[1] + window - now) + 1)
+        conn.execute('INSERT INTO hits VALUES (?, ?)', (key, now))
+        conn.execute('COMMIT')
+        return True, 0
+    except Exception:
+        conn.execute('ROLLBACK')
+        raise
+
+
+def _allow(ip, limit, window):
+    try:
+        if _STORE:
+            return _allow_shared(ip, limit, window)
+    except Exception:
+        pass            # store unusable -> per-process window below
+    now = time.monotonic()
+    with _LOCK:
+        _sweep(now)
+        dq = _HITS[ip]
+        cutoff = now - window
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= limit:
+            retry = max(1, int(dq[0] + window - now) + 1)
+            return False, retry
+        dq.append(now)
+        return True, 0
+
+
+def rate_limited(name, default_limit, default_window):
+    """Decorator: cap a view at `default_limit` requests / `default_window`s per
+    client IP. Override per-endpoint at runtime with env KG_RL_<NAME>="N/seconds"
+    (e.g. KG_RL_ASSIST="60/60"); set "0/0" or KG_RL_DISABLE=1 to turn off."""
+    default = (default_limit, float(default_window))
+
+    def deco(view):
+        @wraps(view)
+        def wrapped(request, *args, **kwargs):
+            if os.environ.get('KG_RL_DISABLE') == '1':
+                return view(request, *args, **kwargs)
+            raw = os.environ.get(f'KG_RL_{name.upper()}')
+            limit, window = _parse_rule(raw, default) if raw else default
+            if limit <= 0:
+                return view(request, *args, **kwargs)
+            try:
+                ok, retry = _allow(f'{name}:{_client_ip(request)}', limit, window)
+            except Exception:
+                ok, retry = True, 0     # fail open — never block on a guard bug
+            if not ok:
+                resp = JsonResponse(
+                    {'error': 'rate_limited',
+                     'detail': 'تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره تلاش کن.'},
+                    status=429)
+                resp['Retry-After'] = str(retry)
+                return resp
+            return view(request, *args, **kwargs)
+        return wrapped
+    return deco
+
+
+# ---------------------------------------------------------------------------
+# Admin gate — see admin_auth.py (env secret OR platform-admin session token)
+# ---------------------------------------------------------------------------
+from .admin_auth import require_admin_token  # noqa: F401 — re-exported for callers

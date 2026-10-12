@@ -1,5 +1,47 @@
 // utils/api.js
-const API_BASE = 'http://127.0.0.1:8000';
+// Backend origin. Set NEXT_PUBLIC_API_BASE at build/run time for any non-local
+// deploy (it's inlined into the client bundle, hence the NEXT_PUBLIC_ prefix).
+// Falls back to localhost for dev. Trailing slash is stripped so callers can
+// safely concatenate `${API_BASE}/path`.
+// Browser-facing base: relative same-origin path in production ("/kg-api"),
+// so requests ride the current https origin through Cloudflare/nginx and never
+// trip mixed-content. Inlined into the client bundle (NEXT_PUBLIC_ prefix).
+const CLIENT_BASE = (process.env.NEXT_PUBLIC_API_BASE || '/kg-api').replace(/\/+$/, '');
+// Server-only origin used during SSR, where Node's fetch() cannot resolve a
+// relative URL. Talks straight to Django on localhost (bypassing the public
+// hop). Override with API_BASE_INTERNAL if the backend moves.
+const SERVER_BASE = (process.env.API_BASE_INTERNAL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+// Fetches: absolute localhost origin on the server, same-origin relative in the
+// browser.
+const API_BASE = typeof window === 'undefined' ? SERVER_BASE : CLIENT_BASE;
+// Media/content URLs get embedded in HTML that is sent to the browser, so they
+// must ALWAYS point at the public browser-reachable path, never SERVER_BASE.
+const PUBLIC_BASE = CLIENT_BASE;
+
+// Vehicle manuals are paid content, so the content endpoints now require the
+// portal session token. It travels one of two ways depending on where the fetch
+// runs: on the CLIENT we read it from localStorage; during SSR (server
+// components) the caller passes the token it read from the `kg_portal_token`
+// cookie (see utils/serverAuth). `authHeaders(token)` resolves whichever applies.
+function authHeaders(token) {
+  const t = token || (typeof window !== 'undefined' ? getPortalToken() : '');
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+// Turn a non-OK content response into an Error that carries `.status`, so
+// server components can redirect on 401 (login) and surface 403 (not in your
+// subscription) distinctly.
+async function contentError(res, fallback) {
+  const data = await res.json().catch(() => ({}));
+  const err = new Error(data?.error || data?.detail || fallback || `HTTP ${res.status}`);
+  err.status = res.status;
+  // A real subscription block is the Django JSON {"error":"forbidden"}. A 403
+  // WITHOUT that body is something else (e.g. a ModSecurity/WAF rule) and must
+  // NOT be reported to the user as "not in your subscription".
+  err.forbidden = res.status === 403 && data?.error === 'forbidden';
+  err.data = data;
+  return err;
+}
 
 // The backend returns node content with image references as relative
 // "/media/..." paths (it doesn't know its own public-facing host/port -
@@ -10,7 +52,7 @@ const API_BASE = 'http://127.0.0.1:8000';
 function withAbsoluteMediaUrls(nodes) {
   for (const node of nodes) {
     if (node?.content) {
-      node.content = node.content.replaceAll('="/media/', `="${API_BASE}/media/`);
+      node.content = node.content.replaceAll('="/media/', `="${PUBLIC_BASE}/media/`);
     }
   }
   return nodes;
@@ -19,7 +61,7 @@ function withAbsoluteMediaUrls(nodes) {
 // For /  (distinct list of brand names across all cars)
 export async function fetchAllBrands() {
   try {
-    const res = await fetch(`${API_BASE}/`);
+    const res = await fetch(`${API_BASE}/`, { cache: 'no-store' });
     if (!res.ok) {
       throw new Error(`Failed to fetch brand list: ${res.status}`);
     }
@@ -33,7 +75,7 @@ export async function fetchAllBrands() {
 // For /brand/
 export async function fetchBrands(brand) {
   try {
-    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/`);
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/`, { cache: 'no-store' });
     // console.log(res)
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
@@ -49,7 +91,7 @@ export async function fetchBrands(brand) {
 // For /brand/year/
 export async function fetchYearData(brand, year) {
   try {
-    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/${year}/`);
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/${year}/`, { cache: 'no-store' });
     if (!res.ok) {
       throw new Error(`Failed to fetch year data: ${res.status}`);
     }
@@ -61,7 +103,7 @@ export async function fetchYearData(brand, year) {
 }
 
 // utils/api.js - Update fetchNodes
-export async function fetchNodes(brand, year, model, pathSegments = []) {
+export async function fetchNodes(brand, year, model, pathSegments = [], token) {
   try {
     const encodedBrand = encodeURIComponent(brand);
     const encodedModel = encodeURIComponent(model);
@@ -80,16 +122,12 @@ export async function fetchNodes(brand, year, model, pathSegments = []) {
       ? `${API_BASE}/${encodedBrand}/${year}/${encodedModel}/?${query}`
       : `${API_BASE}/${encodedBrand}/${year}/${encodedModel}/`;
 
-    console.log('Fetching URL:', url);
-    
-    const res = await fetch(url);
-    
+    const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error('API Error Response:', errorText);
-      throw new Error(`Failed to fetch: ${res.status}`);
+      throw await contentError(res, `Failed to fetch: ${res.status}`);
     }
-    
+
     return withAbsoluteMediaUrls(await res.json());
   } catch (error) {
     console.error('fetchNodes error:', error);
@@ -102,15 +140,16 @@ export async function fetchNodes(brand, year, model, pathSegments = []) {
 // "Land Cruiser Base" page pointing at a "Land Cruiser 1958" page), so the
 // backend searches every registered car, not just the current one - the
 // response tells us which car the target actually belongs to.
-export async function resolveHref(brand, year, model, filename) {
+export async function resolveHref(brand, year, model, filename, token) {
   const encodedBrand = encodeURIComponent(brand);
   const encodedModel = encodeURIComponent(model);
   const url = `${API_BASE}/${encodedBrand}/${year}/${encodedModel}/?href=${encodeURIComponent(filename)}`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: { ...authHeaders(token) } });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
     const err = new Error(error.error || `Failed to resolve link: ${res.status}`);
+    err.status = res.status;
     err.notFound = res.status === 404;
     throw err;
   }
@@ -120,30 +159,961 @@ export async function resolveHref(brand, year, model, filename) {
 // Fetch the raw HTML content of a manual page that has no node (an orphan
 // cross-link target served straight from the car's source folder).
 // Returns { title, content } or null if the page doesn't exist.
-export async function fetchRawPage(brand, year, model, filename) {
+export async function fetchRawPage(brand, year, model, filename, token) {
   const encodedBrand = encodeURIComponent(brand);
   const encodedModel = encodeURIComponent(model);
   const url = `${API_BASE}/${encodedBrand}/${year}/${encodeURIComponent(model)}/?page=${encodeURIComponent(filename)}`;
 
-  const res = await fetch(url);
-  if (!res.ok) return null;
+  const res = await fetch(url, { headers: { ...authHeaders(token) } });
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) throw await contentError(res, 'unauthorized');
+    return null;
+  }
   const data = await res.json();
   if (data?.content) {
-    data.content = data.content.replaceAll('="/media/', `="${API_BASE}/media/`);
+    data.content = data.content.replaceAll('="/media/', `="${PUBLIC_BASE}/media/`);
   }
   return data; // { title, content }
 }
 
-export async function fetchModels(brand, year, model) {
+// Cross-lingual semantic search over a car's manual (backend /api/search/, which
+// rides the RAG retriever). A Persian OR English query matches the English data —
+// the old per-car SQL LIKE this replaces was English-only. Returns the same
+// lightweight navigation shape as before ([{ title, path, segments, ... }]), so
+// build a result's app URL from its `segments` exactly like node navigation.
+export async function searchNodes(brand, year, model, q, limit = 30, token) {
   try {
-    const res = await fetch(`${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/`);
+    const params = new URLSearchParams({ q, car: model, limit: String(limit) });
+    if (brand) params.set('brand', brand);
+    const url = `${API_BASE}/api/search/?${params.toString()}`;
+    const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+    if (!res.ok) return [];
+    return res.json();
+  } catch (error) {
+    console.error('searchNodes error:', error);
+    return [];
+  }
+}
+
+// In-app URLs carry one breadcrumb title per path segment, but a title can
+// legitimately contain "/" ("Wiper/Washer Systems", "A/C"). A literal "/" in
+// the URL path is normalized by the Next router into a segment separator, so
+// the deep-nav walk then searches for the wrong titles and 404s. Mirror the
+// parser's scheme (htmlparser_logical._SLASH_ESCAPE): carry an in-title slash
+// as U+2044 FRACTION SLASH in the URL, and swap it back to "/" on read.
+export const NAV_SLASH = '⁄';
+export const segToUrl = (s) => String(s ?? '').split('/').join(NAV_SLASH);
+export const urlToSeg = (s) => String(s ?? '').split(NAV_SLASH).join('/');
+
+// Build the in-app navigation URL for a search result from its segment chain.
+export function buildNodeHref(brand, year, model, segments = []) {
+  const base = `/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}`;
+  if (!segments.length) return base;
+  return `${base}/${segments.map((s) => encodeURIComponent(segToUrl(s))).join('/')}`;
+}
+
+// Direct download URL for a vehicle's full Labor Times report (CSV). Auth
+// rides the same-site kg_portal_token cookie on the top-level download
+// navigation, so this is used as a plain <a href download> with no client
+// token handling.
+//
+// PUBLIC_BASE, never API_BASE: this URL is rendered into HTML by a server
+// component, and API_BASE is Django's loopback address during SSR. Built from
+// API_BASE the button pointed every visitor at http://127.0.0.1:8000, which
+// only resolves on the server itself.
+export function laborTimesCsvUrl(brand, year, model) {
+  return `${PUBLIC_BASE}/api/labor-times/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
+}
+
+// Direct download URL for a vehicle's merged SST (Special Service Tools) report
+// (CSV): every system's SST page collapsed into one deduplicated tool list.
+// Same cookie-borne auth as the Labor Times export, so it is used as a plain
+// <a href download>.
+export function sstCsvUrl(brand, year, model) {
+  return `${PUBLIC_BASE}/api/sst/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/`;
+}
+
+// Does this vehicle have an SST section at all? One car in the fleet has none,
+// and offering a download that returns 404 is worse than not offering it. The
+// backend answers this with a bare existence query -- it deliberately does not
+// count tools, which would mean parsing ~40 HTML pages on every page load.
+export async function fetchSstAvailable(brand, year, model, token) {
+  // API_BASE, not the href helper above: this runs during SSR, where Node's
+  // fetch() cannot resolve the relative public path.
+  const url = `${API_BASE}/api/sst/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/?probe=1`;
+  const res = await fetch(url, {
+    cache: 'no-store', headers: { ...authHeaders(token) },
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return !!data?.available;
+}
+
+// Structured vehicle facts (schema.org Car) for the vehicle cover page. Same
+// grant gate as the manual; resolves to the spec's `data` object or null and
+// never throws, so a missing spec only hides the facts panel.
+export async function fetchVehicleSpec(brand, year, model, token) {
+  try {
+    const res = await fetch(
+      `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?spec=1`,
+      { cache: 'no-store', headers: { ...authHeaders(token) } });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body?.spec?.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Navigation drills at most this many levels; the node at this depth flattens
+// its whole remaining subtree onto one page (see fetchSubtree).
+export const FLATTEN_DEPTH = 4;
+// A node's subtree is flattened onto one page only when it holds at most
+// this many content nodes; larger subtrees show a drill-down index instead.
+export const FLATTEN_MAX = 200;
+
+// Structure-only children for the car-tree sidebar: same seg-param + auth
+// contract as fetchNodes, but the backend strips page bodies (nav=1) and adds a
+// `has_content` boolean, so expanding a deep folder never downloads its pages.
+export async function fetchNav(brand, year, model, pathSegments = [], token) {
+  const qs = new URLSearchParams();
+  pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
+  qs.set('nav', '1');
+  const url = `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch nav: ${res.status}`);
+  return res.json();
+}
+
+// Aggregated subtree for the flattened single-page view: every content node
+// beneath `pathSegments`, each with a stable anchor id. Media URLs on each item
+// are rewritten absolute, same as the single-node content path.
+export async function fetchSubtree(brand, year, model, pathSegments = [], token, max) {
+  const qs = new URLSearchParams();
+  pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
+  qs.set('subtree', '1');
+  if (max) qs.set('max', String(max));
+  const url = `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch subtree: ${res.status}`);
+  const data = await res.json();
+  if (Array.isArray(data?.items)) {
+    for (const it of data.items) {
+      if (it.content) it.content = it.content.replaceAll('="/media/', `="${PUBLIC_BASE}/media/`);
+    }
+  }
+  return data;
+}
+
+export async function fetchModels(brand, year, model, token) {
+  try {
+    const res = await fetch(
+      `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/`,
+      { cache: 'no-store', headers: { ...authHeaders(token) } });
     if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error.error || `Failed to fetch models: ${res.status}`);
+      throw await contentError(res, `Failed to fetch models: ${res.status}`);
     }
     return withAbsoluteMediaUrls(await res.json());
   } catch (error) {
     console.error('fetchModels error:', error);
     throw error;
   }
+}
+
+// --- parts catalog (کاتالوگ قطعات یدکی) ------------------------------------
+// Per-vehicle EPC parts trees, served from the _parts warehouse. Same auth +
+// error conventions as the manual content fetchers; the extra `cfg` dimension
+// selects the vehicle configuration (frame / model code) being browsed.
+
+// Vehicle parts root: { car, frames[], default_frame, counts }.
+export async function fetchPartsRoot(brand, year, model, token) {
+  const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch parts root: ${res.status}`);
+  return res.json();
+}
+
+// Walk the group tree of one configuration. Segments ride as repeated `seg`
+// query params (titles can contain "/", same rationale as fetchNodes).
+// Returns either an ARRAY of child nodes, or a leaf OBJECT
+// { leaf: true, group, sections: [{ figure_code, caption, image, parts[] }] }
+// with section image URLs already made absolute against API_BASE.
+export async function fetchPartsNodes(brand, year, model, cfg, pathSegments = [], token) {
+  const qs = new URLSearchParams({ cfg });
+  pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
+  const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to fetch parts: ${res.status}`);
+  const data = await res.json();
+  if (data && data.leaf && Array.isArray(data.sections)) {
+    for (const s of data.sections) {
+      if (s.image && s.image.startsWith('/media/')) s.image = `${PUBLIC_BASE}${s.image}`;
+    }
+  }
+  return data;
+}
+
+// Search one configuration's parts by part number or English/Persian name.
+// Returns { query, results: [{ pn, pn_display, name_en, name_fa, path_titles, ... }] }.
+export async function fetchPartsSearch(brand, year, model, cfg, q, token) {
+  const qs = new URLSearchParams({ cfg, q });
+  const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  if (!res.ok) throw await contentError(res, `Failed to search parts: ${res.status}`);
+  return res.json();
+}
+
+// --- purchase request ------------------------------------------------------
+// Legal-entity documentation purchase requests. Stored server-side so the sales
+// team can follow up. Returns { ok: true, id } on success; throws on failure so
+// the form can surface an error instead of a false "we'll contact you".
+export async function submitPurchaseRequest(payload) {
+  const res = await fetch(`${API_BASE}/api/purchase-request/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ثبت درخواست ناموفق بود: ${res.status}`);
+  return data;
+}
+
+// --- portal auth (company seats issued by the admin) ------------------------
+// Token + user snapshot live in localStorage so the dashboard can show the
+// company name and filter the fleet by granted cars.
+const PORTAL_TOKEN_KEY = 'kg_portal_token';
+const PORTAL_USER_KEY = 'kg_portal_user';
+
+// The session token is mirrored into a same-site cookie (alongside localStorage)
+// purely so Next.js server components can read it during SSR and forward it to
+// the content API — the browser sends the cookie to the Next server on
+// navigation. Same JS-readable exposure as the existing localStorage token;
+// moving to a backend-set HttpOnly cookie is a future hardening.
+function setPortalCookie(token) {
+  try {
+    if (typeof document === 'undefined') return;
+    if (token) {
+      document.cookie =
+        `${PORTAL_TOKEN_KEY}=${encodeURIComponent(token)}; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+    } else {
+      document.cookie = `${PORTAL_TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
+    }
+  } catch { /* document unavailable */ }
+}
+
+// SSR-readable mirror of PortalUser.browse_mode. The DB is the source of
+// truth; this cookie just lets server components pick the UI without an
+// extra round-trip. Kept in lockstep with the stored user in setPortalSession.
+function setBrowseModeCookie(mode) {
+  try {
+    if (typeof document === 'undefined') return;
+    const m = mode === 'classic' ? 'classic' : 'modern';
+    document.cookie = `kg_browse_mode=${m}; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+  } catch { /* document unavailable */ }
+}
+
+// Stage B: the session lives in a backend-set HttpOnly cookie, which page JS
+// (and therefore any XSS) cannot read. This returns a token ONLY for sessions
+// created before that change, so they can be upgraded — see clearLegacyToken.
+export function getPortalToken() {
+  try { return localStorage.getItem(PORTAL_TOKEN_KEY) || ''; } catch { return ''; }
+}
+
+// Drop the legacy JS-readable copies once the HttpOnly cookie is in force.
+// Called after a successful /api/auth/me, which is what issues the cookie.
+export function clearLegacyToken() {
+  try { localStorage.removeItem(PORTAL_TOKEN_KEY); } catch { /* storage unavailable */ }
+  try {
+    if (typeof document !== 'undefined') {
+      document.cookie = `${PORTAL_TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
+    }
+  } catch { /* document unavailable */ }
+}
+
+export function getPortalUser() {
+  try { return JSON.parse(localStorage.getItem(PORTAL_USER_KEY) || 'null'); } catch { return null; }
+}
+
+export function setPortalSession(token, user) {
+  try {
+    // Stage B: never persist the session token in JS-reachable storage. The
+    // backend sets it as an HttpOnly + Secure + SameSite cookie at login and
+    // clears it at logout. `token` is accepted for call-site compatibility and
+    // deliberately ignored; any stale copy is removed.
+    localStorage.removeItem(PORTAL_TOKEN_KEY);
+    if (user) localStorage.setItem(PORTAL_USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(PORTAL_USER_KEY);
+  } catch { /* storage unavailable */ }
+  // Keep the SSR cookie in lockstep with the stored token (set on login/refresh,
+  // cleared on logout) so server-rendered content pages stay authenticated.
+  // setPortalCookie() intentionally not called: the JS-readable mirror is gone.
+  // The backend's HttpOnly cookie already reaches the Next server during SSR.
+  setBrowseModeCookie(user?.browse_mode);
+  // Let mounted components (e.g. the sidebar) react to capability changes.
+  try { window.dispatchEvent(new CustomEvent('kg:me', { detail: user || null })); } catch { /* SSR */ }
+}
+
+export async function portalLogin(username, password, turnstileToken) {
+  const res = await fetch(`${API_BASE}/api/auth/login/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, turnstile_token: turnstileToken }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ورود ناموفق بود: ${res.status}`);
+  // login now returns {otp_session, phone_hint} — token issued after OTP verify
+  return data;
+}
+
+export async function verifyOtp(otpSession, code) {
+  const res = await fetch(`${API_BASE}/api/auth/verify-otp/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_session: otpSession, code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `تأیید ناموفق بود: ${res.status}`);
+  setPortalSession(data.token, data.user);
+  return data;
+}
+
+export async function recoverStart(identifier, turnstileToken) {
+  const res = await fetch(`${API_BASE}/api/auth/recover/start/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, turnstile_token: turnstileToken }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `درخواست ناموفق بود: ${res.status}`);
+  return data;
+}
+
+export async function recoverReset(otpSession, code, newPassword) {
+  const res = await fetch(`${API_BASE}/api/auth/recover/reset/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_session: otpSession, code, new_password: newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `بازیابی ناموفق بود: ${res.status}`);
+  setPortalSession(data.token, data.user);
+  return data;
+}
+
+export async function resendOtp(otpSession) {
+  const res = await fetch(`${API_BASE}/api/auth/resend-otp/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_session: otpSession }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ارسال مجدد ناموفق بود: ${res.status}`);
+  return data;
+}
+
+/** Refresh the logged-in portal user from the server (picks up admin grant/revoke). */
+export async function portalRefreshMe() {
+  // The live session is an HttpOnly cookie the browser sends automatically;
+  // getPortalToken() only ever returns a pre-cookie legacy token, so it must
+  // not gate the request — bailing on it logs every new session out.
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/auth/me/`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    setPortalSession('', null);
+    const err = new Error('unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(data?.error || `me: ${res.status}`);
+  setPortalSession(token, data.user);
+  return data.user;
+}
+
+/** Persist the caller's browsing-mode preference (classic | modern) and
+ *  refresh the stored user snapshot + SSR cookies so the next navigation
+ *  renders the chosen UI. */
+export async function updateBrowseMode(mode) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/auth/me/prefs/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+    body: JSON.stringify({ browse_mode: mode }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `prefs: ${res.status}`);
+  setPortalSession(token, data.user);
+  return data.user;
+}
+
+/** Cars this portal seat may open — always read live from the backend. */
+export async function fetchGrantedFleet() {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/auth/fleet/`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    setPortalSession('', null);
+    const err = new Error('unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(data?.error || `fleet: ${res.status}`);
+  return data.items || [];
+}
+
+export async function portalLogout() {
+  const token = getPortalToken();
+  setPortalSession('', null);
+  try {
+    // Must always run: only the backend can clear the HttpOnly cookie.
+    await fetch(`${API_BASE}/api/auth/logout/`, {
+      method: 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+    });
+  } catch { /* best-effort */ }
+}
+
+// Best-effort usage signal for the admin's report + usage analytics. `extra`
+// may carry { category, car_id, node_title, segments } — the backend resolves a
+// canonical content category from `segments` when `category` is not given, so
+// usage can be sliced by technical area (engine / body / electrical / …).
+export async function logActivity(action, detail = '', extra = {}) {
+  const token = getPortalToken();
+  try {
+    await fetch(`${API_BASE}/api/activity/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+      body: JSON.stringify({ action, detail, ...extra }),
+    });
+  } catch { /* never block the UI on telemetry */ }
+}
+
+// --- company team management (manager-gated) --------------------------------
+// A manager manages the employees who report to them. Uses the portal Bearer
+// token (same store as the rest of the portal). 401 -> session expired.
+async function teamFetch(path, options = {}) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    setPortalSession('', null);
+    const err = new Error(data?.error || 'unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
+  if (res.status === 403) {
+    const err = new Error(data?.error || 'forbidden');
+    err.forbidden = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(data?.error || `team api: ${res.status}`);
+  return data;
+}
+
+export const teamApi = {
+  // Member and role management moved to the org graph (api/org/*); the old
+  // /api/team/members|org|roles endpoints no longer exist.
+  analytics: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return teamFetch(`/api/team/analytics/${qs ? `?${qs}` : ''}`);
+  },
+  // Behavioural insights for the manager dashboard (seat use, idle/top members).
+  insights: (range = 30) => teamFetch(`/api/team/insights/?range=${range}`),
+  // Company requests the manager files for the platform admin to action.
+  requests: (status) => teamFetch(`/api/company/requests/${status ? `?status=${status}` : ''}`),
+  createRequest: (payload) =>
+    teamFetch('/api/company/requests/', { method: 'POST', body: JSON.stringify(payload) }),
+  cancelRequest: (id) =>
+    teamFetch(`/api/company/requests/${id}/`, { method: 'POST', body: JSON.stringify({ cancel: true }) }),
+};
+
+/** Personalised behavioural recommendations for the logged-in portal user. */
+export async function fetchRecommendations(limit = 6) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/recommendations/?limit=${limit}`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), },
+  });
+  if (!res.ok) return null;
+  return res.json().catch(() => null);
+}
+
+/** Download the designed PDF team report and trigger a save dialog. */
+export async function downloadTeamReport(rangeDays = 30) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}/api/team/report/?range=${rangeDays}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `دریافت گزارش ناموفق بود: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kgtechvault-team-report-${rangeDays}d.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// --- employee invite acceptance (public, token-gated) -----------------------
+export async function validateInvite(token) {
+  const res = await fetch(`${API_BASE}/api/invite/${encodeURIComponent(token)}/`, { cache: 'no-store' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'این لینک دعوت نامعتبر است.');
+  return data.user;
+}
+
+export async function acceptInvite(token, password) {
+  const res = await fetch(`${API_BASE}/api/invite/${encodeURIComponent(token)}/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `فعال‌سازی ناموفق بود: ${res.status}`);
+  setPortalSession(data.token, data.user);  // auto-login
+  return data.user;
+}
+
+// --- admin panel API ---------------------------------------------------------
+// All gated server-side by KG_ADMIN_TOKEN (Bearer). Uses the same stored token
+// as the review queue below.
+// Several admin sections load /companies/ and /cars/ at the same time; share
+// one request for identical GETs within a few seconds. Any write clears it.
+const ADMIN_GET_CACHE = new Map();
+const ADMIN_GET_TTL = 3000;
+
+async function adminFetch(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  if (method !== 'GET') {
+    ADMIN_GET_CACHE.clear();
+    return adminFetchRaw(path, options);
+  }
+  const hit = ADMIN_GET_CACHE.get(path);
+  if (hit && Date.now() - hit.at < ADMIN_GET_TTL) return hit.p.then((d) => structuredClone(d));
+  const p = adminFetchRaw(path, options);
+  ADMIN_GET_CACHE.set(path, { at: Date.now(), p });
+  p.catch(() => ADMIN_GET_CACHE.delete(path));
+  return p.then((d) => structuredClone(d));
+}
+
+async function adminFetchRaw(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...adminHeaders(),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 503) {
+    const err = new Error(data?.error || 'unauthorized');
+    err.unauthorized = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(data?.error || `admin api: ${res.status}`);
+  return data;
+}
+
+export async function adminLogin(username, password, turnstileToken) {
+  const res = await fetch(`${API_BASE}/api/admin/login/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, turnstile_token: turnstileToken }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `ورود ادمین ناموفق بود: ${res.status}`);
+  setAdminToken(data.token, data.admin);
+  return data;
+}
+
+export const adminApi = {
+  overview: () => adminFetch('/api/admin/overview/'),
+  packages: () => adminFetch('/api/admin/packages/'),
+  requests: () => adminFetch('/api/admin/requests/'),
+  setRequestStatus: (id, status) =>
+    adminFetch(`/api/admin/requests/${id}/status/`, { method: 'POST', body: JSON.stringify({ status }) }),
+  cars: () => adminFetch('/api/admin/cars/'),
+  companies: () => adminFetch('/api/admin/companies/'),
+  createCompany: (payload) =>
+    adminFetch('/api/admin/companies/', { method: 'POST', body: JSON.stringify(payload) }),
+  companyDetail: (id) => adminFetch(`/api/admin/companies/${id}/`),
+  updateCompany: (id, payload) =>
+    adminFetch(`/api/admin/companies/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteCompany: (id) =>
+    adminFetch(`/api/admin/companies/${id}/`, { method: 'POST', body: JSON.stringify({ delete: true }) }),
+  setCompanyAccess: (id, accesses) =>
+    adminFetch(`/api/admin/companies/${id}/access/`, { method: 'POST', body: JSON.stringify({ accesses }) }),
+  companyRoles: (companyId) =>
+    adminFetch(`/api/admin/companies/${companyId}/roles/`),
+  addCompanyRole: (companyId, value) =>
+    adminFetch(`/api/admin/companies/${companyId}/roles/`, { method: 'POST', body: JSON.stringify({ value }) }),
+  deleteCompanyRole: (companyId, value, reassignTo) =>
+    adminFetch(`/api/admin/companies/${companyId}/roles/delete/`, {
+      method: 'POST',
+      body: JSON.stringify({ value, reassign_to: reassignTo || undefined }),
+    }),
+  users: (companyId) =>
+    adminFetch(`/api/admin/users/${companyId ? `?company_id=${companyId}` : ''}`).then((d) => {
+      // The list sends each car once (d.cars) and references it by car_id;
+      // rebuild the full access rows the admin screens use.
+      const cars = d?.cars || {};
+      const allDocs = d?.all_docs || [];
+      (d?.items || []).forEach((u) => {
+        u.accesses = (u.accesses || []).map((a) => {
+          const car = cars[a.car_id] || { id: a.car_id };
+          return { car, documents: a.documents || [...allDocs], admin_granted: !!a.admin_granted,
+                   ready: !!car.ready, parts_ready: !!car.parts_ready };
+        });
+      });
+      return d;
+    }),
+  createUser: (payload) =>
+    adminFetch('/api/admin/users/', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (id, payload) =>
+    adminFetch(`/api/admin/users/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteUser: (id) =>
+    adminFetch(`/api/admin/users/${id}/`, { method: 'POST', body: JSON.stringify({ delete: true }) }),
+  setUserAccess: (id, accesses, overridePurchase = true) =>
+    adminFetch(`/api/admin/users/${id}/access/`, {
+      method: 'POST',
+      body: JSON.stringify({ accesses, override_purchase: overridePurchase }),
+    }),
+  activity: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/activity/${qs ? `?${qs}` : ''}`);
+  },
+  analytics: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/analytics/${qs ? `?${qs}` : ''}`);
+  },
+  // Operational endpoints: data quality, system health, traffic analytics.
+  dataQuality: () => adminFetch('/api/admin/data-quality/'),
+  dataQualityRefresh: (fix = false) =>
+    adminFetch('/api/admin/data-quality/', {
+      method: 'POST', body: JSON.stringify({ refresh: true, fix }),
+    }),
+  system: () => adminFetch('/api/admin/system/'),
+  checkAlerts: () =>
+    adminFetch('/api/admin/system/', {
+      method: 'POST', body: JSON.stringify({ action: 'check_alerts' }),
+    }),
+  traffic: (range = 7) => adminFetch(`/api/admin/traffic/?range=${range}`),
+  pipeline: () => adminFetch('/api/admin/pipeline/'),
+  pipelineAction: (payload) =>
+    adminFetch('/api/admin/pipeline/', {
+      method: 'POST', body: JSON.stringify(payload),
+    }),
+  // Structured schema.org vehicle specs (read-only coverage + per-car detail).
+  vehicleSpecs: (carId) =>
+    adminFetch(`/api/admin/vehicle-specs/${carId ? `?car_id=${carId}` : ''}`),
+  // Real-time: one comprehensive dashboard snapshot + the live processing picture.
+  dashboard: () => adminFetch('/api/admin/dashboard/'),
+  processingSnapshot: () => adminFetch('/api/admin/processing-snapshot/'),
+  // Company requests inbox (managers file these; admin actions them).
+  companyRequests: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/company-requests/${qs ? `?${qs}` : ''}`);
+  },
+  setCompanyRequest: (id, payload) =>
+    adminFetch(`/api/admin/company-requests/${id}/`, {
+      method: 'POST', body: JSON.stringify(payload),
+    }),
+};
+
+// --- admin auth (review queue + pin) ---------------------------------------
+// The pin and review-queue endpoints are admin-gated server-side (KG_ADMIN_TOKEN).
+// The token is typed by the admin at runtime and kept only in sessionStorage —
+// it is NEVER baked into the client bundle. Sent as a Bearer header, which the
+// Django gate (api/ratelimit.require_admin_token) verifies.
+const ADMIN_TOKEN_KEY = 'kg_admin_token';
+const ADMIN_USER_KEY = 'kg_admin_user';
+
+export function getAdminToken() {
+  try { return sessionStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch { return ''; }
+}
+
+export function getAdminUser() {
+  try { return JSON.parse(sessionStorage.getItem(ADMIN_USER_KEY) || 'null'); } catch { return null; }
+}
+
+export function setAdminToken(token, admin = null) {
+  try {
+    if (token) sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+    else sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    if (admin) sessionStorage.setItem(ADMIN_USER_KEY, JSON.stringify(admin));
+    else if (!token) sessionStorage.removeItem(ADMIN_USER_KEY);
+  } catch { /* sessionStorage unavailable */ }
+}
+
+// A new admin tab has an empty sessionStorage. Instead of widening storage
+// to localStorage (which outlives the browser session), an open admin tab
+// hands its token to the new tab over a same-origin BroadcastChannel.
+const ADMIN_CHANNEL = 'kg_admin_auth';
+let adminChannel = null;
+function channel() {
+  if (adminChannel || typeof BroadcastChannel === 'undefined') return adminChannel;
+  adminChannel = new BroadcastChannel(ADMIN_CHANNEL);
+  adminChannel.onmessage = (e) => {
+    const m = e.data || {};
+    if (m.type === 'need' && getAdminToken()) {
+      adminChannel.postMessage({ type: 'token', token: getAdminToken(), admin: getAdminUser() });
+    } else if (m.type === 'logout') {
+      setAdminToken('', null);
+    }
+  };
+  return adminChannel;
+}
+/** Called by every open admin page so it answers new tabs' requests. (A
+ * module-level call was dropped by the bundler as a side effect.) */
+export function shareAdminToken() {
+  channel();
+}
+
+/** Resolves to a token: this tab's own, or one handed over by another open
+ * admin tab within `ms`; '' if none. */
+export function obtainAdminToken(ms = 400) {
+  const own = getAdminToken();
+  const ch = channel();
+  if (own || !ch) return Promise.resolve(own);
+  return new Promise((resolve) => {
+    let timer = null;
+    const done = (t) => { clearTimeout(timer); ch.removeEventListener('message', onMsg); resolve(t); };
+    const onMsg = (e) => {
+      if (e.data?.type === 'token' && e.data.token) {
+        setAdminToken(e.data.token, e.data.admin || null);
+        done(e.data.token);
+      }
+    };
+    timer = setTimeout(() => done(''), ms);
+    ch.addEventListener('message', onMsg);
+    ch.postMessage({ type: 'need' });
+  });
+}
+
+export function adminLogout() {
+  setAdminToken('', null);
+  try { channel()?.postMessage({ type: 'logout' }); } catch { /* noop */ }
+}
+
+function adminHeaders() {
+  const t = getAdminToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+// Human-in-the-loop: record a 👍/👎 verdict on an assistant answer. Best-effort
+// (never blocks the UI). The backend turns these into a guarded ranking boost.
+export async function rateAnswer({ query, verdict, mode, topBlobs, blobId, reason, comment, brand, model, car }) {
+  try {
+    await fetch(`${API_BASE}/api/feedback/rate/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, verdict, mode, top_blobs: topBlobs,
+                             blob_id: blobId, reason, comment, brand, model, car }),
+    });
+    return true;
+  } catch (error) {
+    console.error('rateAnswer error:', error);
+    return false;
+  }
+}
+
+// Expert action: pin a verified source for a query pattern. The backend embeds
+// pattern_query so future near-matches surface this source at the top, tagged
+// expert_verified. Returns true on success.
+export async function pinFeedback({ patternQuery, appUrl, blobId, title, note, by }) {
+  try {
+    const res = await fetch(`${API_BASE}/api/feedback/pin/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({
+        pattern_query: patternQuery, app_url: appUrl,
+        blob_id: blobId, title, note, by,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 || res.status === 503) {
+      const err = new Error(data.error || 'unauthorized');
+      err.unauthorized = true;
+      throw err;
+    }
+    if (!res.ok) throw new Error(data.error || `pin failed: ${res.status}`);
+    return !!data.ok;
+  } catch (error) {
+    console.error('pinFeedback error:', error);
+    throw error;
+  }
+}
+
+// Admin review queue: recent 👎 verdicts (for an expert to inspect / pin a fix).
+// Admin-gated: returns { unauthorized: true } if the token is missing/wrong so
+// the page can prompt for it.
+export async function fetchRecentFeedback(limit = 50) {
+  try {
+    const res = await fetch(`${API_BASE}/api/feedback/recent/?limit=${limit}`, {
+      headers: { ...adminHeaders() },
+    });
+    if (res.status === 401 || res.status === 503) {
+      return { count: 0, items: [], unauthorized: true };
+    }
+    if (!res.ok) throw new Error(`recent feedback: ${res.status}`);
+    return res.json();
+  } catch (error) {
+    console.error('fetchRecentFeedback error:', error);
+    return { count: 0, items: [] };
+  }
+}
+// ---------------------------------------------------------------------------
+// Real-time event stream (Server-Sent Events over fetch).
+// ---------------------------------------------------------------------------
+// We use fetch()+ReadableStream rather than the native EventSource because
+// EventSource cannot send an Authorization header — this lets us reuse the same
+// Bearer token the rest of the app already holds (portal in localStorage, admin
+// in sessionStorage) instead of putting a token in the URL. Auto-reconnects with
+// Last-Event-ID so no events are missed across the server's periodic recycle.
+
+export function openEventStream({ admin = false, onEvent, onStatus } = {}) {
+  let closed = false;
+  let controller = null;
+  let cursor = 0;
+  let retry = 3000;
+
+  // Admin still uses sessionStorage; the portal rides its HttpOnly cookie.
+  const token = admin ? getAdminToken() : getPortalToken();
+  if (admin && !token) {
+    onStatus?.('unauthorized');
+    return () => {};
+  }
+
+  async function connect() {
+    if (closed) return;
+    controller = new AbortController();
+    onStatus?.('connecting');
+    try {
+      const res = await fetch(`${API_BASE}/api/events/stream/`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Accept: 'text/event-stream',
+          ...(cursor ? { 'Last-Event-ID': String(cursor) } : {}),
+        },
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      if (res.status === 401) { onStatus?.('unauthorized'); return; }
+      if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+      onStatus?.('open');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (!closed) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let sep;
+        while ((sep = buf.indexOf('\n\n')) !== -1) {
+          const raw = buf.slice(0, sep);
+          buf = buf.slice(sep + 2);
+          parseFrame(raw);
+        }
+      }
+    } catch (e) {
+      if (closed) return;
+      onStatus?.('reconnecting');
+    }
+    if (!closed) {
+      setTimeout(connect, retry);   // server recycles ~5min; reconnect with cursor
+    }
+  }
+
+  function parseFrame(raw) {
+    let ev = 'message';
+    let data = '';
+    let id = null;
+    for (const line of raw.split('\n')) {
+      if (line.startsWith(':')) continue;             // comment / heartbeat
+      if (line.startsWith('event:')) ev = line.slice(6).trim();
+      else if (line.startsWith('data:')) data += line.slice(5).trim();
+      else if (line.startsWith('id:')) id = line.slice(3).trim();
+      else if (line.startsWith('retry:')) {
+        const n = parseInt(line.slice(6).trim(), 10);
+        if (!Number.isNaN(n)) retry = n;
+      }
+    }
+    if (id) cursor = parseInt(id, 10) || cursor;
+    if (ev === 'ready') {
+      try { const d = JSON.parse(data || '{}'); if (d.cursor) cursor = d.cursor; } catch {}
+      return;
+    }
+    if (ev === 'reconnect') return;                    // graceful server recycle
+    if (!data) return;
+    let payload = {};
+    try { payload = JSON.parse(data); } catch { return; }
+    onEvent?.({ type: ev, ...payload });
+  }
+
+  connect();
+  return () => { closed = true; try { controller?.abort(); } catch {} };
+}
+
+
+// ---------------------------------------------------------------------------
+// Org-graph canvas (n8n-style). Reads open to any authed user; writes root-only.
+// All client-side; the portal token travels as a Bearer header.
+// ---------------------------------------------------------------------------
+
+async function orgFetch(path, { method = 'GET', body } = {}) {
+  const token = getPortalToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.code = data?.code;
+    throw err;
+  }
+  return data;
+}
+
+export function orgGraph() {
+  return orgFetch('/api/org/graph/');
+}
+export function orgCreateNode(payload) {
+  return orgFetch('/api/org/nodes/', { method: 'POST', body: payload });
+}
+export function orgUpdateNode(id, payload) {
+  return orgFetch(`/api/org/nodes/${id}/`, { method: 'PATCH', body: payload });
+}
+export function orgDeleteNode(id) {
+  return orgFetch(`/api/org/nodes/${id}/`, { method: 'DELETE' });
+}
+export function orgSetPermission(id, payload) {
+  return orgFetch(`/api/org/nodes/${id}/permission/`, { method: 'POST', body: payload });
+}
+export function orgCreateUser(id, payload) {
+  return orgFetch(`/api/org/nodes/${id}/create-user/`, { method: 'POST', body: payload });
 }

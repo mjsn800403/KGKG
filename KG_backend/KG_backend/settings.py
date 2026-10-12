@@ -10,22 +10,55 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _env_bool(name, default=False):
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _env_list(name, default=''):
+    raw = os.environ.get(name, default)
+    return [h.strip() for h in raw.split(',') if h.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-04jc1&foetc*#q9y1j+^b3607920=us+em$9xnr8p3xg*sknr8'
+# Falls back to the historical insecure dev key only when DEBUG is on; in
+# production DJANGO_SECRET_KEY is required (we refuse to boot without it).
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _env_bool('DJANGO_DEBUG', default=False)
 
-ALLOWED_HOSTS = []
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-04jc1&foetc*#q9y1j+^b3607920=us+em$9xnr8p3xg*sknr8'
+    else:
+        raise RuntimeError(
+            'DJANGO_SECRET_KEY must be set when DEBUG is off (production).')
+
+# Retired keys, newest first, comma-separated. Django still *verifies* (never
+# signs) with these, so rotating DJANGO_SECRET_KEY doesn't instantly break every
+# password-reset link and signed cookie in flight — the previous key keeps
+# validating old signatures for one retention window, then drops off the list.
+# `manage.py rotate_secrets` maintains both variables together; see
+# api/management/commands/rotate_secrets.py.
+SECRET_KEY_FALLBACKS = _env_list('DJANGO_SECRET_KEY_FALLBACKS')
+
+# Comma-separated, e.g. DJANGO_ALLOWED_HOSTS="example.com,api.example.com".
+# Defaults to localhost so dev works out of the box.
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS',
+                          'localhost,127.0.0.1' if DEBUG else '')
 
 
 # Application definition
@@ -42,6 +75,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First in the chain so it times the full stack. In-memory aggregation +
+    # periodic batched flush — adds no per-request DB work (api/monitoring.py).
+    'api.monitoring.RequestMetricsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -51,7 +87,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
 ]
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS: allow-all only in DEBUG. In production set DJANGO_CORS_ORIGINS to a
+# comma-separated allowlist (e.g. "https://app.example.com").
+CORS_ALLOWED_ORIGINS = _env_list('DJANGO_CORS_ORIGINS')
+CORS_ALLOW_ALL_ORIGINS = _env_bool('DJANGO_CORS_ALLOW_ALL', default=DEBUG)
 ROOT_URLCONF = 'KG_backend.urls'
 
 TEMPLATES = [
@@ -79,6 +118,20 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            # WAL lets readers proceed during writes (metrics flush, activity
+            # logging) — the classic "database is locked" fix for SQLite under
+            # concurrent gunicorn workers. IMMEDIATE transactions grab the
+            # write lock up front instead of failing mid-transaction.
+            'timeout': 20,
+            'transaction_mode': 'IMMEDIATE',
+            'init_command': (
+                'PRAGMA journal_mode=WAL;'
+                'PRAGMA synchronous=NORMAL;'
+                'PRAGMA mmap_size=134217728;'
+                'PRAGMA cache_size=-8192;'
+            ),
+        },
     }
 }
 
@@ -118,6 +171,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Per-car image assets (svg/png/etc referenced from manual HTML content).
 # Each car gets a folder named exactly after its db file, e.g.
@@ -129,3 +183,153 @@ MEDIA_ROOT = BASE_DIR / 'static_warehouse'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ---------------------------------------------------------------------------
+# Security headers
+# ---------------------------------------------------------------------------
+# Everything above the _TLS block is safe on plain HTTP. The TLS-dependent
+# switches stay env-gated so a non-TLS deployment (local, or a bare origin) can
+# still run, but production HAS served 443 since Cloudflare was put in front,
+# and DJANGO_SECURE_SSL=1 is set in .env.prod as of 2026-09-07.
+#
+# Do not turn it back off on the production host. With it off, Django issues
+# session and CSRF cookies WITHOUT the Secure flag on an HTTPS site and cannot
+# tell a proxied HTTPS request from an HTTP one -- which is exactly the state
+# this deployment sat in, unnoticed, after the certificate landed.
+#
+# What the group depends on, if you are enabling it somewhere new: every
+# location that proxies to Django must send X-Forwarded-Proto (here that comes
+# from snippets/kgkg-backend-proxy.conf, included by all five /kg-api/
+# locations), and the proxy in front must actually reach the origin over TLS so
+# $scheme is https. If either is untrue, SECURE_SSL_REDIRECT will redirect-loop
+# the site.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+_TLS = _env_bool('DJANGO_SECURE_SSL', default=False)
+# NOT tied to _TLS. Cloudflare and nginx already force HTTPS at the edge, so a
+# Django-level redirect adds nothing there -- but it DOES break the internal
+# calls, because the Next.js server fetches the backend directly at
+# http://127.0.0.1:8000, bypassing nginx and therefore arriving with no
+# X-Forwarded-Proto. Django then sees a plain-HTTP request, answers 301 to an
+# https://127.0.0.1:8000 that nothing is listening on, and every server-rendered
+# page fails with "fetch failed". Turned on 2026-09-07, broke SSR, off again.
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SSL_REDIRECT", default=False)
+SESSION_COOKIE_SECURE = _TLS
+CSRF_COOKIE_SECURE = _TLS
+SECURE_HSTS_SECONDS = 31536000 if _TLS else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _TLS
+SECURE_HSTS_PRELOAD = _TLS
+# nginx sets this on every proxied request; without it Django can't tell an
+# HTTPS request from an HTTP one behind the proxy.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if _TLS else None
+
+CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
+
+
+# ---------------------------------------------------------------------------
+# Structured logging + error monitoring
+# ---------------------------------------------------------------------------
+# Before this, unhandled exceptions went to gunicorn's stderr and journald and
+# nowhere else: no aggregation, no history past the journal's rotation, nothing
+# anyone would notice without SSHing in. Now every log record is emitted as one
+# JSON object per line (greppable, machine-parseable, ships to anything) and
+# errors additionally go to GlitchTip via the Sentry protocol.
+LOG_DIR = Path(os.environ.get('KG_LOG_DIR', '/var/log/kgkg'))
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _LOG_TO_FILE = os.access(LOG_DIR, os.W_OK)
+except OSError:
+    # Unwritable log dir must never stop the app booting — fall back to stderr.
+    _LOG_TO_FILE = False
+
+_LOG_LEVEL = os.environ.get('KG_LOG_LEVEL', 'INFO').upper()
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {'()': 'KG_backend.jsonlog.JsonFormatter'},
+        'plain': {'format': '[%(asctime)s] %(levelname)s %(name)s: %(message)s'},
+    },
+    'filters': {
+        # Keeps the log readable during tests and management commands, which
+        # would otherwise spray expected 4xx tracebacks into the error file.
+        'quiet_in_tests': {'()': 'KG_backend.jsonlog.QuietInTests'},
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'plain' if DEBUG else 'json',
+            'filters': ['quiet_in_tests'],
+        },
+    },
+    'root': {'handlers': ['console'], 'level': _LOG_LEVEL},
+    'loggers': {
+        # Django logs handled 4xx here too; those are noise, not incidents.
+        'django.request': {'handlers': [], 'level': 'ERROR', 'propagate': True},
+        'django.security': {'handlers': [], 'level': 'INFO', 'propagate': True},
+        'django.db.backends': {'handlers': [], 'level': 'WARNING', 'propagate': True},
+        'kgkg': {'handlers': [], 'level': _LOG_LEVEL, 'propagate': True},
+    },
+}
+
+if _LOG_TO_FILE:
+    LOGGING['handlers']['app_file'] = {
+        'class': 'logging.handlers.WatchedFileHandler',  # cooperates with logrotate
+        'filename': str(LOG_DIR / 'app.jsonl'),
+        'formatter': 'json',
+        'filters': ['quiet_in_tests'],
+    }
+    LOGGING['handlers']['error_file'] = {
+        'class': 'logging.handlers.WatchedFileHandler',
+        'filename': str(LOG_DIR / 'error.jsonl'),
+        'formatter': 'json',
+        'level': 'WARNING',
+        'filters': ['quiet_in_tests'],
+    }
+    LOGGING['root']['handlers'] += ['app_file', 'error_file']
+
+# GlitchTip (self-hosted, Sentry-wire-compatible) — inert unless SENTRY_DSN is
+# set, so dev boxes and the test runner never phone home.
+SENTRY_DSN = (os.environ.get('SENTRY_DSN') or '').strip()
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+
+        from KG_backend.jsonlog import scrub_event
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[
+                DjangoIntegration(),
+                LoggingIntegration(level=None, event_level='ERROR'),
+            ],
+            environment=os.environ.get('SENTRY_ENVIRONMENT', 'production'),
+            release=os.environ.get('KG_RELEASE') or None,
+            # MUST stay gzip. sentry-sdk 2.x picks Brotli automatically
+            # whenever the `brotli` package is importable — and it is here,
+            # pulled in transitively — but GlitchTip 4.1.3 cannot decompress
+            # Brotli and answers every such envelope with
+            # `400 {"detail": "Cannot parse request body"}`. The SDK logs that
+            # at DEBUG and moves on, so the failure mode is silent: the app
+            # looks instrumented and not one error ever arrives.
+            # (It lives under _experiments, not as a top-level option.)
+            _experiments={'transport_compression_algo': 'gzip'},
+            # Customer manual content and Persian PII must not leave the box in
+            # error payloads: no request bodies, no user emails/IPs attached.
+            send_default_pii=False,
+            max_request_body_size='never',
+            traces_sample_rate=float(os.environ.get('SENTRY_TRACES_RATE', '0') or 0),
+            before_send=lambda event, hint: scrub_event(event),
+        )
+    except Exception:  # pragma: no cover - monitoring must never break boot
+        import logging
+        logging.getLogger('kgkg').warning('sentry_sdk init failed', exc_info=True)

@@ -79,6 +79,8 @@ def _conn():
 
 
 def log_query(query, scope, result, cached=False, latency_ms=None):
+    if not config.LOG_QUERIES:
+        return
     try:
         hits = result.get('hits', []) if result else []
         top_blobs = ','.join(str(h.get('blob_id', '')) for h in hits[:8])
@@ -99,6 +101,8 @@ def log_query(query, scope, result, cached=False, latency_ms=None):
 def log_click(query, blob_id, app_url):
     """Optional: the frontend can report which result the user opened — a strong
     relevance signal for future ranking."""
+    if not config.LOG_QUERIES:
+        return
     try:
         c = _conn()
         c.execute("INSERT INTO clicks(query,blob_id,app_url) VALUES (?,?,?)",
@@ -128,6 +132,8 @@ def common_queries(limit=50, min_count=2):
 def rate(query, scope, mode, top_blobs, verdict, blob_id=None, reason=None,
          comment=None):
     """Record an explicit 👍 (+1) / 👎 (-1) verdict. Best-effort."""
+    if not config.LOG_QUERIES:
+        return
     try:
         scope = scope or {}
         tb = ','.join(str(b) for b in top_blobs) if isinstance(top_blobs, (list, tuple)) else (top_blobs or '')

@@ -1,22 +1,18 @@
-// app/browse/page.js — dashboard fleet view (real cars)
+// app/browse/page.js — dashboard fleet view (live grants from backend)
 import DashboardShell from '@/components/DashboardShell';
+import UserChip from '@/components/UserChip';
 import FleetView from '@/components/FleetView';
-import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
-export default async function Browse() {
-  const brands = await fetchAllBrands();
-  const nested = await Promise.all(brands.map((b: string) => fetchBrands(b)));
-  const cars = nested.flat();
-
+export default function Browse() {
   return (
     <DashboardShell>
       <div className="topbar">
         <div className="breadcrumb"><b>خودروهای فعال</b></div>
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">پنل دسترسی به مستندات فنی</h1>
-      <div className="page-sub">// ACTIVE_VEHICLE_ACCESS.LIST</div>
-      <FleetView cars={cars} />
+      <div className="page-sub">خودروهایی که برای شما فعال شده‌اند؛ روی هر خودرو بزنید تا مستندات آن باز شود.</div>
+      <FleetView />
     </DashboardShell>
   );
 }

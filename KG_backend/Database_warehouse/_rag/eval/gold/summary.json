@@ -1,0 +1,100 @@
+{
+  "known_item_en": 250,
+  "known_item_fa": 250,
+  "out_of_scope": 52,
+  "out_of_scope_by_category": {
+    "non_automotive": 25,
+    "nonsense": 15,
+    "automotive_absent": 12
+  },
+  "wrong_vehicle": 60,
+  "absent_verified": [
+    "glow plug preheat",
+    "adblue injector",
+    "diesel particulate filter regeneration",
+    "rotary engine apex seal",
+    "kickstart lever",
+    "swirl flap actuator",
+    "quattro centre differential",
+    "hydropneumatic suspension sphere",
+    "choke cable adjustment",
+    "prechamber diesel injector",
+    "dual mass flywheel clutch",
+    "gasoline direct injection walnut blasting"
+  ],
+  "absent_rejected_present_in_corpus": [
+    "carburetor float bowl",
+    "distributor cap rotor",
+    "magneto ignition",
+    "tractor power take off shaft",
+    "points condenser ignition",
+    "supercharger intercooler bypass"
+  ],
+  "diagnosis": 453,
+  "diagnosis_by_condition": {
+    "symptom": 153,
+    "dtc_name": 150,
+    "dtc_code": 150
+  },
+  "real_user_queries": 143,
+  "en_systems": {
+    "Accessories & Equipment": 38,
+    "Suspension": 30,
+    "Transmission": 30,
+    "Electrical": 22,
+    "Brakes": 21,
+    "Hybrid/Electric Powertrain": 19,
+    "Restraints": 14,
+    "Body & Frame": 14,
+    "Drivelines & Axles": 12,
+    "Engine Performance": 10,
+    "Maintenance": 9,
+    "Heating, Ventilation & A/C (HVAC)": 8
+  },
+  "fa_systems": {
+    "Accessories & Equipment": 82,
+    "Transmission": 36,
+    "Suspension": 19,
+    "Drivelines & Axles": 19,
+    "Brakes": 18,
+    "Electrical": 17,
+    "Body & Frame": 12,
+    "Hybrid/Electric Powertrain": 10,
+    "Heating, Ventilation & A/C (HVAC)": 9,
+    "Restraints": 7,
+    "Steering": 7,
+    "Engine Mechanical": 6
+  },
+  "en_actions": {
+    "inspection": 31,
+    "removal": 28,
+    "installation": 25,
+    "system diagram": 22,
+    "precaution": 21,
+    "problem symptoms table": 19,
+    "diagnosis system": 18,
+    "parts location": 16,
+    "replacement": 16,
+    "disassembly": 14,
+    "terminals of ecu": 13,
+    "reassembly": 12
+  },
+  "fa_actions": {
+    "system diagram": 30,
+    "inspection": 29,
+    "diagnosis system": 28,
+    "precaution": 25,
+    "terminals of ecu": 20,
+    "parts location": 19,
+    "installation": 17,
+    "problem symptoms table": 16,
+    "removal": 16,
+    "disassembly": 14,
+    "reassembly": 12,
+    "operation check": 11
+  },
+  "distinct_cars_en": 38,
+  "distinct_cars_fa": 38,
+  "mean_relevant_en": 4.38,
+  "mean_relevant_fa": 4.61
+}

@@ -1,5 +1,10 @@
-// app/[brand]/page.js — years for a brand, in the dashboard shell
+// app/[brand]/page.js — model years for a brand, in the dashboard shell.
+// An unknown first segment lands here too (the route is a catch-all for one
+// path segment), so a brand with no vehicles renders the real 404 page
+// instead of an empty year list titled with whatever was typed.
+import { notFound, permanentRedirect } from 'next/navigation';
 import { fetchBrands } from '@/utils/api';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import CardGrid from '@/components/CardGrid';
@@ -7,25 +12,32 @@ import CardGrid from '@/components/CardGrid';
 export default async function BrandPage({ params }) {
   const raw = await params;
   const brand = decodeURIComponent(raw.brand);
-  const cars = await fetchBrands(brand);
+  const cars = await fetchBrands(brand).catch(() => []);
+  if (!cars.length) notFound();
+  const canonical = cars[0].brand_name;
+  if (canonical && canonical !== brand) permanentRedirect(`/${encodeURIComponent(canonical)}`);
+
   const years = [...new Set(cars.map((car) => car.year))].sort((a, b) => b - a);
+  const countFor = (year) => cars.filter((c) => c.year === year).length;
 
   const items = years.map((year) => ({
     href: `/${encodeURIComponent(brand)}/${year}`,
-    icon: '◷',
+    icon: 'clock',
     title: String(year),
-    sub: 'MODEL YEAR',
-    go: 'مشاهده ←',
+    sub: `${countFor(year).toLocaleString('fa-IR')} خودرو`,
+    go: 'مشاهده خودروها ←',
   }));
 
   return (
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">{brand}</h1>
-      <div className="page-sub">// SELECT_MODEL_YEAR</div>
+      <div className="page-sub">
+        {`${cars.length.toLocaleString('fa-IR')} خودرو در ${years.length.toLocaleString('fa-IR')} سال مدل — سال موردنظر را انتخاب کنید.`}
+      </div>
       <CardGrid items={items} />
     </DashboardShell>
   );

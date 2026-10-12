@@ -3,7 +3,7 @@
 # Friendly desktop front-end for htmlparser_logical.py.
 #
 # Pick the backend folder (the one with db.sqlite3) and the folder that holds
-# your "LEMON *.zip" files, press Start, and watch the progress. No terminal,
+# your "KGTV *.zip" files, press Start, and watch the progress. No terminal,
 # no Python knowledge required.
 #
 # Run from source:   python parser_gui.py
@@ -206,12 +206,12 @@ class App(tk.Tk):
             messagebox.showerror("خطا", "لطفاً پوشه‌ی فایل‌های زیپ را انتخاب کنید.")
             return None
 
-        found = list(Path(zips).glob("LEMON *.zip"))
+        found = list(Path(zips).glob("KGTV *.zip"))
         if not found:
             messagebox.showerror(
                 "خطا",
-                "در این پوشه هیچ فایلی با الگوی  «LEMON *.zip»  پیدا نشد.\n"
-                "نام فایل‌های زیپ باید با  LEMON  شروع شود.",
+                "در این پوشه هیچ فایلی با الگوی  «KGTV *.zip»  پیدا نشد.\n"
+                "نام فایل‌های زیپ باید با  KGTV  شروع شود.",
             )
             return None
 

@@ -2,10 +2,14 @@
 // Renders a raw manual page that has no node of its own (an orphan
 // cross-link target, e.g. "Labor Times: Other Variant"). Served straight
 // from the car's source folder by the backend's ?page= endpoint.
+import { redirect } from 'next/navigation';
 import { fetchRawPage } from '@/utils/api';
+import { redirectToLogin, portalTokenCookie } from '@/utils/serverAuth';
+import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import ContentRenderer from '@/components/ContentRenderer';
+import { friendlyError } from '@/lib/friendlyError';
 
 export default async function RawPage({ params }) {
   const raw = await params;
@@ -14,22 +18,27 @@ export default async function RawPage({ params }) {
   const model = decodeURIComponent(raw.model);
   const file = decodeURIComponent(raw.file);
 
+  const token = await portalTokenCookie();
+  if (!token) await redirectToLogin();
+
   let page = null;
   let error = null;
   try {
-    page = await fetchRawPage(brand, year, model, file);
+    page = await fetchRawPage(brand, year, model, file, token);
   } catch (err) {
-    error = err.message;
+    if (err?.status === 401) await redirectToLogin();
+    else if (err?.status === 403) error = 'دسترسی به مستندات این خودرو در اشتراک شما نیست.';
+    else error = friendlyError(err, 'بارگذاری این صفحه ناموفق بود.');
   }
 
   return (
     <DashboardShell>
       <div className="topbar">
         <Breadcrumb brand={brand} year={year} model={model} path={[page?.title || file]} />
-        <div className="userchip"><div className="avatar">۰۱</div> شرکت خدمات گستر سپهر گیتی</div>
+        <UserChip />
       </div>
       <h1 className="page-title">{page?.title || file}</h1>
-      <div className="page-sub">// DOCUMENT_VIEW</div>
+      <div className="page-sub">نمایش مستند</div>
 
       {page?.content ? (
         <ContentRenderer content={page.content} brand={brand} year={year} model={model} />

@@ -1,79 +1,114 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
+import Skeleton from './Skeleton';
+import { fetchGrantedFleet, getPortalUser, logActivity, portalRefreshMe } from '../utils/api';
+import RecommendationsWidget from './RecommendationsWidget';
+import { useVehicleFilter } from './VehicleFilter';
+import VehicleGroupList from './VehicleGroupList';
 
-// Fleet view — the prototype's dashboard fleet screen, but the picker
-// dropdowns and the fleet-grid are driven by REAL cars from the backend.
-export default function FleetView({ cars }) {
-  const [brand, setBrand] = useState('');     // '' = all
-  const [year, setYear] = useState('');       // '' = all
-  const [open, setOpen] = useState('');        // which dropdown is open
-  const rootRef = useRef(null);
+const MotionLink = motion.create(Link);
 
-  const brands = useMemo(() => [...new Set(cars.map((c) => c.brand_name))].sort(), [cars]);
-  const years = useMemo(
-    () => [...new Set(cars.filter((c) => !brand || c.brand_name === brand).map((c) => c.year))].sort((a, b) => b - a),
-    [cars, brand]
+function FleetCard({ c, i }) {
+  return (
+    <MotionLink
+      href={`/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
+      className="fleet-card glass"
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -5 }}
+    >
+      <div className="tag">{String(c.brand_name).toUpperCase()} / {c.year}</div>
+      <h4>{c.car_name}</h4>
+      {/* has_parts is additive backend data — older payloads simply
+          render no chip. Parts-only vehicles say what they open into. */}
+      {c.has_parts && (
+        <div className="fleet-parts-chip">کاتالوگ قطعات</div>
+      )}
+      <div className="yrs">
+        {c.has_parts && c.has_manual === false
+          ? 'مشاهده کاتالوگ قطعات ←'
+          : 'مشاهده مستندات ←'}
+      </div>
+    </MotionLink>
   );
-  const filtered = useMemo(
-    () => cars.filter((c) => (!brand || c.brand_name === brand) && (!year || String(c.year) === String(year))),
-    [cars, brand, year]
-  );
+}
+
+// Fleet view — loads only the cars the admin granted to this portal seat,
+// refreshed from the backend on every visit so grant/revoke takes effect
+// immediately without forcing a re-login.
+export default function FleetView() {
+  const router = useRouter();
+  const [cars, setCars] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    function onDoc(e) {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen('');
-    }
-    document.addEventListener('click', onDoc);
-    return () => document.removeEventListener('click', onDoc);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      // The session token is an HttpOnly cookie and unreadable from JS, so the
+      // stored user snapshot is what tells us a session exists. The real check
+      // is the 401 handling below.
+      if (!getPortalUser()) {
+        router.replace('/login');
+        return;
+      }
+      try {
+        const me = await portalRefreshMe();
+        const items = await fetchGrantedFleet();
+        if (cancelled) return;
+        setCars(items);
+        if (items.length) logActivity('view_fleet', 'مشاهده فهرست خودروهای فعال');
+      } catch (e) {
+        if (cancelled) return;
+        if (e?.unauthorized) {
+          router.replace('/login');
+          return;
+        }
+        setError(e?.message || 'بارگذاری خودروها ناموفق بود. لطفاً دوباره وارد شوید.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
 
-  const toggle = (id) => setOpen((o) => (o === id ? '' : id));
+  const { filtered, bar } = useVehicleFilter(cars, { searchPlaceholder: 'جستجوی خودرو…' });
+
+  if (loading) {
+    return <Skeleton kind="cards" count={8} label="در حال بارگذاری خودروهای فعال…" />;
+  }
+
+  if (error) {
+    return <div className="pform-error">{error}</div>;
+  }
 
   return (
-    <div ref={rootRef}>
-      <div className="picker-row">
-        <div className={`dropdown${open === 'brand' ? ' open' : ''}`}>
-          <div className="dd-btn" onClick={() => toggle('brand')}>
-            <span>{brand || 'همه برندها'}</span><span className="arr">▾</span>
-          </div>
-          <div className="dd-menu glass">
-            <div className="dd-item" onClick={() => { setBrand(''); setYear(''); setOpen(''); }}>همه برندها</div>
-            {brands.map((b) => (
-              <div key={b} className="dd-item" onClick={() => { setBrand(b); setYear(''); setOpen(''); }}>{b}</div>
-            ))}
-          </div>
-        </div>
+    <div>
+      {cars.length > 0 && <RecommendationsWidget />}
+      {/* No bar on a small fleet — the tour engine skips steps whose target is
+          absent, so the guided tour must not find an empty placeholder here. */}
+      {bar && <div data-tour="model-filter">{bar}</div>}
 
-        <div className={`dropdown${open === 'year' ? ' open' : ''}`}>
-          <div className="dd-btn" onClick={() => toggle('year')}>
-            <span>{year || 'همه سال‌ها'}</span><span className="arr">▾</span>
+      <VehicleGroupList
+        rows={filtered}
+        total={cars.length}
+        itemKey={(c) => `${c.brand_name}-${c.year}-${c.car_name}`}
+        renderItem={(c, i) => <FleetCard key={`${c.brand_name}-${c.year}-${c.car_name}`} c={c} i={i} />}
+        empty={(
+          <div className="fleet-grid">
+            <div className="empty-state">
+              {cars.length === 0
+                ? 'هنوز خودرویی برای این حساب تعریف نشده. با ادمین تماس بگیرید.'
+                : 'خودرویی مطابق فیلتر یافت نشد.'}
+            </div>
           </div>
-          <div className="dd-menu glass">
-            <div className="dd-item" onClick={() => { setYear(''); setOpen(''); }}>همه سال‌ها</div>
-            {years.map((y) => (
-              <div key={y} className="dd-item" onClick={() => { setYear(String(y)); setOpen(''); }}>{y}</div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="fleet-grid">
-        {filtered.map((c) => (
-          <Link
-            key={`${c.brand_name}-${c.year}-${c.car_name}`}
-            href={`/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
-            className="fleet-card glass"
-          >
-            <span className="badge"></span>
-            <div className="tag">{String(c.brand_name).toUpperCase()} / {c.year}</div>
-            <h4>{c.car_name}</h4>
-            <div className="yrs">مشاهده مستندات ←</div>
-          </Link>
-        ))}
-        {filtered.length === 0 && <div className="empty-state">خودرویی مطابق فیلتر یافت نشد.</div>}
-      </div>
+        )}
+      />
     </div>
   );
 }

@@ -6,7 +6,7 @@
 #   python htmlparser_logical.py "path/to/backend_folder"
 #
 # This will:
-#   1. Extract all LEMON *.zip files in the current directory (parallel)
+#   1. Extract all KGTV *.zip files in the current directory (parallel)
 #   2. Parse each extracted HTML folder into a database (parallel)
 #   3. Copy databases to Database_warehouse/ (renamed without prefix/year)
 #   4. Copy images folders to static_warehouse/ (renamed to match)
@@ -37,11 +37,23 @@ PARSER = "html5lib"  # MANDATORY: html.parser / lxml mis-nest the unclosed <li> 
 # On an interruption, at most this many pages of frontier progress are redone.
 CHECKPOINT_EVERY = 250
 
+# Root-level subtrees pruned at crawl time. "Repair and Diagnosis (Single Page)"
+# is the site's all-in-one aggregate of the normal Repair and Diagnosis tree — a
+# strict duplicate (verified: 0 content blobs unique to it). Excluding it here
+# keeps every freshly ingested car free of the redundant branch, instead of
+# deleting it from the warehouse + RAG after the fact. Match is on the page's
+# parsed title (h1/breadcrumb), so the whole subtree under it is pruned.
+EXCLUDED_PAGE_TITLES = {"Repair and Diagnosis (Single Page)"}
+
 # Thread-safe print lock
 print_lock = threading.Lock()
 
 # Serializes all writes to the backend zip-level ledger across worker threads.
 ledger_lock = threading.Lock()
+
+
+class _StubSkip(Exception):
+    """Internal: a breadcrumb-less stub page with no recovery anchor."""
 
 
 class CrawlPaused(Exception):
@@ -175,8 +187,10 @@ class LogicalHTMLParser:
     # ------------------------------------------------------------- breadcrumb
     def _breadcrumb_segments(self, soup: BeautifulSoup) -> List[str]:
         """Ordered, escaped text of every <a class='breadcrumb-part'>."""
+        # find_all (not CSS .select) so we don't depend on the soupsieve package,
+        # whose version varies across machines (e.g. macOS lacked .select support).
         return [self._escape_text(a.get_text(strip=True))
-                for a in soup.select("a.breadcrumb-part")]
+                for a in soup.find_all("a", class_="breadcrumb-part")]
 
     def _page_abs_path(self, segs: List[str]) -> str:
         """Absolute logical path of a page = its breadcrumb from the MODEL ROOT
@@ -288,7 +302,8 @@ class LogicalHTMLParser:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             soup = BeautifulSoup(f.read(), PARSER)
 
-        main = soup.select_one("div.main") or soup.body or soup
+        # find(...) (not CSS .select_one) to avoid the soupsieve dependency.
+        main = soup.find("div", class_="main") or soup.body or soup
         segs = self._breadcrumb_segments(soup)
         page_abs = self._page_abs_path(segs)
         file_type = self._classify_file_type(main, is_index, page_abs)
@@ -359,6 +374,8 @@ class LogicalHTMLParser:
                     node_type=None,                  # no DOM <li> role; derived post-crawl
                     sort_order=10_000 + len(children),
                     href=href,
+                    link_text=a.get_text(strip=True),
+                    parent_path=page_abs,            # STUB-RECOVERY fallback anchor
                 ))
 
         return page_abs, rows, children
@@ -402,8 +419,12 @@ class LogicalHTMLParser:
             base = self._resolve_basename(href)
             if not self._has_fragment(href) and self._is_followable(base):
                 # Structural child PAGE: defer the node to its own open.
+                # link_text + parent_path let the crawl recover the node under
+                # this referrer if the target turns out to be a breadcrumb-less
+                # "known-missing" stub (STUB-RECOVERY in the BFS body).
                 children.append(dict(basename=base, node_type=node_type,
-                                     sort_order=order, href=href))
+                                     sort_order=order, href=href,
+                                     link_text=link_text, parent_path=current_base))
                 if sub is not None:
                     # Rare: a followable leaf that also nests a <ul> on this page.
                     guess = self._norm(f"{current_base}/{self._escape_text(link_text)}")
@@ -542,6 +563,7 @@ class LogicalHTMLParser:
             self._save_checkpoint(conn, visited, queue, processed, failed, total_nodes)
 
         # 2) BFS over structural child pages.
+        skipped_excluded = 0
         while queue:
             # Cooperative cancel: checkpoint NOW (commit nodes + frontier together)
             # and bail out so pressing Start later resumes from this exact spot.
@@ -567,12 +589,42 @@ class LogicalHTMLParser:
                 continue
             try:
                 _, rows, grandchildren = self.parse_page(fp, is_index=False)
+                # Prune excluded aggregate subtrees (e.g. the duplicate "single
+                # page" branch): skip saving the node AND skip enqueuing its
+                # children, so the whole subtree never enters the warehouse. Its
+                # descendant pages remain reachable through the canonical tree.
+                if rows and rows[0].get("title") in EXCLUDED_PAGE_TITLES:
+                    visited.add(base)
+                    skipped_excluded += 1
+                    continue
                 # Inherit node_type / sort_order from the parent <li> onto page-base.
                 pb = rows[0]
                 pb["node_type"] = c["node_type"]
                 pb["sort_order"] = c["sort_order"]
                 if c.get("href"):
                     pb["href"] = c["href"]
+                # STUB-RECOVERY: a "known-missing" target page carries no
+                # breadcrumb, so parse_page yields an empty page_abs and the row
+                # would otherwise be saved as a junk title="Root", path="" node
+                # (all such stubs collapsing onto the same id). Re-anchor it under
+                # the referring parent using the link text, so the node keeps its
+                # real title and position in the tree. Content stays whatever the
+                # stub held (the "known-missing" notice), so the leaf is visible
+                # and honestly flags the gap instead of vanishing.
+                if not pb.get("path"):
+                    parent = c.get("parent_path")
+                    ltext = c.get("link_text")
+                    if parent is not None and ltext:
+                        node_path = self._norm(f"{parent}/{self._escape_text(ltext)}")
+                        pb["path"] = node_path
+                        pb["parent_path"] = self._parent_path(node_path)
+                        pb["title"] = ltext
+                        pb["depth"] = node_path.count("/")
+                        pb["file_type"] = "end_path"
+                    else:
+                        # No anchor to recover under: drop the junk row entirely
+                        # rather than persist an empty-path "Root".
+                        raise _StubSkip()
                 total_nodes += self.save_rows(rows, conn)
                 processed += 1
                 queue.extend(grandchildren)
@@ -585,6 +637,9 @@ class LogicalHTMLParser:
                     with print_lock:
                         print(f"  …{processed} pages, {total_nodes} node rows, "
                               f"{len(queue)} queued (checkpointed)")
+            except _StubSkip:
+                # Breadcrumb-less stub with no recovery anchor: silently drop.
+                continue
             except Exception as e:
                 failed += 1
                 with print_lock:
@@ -609,6 +664,7 @@ class LogicalHTMLParser:
             print(f"🧩 Node rows upserted (incl. dedup): {total_nodes}")
             print(f"🔁 Promoted end→intermediate (breadcrumb): {promoted}")
             print(f"🌱 Root nodes ordered: {roots_n}")
+            print(f"🚫 Excluded subtrees pruned: {skipped_excluded}")
             print(f"💾 Database        : {self.db_path}")
         return processed
 
@@ -660,6 +716,21 @@ class LogicalHTMLParser:
                                     THEN 'leaf' ELSE 'folder' END
              WHERE node_type IS NULL
                AND file_type IN ('end_path', 'intermediate_path');
+        """)
+
+        # Final invariant: ANY node that actually parents a child is a folder.
+        # The promotion above only rescues end_path pages; a page already
+        # classified intermediate_path (it has <a name="…/"> hub anchors) but
+        # whose page-base row inherited node_type='leaf' from a parent <li>
+        # with no nested <ul> (Toyota lists a hub page as a bare link) was
+        # never reconciled — leaving ~700 nodes/car as leaf while holding
+        # children. car_view serves by content-presence so pages still render,
+        # but the DOM role was a lie; anything trusting node_type broke on it.
+        conn.execute("""
+            UPDATE nodes
+               SET node_type = 'folder'
+             WHERE node_type = 'leaf'
+               AND EXISTS (SELECT 1 FROM nodes ch WHERE ch.parent_id = nodes.id);
         """)
         return promoted
 
@@ -862,6 +933,21 @@ def parse_car_info(db_name: str) -> Tuple[str, int, str]:
     return brand, year, car_name
 
 
+# The fleet's original naming convention keeps the plain car name as the
+# warehouse stem for this model year; other years get a " (<year>)" suffix so
+# e.g. the 2023 and 2025 "Corolla Cross LE, FWD" manuals coexist as separate
+# cars (the stem doubles as catalog car_name and RAG car_stem — it must be
+# unique per vehicle, and year alone lives in the catalog's year column).
+DEFAULT_STEM_YEAR = 2025
+
+
+def warehouse_stem(car_name: str, year: int) -> str:
+    """Warehouse filename stem (== catalog car_name) for a parsed car."""
+    if year and year != DEFAULT_STEM_YEAR:
+        return f"{car_name} ({year})"
+    return car_name
+
+
 def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
                        static_warehouse: Path, current_dir: Path,
                        ledger: "ProcessingLedger", cancel_event=None,
@@ -882,7 +968,7 @@ def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
 
     # ---- force: wipe the stale car db so regeneration starts fresh --------
     if force:
-        db_name = zip_path.name.replace("LEMON ", "").replace(".zip", ".db")
+        db_name = zip_path.name.replace("KGTV ", "").replace(".zip", ".db")
         for suffix in ("", "-wal", "-shm"):
             stale = current_dir / (db_name + suffix)
             try:
@@ -923,12 +1009,54 @@ def process_single_zip(zip_path: Path, backend_dir: Path, db_warehouse: Path,
         return None
 
 
+def _publish_images(images_source, images_dest, static_warehouse):
+    """Give a car its own image folder without duplicating bytes on disk.
+
+    Image filenames are Toyota's global asset IDs, so the same name always
+    carries the same bytes across every car. Each distinct image is therefore
+    written once into ``static_warehouse/_store/`` and every car folder gets a
+    hardlink to it - N cars sharing an image cost one copy instead of N.
+
+    The store lives inside static_warehouse on purpose: hardlinks only work
+    within a single filesystem. Files are written to a temp name and renamed
+    into place, so a shared inode is never modified after publication and
+    readers always see a complete file.
+
+    Returns (new, linked): images copied for the first time, and images that
+    were already in the store.
+    """
+    store = static_warehouse / "_store"
+    store.mkdir(parents=True, exist_ok=True)
+
+    if images_dest.exists():
+        shutil.rmtree(images_dest)
+    images_dest.mkdir(parents=True)
+
+    new = linked = 0
+    for src in sorted(images_source.iterdir()):
+        if not src.is_file():
+            continue
+        canon = store / src.name
+        if canon.exists():
+            linked += 1
+        else:
+            tmp = store / f".{src.name}.{os.getpid()}.tmp"
+            shutil.copy2(src, tmp)
+            os.replace(tmp, canon)
+            new += 1
+        try:
+            os.link(canon, images_dest / src.name)
+        except FileExistsError:
+            pass
+    return new, linked
+
+
 def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: Path,
                               static_warehouse: Path, current_dir: Path,
                               ledger: "ProcessingLedger", cancel_event=None) -> Optional[Dict]:
     # The per-car db lives next to the zips; its name is derived from the zip,
     # independent of extraction, so we can check for a checkpoint up front.
-    db_name = zip_path.name.replace("LEMON ", "").replace(".zip", ".db")
+    db_name = zip_path.name.replace("KGTV ", "").replace(".zip", ".db")
     db_path = current_dir / db_name
 
     # ---- Resume fast-path: if a not-yet-finished checkpoint exists AND the
@@ -967,8 +1095,9 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
 
     # Parse car info from database name (db_name/db_path computed above).
     brand, year, car_name = parse_car_info(db_name)
+    stem = warehouse_stem(car_name, year)
     with print_lock:
-        print(f"🚗 Car info: {brand} {year} {car_name}")
+        print(f"🚗 Car info: {brand} {year} {car_name} (stem: {stem})")
     
     # Run HTML parser
     with print_lock:
@@ -981,8 +1110,9 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
     )
     pages = parser.crawl(cancel_event)
 
-    # Copy database to warehouse (rename without prefix/year)
-    final_db_name = f"{car_name}.db"
+    # Copy database to warehouse (renamed to the stem — no KGTV prefix, and
+    # the year only appears in the stem for non-default model years).
+    final_db_name = f"{stem}.db"
     final_db_path = db_warehouse / final_db_name
 
     if db_path.exists():
@@ -995,33 +1125,25 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
         ledger.mark_failed(zip_path, "car database not produced")
         return None
     
-    # Copy images folder to static warehouse
+    # Publish images into the static warehouse. Each distinct image is stored
+    # once under _store/ and hardlinked into this car's folder, so cars that
+    # share a diagram share the bytes too. Paths are unchanged: the manual
+    # still references /media/<car>/<file> exactly as before.
     images_source = extract_dir / "images"
-    if images_source.exists() and images_source.is_dir():
-        images_dest = static_warehouse / car_name
-        if images_dest.exists():
-            shutil.rmtree(images_dest)
-        shutil.copytree(images_source, images_dest)
+    if not (images_source.exists() and images_source.is_dir()):
+        images_source = next(
+            (d for d in extract_dir.rglob("images") if d.is_dir()), None)
+
+    if images_source:
+        images_dest = static_warehouse / stem
+        new, linked = _publish_images(images_source, images_dest,
+                                      static_warehouse)
         with print_lock:
-            print(f"📁 Copied images to: {images_dest}")
+            print(f"\U0001f4c1 Images for {stem}: {linked} shared, "
+                  f"{new} new -> {images_dest}")
     else:
-        # Try searching for images folder recursively
-        images_found = None
-        for img_dir in extract_dir.rglob("images"):
-            if img_dir.is_dir():
-                images_found = img_dir
-                break
-        
-        if images_found:
-            images_dest = static_warehouse / car_name
-            if images_dest.exists():
-                shutil.rmtree(images_dest)
-            shutil.copytree(images_found, images_dest)
-            with print_lock:
-                print(f"📁 Copied images from {images_found} to: {images_dest}")
-        else:
-            with print_lock:
-                print(f"⚠️ No images folder found in {extract_dir}")
+        with print_lock:
+            print(f"\u26a0\ufe0f No images folder found in {extract_dir}")
     
     # Optional: Cleanup extracted folder
     # shutil.rmtree(extract_dir)
@@ -1033,11 +1155,15 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
     with print_lock:
         print(f"🏁 Completed {zip_path.name}: {pages} pages")
 
-    # Return car info for backend update
+    # Return car info for backend update. car_name is the STEM: the catalog's
+    # car_name column must equal the warehouse filename stem (that invariant is
+    # what makes brand/year/name links and RAG car_stem resolve), so a
+    # year-suffixed stem is carried through to the catalog verbatim while the
+    # year column keeps the numeric year.
     return {
         'brand': brand,
         'year': year,
-        'car_name': car_name,
+        'car_name': stem,
         # Always use POSIX '/' separators so the address is portable: the frontend
         # may serve from Linux/macOS where a Windows '\' is a literal filename char
         # (causing 404s). '/' is valid on Windows too, so this is safe everywhere.
@@ -1047,9 +1173,9 @@ def _process_single_zip_inner(zip_path: Path, backend_dir: Path, db_warehouse: P
 
 def process_all_zips(backend_path: str, max_workers: int = None,
                      zips_dir: str = None, cancel_event=None, force: bool = False):
-    """Main function to process all LEMON zip files in parallel.
+    """Main function to process all KGTV zip files in parallel.
 
-    zips_dir: folder to search for 'LEMON *.zip' and to use as the extraction /
+    zips_dir: folder to search for 'KGTV *.zip' and to use as the extraction /
     intermediate working directory. Defaults to the current working directory so
     existing command-line behavior is unchanged.
 
@@ -1092,11 +1218,11 @@ def process_all_zips(backend_path: str, max_workers: int = None,
     print(f"⚡ Max workers: {max_workers}")
     print("=" * 70)
     
-    # Find all LEMON zip files
-    all_zip_files = list(current_dir.glob("LEMON *.zip"))
+    # Find all KGTV zip files
+    all_zip_files = list(current_dir.glob("KGTV *.zip"))
 
     if not all_zip_files:
-        print("❌ No LEMON *.zip files found in current directory.")
+        print("❌ No KGTV *.zip files found in current directory.")
         print(f"   Current directory: {current_dir}")
         sys.exit(1)
 
@@ -1252,7 +1378,7 @@ def process_all_zips(backend_path: str, max_workers: int = None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated HTML parser for LEMON car data (parallel processing)",
+        description="Automated HTML parser for KGTV car data (parallel processing)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 USAGE:
@@ -1260,7 +1386,7 @@ USAGE:
   python htmlparser_logical.py "path/to/backend_folder" --workers 8
 
 This will:
-  1. Extract all LEMON *.zip files in the current directory (parallel)
+  1. Extract all KGTV *.zip files in the current directory (parallel)
   2. Parse each extracted HTML folder into a database (parallel)
   3. Copy databases to Database_warehouse/ (renamed without prefix/year)
   4. Copy images folders to static_warehouse/ (renamed to match)
@@ -1289,7 +1415,7 @@ EXAMPLES:
         "--zips-dir",
         type=str,
         default=None,
-        help="Folder containing the LEMON *.zip files "
+        help="Folder containing the KGTV *.zip files "
              "(default: current working directory)"
     )
 

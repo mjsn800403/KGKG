@@ -17,7 +17,7 @@ Nothing here ever writes to the original car databases or db.sqlite3. Every
 artefact lives under Database_warehouse/_rag/ and can be deleted to fully revert.
 """
 import os
-import sqlite3
+import re
 from pathlib import Path
 from django.conf import settings
 
@@ -27,7 +27,15 @@ from django.conf import settings
 BASE_DIR = Path(settings.DATABASES['default']['NAME']).parent
 WAREHOUSE_DIR = BASE_DIR / 'Database_warehouse'
 RAG_DIR = WAREHOUSE_DIR / '_rag'              # all output (deletable)
-INDEX_DB = RAG_DIR / 'index.rag.db'           # the single unified index
+# RAG_INDEX_DB lets an offline experiment point at an alternate index copy
+# without touching production. Unset in .env.prod -> production is unaffected.
+INDEX_DB = Path(os.environ.get('RAG_INDEX_DB') or (RAG_DIR / 'index.rag.db'))
+
+# Bilingual terminology store (terms + generation queue) and the en->fa display
+# artifact generated from it (consumed by the Next chat route). Both live under
+# _rag/ like every other derived artefact. See api/rag/terms.py.
+TERMS_DB = RAG_DIR / 'terms.db'
+TERMS_JSON = RAG_DIR / 'terms_en_fa.json'
 
 # Per-car diagnostic sidecars (the DTC / symptom rule-engine layer). One small,
 # self-contained DB per car under _rag/diag/, derived from that car's `nodes`
@@ -47,28 +55,25 @@ _NON_CAR_PREFIXES = ('_rag', '_backup')
 # ---------------------------------------------------------------------------
 # Parts translation dictionary (Persian <-> English part names)
 # ---------------------------------------------------------------------------
-# A user-maintained CSV of "ENGLISH PART NAME, فارسی" rows (e.g. Book1.csv).
-# It feeds the glossary so a Persian query naming a part is expanded with the
-# English part terms the manual actually uses -- a build-free accuracy lever:
-# edit the CSV and the next query benefits (the glossary reloads on file change).
-# Resolution order: env override -> project root -> backend dir -> _rag copy.
-def _resolve_parts_csv():
+# A user-maintained SQLite DB (translation.db, Book1 table: field1=English,
+# field2=Persian). The glossary reads it at startup and reloads on mtime change.
+# Resolution order: env override -> project root -> backend dir.
+def _resolve_parts_db():
     candidates = []
-    env = os.environ.get('RAG_PARTS_CSV')
+    env = os.environ.get('RAG_PARTS_DB')
     if env:
         candidates.append(Path(env))
     candidates += [
-        BASE_DIR.parent / 'Book1.csv',   # project root (where the user keeps it)
-        BASE_DIR / 'Book1.csv',
-        RAG_DIR / 'parts.csv',
+        BASE_DIR.parent / 'translation.db',
+        BASE_DIR / 'translation.db',
     ]
     for p in candidates:
         if p.exists():
             return p
-    return candidates[-1]   # default location even if absent (glossary tolerates)
+    return candidates[-1]
 
 
-PARTS_CSV = _resolve_parts_csv()
+PARTS_DB = _resolve_parts_db()
 # Minimum normalised length (chars) for a CSV Persian phrase to be used as a
 # query-expansion key -- guards against very short, ambiguous parts (e.g. "بست")
 # polluting unrelated queries. The hand-curated map keeps its own short keys.
@@ -78,32 +83,12 @@ PARTS_MIN_KEY_CHARS = 5
 GLOSSARY_MAX_TERMS = 16
 
 
-def _has_nodes_table(p):
-    """True if a sqlite file is a real car DB (has a `nodes` table). Guards the
-    build against stray top-level .db files -- e.g. an empty index.rag.db /
-    feedback.db accidentally created in the warehouse root -- which would
-    otherwise be globbed as a 'car' and crash ingest with 'no such table: nodes'."""
-    try:
-        conn = sqlite3.connect(f'file:{p}?mode=ro', uri=True)
-        try:
-            return conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='nodes' "
-                "LIMIT 1").fetchone() is not None
-        finally:
-            conn.close()
-    except Exception:
-        return False
-
-
 def car_db_files():
     """All real car DB files on disk (top-level *.db, excluding our own
-    sidecar/backup folders AND any non-car .db without a `nodes` table).
-    Returns a sorted list of Path."""
+    sidecar/backup folders). Returns a sorted list of Path."""
     out = []
     for p in sorted(WAREHOUSE_DIR.glob('*.db')):
         if any(p.name.startswith(pre) for pre in _NON_CAR_PREFIXES):
-            continue
-        if not _has_nodes_table(p):
             continue
         out.append(p)
     return out
@@ -131,16 +116,72 @@ CAR_REGISTRY = {
 
 _LEXUS_PREFIXES = ('NX', 'RX', 'ES', 'IS', 'UX', 'GX', 'LX', 'LS', 'RC', 'LC')
 
+# Multi-year stems: the 2025 fleet keeps plain names; other model years carry
+# a " (YYYY)" suffix (e.g. 'Corolla Cross LE, FWD (2023)') so the same trim
+# can exist for several years as distinct cars. See htmlparser_logical.
+_STEM_YEAR_RE = re.compile(r'\s*\((\d{4})\)\s*$')
+
+
+def split_stem_year(car_stem):
+    """('Corolla Cross LE, FWD', 2023) for a year-suffixed stem;
+    (stem, None) for a plain one."""
+    m = _STEM_YEAR_RE.search(car_stem)
+    if m:
+        return car_stem[:m.start()].strip(), int(m.group(1))
+    return car_stem, None
+
+
+def display_name(car_stem):
+    """Human-facing car name: the stem without the year suffix (the year is
+    shown separately from the catalog's year column)."""
+    return split_stem_year(car_stem)[0]
+
+_CATALOG_CACHE = None
+
+
+def _catalog_meta(car_stem):
+    """(brand, year) for a stem from the main catalog DB (car_name == car_stem
+    by convention, verified against occurrences). This is what actually makes a
+    generated /brand/year/name link resolvable by car_view, so it outranks any
+    heuristic. Read-only direct sqlite (builds may run without a warm ORM);
+    cached for the process lifetime; never raises."""
+    global _CATALOG_CACHE
+    if _CATALOG_CACHE is None:
+        rows = {}
+        try:
+            import sqlite3
+            con = sqlite3.connect(
+                f"file:{Path(settings.DATABASES['default']['NAME'])}?mode=ro",
+                uri=True)
+            try:
+                for name, brand, year in con.execute(
+                        'SELECT car_name, brand_name, year FROM main_db'):
+                    rows[name] = (brand, year)
+            finally:
+                con.close()
+        except Exception:
+            pass                      # catalog unavailable -> heuristic fallback
+        _CATALOG_CACHE = rows
+    return _CATALOG_CACHE.get(car_stem)
+
 
 def car_meta(car_stem):
-    """Brand/model/variant/year for a car stem, with a conservative heuristic
-    fallback for any DB file not yet in CAR_REGISTRY."""
+    """Brand/model/variant/year for a car stem: explicit registry first, then
+    the main catalog (authoritative brand/year — a wrong or missing year here
+    produces app links car_view cannot resolve), then a conservative heuristic
+    so the build never crashes on an unregistered file."""
     if car_stem in CAR_REGISTRY:
         return dict(CAR_REGISTRY[car_stem], car_stem=car_stem)
-    first = car_stem.split()[0] if car_stem.split() else car_stem
+    base, stem_year = split_stem_year(car_stem)
+    first = base.split()[0] if base.split() else base
     brand = 'Lexus' if first in _LEXUS_PREFIXES else 'Toyota'
-    model = car_stem.split(',')[0].strip()
-    return dict(brand=brand, model=model, variant='', year=None, car_stem=car_stem)
+    model = base.split(',')[0].strip()
+    cat = _catalog_meta(car_stem)
+    if cat:
+        return dict(brand=cat[0] or brand, model=model, variant='',
+                    year=cat[1] or stem_year, car_stem=car_stem)
+    return dict(brand=brand, model=model, variant='', year=stem_year,
+                car_stem=car_stem)
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +193,126 @@ REPAIR_ROOTS = ('repair and diagnosis', 'repair and diagnosis (single page)')
 # Breadcrumb tokens that are structural noise, dropped when building the
 # component key used to align a Labor-Times page with its repair procedure.
 _DROP_CRUMB_TOKENS = ('other variant',)
+
+
+# Near-miss scope guard: warn when vehicle-scoping substituted a different
+# component (see _evidence_scope). On by default; set RAG_NEARMISS_GUARD=0 to
+# fall back to the title-anchored guard alone without a deploy.
+NEARMISS_GUARD = os.environ.get('RAG_NEARMISS_GUARD', '1') != '0'
+
+# comp_readable is a breadcrumb, not a component name: its last segments are
+# actions and page kinds ("... > Millimeter Wave Radar Sensor > Removal >
+# Procedure"). Walking back past those lands on the component itself. Shared by
+# the labor<->repair graph gate and the retrieval scope guard so the two cannot
+# drift apart.
+_NON_COMPONENT = (
+    'remove', 'replace', 'install', 'removal', 'installation', 'reassembly',
+    'disassembly', 'overhaul', 'adjustment', 'adjust', 'inspection', 'inspect',
+    'diagnosis', 'diagnostic', 'testing', 'test', 'procedure', 'components',
+    'precaution', 'description', 'bleeding', 'bleed', 'balance', 'alignment',
+    'rotation', 'refinish', 'calibration', 'initialization', 'registration',
+    'reset', 'measurement', 'check', 'service information', 'parts location',
+    'illustration', 'wiring diagram', 'system diagram', 'data list',
+    'maintenance overview', 'operation check',
+)
+# Words too generic to be evidence that two names mean the same part.
+_GENERIC_WORDS = frozenset((
+    'assembly', 'assy', 'sub', 'system', 'systems', 'unit', 'and', 'the', 'for',
+    'with', 'complete', 'type', 'side', 'set', 'kit', 'component', 'components',
+))
+# Qualifiers that make two otherwise-similar names DIFFERENT parts.
+_DIRECTIONS = (
+    frozenset(('front', 'rear')), frozenset(('front', 'back')),
+    frozenset(('left', 'right')), frozenset(('lh', 'rh')),
+    frozenset(('upper', 'lower')), frozenset(('inner', 'outer')),
+    frozenset(('no1', 'no2')), frozenset(('no2', 'no3')), frozenset(('no1', 'no3')),
+)
+
+
+def _is_component_seg(seg):
+    s = seg.lower().strip()
+    return not any(s == kw or s.startswith(kw) for kw in _NON_COMPONENT)
+
+
+def component_segment(comp_readable):
+    """The component segment of a comp_readable breadcrumb ('' if none)."""
+    segs = [s.strip() for s in (comp_readable or '').split(' › ') if s.strip()]
+    for i in range(len(segs) - 1, -1, -1):
+        if _is_component_seg(segs[i]):
+            return segs[i]
+    return ''
+
+
+def component_words(comp_readable, with_parent=False):
+    """Content words of the component segment.
+
+    ``with_parent`` also folds in the segment above it, which is where the
+    manual carries the directional qualifier on the Labor-Times side
+    ("Axle Shafts - Front" > "Axle Shaft Assembly"); without it a REAR axle
+    labor entry matches a FRONT drive shaft procedure."""
+    segs = [s.strip() for s in (comp_readable or '').split(' › ') if s.strip()]
+    picked = []
+    for i in range(len(segs) - 1, -1, -1):
+        if _is_component_seg(segs[i]):
+            picked.append(segs[i])
+            if with_parent and i > 0:
+                picked.append(segs[i - 1])
+            break
+    out = set()
+    for seg in picked:
+        norm = ''.join(c.lower() if c.isalnum() else ' ' for c in seg)
+        for w in norm.split():
+            if len(w) > 2 and w not in _GENERIC_WORDS:
+                out.add(w)
+    return out
+
+
+# Head nouns that name what KIND of part something is. Used only to reject a
+# pair whose names overlap but whose classes disagree ("High Voltage Battery"
+# vs "Battery Voltage Sensor"); a name declaring no class is not penalised.
+_PART_CLASSES = frozenset((
+    'sensor', 'switch', 'relay', 'valve', 'cable', 'hose', 'gasket', 'seal',
+    'bearing', 'pump', 'motor', 'battery', 'shaft', 'belt', 'filter', 'module',
+    'actuator', 'solenoid', 'radiator', 'condenser', 'compressor', 'pulley',
+    'bracket', 'cover', 'lamp', 'light', 'mirror', 'panel', 'spring', 'damper',
+    'absorber', 'rotor', 'disc', 'disk', 'pad', 'caliper', 'clutch', 'injector',
+    'plug', 'coil', 'amplifier', 'antenna', 'camera', 'regulator', 'thermostat',
+    'alternator', 'starter', 'muffler', 'manifold', 'tank', 'reservoir',
+))
+
+
+def _part_class(comp_readable, with_parent=False):
+    """The LAST class word in the component name -- English part names put the
+    head noun last ("Battery Voltage Sensor" is a sensor, not a battery).
+    Returns None when the name declares no class."""
+    segs = [s.strip() for s in (comp_readable or '').split(' › ') if s.strip()]
+    for i in range(len(segs) - 1, -1, -1):
+        if _is_component_seg(segs[i]):
+            norm = ''.join(c.lower() if c.isalnum() else ' ' for c in segs[i])
+            found = [w for w in norm.split() if w in _PART_CLASSES]
+            return found[-1] if found else None
+    return None
+
+
+def components_compatible(a_comp, b_comp, a_with_parent=True):
+    """True when two breadcrumbs name the same component.
+
+    Deliberately conservative -- an unidentifiable component on either side is a
+    reject, because the point is to stop a claim nobody checked."""
+    aw = component_words(a_comp, with_parent=a_with_parent)
+    bw = component_words(b_comp)
+    if not aw or not bw:
+        return False
+    for pair in _DIRECTIONS:
+        if (aw & pair) and (bw & pair) and (aw & pair) != (bw & pair):
+            return False
+    if aw <= bw or bw <= aw:
+        return True
+    if len(aw & bw) < 2:
+        return False
+    # Same words, different part: both names declare a class and they disagree.
+    ca, cb = _part_class(a_comp, a_with_parent), _part_class(b_comp)
+    return not (ca and cb and ca != cb)
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +411,12 @@ RETRIEVE_FTS_K = 40         # chunk candidates from keyword search
 SCOPED_VEC_K = 120          # vector candidates when a scope is given
 SCOPED_FTS_K = 120          # keyword candidates when a scope is given
 SCOPE_PENALTY = 0.85        # multiplier for a blob absent from the active scope
+# A car's manual covers every engine/production span of the model line
+# (a Corolla Hybrid manual also carries M20A-FKS and G16E-GTS pages). When a
+# car is pinned, pages for the other powertrain or for a production span that
+# ended before (or starts after) the car's model year rank lower.
+VARIANT_ENGINE_PENALTY = 0.8
+VARIANT_YEAR_PENALTY = 0.85
 RRF_K = 60                  # reciprocal-rank-fusion constant
 FINAL_K = 8                 # blobs returned to the generator
 GRAPH_EXPAND = 4            # related neighbours pulled in per top hit
@@ -261,6 +428,40 @@ CROSS_VEHICLE_MAX = 4       # sibling-vehicle corroborations shown per hit
 # Calibrated blend weights handed to scoring.calibrate() (sum need not be 1; the
 # multiplicative boosts ride on top). Tune live — they only re-rank, never
 # re-embed. See scoring.py for the formula.
+# BM25 per-column weights for blobs_fts(text, title, comp). SQLite's bm25()
+# defaults to 1.0 for every column, which rates a term in the page title exactly
+# as highly as one buried in the body -- and in a service manual the title is the
+# component name. Overridable so the A/B (hybrid_tw) can vary them without a
+# code change.
+#
+# Title 8 / comp 4 measured against 1/1/1 on 250 queries per language (hybrid_tw):
+#   EN  nDCG@5 +0.025 p<0.001   Hit@1 +0.052 p=0.004   Hit@5 +0.040 p<0.001
+#   FA  nDCG@5 +0.012 p=0.021   MRR   +0.022 p=0.012
+# Every metric improved on both languages at identical latency; Hit@5 on English
+# moved on 10 queries with none regressing.
+# Clean the FTS MATCH string before it is ORed together: drop English stopwords
+# (glossary expansion drags in "and"/"for"/"with", which match 143k-207k of the
+# 301,369 pages and flatten BM25), drop tokens that cannot match the English
+# index at all (Persian query tokens -- measured at 9.0 per Persian query, all
+# matching zero pages), and de-duplicate.
+#
+# Measured (hybrid_fc, n=250 EN + 250 FA + 51 FA-llm): ranking is UNCHANGED --
+# Persian moved on 0 queries, English on 2 (Hit@1 -0.008, p=0.27). BM25 already
+# discounts a term appearing on 67% of pages to near-zero IDF, so the stopwords
+# were never the ranking problem they looked like. What it does buy is latency:
+# p50 1168->819ms EN, 1048->842ms FA, from a much shorter MATCH string.
+FTS_CLEAN = os.environ.get('RAG_FTS_CLEAN', '1') == '1'
+# Functional words only. Deliberately NOT including "no": Toyota titles use
+# "No. 1"/"No. 2" as part identifiers, and stripping it would lose real matches.
+FTS_STOPWORDS = frozenset('''
+and or the a an of to in on at by is are be was were from with for this that it
+as its their there then than which when where while into over under
+'''.split())
+
+FTS_W_TEXT = float(os.environ.get('RAG_FTS_W_TEXT', '1.0'))
+FTS_W_TITLE = float(os.environ.get('RAG_FTS_W_TITLE', '4.0'))
+FTS_W_COMP = float(os.environ.get('RAG_FTS_W_COMP', '12.0'))
+
 SCORE_W_RRF = 0.30          # fused reciprocal-rank weight
 SCORE_W_SIM = 0.45          # dense cosine similarity weight
 SCORE_W_BM25 = 0.20         # normalized BM25 (keyword strength) weight
@@ -270,6 +471,28 @@ CENTRALITY_C = 8.0          # degree/(degree+C) soft-normalisation constant
 # Adaptive retrieval depth: an easy query (clear top winner + strong match)
 # returns fewer hits and expands fewer graphs; an ambiguous one widens. Cuts the
 # average request's work while spending more only where it helps accuracy.
+# Per-car site search over-fetches, because it filters out hits whose occurrence
+# belongs to another car and that filter runs after ranking. 4x covers the
+# measured ~70% drop rate with headroom; the cap keeps a limit=50 request from
+# asking for more candidates than the scoped pool (SCOPED_VEC_K) even holds.
+# Depth of the car-scoped keyword pass (retrieve.assist(scope_fts=True)).
+# 30 already yields a median of 30 in-car candidates where the global pool of 120
+# yields 13, so deeper buys little.
+SCOPE_FTS_K = int(os.environ.get('RAG_SCOPE_FTS_K', '30'))
+# How deep the single-table FTS scan goes before intersecting with the car's own
+# blobs. Deep enough that a car holding ~2% of the corpus still yields SCOPE_FTS_K.
+SCOPE_FTS_SCAN = int(os.environ.get('RAG_SCOPE_FTS_SCAN', '4000'))
+# Per-car blob-id sets cached in memory (~7k ints each).
+CAR_BLOBS_CACHE = int(os.environ.get('RAG_CAR_BLOBS_CACHE', '8'))
+# Site search's own corpus-boundary floor, applied per hit and only when the
+# retriever already flagged the query as ungrounded. Measured: real queries land
+# at 0.63-0.67 vector similarity, absent/gibberish ones at 0.45-0.52. Swept
+# against both costs: 0.55 leaves 1 of 81 real queries empty and suppresses the
+# same junk as 0.58, which leaves 3 empty -- so 0.55 strictly dominates it.
+SEARCH_SIM_FLOOR = float(os.environ.get('RAG_SEARCH_SIM_FLOOR', '0.55'))
+SEARCH_OVERFETCH = int(os.environ.get('RAG_SEARCH_OVERFETCH', '4'))
+SEARCH_MAX_DEPTH = int(os.environ.get('RAG_SEARCH_MAX_DEPTH', '120'))
+
 FINAL_K_MIN = 4             # hits returned for an easy/clear query
 FINAL_K_MAX = FINAL_K       # hits returned for an ambiguous query
 MARGIN_EASY = 0.20          # top1-top2 fused-score gap above which a query is "easy"
@@ -285,7 +508,29 @@ CONF_LOW_SIM = 0.45
 # so the phraser refuses instead of inventing an answer. Measured separation on
 # this corpus: real queries score >=0.64, nonsense <=0.49 (eval_rag surfaces it).
 # Code queries clear it via BM25 (eff_sim = max(sim, bm25)).
-GROUND_SIM_FLOOR = float(os.environ.get('RAG_GROUND_SIM_FLOOR', '0.55'))
+#
+# Raised 0.55 -> 0.60 on 2026-09-05 (Phase 3 Task 4). Non-automotive and nonsense
+# queries were already refused 100% of the time; the gap was automotive questions
+# about components genuinely absent from this corpus (diesel glow plugs, AdBlue),
+# which scored 0.623 mean similarity against 0.676 for real queries — close enough
+# that only 8.3% were refused. Measured trade at each threshold:
+#
+#     floor   absent caught   FA false-refusal   EN false-refusal
+#     0.55           8.3%               0.0%               1.2%
+#     0.60          33.3%               1.2%               1.2%
+#     0.62          50.0%               6.2%               5.0%
+#     0.64          75.0%              15.0%               6.2%
+#
+# 0.60 quadruples boundary refusal for ~1% false refusal; past it the cost rises
+# far faster than the benefit. Note the absent set is only n=12, so "33.3%" is
+# 4 queries and its confidence interval is wide — the gold set needs expanding
+# before pushing this further.
+#
+# What was tried and rejected: checking whether the query's component vocabulary
+# occurs in the index at all. Absent components are described with words that are
+# all present ("diesel", "injector", "plug"), so corpus-vocabulary coverage scored
+# 1.000 for absent and in-corpus queries alike — no separation whatsoever.
+GROUND_SIM_FLOOR = float(os.environ.get('RAG_GROUND_SIM_FLOOR', '0.60'))
 
 # ---------------------------------------------------------------------------
 # Human-in-the-loop closed loop (all signals live in the feedback.db sidecar)
@@ -384,3 +629,6 @@ FEEDBACK_DB = RAG_DIR / 'feedback.db'
 RERANK = os.environ.get('RAG_RERANK', '0') == '1'
 RERANK_MODEL = os.environ.get('RAG_RERANK_MODEL', 'BAAI/bge-reranker-v2-m3')
 RERANK_CANDIDATES = 20
+
+# Car-scoped dense pass depth (retrieve.assist, pinned car only).
+CAR_VEC_K = int(os.environ.get('RAG_CAR_VEC_K', '40'))

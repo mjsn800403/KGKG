@@ -1,0 +1,32 @@
+name: backend-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rag-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: KG_backend
+    env:
+      # Boot settings without a real prod key; tests need no secret.
+      DJANGO_DEBUG: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install lean test deps
+        # The RAG retrieve/service/feedback tests stub the embedding encoder, so
+        # we skip the heavy torch / sentence-transformers install and only pull
+        # what the import chain and sqlite-vec index actually need.
+        run: |
+          python -m pip install --upgrade pip
+          pip install "Django>=4.2,<6" "django-cors-headers>=4.0" \
+                      "beautifulsoup4>=4.12" "html5lib>=1.1" \
+                      "numpy>=1.26" "sqlite-vec>=0.1.6"
+      - name: Run RAG integration + unit tests
+        run: python manage.py test api.rag -v 2

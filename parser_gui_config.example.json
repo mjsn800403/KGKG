@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy to parser_gui_config.json and set for THIS machine. The GUI rewrites that file itself on exit; it is per-machine and deliberately not tracked in git.",
+  "backend": "/path/to/KG_backend",
+  "zips": "/path/to/Cars_database",
+  "workers": "5"
+}

@@ -1,0 +1,1580 @@
+"""Portal auth + admin panel API.
+
+Two audiences:
+
+* Portal users (company seats): token login, "me" (their granted cars/docs),
+  activity self-logging. Issued and managed by the admin.
+* The platform admin: gated by KG_ADMIN_TOKEN (same shared-secret gate the
+  review queue uses; in DEBUG with no token configured it stays open so local
+  dev works without ceremony). Sees everything: purchase requests, companies,
+  users, per-user grants, the full car catalog, and the usage/activity report.
+
+Deliberately dependency-free (no DRF) to match the rest of the project.
+"""
+import json
+import secrets
+import string
+import logging
+import os
+import urllib.request
+import urllib.parse
+import time
+import re as _re
+
+from django.db import IntegrityError, transaction
+from django.http import JsonResponse
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+
+from django.db.models import Count, Q
+
+from .models import (
+    ActivityLog, AdminAuthToken, AuthToken, Car, Company, CompanyCarAccess,
+    CompanyRole, OtpChallenge, OtpEvent, PlatformAdmin, PortalUser,
+    PurchaseRequest, UserCarAccess,
+)
+from .access import (
+    CONTENT_CATEGORIES, DOC_TYPE_CHOICES, PACKAGE_CHOICES, ROLE_CHOICES, ROLE_LEVEL,
+    VALID_CATEGORIES, VALID_DOCS, VALID_ROLES,
+    apply_user_access, car_db_ready, category_label, company_role_options,
+    display_role_label, ensure_company_role,
+    normalize_role, resolve_category, role_label,
+    user_ai_eligible, user_manage_scope,
+    user_package_set, user_rank,
+)
+from .admin_auth import require_admin_token
+from .ratelimit import rate_limited
+from . import events
+
+
+# A valid-format hash to check bad/absent logins against, so the wrong-password
+# and no-such-user paths take the same (constant) time — no user enumeration.
+# Computed once; the password it encodes is never used to authenticate anything.
+from django.contrib.auth.hashers import make_password as _make_password
+_DUMMY_PASSWORD_HASH = _make_password('kg-login-timing-equalizer')
+
+
+# ---------------------------------------------------------------------------
+# SMS OTP session store (in-process, TTL-based)
+# ---------------------------------------------------------------------------
+_logger_sms = logging.getLogger("kgkg.sms")
+
+
+def _otp_debug_expose() -> bool:
+    """TEMPORARY debug switch. When env OTP_DEBUG_EXPOSE is truthy, the login
+    and resend endpoints return the freshly generated OTP code in the JSON
+    response (field ``debug_code``) so an admin can log into any account for
+    testing without needing the SMS. OFF by default; remove the env line and
+    restart kgkg-backend to revert. Never leave this on in normal operation."""
+    return os.environ.get('OTP_DEBUG_EXPOSE', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _otp_phone_hint(phone: str) -> str:
+    if len(phone) > 6:
+        return phone[:3] + '*' * (len(phone) - 5) + phone[-2:]
+    return phone
+
+
+# Persian bodies are only accepted with the trailing "لغو11" opt-out line;
+# without it the operator returns Value 11. ASCII bodies do not need it.
+_OTP_SMS_TEXT = "خدمات گستر\nکد ورود : {0}\nلغو11"
+_OTP_SMS_ASCII = "Khadamat Gostar\nlogin code : {0}"
+
+
+def _post_sms(phone: str, text: str):
+    """Send one SMS. Returns (sent, value), value being Melipayamak's status.
+
+    RetStatus/StrRetStatus only say the request parsed; the real outcome is in
+    Value -- a long RecID when sent, otherwise a documented failure code
+    ("11" unicode rejected, "14" contains a link, "2" no credit, "5" bad line).
+    """
+    sms_user = os.environ.get("SMS_USERNAME", "")
+    sms_key = os.environ.get("SMS_API_KEY", "")
+    sms_from = os.environ.get("SMS_FROM", "")
+    if not sms_user or not sms_key or not sms_from:
+        _logger_sms.warning("SMS not configured (SMS_USERNAME/SMS_API_KEY/SMS_FROM missing)")
+        return False, ""
+    payload = json.dumps({
+        "username": sms_user,
+        "password": sms_key,
+        "to": phone,
+        "from": sms_from,
+        "text": text,
+        "isFlash": False,
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(
+            "https://rest.payamak-panel.com/api/SendSMS/SendSMS",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        _logger_sms.warning("SendSMS transport error: %s", exc)
+        return False, ""
+    value = str(result.get("Value", "")).strip().split(",")[0]
+    try:
+        if int(value) > 1000:
+            return True, value
+    except ValueError:
+        pass
+    return False, value
+
+
+def _send_sms_otp(phone: str, code: int) -> bool:
+    """Send the login code, preferring the Persian body.
+
+    """
+    sent, value = _post_sms(phone, _OTP_SMS_TEXT.format(code))
+    if sent:
+        return True
+    _logger_sms.warning("SendSMS failed for %s (Value=%s)", phone, value)
+    return False
+
+
+def _body(request):
+    """Parsed JSON request body, always a dict.
+
+    A body that is valid JSON but not an object (a bare string, list, or
+    number) would otherwise flow into ``.get()`` and raise AttributeError →
+    HTTP 500. Anything that isn't a JSON object collapses to ``{}`` so callers
+    can treat missing fields uniformly.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _bearer(request):
+    auth = request.META.get('HTTP_AUTHORIZATION', '')
+    if auth.lower().startswith('bearer '):
+        return auth[7:].strip()
+    return ''
+
+
+def _portal_token(request):
+    """Session token from the Authorization header OR the ``kg_portal_token``
+    cookie. The cookie path is what lets Next.js server components (SSR) carry
+    the session when they fetch content — the browser sends the cookie to the
+    Next server, which forwards it here."""
+    key = _bearer(request)
+    if key:
+        return key
+    try:
+        return (request.COOKIES.get('kg_portal_token') or '').strip()
+    except Exception:
+        return ''
+
+
+# --- session cookie -------------------------------------------------------
+# The session token is delivered as an HttpOnly cookie so page JavaScript (and
+# therefore any XSS) cannot read it. `_portal_token` already accepts either the
+# cookie or an Authorization header, so this is additive: clients still sending
+# the bearer header keep working while the frontend migrates off localStorage.
+PORTAL_COOKIE = 'kg_portal_token'
+
+
+def _cookie_max_age():
+    """Match the cookie lifetime to the token's own idle TTL, so the cookie can
+    never outlive the credential it carries."""
+    idle, absolute = AuthToken._ttls()
+    return int(min(idle, absolute).total_seconds())
+
+
+def _set_portal_cookie(response, raw_token):
+    response.set_cookie(
+        PORTAL_COOKIE, raw_token,
+        max_age=_cookie_max_age(),
+        httponly=True,
+        secure=True,
+        samesite='Lax',
+        path='/',
+    )
+    return response
+
+
+def _clear_portal_cookie(response):
+    response.delete_cookie(PORTAL_COOKIE, path='/', samesite='Lax')
+    return response
+
+
+def _effective_expiry(user):
+    """The access-expiry that actually governs ``user``.
+
+    The company's access window is owned by its 0-level (root) org-graph seat:
+    the super-admin sets an expiry on the root occupant at approval time, and
+    every seat below inherits it. So the effective expiry for anyone in the
+    company is the ROOT occupant's ``access_expires_at``. A company whose graph
+    has no root occupant yet (or a user with no company graph) falls back to the
+    user's own stored value. One small indexed lookup; safe to call per request.
+    """
+    try:
+        graph = getattr(user.company, 'org_graph', None)
+        root = graph.root_node if graph else None
+        root_user = root.occupant if (root and root.occupant_id) else None
+    except Exception:
+        root_user = None
+    if root_user is not None:
+        return root_user.access_expires_at
+    return user.access_expires_at
+
+
+def _is_expired(user):
+    exp = _effective_expiry(user)
+    return bool(exp and exp <= timezone.now())
+
+
+def _tehran_day_start():
+    """Midnight today in Tehran as an aware datetime (the site's users' day)."""
+    from zoneinfo import ZoneInfo
+    now = timezone.now().astimezone(ZoneInfo('Asia/Tehran'))
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _denied_reason(request):
+    """Why a presented token no longer authenticates: 'locked', 'expired',
+    'inactive' or None (no/unknown/expired session). Only for the message."""
+    key = _portal_token(request)
+    if not key:
+        return None
+    token = AuthToken.resolve(key, select_related=('user', 'user__company'))
+    if not token:
+        return None
+    u = token.user
+    if u.locked:
+        return 'locked'
+    if not u.active or not u.company.active:
+        return 'inactive'
+    if _is_expired(u):
+        return 'expired'
+    return None
+
+
+DENIED_MESSAGES = {
+    'expired': 'مهلت اشتراک شرکت شما به پایان رسیده است. برای تمدید با مدیر شرکت یا پشتیبانی تماس بگیرید.',
+    'locked': 'حساب کاربری شما قفل شده است. با مدیر شرکت یا پشتیبانی تماس بگیرید.',
+    'inactive': 'حساب کاربری یا شرکت شما غیرفعال است. با پشتیبانی تماس بگیرید.',
+}
+
+
+def portal_user(request):
+    """Resolve the PortalUser from a Bearer token or session cookie, or None.
+
+    ``AuthToken.resolve`` looks the token up by sha256 and refuses anything past
+    its expiry; a live hit then slides the idle window forward (rate-limited
+    internally to one write per 5 minutes, since this runs on every request).
+    """
+    key = _portal_token(request)
+    if not key:
+        return None
+    token = AuthToken.resolve(key, select_related=('user', 'user__company'))
+    if not token or not token.user.active or not token.user.company.active:
+        return None
+    u = token.user
+    if u.locked:
+        return None
+    if _is_expired(u):
+        return None
+    token.touch()
+    return u
+
+
+def _car_dict(car):
+    return {'id': car.id, 'brand': car.brand_name, 'model': car.car_name, 'year': car.year}
+
+
+def _company_root_user(c):
+    """The company's 0-level (root) seat occupant, which owns the access window
+    (every user inherits it — see _effective_expiry). None if not seated yet."""
+    try:
+        g = getattr(c, 'org_graph', None)
+        rn = g.root_node if g else None
+        return rn.occupant if (rn and rn.occupant_id) else None
+    except Exception:
+        return None
+
+
+def _user_can_view_team(u):
+    """Lazy wrapper around orggraph.user_can_view_team (avoids an import cycle:
+    orggraph imports models which imports this module). Fails open to False so a
+    graph hiccup never breaks /me."""
+    try:
+        from .orggraph import user_can_view_team
+        return bool(user_can_view_team(u))
+    except Exception:
+        return False
+
+
+def _user_dict(u, with_access=False):
+    dept = u.company.department_label if hasattr(u, 'company') else ''
+    reports_to = None
+    if u.reports_to_id:
+        reports_to = {'id': u.reports_to_id,
+                      'name': (u.reports_to.display_name or u.reports_to.username)
+                      if u.reports_to else None}
+    d = {
+        'id': u.id, 'username': u.username, 'display_name': u.display_name,
+        'email': u.email, 'phone': u.phone, 'personnel_code': u.personnel_code,
+        'role': normalize_role(u.role),
+        'role_label': display_role_label(u, dept),
+        'role_level': user_rank(u),
+        'manage_scope': user_manage_scope(u),
+        'company_id': u.company_id, 'company': u.company.name,
+        'department_label': u.company.department_label,
+        'reports_to': reports_to,
+        'can_manage_team': u.can_manage_team,
+        # May open /team: everyone except a leaf on the org graph (see
+        # orggraph.user_can_view_team). Root and any node with children qualify.
+        'can_view_team': _user_can_view_team(u),
+        'can_view_analytics': u.can_view_analytics,
+        'ai_assistant_enabled': u.ai_assistant_enabled,
+        'browse_mode': getattr(u, 'browse_mode', 'modern'),
+        'ai_eligible': user_ai_eligible(u),
+        'packages': sorted(user_package_set(u)) if with_access else [],
+        'active': u.active, 'locked': u.locked,
+        # Lets the admin UI show the phone field only where it matters:
+        # a phone is required to log in only for org-graph root seats.
+        'otp_required': _otp_required(u),
+        'invite_status': u.invite_status, 'password_set': u.password_set,
+        # Effective expiry: the company's 0-level (root) seat owns the access
+        # window; every seat below inherits it. Only the root occupant's own
+        # value is editable (``is_org_root``); for everyone else this is
+        # read-only, inherited info.
+        'access_expires_at': (_effective_expiry(u).isoformat()
+                              if _effective_expiry(u) else None),
+        'is_org_root': bool(getattr(u, 'seat', None) and u.seat.is_root),
+        'created_at': u.created_at.isoformat(),
+        'last_login_at': u.last_login_at.isoformat() if u.last_login_at else None,
+    }
+    if with_access:
+        # Show the user's full set of granted vehicles (entitlements). Whether a
+        # car's content DB is on disk yet is a serve-time concern (car_view 404s),
+        # not a reason to hide the grant from the manager/admin who set it.
+        from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
+        d['accesses'] = [
+            {'car': _car_dict(a.car), 'documents': a.documents, 'admin_granted': a.admin_granted,
+             'ready': car_db_ready(a.car), 'parts_ready': parts_db_ready(a.car)}
+            for a in u.car_accesses.select_related('car')
+        ]
+    return d
+
+
+def _company_dict(c, deep=False):
+    d = {
+        'id': c.id, 'name': c.name, 'department_label': c.department_label,
+        'reg_no': c.reg_no,
+        'landline': c.landline, 'mobile': c.mobile,
+        'employees_count': c.employees_count, 'seats_count': c.seats_count,
+        'is_demo': c.is_demo, 'ai_assistant_enabled': c.ai_assistant_enabled,
+        'active': c.active, 'note': c.note, 'created_at': c.created_at.isoformat(),
+        'users_count': c.users.count(),
+    }
+    # Company access window = the 0-level (root) seat's expiry, inherited by all
+    # users. Surfaced here so the companies panel can show/edit the demo window.
+    _root = _company_root_user(c)
+    d['access_expires_at'] = (_root.access_expires_at.isoformat()
+                              if (_root and _root.access_expires_at) else None)
+    d['has_root'] = bool(_root)
+    if deep:
+        d['accesses'] = [
+            {'car': _car_dict(a.car), 'documents': a.documents}
+            for a in c.car_accesses.select_related('car')
+        ]
+        d['users'] = [_user_dict(u, with_access=True) for u in c.users.all()]
+    return d
+
+
+# ---------------------------------------------------------------------------
+# Portal user auth
+# ---------------------------------------------------------------------------
+
+def _client_ip(request):
+    # Behind Cloudflare+nginx the real client is in CF-Connecting-IP; fall back
+    # to the first X-Forwarded-For hop, then REMOTE_ADDR.
+    ip = request.META.get("HTTP_CF_CONNECTING_IP")
+    if ip:
+        return ip.strip()
+    xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
+
+
+def _verify_turnstile(request, token, expected_action="login"):
+    """Canonical Cloudflare Turnstile server-side verification. Fails closed."""
+    secret = os.environ.get("TURNSTILE_SECRET", "")
+    if not secret:
+        from django.conf import settings
+        return bool(getattr(settings, "DEBUG", False))
+    if not isinstance(token, str) or not token or len(token) > 2048:
+        return False
+    hostnames = {h.strip() for h in os.environ.get("TURNSTILE_HOSTNAMES", "").split(",") if h.strip()}
+    data = urllib.parse.urlencode({
+        "secret": secret,
+        "response": token,
+        "remoteip": _client_ip(request),
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+    except Exception:
+        return False
+    _tlog = logging.getLogger("kgkg.turnstile")
+    if not result.get("success"):
+        _tlog.warning("turnstile FAIL success=false codes=%s hostname=%s action=%s", result.get("error-codes"), result.get("hostname"), result.get("action"))
+        return False
+    if result.get("action") != expected_action:
+        _tlog.warning("turnstile FAIL action mismatch got=%s want=%s", result.get("action"), expected_action)
+        return False
+    if hostnames and result.get("hostname") not in hostnames:
+        _tlog.warning("turnstile FAIL hostname mismatch got=%s allow=%s", result.get("hostname"), hostnames)
+        return False
+    return True
+
+
+def _otp_required(user):
+    """Every account logs in with the SMS second factor, so every account needs
+    a phone on file. The admin who owns a seat is the one who sets it: the root
+    admin fills in the admins below them, and each admin fills in their own
+    seats. Kept as a function so the login gate and the admin UI can never
+    disagree about who needs a number."""
+    return True
+
+
+def _issue_session(user):
+    """Mint the portal session for an authenticated user (shared by the direct
+    login path and the post-OTP path)."""
+    user.last_login_at = timezone.now()
+    user.save(update_fields=['last_login_at'])
+    token = AuthToken.issue(user)
+    ActivityLog.objects.create(user=user, action='login', detail='ورود به سامانه')
+    try:
+        events.emit_company('activity', user.company_id, {
+            'user_id': user.id, 'user_name': user.display_name or user.username,
+            'action': 'login', 'category': '', 'car': None,
+            'detail': 'ورود به سامانه'}, user_id=user.id)
+    except Exception:
+        pass
+    resp = JsonResponse({'token': token.key, 'user': _user_dict(user, with_access=True)})
+    return _set_portal_cookie(resp, token.key)
+
+
+@csrf_exempt
+@rate_limited('login', 15, 60)
+def login_view(request):
+    """POST /api/auth/login {username, password} -> {token, user}
+
+    ``username`` may be a username OR an email (invited employees log in with
+    their email). Invited-but-not-accepted accounts are rejected until they
+    set a password via the invite link.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    username = (b.get('username') or '').strip()
+    password = b.get('password') or ''
+    if not _verify_turnstile(request, b.get("turnstile_token") or "", "login"):
+        return JsonResponse({"error": "تأیید امنیتی ناموفق بود. دوباره تلاش کنید."}, status=403)
+    user = (PortalUser.objects
+            .filter(Q(username__iexact=username) | Q(email__iexact=username))
+            .select_related('company').first())
+    if not user or not user.password_set:
+        # Equalise timing with the wrong-password path so a missing/invited
+        # account isn't distinguishable from a bad password (no user enumeration).
+        from django.contrib.auth.hashers import check_password as _cp
+        _cp(password, _DUMMY_PASSWORD_HASH)
+        return JsonResponse({'error': 'نام کاربری یا رمز عبور اشتباه است.'}, status=401)
+    if not user.check_password(password):
+        return JsonResponse({'error': 'نام کاربری یا رمز عبور اشتباه است.'}, status=401)
+    if not user.active or not user.company.active:
+        return JsonResponse({'error': 'این حساب غیرفعال شده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    if user.locked:
+        return JsonResponse({'error': 'این حساب قفل شده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    if _is_expired(user):
+        return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
+    phone = (user.phone or '').strip()
+    if not phone:
+        return JsonResponse({'error': 'شماره موبایل برای این حساب ثبت نشده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    # Per-user SMS throttle: a live challenge sent < RESEND_INTERVAL ago blocks a
+    # fresh send, so re-submitting the login form cannot spam a user with codes.
+    if OtpEvent.sends_exhausted(user) or OtpEvent.fails_exhausted(user):
+        return JsonResponse({'error': 'تعداد تلاش‌های ورود برای این حساب بیش از حد مجاز است. لطفاً ۲۴ ساعت بعد دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.'}, status=429)
+    _wait = OtpChallenge.recent_send_wait(user)
+    if _wait:
+        resp = JsonResponse({'error': f'کد تأیید به‌تازگی ارسال شده است. لطفاً {_wait} ثانیه صبر کنید.'}, status=429)
+        resp['Retry-After'] = str(_wait)
+        return resp
+    code = secrets.randbelow(900000) + 100000
+    if _otp_debug_expose():
+        # Debug switch on: skip the real SMS entirely (no send, no credit).
+        _logger_sms.warning("OTP_DEBUG_EXPOSE on: SMS skipped for %s", user.username)
+    else:
+        sent = _send_sms_otp(phone, code)
+        if not sent:
+            from django.conf import settings as _s
+            if not getattr(_s, 'DEBUG', False):
+                return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود. لطفاً دوباره تلاش کنید.'}, status=503)
+            _logger_sms.warning("DEBUG OTP for %s: %s", user.username, code)
+    OtpEvent.record(user, OtpEvent.SEND)
+    _challenge, otp_session = OtpChallenge.issue(user, phone, code)
+    payload = {'otp_session': otp_session, 'phone_hint': _otp_phone_hint(phone)}
+    if _otp_debug_expose():
+        _logger_sms.warning("OTP_DEBUG_EXPOSE on: returning code for %s", user.username)
+        payload['debug_code'] = f'{code:06d}'
+    return JsonResponse(payload)
+
+
+@csrf_exempt
+def logout_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    key = _portal_token(request)
+    if key:
+        AuthToken.objects.filter(key_hash=AuthToken._hash(key)).delete()
+    return _clear_portal_cookie(JsonResponse({'ok': True}))
+
+
+@csrf_exempt
+@rate_limited('verify_otp', 10, 60)
+def verify_otp_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    session_id = (b.get('otp_session') or '').strip()
+    code = (b.get('code') or '').strip()
+    if not session_id or not code:
+        return JsonResponse({'error': 'اطلاعات ناقص است.'}, status=400)
+    challenge = OtpChallenge.resolve(session_id)
+    if challenge is None or challenge.purpose != 'login':
+        return JsonResponse({'error': 'کد وارد شده اشتباه یا منقضی شده است.'}, status=401)
+    if OtpEvent.fails_exhausted(challenge.user):
+        challenge.delete()
+        return JsonResponse({'error': 'تعداد تلاش‌های ورود برای این حساب بیش از حد مجاز است. لطفاً ۲۴ ساعت بعد دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.'}, status=429)
+    if not challenge.check_code(code):
+        OtpEvent.record(challenge.user, OtpEvent.FAIL)
+        return JsonResponse({'error': 'کد وارد شده اشتباه یا منقضی شده است.'}, status=401)
+    user = challenge.user
+    if not user.active or not user.company.active or user.locked:
+        return JsonResponse({'error': 'این حساب غیرفعال شده است.'}, status=403)
+    if _is_expired(user):
+        return JsonResponse({'error': 'دسترسی این حساب منقضی شده است.'}, status=403)
+    return _issue_session(user)
+
+
+_TOO_MANY = ('تعداد تلاش‌ها برای این حساب بیش از حد مجاز است. لطفاً ۲۴ ساعت بعد '
+             'دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.')
+
+
+_phone_key = PortalUser.phone_key
+
+
+def _recover_lookup(identifier):
+    """Username, email or mobile number -> the one matching account, or None."""
+    user = (PortalUser.objects
+            .filter(Q(username__iexact=identifier) | Q(email__iexact=identifier))
+            .select_related('company').first())
+    if user:
+        return user
+    key = _phone_key(identifier)
+    if not key:
+        return None
+    hits = [u for u in PortalUser.objects.exclude(phone='').select_related('company')
+            if _phone_key(u.phone) == key]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _account_open(user):
+    return (user.active and user.company.active and not user.locked
+            and not _is_expired(user))
+
+
+@csrf_exempt
+@rate_limited('recover_start', 5, 60)
+def recover_start_view(request):
+    """POST /api/auth/recover/start {identifier, turnstile_token} -> {otp_session}
+
+    Sends a recovery code to the mobile number on file. The reply is the same
+    whether or not an account matched (a throwaway session is returned), so the
+    form cannot be used to find out which usernames or numbers exist.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    identifier = (b.get('identifier') or '').strip()
+    if not identifier:
+        return JsonResponse({'error': 'نام کاربری، ایمیل یا شماره موبایل را وارد کنید.'}, status=400)
+    if not _verify_turnstile(request, b.get('turnstile_token') or '', 'login'):
+        return JsonResponse({'error': 'تأیید امنیتی ناموفق بود. دوباره تلاش کنید.'}, status=403)
+    user = _recover_lookup(identifier)
+    phone = (user.phone or '').strip() if user else ''
+    if not user or not user.password_set or not phone or not _account_open(user):
+        return JsonResponse({'otp_session': secrets.token_urlsafe(32)})
+    if OtpEvent.sends_exhausted(user) or OtpEvent.fails_exhausted(user):
+        return JsonResponse({'error': _TOO_MANY}, status=429)
+    wait = OtpChallenge.recent_send_wait(user)
+    if wait:
+        resp = JsonResponse({'error': f'کد تأیید به‌تازگی ارسال شده است. لطفاً {wait} ثانیه صبر کنید.'}, status=429)
+        resp['Retry-After'] = str(wait)
+        return resp
+    code = secrets.randbelow(900000) + 100000
+    if not _send_sms_otp(phone, code):
+        from django.conf import settings as _s
+        if not getattr(_s, 'DEBUG', False):
+            return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود. لطفاً دوباره تلاش کنید.'}, status=503)
+        _logger_sms.warning("DEBUG recovery OTP for %s: %s", user.username, code)
+    OtpEvent.record(user, OtpEvent.SEND)
+    _challenge, otp_session = OtpChallenge.issue(user, phone, code, purpose='recover')
+    return JsonResponse({'otp_session': otp_session})
+
+
+@csrf_exempt
+@rate_limited('recover_reset', 10, 60)
+def recover_reset_view(request):
+    """POST /api/auth/recover/reset {otp_session, code, new_password} -> {token, user}
+
+    A correct code sets the new password, signs the account out everywhere
+    else and logs this browser in.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    session_id = (b.get('otp_session') or '').strip()
+    code = (b.get('code') or '').strip()
+    new_password = b.get('new_password') or ''
+    if not session_id or not code:
+        return JsonResponse({'error': 'اطلاعات ناقص است.'}, status=400)
+    if len(new_password) < 8:
+        return JsonResponse({'error': 'رمز عبور باید حداقل ۸ کاراکتر باشد.'}, status=400)
+    challenge = OtpChallenge.resolve(session_id)
+    if challenge is None or challenge.purpose != 'recover':
+        return JsonResponse({'error': 'کد وارد شده اشتباه یا منقضی شده است.'}, status=401)
+    user = challenge.user
+    if OtpEvent.fails_exhausted(user):
+        challenge.delete()
+        return JsonResponse({'error': _TOO_MANY}, status=429)
+    if not challenge.check_code(code):
+        OtpEvent.record(user, OtpEvent.FAIL)
+        return JsonResponse({'error': 'کد وارد شده اشتباه یا منقضی شده است.'}, status=401)
+    if not _account_open(user):
+        return JsonResponse({'error': 'این حساب غیرفعال شده است. با پشتیبانی تماس بگیرید.'}, status=403)
+    user.set_password(new_password)
+    user.save(update_fields=['password_hash', 'password_set'])
+    AuthToken.objects.filter(user=user).delete()
+    ActivityLog.objects.create(user=user, action='password_reset',
+                               detail='بازیابی رمز عبور با پیامک')
+    return _issue_session(user)
+
+
+@csrf_exempt
+@rate_limited('resend_otp', 3, 60)
+def resend_otp_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    session_id = (b.get('otp_session') or '').strip()
+    challenge = OtpChallenge.resolve(session_id)
+    if challenge is None:
+        return JsonResponse({'error': 'جلسه منقضی شده است. دوباره وارد شوید.'}, status=400)
+    if (OtpEvent.sends_exhausted(challenge.user)
+            or OtpEvent.fails_exhausted(challenge.user)):
+        challenge.delete()
+        return JsonResponse({'error': 'تعداد تلاش‌های ورود برای این حساب بیش از حد مجاز است. لطفاً ۲۴ ساعت بعد دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.'}, status=429)
+    wait_secs = challenge.resend_wait()
+    if wait_secs:
+        return JsonResponse({'error': f'لطفاً {wait_secs} ثانیه صبر کنید.'}, status=429)
+    code = secrets.randbelow(900000) + 100000
+    OtpEvent.record(challenge.user, OtpEvent.SEND)
+    challenge.rotate(code)
+    if _otp_debug_expose():
+        # Debug switch on: skip the real SMS entirely (no send, no credit).
+        _logger_sms.warning("OTP_DEBUG_EXPOSE on: resend SMS skipped")
+        return JsonResponse({'ok': True, 'debug_code': f'{code:06d}'})
+    sent = _send_sms_otp(challenge.phone, code)
+    if not sent:
+        from django.conf import settings as _s
+        if not getattr(_s, 'DEBUG', False):
+            return JsonResponse({'error': 'ارسال کد تأیید ناموفق بود.'}, status=503)
+        _logger_sms.warning("DEBUG resend OTP: %s", code)
+    return JsonResponse({'ok': True})
+
+
+def me_view(request):
+    """GET /api/auth/me -> the logged-in user + their granted cars/docs.
+
+    Also performs the localStorage -> HttpOnly cookie upgrade: a client that
+    authenticated with a bearer header and has no session cookie yet gets one
+    issued here. That covers every session created before the cookie existed,
+    on the first page load, without asking the user to log in again.
+    """
+    user = portal_user(request)
+    if not user:
+        reason = _denied_reason(request)
+        if reason:
+            return JsonResponse({'error': 'unauthorized', 'reason': reason,
+                                 'detail': DENIED_MESSAGES[reason]}, status=401)
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    resp = JsonResponse({'user': _user_dict(user, with_access=True)})
+    try:
+        if _bearer(request) and not (request.COOKIES.get(PORTAL_COOKIE) or '').strip():
+            _set_portal_cookie(resp, _bearer(request))
+    except Exception:
+        pass          # upgrade is best-effort; never break /me over it
+    return resp
+
+
+@csrf_exempt
+def me_prefs_view(request):
+    """POST /api/auth/me/prefs/ {browse_mode} -> update the caller's own
+    preferences. Only self-editable, low-risk display prefs live here."""
+    user = portal_user(request)
+    if not user:
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    if 'browse_mode' in b:
+        mode = str(b.get('browse_mode') or '').strip()
+        if mode not in ('modern', 'classic'):
+            return JsonResponse({'error': 'invalid browse_mode'}, status=400)
+        user.browse_mode = mode
+        user.save(update_fields=['browse_mode'])
+    return JsonResponse({'user': _user_dict(user, with_access=True)})
+
+
+def fleet_view(request):
+    """GET /api/auth/fleet/ -> catalog rows for cars this user may open.
+
+    A car is servable when it has a manual DB, a parts DB, or both; the
+    additive has_manual/has_parts flags let the frontend route the tile
+    (parts-only vehicles have no manual tree to open). Old clients that only
+    read brand/name/year keep working unchanged.
+    """
+    from .access import user_car_documents
+    from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
+    user = portal_user(request)
+    if not user:
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    car_ids = list(user.car_accesses.values_list('car_id', flat=True))
+    if not car_ids:
+        return JsonResponse({'items': []})
+    items = []
+    for c in Car.objects.filter(id__in=car_ids).order_by('brand_name', 'car_name', 'year'):
+        has_manual = car_db_ready(c)
+        # Advertise Parts only when the seat actually holds that layer —
+        # parts_view enforces it, so a chip without the grant would be a
+        # dead end (403 on click).
+        has_parts = parts_db_ready(c) and 'parts' in (user_car_documents(user, c) or set())
+        if not (has_manual or has_parts):
+            continue
+        items.append({
+            'brand_name': c.brand_name,
+            'car_name': c.car_name,
+            'year': c.year,
+            'has_manual': has_manual,
+            'has_parts': has_parts,
+        })
+    return JsonResponse({'items': items})
+
+
+@csrf_exempt
+@rate_limited('activity', 120, 60)
+def activity_view(request):
+    """POST /api/activity/ {action, detail?, category?, car_id?, node_title?}
+
+    Usage signal for the admin report + analytics. ``category`` (if supplied) is
+    validated against the canonical taxonomy; ``segments`` may be sent instead
+    and the server resolves the category from them.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    user = portal_user(request)
+    if not user:
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    b = _body(request)
+    action = (str(b.get('action') or '')).strip()[:60]
+    detail = (str(b.get('detail') or '')).strip()[:400]
+    category = (str(b.get('category') or '')).strip()
+    if not category and b.get('segments'):
+        category = resolve_category(b.get('segments'))
+    if category and category not in VALID_CATEGORIES:
+        category = ''
+    car = None
+    if b.get('car_id'):
+        car = Car.objects.filter(id=b['car_id']).first()
+    elif b.get('brand') and b.get('model'):
+        # Content pages send brand/model names, not the catalog id; resolve so
+        # the activity (and the recommendations built from it) attach to a car.
+        cq = Car.objects.filter(brand_name__iexact=str(b['brand']),
+                                car_name__iexact=str(b['model']))
+        if b.get('year'):
+            try:
+                cq = cq.filter(year=int(b['year']))
+            except (TypeError, ValueError):
+                pass
+        car = cq.first()
+    node_title = (str(b.get('node_title') or '')).strip()[:300]
+    app_url = (str(b.get('app_url') or '')).strip()[:600]
+    if action:
+        log = ActivityLog.objects.create(
+            user=user, action=action, detail=detail,
+            category=category, car=car, node_title=node_title, app_url=app_url)
+        # Live company activity feed (managers/analytics viewers) + the user's
+        # own stream (drives "continue where you left off" and recommendations).
+        try:
+            from . import events
+            payload = {
+                'activity_id': log.id, 'user_id': user.id,
+                'user_name': user.display_name or user.username,
+                'action': action, 'category': category,
+                'car': ({'id': car.id, 'label': f'{car.brand_name} {car.car_name}'}
+                        if car else None),
+                'node_title': node_title, 'detail': detail,
+            }
+            events.emit_company('activity', user.company_id, payload, user_id=user.id)
+        except Exception:
+            pass
+    return JsonResponse({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# Platform admin login (default dev: admin / admin)
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@rate_limited('admin_login', 20, 60)
+def admin_login_view(request):
+    """POST /api/admin/login/ {username, password} -> {token, admin}"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    b = _body(request)
+    if not _verify_turnstile(request, b.get('turnstile_token') or '', 'login'):
+        return JsonResponse({'error': 'تأیید «ربات نیستم» ناموفق بود؛ دوباره تلاش کنید.'}, status=403)
+    username = (b.get('username') or '').strip()
+    password = b.get('password') or ''
+    admin = PlatformAdmin.objects.filter(username__iexact=username).first()
+    if not admin or not admin.check_password(password):
+        return JsonResponse({'error': 'نام کاربری یا رمز عبور ادمین اشتباه است.'}, status=401)
+    if not admin.active:
+        return JsonResponse({'error': 'حساب ادمین غیرفعال است.'}, status=403)
+    token = AdminAuthToken.issue(admin)
+    return JsonResponse({'token': token.key, 'admin': {'username': admin.username}})
+
+
+# ---------------------------------------------------------------------------
+# Admin: overview / purchase requests
+# ---------------------------------------------------------------------------
+
+@require_admin_token
+def admin_overview_view(request):
+    """GET /api/admin/overview/ — dashboard counters."""
+    return JsonResponse({
+        'requests_new': PurchaseRequest.objects.filter(status='new').count(),
+        'requests_total': PurchaseRequest.objects.count(),
+        'companies': Company.objects.count(),
+        'users': PortalUser.objects.count(),
+        'cars': Car.objects.count(),
+        'activities_today': ActivityLog.objects.filter(
+            created_at__gte=_tehran_day_start()).count(),
+    })
+
+
+@require_admin_token
+def admin_requests_view(request):
+    """GET /api/admin/requests/ -> all purchase/demo requests, newest first."""
+    items = [{
+        'id': r.id, 'brand': r.brand, 'model': r.model, 'year': r.year,
+        'documents': r.documents, 'company': r.company, 'landline': r.landline,
+        'mobile': r.mobile, 'reg_no': r.reg_no, 'note': r.note,
+        'employees_count': r.employees_count, 'seats_count': r.seats_count,
+        'seat_plan': r.seat_plan or [],
+        'wants_demo': r.wants_demo, 'wants_ai_assistant': r.wants_ai_assistant,
+        'status': r.status, 'handled': r.handled,
+        'created_at': r.created_at.isoformat(),
+    } for r in PurchaseRequest.objects.all()[:500]]
+    return JsonResponse({'items': items})
+
+
+@csrf_exempt
+@require_admin_token
+def admin_request_status_view(request, req_id):
+    """POST /api/admin/requests/<id>/status/ {status}"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    status = (_body(request).get('status') or '').strip()
+    if status not in dict(PurchaseRequest.STATUS_CHOICES):
+        return JsonResponse({'error': 'invalid status'}, status=400)
+    updated = PurchaseRequest.objects.filter(id=req_id).update(
+        status=status, handled=status in ('approved', 'rejected'))
+    if not updated:
+        return JsonResponse({'error': 'not found'}, status=404)
+    return JsonResponse({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# Admin: catalog / companies / access
+# ---------------------------------------------------------------------------
+
+@require_admin_token
+def admin_packages_view(request):
+    """GET /api/admin/packages/ — subscription package catalog."""
+    return JsonResponse({'items': [{'id': p, 'label': l} for p, l in PACKAGE_CHOICES]})
+
+
+@require_admin_token
+def admin_cars_view(request):
+    """GET /api/admin/cars/ — the FULL catalog (admin sees everything).
+
+    Every row carries its health indicators (data completeness, missing or
+    empty sections, indexing state, outstanding processing) so the admin can
+    filter the fleet by quality without opening the data-quality report, and
+    so an access grant shows whether the car it grants is actually servable.
+    """
+    from .dataquality import latest_health_by_car
+    from .models import VehicleSpec
+
+    health, audited_at = latest_health_by_car()
+    spec_fields = {
+        car_id: len([k for k in (data or {}) if not str(k).startswith('@')])
+        for car_id, data in VehicleSpec.objects.values_list('car_id', 'data')
+    }
+
+    from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
+    items = []
+    for c in Car.objects.order_by('brand_name', 'car_name'):
+        row = _car_dict(c)
+        row['ready'] = car_db_ready(c)
+        row['has_parts'] = parts_db_ready(c)
+        row['health'] = health.get(c.id)
+        row['has_spec'] = c.id in spec_fields
+        row['spec_fields'] = spec_fields.get(c.id, 0)
+        items.append(row)
+    return JsonResponse({
+        'items': items,
+        'audited_at': audited_at.isoformat() if audited_at else None,
+    })
+
+
+def _create_root_account(c, b, is_new_company=False):
+    """Create company ``c``'s 0-level (root) account from admin_* fields and
+    seat it on the org-graph root. Returns (result, None) or (None, error
+    response). On a brand-new company a failure deletes the company again, so
+    a retry of the same form does not hit «name already exists»."""
+    def fail(msg):
+        if is_new_company:
+            c.delete()
+        return None, JsonResponse({'error': msg}, status=400)
+    admin_phone = (str(b.get('admin_phone') or '')).strip()[:40] or (c.mobile or '').strip()
+    if not admin_phone:
+        return fail('برای ساخت حساب سطح‌صفر، تلفن همراه شرکت را وارد کنید.')
+    admin_username = (str(b.get('admin_username') or '')).strip()[:100]
+    if not admin_username:
+        return fail('نام کاربری حساب سطح‌صفر را وارد کنید.')
+    if PortalUser.phone_taken(admin_phone):
+        return fail('این شماره موبایل قبلاً برای حساب دیگری ثبت شده است.')
+    expires_at = _parse_expiry(b.get('admin_access_expires_at'))
+    if expires_at is None and c.is_demo:
+        # Demo companies default to a 1-day access window (from creation);
+        # the super-admin can override by sending an explicit expiry.
+        from datetime import timedelta
+        expires_at = timezone.now() + timedelta(days=1)
+    password = (str(b.get('admin_password') or '')).strip() or _gen_password()
+    root_user = PortalUser(
+        company=c, username=admin_username, role='after_sales_manager',
+        display_name=((str(b.get('admin_display_name') or '')).strip() or c.name)[:150],
+        phone=admin_phone,
+        can_manage_team=True, can_view_analytics=True,
+        ai_assistant_enabled=bool(c.ai_assistant_enabled),
+        access_expires_at=expires_at, active=True,
+    )
+    root_user.set_password(password)
+    try:
+        with transaction.atomic():
+            root_user.save()
+    except IntegrityError:
+        return fail('این نام کاربری قبلاً استفاده شده است.')
+    # Seat the buyer on the company's root node (creates the graph).
+    from .orggraph import reassign_root
+    reassign_root(c, root_user)
+    from .orggraph import grant_root_company_scope
+    grant_root_company_scope(c)
+    events.emit('admin_changed', {'entity': 'user', 'id': root_user.id, 'action': 'create',
+                                  'company_id': c.id})
+    return {'username': root_user.username, 'password': password, 'user_id': root_user.id}, None
+
+
+@csrf_exempt
+@require_admin_token
+def admin_companies_view(request):
+    """GET (list) / POST (create) /api/admin/companies/"""
+    if request.method == 'POST':
+        b = _body(request)
+        name = (str(b.get('name') or '')).strip()[:200]
+        if not name:
+            return JsonResponse({'error': 'نام شرکت الزامی است.'}, status=400)
+        # Provisioning a paid request must seat the buyer as root (the root owns
+        # the company's access window). A bare company may get its root later.
+        if b.get('purchase_request_id') and not (str(b.get('admin_username') or '')).strip():
+            return JsonResponse({'error': 'نام کاربری حساب سطح‌صفر الزامی است.'}, status=400)
+        try:
+            with transaction.atomic():
+              c = Company.objects.create(
+                name=name,
+                department_label=(str(b.get('department_label') or 'خدمات پس از فروش')).strip()[:80],
+                reg_no=(str(b.get('reg_no') or '')).strip()[:60],
+                landline=(str(b.get('landline') or '')).strip()[:40],
+                mobile=(str(b.get('mobile') or '')).strip()[:40],
+                employees_count=b.get('employees_count') or None,
+                seats_count=b.get('seats_count') or None,
+                is_demo=bool(b.get('is_demo')),
+                ai_assistant_enabled=bool(b.get('ai_assistant_enabled')),
+                note=(str(b.get('note') or '')).strip()[:2000],
+            )
+        except IntegrityError:
+            return JsonResponse({'error': 'شرکتی با این نام قبلاً ثبت شده است.'}, status=400)
+        events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'create'})
+
+        # Optionally provision the buyer's 0-level (root) account in the same
+        # step — this is "approving the request": the company, its org graph and
+        # the top seat (the buyer, who logs in and builds their team) are born
+        # together. The expiry set here is the whole company's access window.
+        admin_username = (str(b.get('admin_username') or '')).strip()[:100]
+        admin_result = None
+        if admin_username:
+            admin_result, err = _create_root_account(c, b, is_new_company=True)
+            if err:
+                return err
+        req_id = b.get('purchase_request_id')
+        if req_id:
+            PurchaseRequest.objects.filter(id=req_id).update(status='approved', handled=True)
+            from .quota import REQUEST_PLAN
+            pr = PurchaseRequest.objects.filter(id=req_id).first()
+            if pr and REQUEST_PLAN.get(pr.year):
+                Company.objects.filter(id=c.id).update(plan=REQUEST_PLAN[pr.year])
+
+        return JsonResponse({'ok': True, 'company': _company_dict(c, deep=True),
+                             'admin': admin_result})
+    return JsonResponse({'items': [_company_dict(c) for c in Company.objects.all()]})
+
+
+@csrf_exempt
+@require_admin_token
+def admin_company_detail_view(request, company_id):
+    """GET / PATCH-via-POST /api/admin/companies/<id>/"""
+    c = Company.objects.filter(id=company_id).first()
+    if not c:
+        return JsonResponse({'error': 'not found'}, status=404)
+    if request.method == 'POST':
+        b = _body(request)
+        # Hard-delete the company. Cascades to its users, org graph and
+        # per-car grants (FK on_delete=CASCADE). Super-admin only, irreversible.
+        if b.get('delete'):
+            cid = c.id
+            c.delete()
+            events.emit('admin_changed', {'entity': 'company', 'id': cid, 'action': 'delete'})
+            return JsonResponse({'ok': True, 'deleted': True})
+        # Clamp to the same lengths the create path enforces — SQLite does not
+        # honour VARCHAR limits, so an unclamped update could store a huge blob.
+        _limits = {'name': 200, 'reg_no': 60, 'landline': 40, 'mobile': 40,
+                   'note': 2000, 'department_label': 80}
+        for f, lim in _limits.items():
+            if f in b:
+                setattr(c, f, (str(b[f] or '')).strip()[:lim])
+        for f in ('employees_count', 'seats_count'):
+            if f in b:
+                setattr(c, f, b[f] or None)
+        for f in ('is_demo', 'ai_assistant_enabled', 'active'):
+            if f in b:
+                setattr(c, f, bool(b[f]))
+        try:
+            c.save()
+        except IntegrityError:
+            return JsonResponse({'error': 'شرکتی با این نام قبلاً ثبت شده است.'}, status=400)
+        created = None
+        if _company_root_user(c) is None and b.get('admin_username'):
+            if 'access_expires_at' in b and not b.get('admin_access_expires_at'):
+                b = {**b, 'admin_access_expires_at': b.get('access_expires_at')}
+            created, err = _create_root_account(c, b)
+            if err:
+                return err
+        # The company access window (demo length) is stored on the root seat's
+        # occupant; every user inherits it. Editable here from the companies panel.
+        if 'access_expires_at' in b:
+            root = _company_root_user(c)
+            if root is None:
+                return JsonResponse(
+                    {'error': 'برای تنظیم پنجرهٔ دسترسی، ابتدا باید حساب سطح‌صفر (مدیر) شرکت ساخته شود.'},
+                    status=400)
+            root.access_expires_at = _parse_expiry(b.get('access_expires_at'))
+            root.save(update_fields=['access_expires_at'])
+        events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'update'})
+        if created:
+            return JsonResponse({'company': _company_dict(c, deep=True), 'admin': created})
+    return JsonResponse({'company': _company_dict(c, deep=True)})
+
+
+@csrf_exempt
+@require_admin_token
+def admin_company_access_view(request, company_id):
+    """POST /api/admin/companies/<id>/access/ {accesses: [{car_id, documents[]}]}
+
+    Replaces the company's purchased-car list. Per-user grants outside the new
+    company scope are pruned automatically (users can never exceed the company).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    c = Company.objects.filter(id=company_id).first()
+    if not c:
+        return JsonResponse({'error': 'not found'}, status=404)
+    accesses = _body(request).get('accesses') or []
+    if not isinstance(accesses, list):
+        return JsonResponse({'error': 'accesses must be a list'}, status=400)
+
+    keep_car_ids = set()
+    c.car_accesses.all().delete()
+    for a in accesses:
+        car = Car.objects.filter(id=a.get('car_id')).first()
+        if not car:
+            continue
+        docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
+        CompanyCarAccess.objects.create(company=c, car=car, documents=docs)
+        keep_car_ids.add(car.id)
+
+    # Prune user grants that fell outside the company's new scope.
+    UserCarAccess.objects.filter(user__company=c).exclude(car_id__in=keep_car_ids).delete()
+    from .orggraph import grant_root_company_scope
+    grant_root_company_scope(c)
+    events.emit('admin_changed', {'entity': 'company', 'id': c.id, 'action': 'access'})
+    return JsonResponse({'company': _company_dict(c, deep=True)})
+
+
+# ---------------------------------------------------------------------------
+# Admin: users + per-user grants
+# ---------------------------------------------------------------------------
+
+def _gen_password(n=10):
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(n))
+
+
+def _parse_expiry(value):
+    """Parse an ISO datetime string into an aware datetime, or None."""
+    if not value:
+        return None
+    try:
+        dt = timezone.datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+    except (ValueError, TypeError):
+        return None
+
+
+def _role_affected_users(company, value):
+    """Company users currently holding role ``value`` (for the safe-remove card)."""
+    return [
+        {'id': u.id, 'username': u.username,
+         'display_name': u.display_name or u.username,
+         'role_label': display_role_label(u, company.department_label)}
+        for u in PortalUser.objects.filter(company=company, role=value)
+                 .order_by('display_name', 'username')
+    ]
+
+
+@csrf_exempt
+@require_admin_token
+def admin_company_roles_view(request, company_id):
+    """GET  /api/admin/companies/<id>/roles/  -> {roles: [...]}
+    POST /api/admin/companies/<id>/roles/  {value} -> add a custom role.
+
+    The per-company ``نقش سازمانی`` picker: list options, or add a typed one.
+    """
+    company = Company.objects.filter(id=company_id).first()
+    if not company:
+        return JsonResponse({'error': 'شرکت یافت نشد.'}, status=404)
+    if request.method == 'POST':
+        b = _body(request)
+        value = (str(b.get('value') or '')).strip()[:80]
+        if not value:
+            return JsonResponse({'error': 'عنوان نقش را وارد کنید.'}, status=400)
+        # Seed built-ins first so a duplicate check sees them.
+        company_role_options(company)
+        _, created = CompanyRole.objects.get_or_create(
+            company=company, value=value,
+            defaults={'is_builtin': value in VALID_ROLES})
+        if not created:
+            return JsonResponse({'error': 'این نقش از قبل وجود دارد.',
+                                 'roles': company_role_options(company)}, status=409)
+        events.emit('admin_changed', {'entity': 'company', 'id': company.id,
+                                      'action': 'roles'})
+        return JsonResponse({'ok': True, 'roles': company_role_options(company)})
+    return JsonResponse({'roles': company_role_options(company)})
+
+
+@csrf_exempt
+@require_admin_token
+def admin_company_role_delete_view(request, company_id):
+    """POST /api/admin/companies/<id>/roles/delete/ {value, reassign_to?}.
+
+    Removing a role that no user holds is immediate. If users still hold it, the
+    call returns ``requires_reassign`` with the affected users instead of
+    deleting, so the admin can either cancel or pick a replacement role. Passing
+    ``reassign_to`` re-assigns those users first, then removes the label.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    company = Company.objects.filter(id=company_id).first()
+    if not company:
+        return JsonResponse({'error': 'شرکت یافت نشد.'}, status=404)
+    b = _body(request)
+    value = (str(b.get('value') or '')).strip()[:80]
+    if not value:
+        return JsonResponse({'error': 'نقش نامعتبر است.'}, status=400)
+    reassign_to = (str(b.get('reassign_to') or '')).strip()[:80]
+    affected = _role_affected_users(company, value)
+    if affected and not reassign_to:
+        # Don't strip anyone's position silently — hand the list back for the card.
+        return JsonResponse({'requires_reassign': True, 'value': value,
+                             'affected': affected,
+                             'roles': company_role_options(company)})
+    if affected:
+        if reassign_to == value:
+            return JsonResponse({'error': 'نقش جایگزین باید متفاوت باشد.'}, status=400)
+        ensure_company_role(company, reassign_to)
+        PortalUser.objects.filter(company=company, role=value).update(role=reassign_to)
+    CompanyRole.objects.filter(company=company, value=value).delete()
+    events.emit('admin_changed', {'entity': 'company', 'id': company.id,
+                                  'action': 'roles'})
+    return JsonResponse({'ok': True, 'reassigned': len(affected),
+                         'roles': company_role_options(company)})
+
+
+@csrf_exempt
+@require_admin_token
+def admin_users_view(request):
+    """GET (list, ?company_id=) / POST (create) /api/admin/users/
+
+    Creating returns the generated one-time password so the admin can hand it
+    to the company; only the hash is stored.
+    """
+    if request.method == 'POST':
+        b = _body(request)
+        company = Company.objects.filter(id=b.get('company_id')).first()
+        if not company:
+            return JsonResponse({'error': 'شرکت یافت نشد.'}, status=400)
+        # Users inherit the root's expiry; with no root they would never expire.
+        if not PortalUser.objects.filter(company=company, seat__is_root=True).exists():
+            return JsonResponse(
+                {'error': 'ابتدا حساب سطح‌صفر (مدیر ارشد) این شرکت را بسازید؛ کاربران انقضای خود را از آن می‌گیرند.'},
+                status=400)
+        # Seat cap: seats_count is the number of users the company paid for.
+        cap = company.seats_count
+        if cap and company.users.count() >= cap:
+            return JsonResponse(
+                {'error': f'ظرفیت کاربران این شرکت ({cap} نفر) تکمیل است. ابتدا تعداد صندلی شرکت را افزایش دهید.'},
+                status=400)
+        # Custom (per-company) roles are allowed: accept any non-empty label and
+        # make sure it exists in the company's picker (auto-add on first use).
+        role = (normalize_role(b.get('role')) or '').strip()[:80]
+        if not role:
+            return JsonResponse({'error': 'نقش سازمانی الزامی است.'}, status=400)
+        ensure_company_role(company, role)
+        username = (str(b.get('username') or '')).strip()[:100]
+        if not username:
+            return JsonResponse({'error': 'نام کاربری الزامی است.'}, status=400)
+        password = (str(b.get('password') or '')).strip() or _gen_password()
+        # Users added here are ordinary seats below the company's 0-level root.
+        # Their access window is inherited from the root occupant's expiry
+        # (see _effective_expiry), so they never carry their own — a client-sent
+        # access_expires_at is deliberately ignored.
+        access_expires_at = None
+        reports_to = None
+        if b.get('reports_to_id'):
+            reports_to = PortalUser.objects.filter(
+                id=b['reports_to_id'], company=company).first()
+        u = PortalUser(
+            company=company, username=username, role=role,
+            display_name=(str(b.get('display_name') or '')).strip()[:150],
+            email=(str(b.get('email') or '')).strip()[:254] or None,
+            phone=(str(b.get('phone') or '')).strip()[:40],
+            personnel_code=(str(b.get('personnel_code') or '')).strip()[:60],
+            reports_to=reports_to,
+            can_manage_team=bool(b.get('can_manage_team')),
+            can_view_analytics=bool(b.get('can_view_analytics')),
+            ai_assistant_enabled=(bool(b.get('ai_assistant_enabled'))
+                                  if 'ai_assistant_enabled' in b
+                                  else bool(company.ai_assistant_enabled)),
+            locked=bool(b.get('locked')),
+            access_expires_at=access_expires_at,
+        )
+        if not u.phone:
+            # Login always sends an SMS code; a seat without a number is unusable.
+            return JsonResponse({'error': 'شماره موبایل کاربر الزامی است (کد ورود پیامکی به آن ارسال می‌شود).'}, status=400)
+        if PortalUser.phone_taken(u.phone):
+            return JsonResponse({'error': 'این شماره موبایل قبلاً برای حساب دیگری ثبت شده است.'}, status=400)
+        u.set_password(password)
+        try:
+            u.save()
+        except IntegrityError:
+            return JsonResponse({'error': 'این نام کاربری یا ایمیل قبلاً استفاده شده است.'}, status=400)
+        from .orggraph import seat_new_user
+        seat_new_user(company, u, u.ai_assistant_enabled)
+        u.refresh_from_db()
+        events.emit('admin_changed', {'entity': 'user', 'id': u.id, 'action': 'create', 'company_id': u.company_id})
+        return JsonResponse({'ok': True, 'user': _user_dict(u, with_access=True), 'password': password})
+
+    qs = PortalUser.objects.select_related('company')
+    company_id = request.GET.get('company_id')
+    if company_id:
+        qs = qs.filter(company_id=company_id)
+    # Each car is sent once in `cars` (with its readiness, checked once per car
+    # rather than once per user x car) and every access row is just its car id,
+    # plus documents (only when not every package) / admin_granted (only when
+    # set): with ~236 cars per user the full rows made this list >1 MB.
+    # utils/api.jsx rebuilds the full rows, filling documents from `all_docs`.
+    from .parts import parts_db_ready  # lazy: parts imports portal (cycle)
+    all_docs = [p for p, _ in DOC_TYPE_CHOICES]
+    items, cars = [], {}
+    for u in qs.prefetch_related('car_accesses__car'):
+        d = _user_dict(u)
+        rows = []
+        for a in u.car_accesses.all():
+            c = a.car
+            if c.id not in cars:
+                cars[c.id] = dict(_car_dict(c), ready=car_db_ready(c), parts_ready=parts_db_ready(c))
+            row = {'car_id': c.id}
+            if a.documents and set(a.documents) != set(all_docs):
+                row['documents'] = a.documents
+            if a.admin_granted:
+                row['admin_granted'] = True
+            rows.append(row)
+        d['accesses'] = rows
+        d['packages'] = sorted(user_package_set(u))
+        items.append(d)
+    return JsonResponse({'items': items, 'cars': cars, 'all_docs': all_docs})
+
+
+@csrf_exempt
+@require_admin_token
+def admin_user_detail_view(request, user_id):
+    """POST /api/admin/users/<id>/ — update, delete, reset password."""
+    u = PortalUser.objects.filter(id=user_id).select_related('company').first()
+    if not u:
+        return JsonResponse({'error': 'not found'}, status=404)
+    new_password = None
+    if request.method == 'POST':
+        b = _body(request)
+        if b.get('delete'):
+            uid, cid = u.id, u.company_id
+            u.tokens.all().delete()
+            u.delete()
+            events.emit('admin_changed', {'entity': 'user', 'id': uid, 'action': 'delete', 'company_id': cid})
+            return JsonResponse({'ok': True, 'deleted': True})
+        if 'active' in b:
+            u.active = bool(b['active'])
+            if not u.active:
+                u.tokens.all().delete()
+        if 'locked' in b:
+            u.locked = bool(b['locked'])
+            if u.locked:
+                u.tokens.all().delete()
+        if 'ai_assistant_enabled' in b:
+            u.ai_assistant_enabled = bool(b['ai_assistant_enabled'])
+        if 'can_manage_team' in b:
+            u.can_manage_team = bool(b['can_manage_team'])
+        if 'can_view_analytics' in b:
+            u.can_view_analytics = bool(b['can_view_analytics'])
+        if 'display_name' in b:
+            u.display_name = (str(b['display_name'] or '')).strip()[:150]
+        if 'email' in b:
+            u.email = (str(b['email'] or '')).strip()[:254] or None
+        if 'phone' in b:
+            u.phone = (str(b['phone'] or '')).strip()[:40]
+            if PortalUser.phone_taken(u.phone, exclude_id=u.id):
+                return JsonResponse({'error': 'این شماره موبایل قبلاً برای حساب دیگری ثبت شده است.'}, status=400)
+        if 'personnel_code' in b:
+            u.personnel_code = (str(b['personnel_code'] or '')).strip()[:60]
+        if 'reports_to_id' in b:
+            rid = b.get('reports_to_id')
+            if not rid:
+                u.reports_to = None
+            else:
+                mgr = PortalUser.objects.filter(id=rid, company=u.company).first()
+                if mgr and mgr.id != u.id:
+                    u.reports_to = mgr
+        if b.get('role'):
+            # Any non-empty label is accepted; a typed custom role is added to
+            # the company's picker so it becomes selectable next time.
+            role = (normalize_role(b['role']) or '').strip()[:80]
+            if role:
+                u.role = role
+                ensure_company_role(u.company, role)
+        # Expiry is the company access window, owned by the 0-level (root) seat.
+        # Only the root occupant's own value is writable — for every other user
+        # it is read-only, inherited info, so a client change is ignored.
+        if 'access_expires_at' in b and (getattr(u, 'seat', None) and u.seat.is_root):
+            u.access_expires_at = _parse_expiry(b.get('access_expires_at'))
+        if b.get('password'):
+            new_password = (str(b['password'] or '')).strip() or _gen_password()
+            u.set_password(new_password)
+            u.tokens.all().delete()
+        elif b.get('reset_password'):
+            new_password = _gen_password()
+            u.set_password(new_password)
+            u.tokens.all().delete()
+        try:
+            u.save()
+        except IntegrityError:
+            return JsonResponse({'error': 'این ایمیل قبلاً استفاده شده است.'}, status=400)
+        if b.get('role') or 'reports_to_id' in b:
+            # Admin edits obey the same org-chart invariant as the team module:
+            # reporting edges must point strictly upward in rank.
+            from .access import enforce_org_consistency
+            enforce_org_consistency(u.company_id)
+            u.refresh_from_db()
+        if 'ai_assistant_enabled' in b:
+            # Mirror the AI toggle onto the user's seat (see orggraph.sync_user_to_node).
+            from .orggraph import sync_user_to_node  # lazy: avoids import cycle
+            sync_user_to_node(u)
+        events.emit('admin_changed', {'entity': 'user', 'id': u.id, 'action': 'update', 'company_id': u.company_id})
+    resp = {'user': _user_dict(u, with_access=True)}
+    if new_password:
+        resp['password'] = new_password
+    return JsonResponse(resp)
+
+
+@csrf_exempt
+@require_admin_token
+def admin_user_access_view(request, user_id):
+    """POST /api/admin/users/<id>/access/ {accesses: [{car_id, documents[], admin_granted?}],
+    override_purchase?: bool}
+
+    Purchase-based grants are clamped to company scope. Admin-granted entries
+    (admin_granted or override_purchase) bypass purchase limits.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    u = PortalUser.objects.filter(id=user_id).select_related('company').first()
+    if not u:
+        return JsonResponse({'error': 'not found'}, status=404)
+    b = _body(request)
+    accesses = b.get('accesses') or []
+    override = bool(b.get('override_purchase'))
+    # The platform admin may bypass the company's purchase scope (admin_granted).
+    try:
+        apply_user_access(u, accesses, override_purchase=override, allow_admin_grants=True)
+    except ValueError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    # Keep the org-graph seat in step so /admin and /team never disagree.
+    from .orggraph import sync_user_to_node  # lazy: avoids import cycle
+    sync_user_to_node(u)
+    events.emit('admin_changed', {'entity': 'user', 'id': u.id, 'action': 'access', 'company_id': u.company_id})
+    return JsonResponse({'user': _user_dict(u, with_access=True)})
+
+
+# ---------------------------------------------------------------------------
+# Admin: activity report
+# ---------------------------------------------------------------------------
+
+@require_admin_token
+def admin_activity_view(request):
+    """GET /api/admin/activity/?limit=&user_id=&company_id=&category= — usage report."""
+    try:
+        limit = max(1, min(int(request.GET.get('limit', 200) or 200), 1000))
+    except (TypeError, ValueError):
+        limit = 200
+    qs = ActivityLog.objects.select_related('user', 'user__company')
+    if request.GET.get('user_id'):
+        qs = qs.filter(user_id=request.GET['user_id'])
+    if request.GET.get('company_id'):
+        qs = qs.filter(user__company_id=request.GET['company_id'])
+    if request.GET.get('category'):
+        qs = qs.filter(category=request.GET['category'])
+    items = [{
+        'id': a.id, 'user': a.user.username, 'company': a.user.company.name,
+        'role_label': role_label(a.user.role, a.user.company.department_label),
+        'action': a.action, 'detail': a.detail,
+        'category': a.category, 'category_label': category_label(a.category) if a.category else '',
+        'created_at': a.created_at.isoformat(),
+    } for a in qs[:limit]]
+    return JsonResponse({'items': items})
+
+
+# ---------------------------------------------------------------------------
+# Admin: cross-company analytics (platform-wide)
+# ---------------------------------------------------------------------------
+
+@require_admin_token
+def admin_analytics_view(request):
+    """GET /api/admin/analytics/?range= — platform-wide usage analytics.
+
+    Aggregated in SQL (no per-row transfer): platform totals, per-company usage,
+    per-category breakdown, and the most active employees across all companies.
+    """
+    try:
+        days = max(1, min(int(request.GET.get('range', 30) or 30), 365))
+    except (TypeError, ValueError):
+        days = 30
+    since = timezone.now() - timezone.timedelta(days=days)
+    logs = ActivityLog.objects.filter(created_at__gte=since)
+    if request.GET.get('company_id'):
+        logs = logs.filter(user__company_id=request.GET['company_id'])
+
+    # Category breakdown.
+    cat_counts = {row['category']: row['n'] for row in
+                  logs.exclude(category='').values('category').annotate(n=Count('id'))}
+    categories = [
+        {'id': cid, 'label': category_label(cid, 'fa'), 'label_en': category_label(cid, 'en'),
+         'count': cat_counts.get(cid, 0)}
+        for cid, _ in CONTENT_CATEGORIES
+    ]
+
+    # Per-company usage.
+    companies = []
+    for row in (logs.values('user__company_id', 'user__company__name')
+                .annotate(n=Count('id')).order_by('-n')):
+        companies.append({
+            'company_id': row['user__company_id'],
+            'company': row['user__company__name'],
+            'events': row['n'],
+        })
+
+    # Most active employees, cross-company.
+    top_users = []
+    for row in (logs.values('user_id', 'user__username', 'user__display_name',
+                            'user__company__name')
+                .annotate(n=Count('id')).order_by('-n')[:20]):
+        top_users.append({
+            'user_id': row['user_id'],
+            'user': row['user__display_name'] or row['user__username'],
+            'company': row['user__company__name'],
+            'events': row['n'],
+        })
+
+    # Daily series.
+    day_counts = {}
+    for dt in logs.values_list('created_at', flat=True):
+        key = dt.date().isoformat()
+        day_counts[key] = day_counts.get(key, 0) + 1
+    series = [{'date': k, 'count': v} for k, v in sorted(day_counts.items())]
+
+    return JsonResponse({
+        'range_days': days,
+        'totals': {
+            'events': logs.count(),
+            'companies': Company.objects.count(),
+            'users': PortalUser.objects.count(),
+            'active_users': logs.values('user_id').distinct().count(),
+        },
+        'categories': categories,
+        'companies_usage': companies,
+        'top_users': top_users,
+        'series': series,
+        'action_breakdown': {row['action']: row['n'] for row in
+                             logs.values('action').annotate(n=Count('id'))},
+    })
