@@ -6,7 +6,7 @@
   org-graph reach (access.manageable_user_ids, same scope as team analytics).
 * GET  /api/admin/chat-logs/ — a platform admin: every company.
 """
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, Q, Sum
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -46,7 +46,11 @@ def record_view(request):
         question=q[:4000], answer=str(b.get('answer') or '')[:20000],
         mode=str(b.get('mode') or '')[:20], grounded=bool(b.get('grounded')),
         degraded=bool(b.get('degraded')), vehicle=str(b.get('vehicle') or '')[:200],
-        sources=_clean_sources(b.get('sources')))
+        sources=_clean_sources(b.get('sources')),
+        latency_ms=_int(b.get('latency_ms')), llm_latency_ms=_int(b.get('llm_latency_ms')),
+        input_tokens=_int(b.get('input_tokens')), output_tokens=_int(b.get('output_tokens')),
+        llm_cost=_float(b.get('llm_cost')),
+        llm_usage=b.get('llm_usage') if isinstance(b.get('llm_usage'), dict) else {})
     return JsonResponse({'id': log.id}, status=201)
 
 
@@ -57,7 +61,14 @@ def _int(v):
         return None
 
 
-def _listing(request, qs, users_qs):
+def _float(v):
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _listing(request, qs, users_qs, with_cost=False):
     """Shared filtering + pagination + payload for both readers."""
     uid, cid = _int(request.GET.get('user_id')), _int(request.GET.get('company_id'))
     if cid:
@@ -82,9 +93,20 @@ def _listing(request, qs, users_qs):
         'session_id': r.session_id, 'question': r.question, 'answer': r.answer,
         'mode': r.mode, 'grounded': r.grounded, 'degraded': r.degraded,
         'vehicle': r.vehicle, 'sources': r.sources, 'created_at': r.created_at.isoformat(),
+        'latency_ms': r.latency_ms,
+        **({'llm_latency_ms': r.llm_latency_ms, 'input_tokens': r.input_tokens,
+            'output_tokens': r.output_tokens, 'llm_cost': r.llm_cost} if with_cost else {}),
     } for r in rows]
-    return JsonResponse({'items': items, 'total': total, 'page': page,
-                         'pages': max(1, -(-total // PAGE)), 'users': users})
+    out = {'items': items, 'total': total, 'page': page,
+           'pages': max(1, -(-total // PAGE)), 'users': users}
+    if with_cost:
+        # Totals over the whole filtered set, not just this page. Cost is Metis's
+        # own reported figure (its billing currency), platform-admin only.
+        out['totals'] = qs.aggregate(
+            input_tokens=Sum('input_tokens'), output_tokens=Sum('output_tokens'),
+            llm_cost=Sum('llm_cost'), avg_latency_ms=Avg('latency_ms'),
+            avg_llm_latency_ms=Avg('llm_latency_ms'))
+    return JsonResponse(out)
 
 
 @require_analytics
@@ -100,4 +122,4 @@ def team_view(request):
 
 @require_admin_token
 def admin_view(request):
-    return _listing(request, ChatLog.objects.all(), PortalUser.objects.all())
+    return _listing(request, ChatLog.objects.all(), PortalUser.objects.all(), with_cost=True)

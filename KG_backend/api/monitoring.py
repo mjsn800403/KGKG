@@ -291,6 +291,11 @@ def _raise_alert(key, severity, message, context=None):
     else:
         SystemAlert.objects.create(key=key, severity=severity,
                                    message=message, context=context or {})
+        try:
+            from . import alert_rules
+            alert_rules.deliver(key, severity, message)
+        except Exception:
+            pass
         # New alert (not a re-touch of an ongoing one) -> push to admin dashboards.
         try:
             from . import events
@@ -364,6 +369,10 @@ def evaluate_alerts():
             firing['dq_duplicates'] = ('warning',
                                        f"{dq['duplicates']} خودروی تکراری شناسایی شده است.", dq)
 
+    # Security, assistant and SMS-delivery rules (api/alert_rules.py).
+    from . import alert_rules
+    firing.update(alert_rules.evaluate())
+
     opened = [_raise_alert(k, sev, msg, ctx) for k, (sev, msg, ctx) in firing.items()]
 
     # Auto-resolve ONLY the alert keys this evaluator owns. Other subsystems
@@ -371,7 +380,7 @@ def evaluate_alerts():
     # closing them here just because this function didn't raise them would
     # hide real conditions.
     OWNED_KEYS = ('disk_high', 'memory_high', 'db_down', 'rag_index_missing')
-    OWNED_PREFIXES = ('error_rate:', 'latency:', 'dq_')
+    OWNED_PREFIXES = ('error_rate:', 'latency:', 'dq_') + alert_rules.OWNED_PREFIXES
     resolved = []
     for alert in SystemAlert.objects.filter(is_open=True):
         owned = alert.key in OWNED_KEYS or alert.key.startswith(OWNED_PREFIXES)

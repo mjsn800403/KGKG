@@ -6,6 +6,8 @@
 // Browser-facing base: relative same-origin path in production ("/kg-api"),
 // so requests ride the current https origin through Cloudflare/nginx and never
 // trip mixed-content. Inlined into the client bundle (NEXT_PUBLIC_ prefix).
+import { track } from './analytics';
+
 const CLIENT_BASE = (process.env.NEXT_PUBLIC_API_BASE || '/kg-api').replace(/\/+$/, '');
 // Server-only origin used during SSR, where Node's fetch() cannot resolve a
 // relative URL. Talks straight to Django on localhost (bypassing the public
@@ -375,6 +377,7 @@ export async function submitPurchaseRequest(payload) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `ثبت درخواست ناموفق بود: ${res.status}`);
+  track('purchase_request', { demo: !!payload?.wants_demo, ai: !!payload?.wants_ai_assistant });
   return data;
 }
 
@@ -463,7 +466,8 @@ export async function portalLogin(username, password, turnstileToken) {
   if (!res.ok) throw new Error(data?.error || `ورود ناموفق بود: ${res.status}`);
   // login returns {otp_session, phone_hint} when the SMS step applies, or
   // {token, user} directly for password-only accounts (no phone / OTP off).
-  if (data.token) setPortalSession(data.token, data.user);
+  if (data.token) { setPortalSession(data.token, data.user); track('login', { otp: false }); }
+  else if (data.otp_session) track('login_otp_sent');
   return data;
 }
 
@@ -476,6 +480,7 @@ export async function verifyOtp(otpSession, code) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `تأیید ناموفق بود: ${res.status}`);
   setPortalSession(data.token, data.user);
+  track('login', { otp: true });
   return data;
 }
 

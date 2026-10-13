@@ -5,6 +5,7 @@ import Link from 'next/link';
 import EvidencePanel from './EvidencePanel';
 import FeedbackBar from './FeedbackBar';
 import { rateAnswer } from '../utils/api';
+import { track } from '../utils/analytics';
 
 // Renders bot text and turns markdown links into clickable elements.
 // Supports both [label](href) and the instruction's [BUTTON](title="..", href="..")
@@ -205,6 +206,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
       .map((s) => s.title_en || s.title).filter(Boolean);
     setMessages((m) => [...m, { role: 'user', content: (displayText ?? text) }]);
     setLoading(true);
+    track('assistant_ask', { car: carName || model || '', followup: messages.length > 0 });
     // Replace the in-flight streaming bubble (if any) or append a new one.
     const putAi = (msg) => setMessages((m) => (
       m.length && m[m.length - 1].streaming ? [...m.slice(0, -1), msg] : [...m, msg]));
