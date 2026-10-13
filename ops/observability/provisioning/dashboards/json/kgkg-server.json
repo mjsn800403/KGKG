@@ -1,0 +1,511 @@
+{
+ "uid": "kgkg-server",
+ "title": "KGKG \u2014 Server & containers",
+ "tags": [
+  "kgkg"
+ ],
+ "timezone": "Asia/Tehran",
+ "schemaVersion": 39,
+ "refresh": "1m",
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "stat",
+   "title": "CPU used",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "100*(1-avg(rate(node_cpu_seconds_total{mode=\"idle\",instance=\"kgkg-vps\"}[5m])))",
+     "legendFormat": "",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "Memory used",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "100*(1-node_memory_MemAvailable_bytes{instance=\"kgkg-vps\"}/node_memory_MemTotal_bytes{instance=\"kgkg-vps\"})",
+     "legendFormat": "",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "Disk / used",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "100*(1-node_filesystem_avail_bytes{mountpoint=\"/\",instance=\"kgkg-vps\"}/node_filesystem_size_bytes{mountpoint=\"/\",instance=\"kgkg-vps\"})",
+     "legendFormat": "",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "Load (1m)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "node_load1{instance=\"kgkg-vps\"}",
+     "legendFormat": "",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Uptime",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "time()-node_boot_time_seconds{instance=\"kgkg-vps\"}",
+     "legendFormat": "",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "Containers",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "count(container_last_seen{name!=\"\"})",
+     "legendFormat": "",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 7,
+   "type": "timeseries",
+   "title": "CPU by mode",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "custom": {
+      "stacking": {
+       "mode": "normal"
+      },
+      "fillOpacity": 40
+     }
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "100*sum by (mode)(rate(node_cpu_seconds_total{mode!=\"idle\",instance=\"kgkg-vps\"}[5m]))/scalar(count(node_cpu_seconds_total{mode=\"idle\",instance=\"kgkg-vps\"}))",
+     "legendFormat": "{{mode}}",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 8,
+   "type": "timeseries",
+   "title": "Memory",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 4,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "node_memory_MemTotal_bytes{instance=\"kgkg-vps\"}-node_memory_MemAvailable_bytes{instance=\"kgkg-vps\"}",
+     "legendFormat": "used",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "node_memory_MemTotal_bytes{instance=\"kgkg-vps\"}",
+     "legendFormat": "total",
+     "refId": "B"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 9,
+   "type": "timeseries",
+   "title": "Disk I/O",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 12,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "sum(rate(node_disk_read_bytes_total{instance=\"kgkg-vps\"}[5m]))",
+     "legendFormat": "read",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "sum(rate(node_disk_written_bytes_total{instance=\"kgkg-vps\"}[5m]))",
+     "legendFormat": "write",
+     "refId": "B"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 10,
+   "type": "timeseries",
+   "title": "Network",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 12,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "sum(rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\",instance=\"kgkg-vps\"}[5m]))",
+     "legendFormat": "in",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "sum(rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\",instance=\"kgkg-vps\"}[5m]))",
+     "legendFormat": "out",
+     "refId": "B"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 11,
+   "type": "timeseries",
+   "title": "Docker container CPU (cores)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 20,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "sum by (name)(rate(container_cpu_usage_seconds_total{name!=\"\"}[5m]))",
+     "legendFormat": "{{name}}",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 12,
+   "type": "timeseries",
+   "title": "Docker container memory",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 20,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "sum by (name)(container_memory_working_set_bytes{name!=\"\"})",
+     "legendFormat": "{{name}}",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 13,
+   "type": "timeseries",
+   "title": "systemd services CPU (cores) \u2014 kgkg-backend, frontend, nginx\u2026",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 28,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "topk(8, sum by (id)(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/.+[.]service\"}[5m])))",
+     "legendFormat": "{{id}}",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 14,
+   "type": "timeseries",
+   "title": "systemd services memory",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 28,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "topk(8, sum by (id)(container_memory_working_set_bytes{id=~\"/system.slice/.+[.]service\"}))",
+     "legendFormat": "{{id}}",
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  }
+ ]
+}

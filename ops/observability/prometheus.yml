@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 30s
+scrape_configs:
+  # node-exporter runs on the host network, bound to this compose network's gateway.
+  - job_name: node
+    static_configs: [{targets: ['172.19.0.1:9100'], labels: {instance: kgkg-vps}}]
+  - job_name: cadvisor
+    static_configs: [{targets: ['cadvisor:8080']}]

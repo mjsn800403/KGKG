@@ -50,15 +50,54 @@ services:
       GF_AUTH_PROXY_HEADER_PROPERTY: username
       GF_AUTH_PROXY_AUTO_SIGN_UP: "false"
       GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN: "false"
+      GF_INSTALL_PLUGINS: frser-sqlite-datasource 3.5.0
     volumes:
       - ./provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
+      - ./bizdb:/var/lib/bizdb:ro
     ports: ["127.0.0.1:3001:3000"]
     depends_on: [loki]
     mem_limit: 512m
     restart: unless-stopped
 
+  # Server metrics: host (node-exporter) + per-container / per-systemd-unit
+  # (cAdvisor). node-exporter uses the host network so NIC stats are real; it
+  # binds only to this compose network's gateway, never a public address.
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    command: [--config.file=/etc/prometheus/prometheus.yml, --storage.tsdb.path=/prometheus, --storage.tsdb.retention.time=30d]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    mem_limit: 1g
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    command: [--path.rootfs=/host, --web.listen-address=172.19.0.1:9100]
+    network_mode: host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 128m
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    command: [--docker_only=false, --housekeeping_interval=30s, --store_container_labels=false]
+    privileged: true
+    devices: [/dev/kmsg]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    mem_limit: 512m
+    restart: unless-stopped
+
 volumes:
+  prometheus-data:
   loki-data:
   alloy-data:
   grafana-data:

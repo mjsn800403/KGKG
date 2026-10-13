@@ -1,0 +1,17 @@
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prom
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    editable: false
+  # Read-only snapshot written by ops/observability/bizsnap.py (not the app DB).
+  - name: KGKG business
+    uid: bizdb
+    type: frser-sqlite-datasource
+    access: proxy
+    jsonData:
+      path: /var/lib/bizdb/biz.sqlite
+      pathOptions: "?mode=ro"
+    editable: false

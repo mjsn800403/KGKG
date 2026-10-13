@@ -222,7 +222,7 @@ const SECTIONS = [
   { id: 'search-insights', label: 'جستجوها و کمبود محتوا', icon: 'search', desc: 'پرتکرارترین و بی‌نتیجه‌ترین جستجوهای کاربران' },
   { id: 'ai-cost', label: 'هزینهٔ دستیار', icon: 'bot', desc: 'هزینه، توکن و زمان پاسخ مدل زبانی' },
   { id: 'audit', label: 'گزارش ممیزی', icon: 'shield', desc: 'ورودها و همهٔ تغییرات: چه کسی، چه کاری، از کجا' },
-  { id: 'logs', label: 'داشبورد لاگ‌ها (Grafana)', icon: 'chart', desc: 'خطاها، کدهای HTTP، خطای پیامک و لاگ سرویس‌ها' },
+  { id: 'logs', label: 'داشبوردهای Grafana', icon: 'chart', desc: 'لاگ‌ها، منابع سرور و کانتینرها، آمار کسب‌وکار' },
 ];
 
 // The hub groups the sections so the admin lands on a calm "desk", not the

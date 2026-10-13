@@ -1,0 +1,497 @@
+{
+ "uid": "kgkg-business",
+ "title": "KGKG \u2014 Business",
+ "tags": [
+  "kgkg"
+ ],
+ "timezone": "Asia/Tehran",
+ "schemaVersion": 39,
+ "refresh": "1m",
+ "time": {
+  "from": "now-30d",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "stat",
+   "title": "Active portal users",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT count(*) AS v FROM users WHERE active=1",
+     "rawQueryText": "SELECT count(*) AS v FROM users WHERE active=1",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "Logged in last 7 days",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT count(*) AS v FROM users WHERE last_login_ts >= strftime('%s','now')-7*86400",
+     "rawQueryText": "SELECT count(*) AS v FROM users WHERE last_login_ts >= strftime('%s','now')-7*86400",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "AI cost (range)",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT round(coalesce(sum(llm_cost),0),4) AS v FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000",
+     "rawQueryText": "SELECT round(coalesce(sum(llm_cost),0),4) AS v FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "AI answers (range)",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT count(*) AS v FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000",
+     "rawQueryText": "SELECT count(*) AS v FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Searches (range)",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT count(*) AS v FROM search WHERE ts >= $__from/1000 AND ts < $__to/1000",
+     "rawQueryText": "SELECT count(*) AS v FROM search WHERE ts >= $__from/1000 AND ts < $__to/1000",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "Failed logins (range)",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 0,
+    "w": 4,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT count(*) AS v FROM audit WHERE ts >= $__from/1000 AND ts < $__to/1000 AND action LIKE '%login%' AND status_code=401",
+     "rawQueryText": "SELECT count(*) AS v FROM audit WHERE ts >= $__from/1000 AND ts < $__to/1000 AND action LIKE '%login%' AND status_code=401",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 7,
+   "type": "timeseries",
+   "title": "Logins per day",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT (ts/86400)*86400 AS t, sum(status_code=200) AS ok, sum(status_code=401) AS failed FROM audit WHERE ts >= $__from/1000 AND ts < $__to/1000 AND action IN ('auth.login','auth.verify_otp','admin.login') GROUP BY 1 ORDER BY 1",
+     "rawQueryText": "SELECT (ts/86400)*86400 AS t, sum(status_code=200) AS ok, sum(status_code=401) AS failed FROM audit WHERE ts >= $__from/1000 AND ts < $__to/1000 AND action IN ('auth.login','auth.verify_otp','admin.login') GROUP BY 1 ORDER BY 1",
+     "queryType": "time series",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 8,
+   "type": "timeseries",
+   "title": "New users per day",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 4,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT (created_ts/86400)*86400 AS t, count(*) AS signups FROM users WHERE created_ts >= $__from/1000 AND created_ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "rawQueryText": "SELECT (created_ts/86400)*86400 AS t, count(*) AS signups FROM users WHERE created_ts >= $__from/1000 AND created_ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "queryType": "time series",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 9,
+   "type": "timeseries",
+   "title": "AI cost per day",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 12,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT (ts/86400)*86400 AS t, sum(llm_cost) AS cost FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "rawQueryText": "SELECT (ts/86400)*86400 AS t, sum(llm_cost) AS cost FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "queryType": "time series",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 10,
+   "type": "timeseries",
+   "title": "AI tokens & latency per day",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 12,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT (ts/86400)*86400 AS t, sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens, avg(latency_ms) AS avg_latency_ms FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "rawQueryText": "SELECT (ts/86400)*86400 AS t, sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens, avg(latency_ms) AS avg_latency_ms FROM chat WHERE ts >= $__from/1000 AND ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "queryType": "time series",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 11,
+   "type": "timeseries",
+   "title": "Searches per day (and zero-result)",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 20,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT (ts/86400)*86400 AS t, count(*) AS searches, sum(results=0) AS zero_results FROM search WHERE ts >= $__from/1000 AND ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "rawQueryText": "SELECT (ts/86400)*86400 AS t, count(*) AS searches, sum(results=0) AS zero_results FROM search WHERE ts >= $__from/1000 AND ts < $__to/1000 GROUP BY 1 ORDER BY 1",
+     "queryType": "time series",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 12,
+   "type": "table",
+   "title": "Top zero-result searches",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 20,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT query_norm AS query, car, count(*) AS times FROM search WHERE ts >= $__from/1000 AND ts < $__to/1000 AND results=0 GROUP BY 1,2 ORDER BY 3 DESC LIMIT 20",
+     "rawQueryText": "SELECT query_norm AS query, car, count(*) AS times FROM search WHERE ts >= $__from/1000 AND ts < $__to/1000 AND results=0 GROUP BY 1,2 ORDER BY 3 DESC LIMIT 20",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  },
+  {
+   "id": 13,
+   "type": "table",
+   "title": "Admin actions & failed requests",
+   "datasource": {
+    "type": "frser-sqlite-datasource",
+    "uid": "bizdb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 28,
+    "w": 24,
+    "h": 9
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "frser-sqlite-datasource",
+      "uid": "bizdb"
+     },
+     "queryText": "SELECT datetime(ts,'unixepoch','+210 minutes') AS time_tehran, action, actor_type, status_code, ip FROM audit WHERE ts >= $__from/1000 AND ts < $__to/1000 AND (action LIKE 'admin.%' OR status_code>=400) ORDER BY ts DESC LIMIT 100",
+     "rawQueryText": "SELECT datetime(ts,'unixepoch','+210 minutes') AS time_tehran, action, actor_type, status_code, ip FROM audit WHERE ts >= $__from/1000 AND ts < $__to/1000 AND (action LIKE 'admin.%' OR status_code>=400) ORDER BY ts DESC LIMIT 100",
+     "queryType": "table",
+     "timeColumns": [
+      "t"
+     ],
+     "refId": "A"
+    }
+   ],
+   "options": {}
+  }
+ ]
+}

@@ -342,12 +342,18 @@ export function FunnelPanel({ guard }) {
 // Grafana log dashboards (ops/observability), embedded behind an admin-only
 // ticket cookie — see api/grafanaauth.py.
 // ---------------------------------------------------------------------------
-const GRAFANA_DASH = '/grafana/d/kgkg-overview/?orgId=1&kiosk&theme=dark&refresh=1m';
+const GRAFANA_DASHES = [
+  { uid: 'kgkg-overview', label: 'لاگ‌ها' },
+  { uid: 'kgkg-server', label: 'سرور و کانتینرها' },
+  { uid: 'kgkg-business', label: 'کسب‌وکار' },
+];
+const grafanaSrc = (uid) => `/grafana/d/${uid}/?orgId=1&kiosk&theme=dark&refresh=1m`;
 
 export function GrafanaPanel({ guard }) {
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState('');
   const [nonce, setNonce] = useState(0);
+  const [dash, setDash] = useState(GRAFANA_DASHES[0].uid);
   useEffect(() => {
     let alive = true;
     setReady(false);
@@ -361,18 +367,23 @@ export function GrafanaPanel({ guard }) {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 className="page-title">داشبورد لاگ‌ها (Grafana)</h1>
-          <div className="page-sub">خطاها و هشدارهای سرور، کدهای پاسخ HTTP، خطاهای پیامک و لاگ سرویس‌ها — ۹۰ روز اخیر</div>
+          <h1 className="page-title">داشبوردهای Grafana</h1>
+          <div className="page-sub">لاگ‌ها و خطاها، منابع سرور و کانتینرها، و آمار کسب‌وکار (کاربران، ورود، هزینهٔ دستیار، جستجو)</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setNonce((n) => n + 1)}><Icon name="refresh" size={14} /> بارگذاری دوباره</button>
           {ready && <a className="btn" href="/grafana/" target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} /> باز کردن Grafana کامل</a>}
         </div>
       </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        {GRAFANA_DASHES.map((d) => (
+          <button key={d.uid} className={`btn${dash === d.uid ? ' btn-primary' : ''}`} onClick={() => setDash(d.uid)}>{d.label}</button>
+        ))}
+      </div>
       {err && <div className="pform-error" style={{ marginTop: 12 }}>{err}</div>}
       {!ready && !err && <Loading />}
       {ready && (
-        <iframe key={nonce} title="Grafana" src={GRAFANA_DASH}
+        <iframe key={`${dash}-${nonce}`} title="Grafana" src={grafanaSrc(dash)}
           style={{ width: '100%', height: '78vh', border: 0, borderRadius: 12, marginTop: 16, background: '#111217' }} />
       )}
     </>
