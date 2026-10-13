@@ -96,6 +96,15 @@ services:
     mem_limit: 512m
     restart: unless-stopped
 
+  # Uptime / latency / TLS-expiry probes (scraped by prometheus, job probe*).
+  blackbox:
+    image: prom/blackbox-exporter:v0.26.0
+    command: [--config.file=/etc/blackbox/blackbox.yml]
+    volumes:
+      - ./blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    mem_limit: 128m
+    restart: unless-stopped
+
 volumes:
   prometheus-data:
   loki-data:

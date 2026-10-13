@@ -1,0 +1,14 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      headers: {User-Agent: "Mozilla/5.0 (KGKG uptime probe)"}
+  # Third-party APIs: any HTTP answer means reachable (auth errors are fine).
+  http_reachable:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200, 301, 302, 400, 401, 403, 404, 405]

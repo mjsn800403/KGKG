@@ -6,3 +6,21 @@ scrape_configs:
     static_configs: [{targets: ['172.19.0.1:9100'], labels: {instance: kgkg-vps}}]
   - job_name: cadvisor
     static_configs: [{targets: ['cadvisor:8080']}]
+  # Uptime probes every minute via blackbox-exporter.
+  - job_name: probe
+    scrape_interval: 60s
+    metrics_path: /probe
+    params: {module: [http_2xx]}
+    static_configs:
+      - targets: ['https://kgtechvault.com/', 'https://kgtechvault.com/kg-api/api/health/']
+    relabel_configs: &bb
+      - {source_labels: [__address__], target_label: __param_target}
+      - {source_labels: [__param_target], target_label: target}
+      - {target_label: __address__, replacement: 'blackbox:9115'}
+  - job_name: probe_ext
+    scrape_interval: 60s
+    metrics_path: /probe
+    params: {module: [http_reachable]}
+    static_configs:
+      - targets: ['https://api.metisai.ir/', 'https://console.melipayamak.com/']
+    relabel_configs: *bb
