@@ -1,5 +1,5 @@
 from .audit import admin_audit_view
-from .insights import admin_funnel_view, admin_search_view
+from .insights import admin_ai_cost_view, admin_funnel_view, admin_search_view
 from django.http import JsonResponse
 from django.urls import path, re_path
 from . import adminops, events, recommend, requests_api, views, portal, team
@@ -89,6 +89,7 @@ urlpatterns = [
     path('api/admin/users/<int:user_id>/access/', portal.admin_user_access_view, name='admin_user_access'),
     path('api/admin/insights/search/', admin_search_view),
     path('api/admin/insights/funnel/', admin_funnel_view),
+    path('api/admin/insights/ai-cost/', admin_ai_cost_view),
     path('api/admin/audit/', admin_audit_view),
     path('api/admin/activity/', portal.admin_activity_view, name='admin_activity'),
     path('api/admin/analytics/', portal.admin_analytics_view, name='admin_analytics'),

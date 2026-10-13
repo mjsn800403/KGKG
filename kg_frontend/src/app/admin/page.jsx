@@ -23,6 +23,7 @@ import AdminDashboard from '@/components/AdminDashboard';
 import JalaliDateTimeInput from '@/components/JalaliDateTimeInput';
 import RequestsInbox from '@/components/RequestsInbox';
 import ChatLogsView from '@/components/ChatLogsView';
+import { AiCostPanel, AuditLogPanel, FunnelPanel, SearchInsightsPanel } from '@/components/AdminInsights';
 import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
 import { adminApi, adminLogout, getAdminUser, obtainAdminToken, shareAdminToken } from '@/utils/api';
 
@@ -217,6 +218,10 @@ const SECTIONS = [
   { id: 'pipeline', label: 'پردازش داده‌ها', icon: 'refresh', desc: 'دانلود، استخراج، ایندکس RAG و پردازش داده‌های جدید' },
   { id: 'vehicle-specs', label: 'مشخصات خودروها', icon: 'car', desc: 'مشخصات ساختاریافته (schema.org) هر خودرو و منبع هر مقدار' },
   { id: 'system', label: 'پایش سیستم', icon: 'gear', desc: 'منابع سرور، ترافیک و هشدارهای عملیاتی' },
+  { id: 'funnel', label: 'قیف جذب و فعال‌سازی', icon: 'chart', desc: 'از بازدید سایت تا کاربر فعال، و حساب‌های خاموش' },
+  { id: 'search-insights', label: 'جستجوها و کمبود محتوا', icon: 'search', desc: 'پرتکرارترین و بی‌نتیجه‌ترین جستجوهای کاربران' },
+  { id: 'ai-cost', label: 'هزینهٔ دستیار', icon: 'bot', desc: 'هزینه، توکن و زمان پاسخ مدل زبانی' },
+  { id: 'audit', label: 'گزارش ممیزی', icon: 'shield', desc: 'ورودها و همهٔ تغییرات: چه کسی، چه کاری، از کجا' },
 ];
 
 // The hub groups the sections so the admin lands on a calm "desk", not the
@@ -224,8 +229,8 @@ const SECTIONS = [
 const SECTION_GROUPS = [
   { title: 'آنلاین', tag: 'داشبورد و درخواست‌ها', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
   { title: 'مشتریان و فروش', tag: 'درخواست خرید، شرکت‌ها، کاربران', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
-  { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت، گفتگوها', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'activity', 'chats'] },
-  { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system'] },
+  { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت، گفتگوها', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'funnel', 'search-insights', 'activity', 'chats', 'ai-cost'] },
+  { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system', 'audit'] },
 ];
 
 function fmtDate(iso) {
@@ -434,6 +439,10 @@ export default function AdminPage() {
               {section === 'pipeline' && <Pipeline guard={guard} />}
               {section === 'vehicle-specs' && <VehicleSpecs guard={guard} />}
               {section === 'system' && <SystemMonitor guard={guard} />}
+              {section === 'funnel' && <FunnelPanel guard={guard} />}
+              {section === 'search-insights' && <SearchInsightsPanel guard={guard} />}
+              {section === 'ai-cost' && <AiCostPanel guard={guard} />}
+              {section === 'audit' && <AuditLogPanel guard={guard} />}
             </motion.div>
           </AnimatePresence>
         </main>

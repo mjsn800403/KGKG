@@ -144,3 +144,40 @@ def admin_funnel_view(request):
             active=True, password_set=True).count(),
         'invited_not_accepted': PortalUser.objects.filter(password_set=False).count(),
     })
+
+
+@require_admin_token
+def admin_ai_cost_view(request):
+    """GET /api/admin/insights/ai-cost/?days=30 — assistant spend and speed.
+
+    Cost is Metis's own reported figure (its billing currency); answers from
+    before usage tracking (or no-LLM fallbacks) carry no cost and are counted
+    separately so averages are not diluted."""
+    from django.db.models import Sum
+    from django.db.models.functions import TruncDate
+    days = _days(request)
+    qs = ChatLog.objects.filter(created_at__gte=timezone.now() - timedelta(days=days))
+    agg = dict(answers=Count('id'), cost=Sum('llm_cost'), input_tokens=Sum('input_tokens'),
+               output_tokens=Sum('output_tokens'), avg_latency_ms=Avg('latency_ms'),
+               avg_llm_latency_ms=Avg('llm_latency_ms'),
+               degraded=Count('id', filter=Q(degraded=True)),
+               ungrounded=Count('id', filter=Q(grounded=False)))
+    totals = qs.aggregate(**agg)
+    totals['priced_answers'] = qs.filter(llm_cost__isnull=False).count()
+    by_company = [{'company_id': r['company_id'], 'company': r['company__name'],
+                   'answers': r['answers'], 'cost': r['cost'],
+                   'avg_latency_ms': r['avg_latency_ms']}
+                  for r in (qs.values('company_id', 'company__name')
+                            .annotate(answers=Count('id'), cost=Sum('llm_cost'),
+                                      avg_latency_ms=Avg('latency_ms'))
+                            .order_by('-cost', '-answers')[:30])]
+    by_day = [{'day': r['d'].isoformat(), 'answers': r['answers'], 'cost': r['cost']}
+              for r in (qs.annotate(d=TruncDate('created_at')).values('d')
+                        .annotate(answers=Count('id'), cost=Sum('llm_cost')).order_by('d'))]
+    top_users = [{'user': r['user__username'], 'company': r['company__name'],
+                  'answers': r['answers'], 'cost': r['cost']}
+                 for r in (qs.values('user__username', 'company__name')
+                           .annotate(answers=Count('id'), cost=Sum('llm_cost'))
+                           .order_by('-cost', '-answers')[:15])]
+    return JsonResponse({'days': days, 'totals': totals, 'by_company': by_company,
+                         'by_day': by_day, 'top_users': top_users})

@@ -858,6 +858,14 @@ export const adminApi = {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/chat-logs/${qs ? `?${qs}` : ''}`);
   },
+  // Observability (api/audit.py, api/insights.py).
+  audit: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/audit/${qs ? `?${qs}` : ''}`);
+  },
+  aiCost: (days = 30) => adminFetch(`/api/admin/insights/ai-cost/?days=${days}`),
+  searchInsights: (days = 30) => adminFetch(`/api/admin/insights/search/?days=${days}`),
+  funnel: (days = 30) => adminFetch(`/api/admin/insights/funnel/?days=${days}`),
   analytics: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/analytics/${qs ? `?${qs}` : ''}`);
