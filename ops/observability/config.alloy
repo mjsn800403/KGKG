@@ -1,0 +1,78 @@
+// Ships KGKG logs to Loki. Labels stay low-cardinality (job, level, logger,
+// unit); everything else is queried with `| json` / line filters.
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// ---- Django JSON logs (/var/log/kgkg/app.jsonl, error.jsonl) --------------
+local.file_match "kgkg" {
+  path_targets = [{"__path__" = "/var/log/kgkg/*.jsonl", "job" = "kgkg-backend"}]
+}
+
+loki.source.file "kgkg" {
+  targets    = local.file_match.kgkg.targets
+  forward_to = [loki.process.kgkg.receiver]
+}
+
+loki.process "kgkg" {
+  stage.json {
+    expressions = {level = "level", logger = "logger", ts = "ts"}
+  }
+  stage.timestamp {
+    source = "ts"
+    format = "RFC3339Nano"
+  }
+  stage.labels {
+    values = {level = "", logger = ""}
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+// ---- nginx --------------------------------------------------------------
+local.file_match "nginx" {
+  path_targets = [
+    {"__path__" = "/var/log/nginx/access.log", "job" = "nginx", "stream" = "access"},
+    {"__path__" = "/var/log/nginx/error.log", "job" = "nginx", "stream" = "error"},
+  ]
+}
+
+loki.source.file "nginx" {
+  targets    = local.file_match.nginx.targets
+  forward_to = [loki.process.nginx.receiver]
+}
+
+loki.process "nginx" {
+  // combined format: ip - user [time] "METHOD path proto" status bytes ...
+  stage.regex {
+    expression = "^\\S+ \\S+ \\S+ \\[[^\\]]+\\] \"[^\"]*\" (?P<status_class>[1-5])\\d\\d "
+  }
+  stage.labels {
+    values = {status_class = ""}
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+// ---- systemd journal: the KGKG units + nginx -----------------------------
+loki.relabel "journal" {
+  forward_to = []
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+loki.source.journal "units" {
+  path          = "/var/log/journal"
+  max_age       = "12h"
+  relabel_rules = loki.relabel.journal.rules
+  matches       = "_SYSTEMD_UNIT=kgkg-backend.service _SYSTEMD_UNIT=kgkg-frontend.service _SYSTEMD_UNIT=kgkg-pipeline.service _SYSTEMD_UNIT=kgkg-alerts.service _SYSTEMD_UNIT=kgkg-detect.service _SYSTEMD_UNIT=nginx.service"
+  labels        = {job = "systemd"}
+  forward_to    = [loki.write.local.receiver]
+}
