@@ -23,7 +23,7 @@ import AdminDashboard from '@/components/AdminDashboard';
 import JalaliDateTimeInput from '@/components/JalaliDateTimeInput';
 import RequestsInbox from '@/components/RequestsInbox';
 import ChatLogsView from '@/components/ChatLogsView';
-import { AiCostPanel, AuditLogPanel, FunnelPanel, SearchInsightsPanel } from '@/components/AdminInsights';
+import { AiCostPanel, AuditLogPanel, FunnelPanel, GrafanaPanel, SearchInsightsPanel } from '@/components/AdminInsights';
 import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
 import { adminApi, adminLogout, getAdminUser, obtainAdminToken, shareAdminToken } from '@/utils/api';
 
@@ -222,6 +222,7 @@ const SECTIONS = [
   { id: 'search-insights', label: 'جستجوها و کمبود محتوا', icon: 'search', desc: 'پرتکرارترین و بی‌نتیجه‌ترین جستجوهای کاربران' },
   { id: 'ai-cost', label: 'هزینهٔ دستیار', icon: 'bot', desc: 'هزینه، توکن و زمان پاسخ مدل زبانی' },
   { id: 'audit', label: 'گزارش ممیزی', icon: 'shield', desc: 'ورودها و همهٔ تغییرات: چه کسی، چه کاری، از کجا' },
+  { id: 'logs', label: 'داشبورد لاگ‌ها (Grafana)', icon: 'chart', desc: 'خطاها، کدهای HTTP، خطای پیامک و لاگ سرویس‌ها' },
 ];
 
 // The hub groups the sections so the admin lands on a calm "desk", not the
@@ -230,7 +231,7 @@ const SECTION_GROUPS = [
   { title: 'آنلاین', tag: 'داشبورد و درخواست‌ها', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
   { title: 'مشتریان و فروش', tag: 'درخواست خرید، شرکت‌ها، کاربران', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
   { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت، گفتگوها', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'funnel', 'search-insights', 'activity', 'chats', 'ai-cost'] },
-  { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system', 'audit'] },
+  { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system', 'logs', 'audit'] },
 ];
 
 function fmtDate(iso) {
@@ -443,6 +444,7 @@ export default function AdminPage() {
               {section === 'search-insights' && <SearchInsightsPanel guard={guard} />}
               {section === 'ai-cost' && <AiCostPanel guard={guard} />}
               {section === 'audit' && <AuditLogPanel guard={guard} />}
+              {section === 'logs' && <GrafanaPanel guard={guard} />}
             </motion.div>
           </AnimatePresence>
         </main>

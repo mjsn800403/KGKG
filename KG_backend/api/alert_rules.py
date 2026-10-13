@@ -85,6 +85,10 @@ def _admin_logins():
         out['sec:admin_login_fails'] = (
             'critical', f'{n_fail} تلاش ناموفق ورود به پنل ادمین در ۱۵ دقیقهٔ اخیر.',
             {'fails': n_fail})
+    # Switchable: admin OTP can be turned off on purpose (clear the admin's
+    # phone), and then this would just repeat on every login.
+    if os.environ.get('KG_ALERT_ADMIN_NO2FA', '1') == '0':
+        return out
     no2fa = list(qs.filter(action='admin.login', status_code=200,
                            detail__no_2fa=True).values_list('actor_label', 'ip')[:5])
     if no2fa:

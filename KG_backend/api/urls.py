@@ -6,6 +6,7 @@ from . import adminops, events, recommend, requests_api, views, portal, team
 from . import orggraph_api, parts, labortimes, sst, quota, frm
 from . import mediaauth
 from . import vncauth
+from . import grafanaauth
 from . import chatlog
 
 
@@ -124,6 +125,8 @@ urlpatterns = [
     # nginx auth_request for /kg-api/media/ (see mediaauth.py)
     path('api/media-auth/', mediaauth.media_auth_view, name='media_auth'),
     path('api/vnc-auth/', vncauth.vnc_auth_view, name='vnc_auth'),
+    path('api/grafana-auth/', grafanaauth.grafana_auth_view, name='grafana_auth'),
+    path('api/admin/grafana-ticket/', grafanaauth.grafana_ticket_view, name='grafana_ticket'),
     path('api/labor-times/<str:brand_name>/<str:year>/<str:model_name>/',
          labortimes.labor_times_csv_view, name='labor_times_csv'),
     # Per-vehicle SST (Special Service Tools) CSV export: merges every system's

@@ -38,6 +38,18 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_NEWS_NEWS_FEED_ENABLED: "false"
+      # Embedded in the super-admin panel at https://kgtechvault.com/grafana/.
+      # nginx admits a request only with a valid admin ticket cookie
+      # (api/grafanaauth.py) and then sets X-WEBAUTH-USER, overwriting anything
+      # the client sent; the port itself is loopback-only.
+      GF_SERVER_ROOT_URL: https://kgtechvault.com/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: X-WEBAUTH-USER
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "false"
+      GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN: "false"
     volumes:
       - ./provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana

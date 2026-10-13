@@ -866,6 +866,7 @@ export const adminApi = {
   aiCost: (days = 30) => adminFetch(`/api/admin/insights/ai-cost/?days=${days}`),
   searchInsights: (days = 30) => adminFetch(`/api/admin/insights/search/?days=${days}`),
   funnel: (days = 30) => adminFetch(`/api/admin/insights/funnel/?days=${days}`),
+  grafanaTicket: () => adminFetch('/api/admin/grafana-ticket/', { method: 'POST', body: '{}' }),
   analytics: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/analytics/${qs ? `?${qs}` : ''}`);
