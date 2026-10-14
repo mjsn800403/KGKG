@@ -186,6 +186,10 @@ export function AiCostPanel({ guard }) {
       <Ranges value={days} onChange={setDays} />
       {!data ? <Loading err={err} /> : (
         <>
+          <div className="page-sub" style={{ marginTop: 8 }}>
+            مدل فعلی Metis: <b dir="ltr">{data.model || 'نامشخص'}</b>
+            {data.totals.backfilled > 0 && <> — {fa(data.totals.backfilled)} پرسش قدیمی از گزارش فعالیت بازیابی شده (بدون هزینه و پاسخ)</>}
+          </div>
           <div className="an-kpis">
             <Kpi icon="chart" value={money(data.totals.cost)} label="هزینهٔ کل" />
             <Kpi icon="bot" value={fa(data.totals.answers)} label="پاسخ‌ها" />

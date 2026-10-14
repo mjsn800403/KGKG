@@ -161,7 +161,8 @@ def admin_ai_cost_view(request):
                output_tokens=Sum('output_tokens'), avg_latency_ms=Avg('latency_ms'),
                avg_llm_latency_ms=Avg('llm_latency_ms'),
                degraded=Count('id', filter=Q(degraded=True)),
-               ungrounded=Count('id', filter=Q(grounded=False)))
+               ungrounded=Count('id', filter=Q(grounded=False) & ~Q(mode='backfill')),
+               backfilled=Count('id', filter=Q(mode='backfill')))
     totals = qs.aggregate(**agg)
     totals['priced_answers'] = qs.filter(llm_cost__isnull=False).count()
     by_company = [{'company_id': r['company_id'], 'company': r['company__name'],
@@ -179,5 +180,7 @@ def admin_ai_cost_view(request):
                  for r in (qs.values('user__username', 'company__name')
                            .annotate(answers=Count('id'), cost=Sum('llm_cost'))
                            .order_by('-cost', '-answers')[:15])]
-    return JsonResponse({'days': days, 'totals': totals, 'by_company': by_company,
+    import os
+    return JsonResponse({'days': days, 'model': os.environ.get('KG_LLM_MODEL', ''),
+                         'totals': totals, 'by_company': by_company,
                          'by_day': by_day, 'top_users': top_users})
