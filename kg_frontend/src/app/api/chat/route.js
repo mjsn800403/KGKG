@@ -729,6 +729,7 @@ export async function POST(request) {
     const fromFinancial = (f) => { llm.usage = f; llm.cost = f?.totalCost ?? null; };
     // Chat log for admins / managers (api/chatlog.py). Best-effort: a logging
     // failure never touches the user's answer.
+    const logKey = globalThis.crypto.randomUUID();
     const record = (payload) => {
       fetch(`${BACKEND_URL}/api/auth/chat-log/`, {
         method: 'POST',
@@ -746,10 +747,11 @@ export async function POST(request) {
           output_tokens: llm.usage?.outputTokens ?? null,
           llm_cost: llm.cost,
           llm_usage: llm.usage || {},
+          client_key: logKey,
         }),
         signal: AbortSignal.timeout(10000),
       }).catch((e) => console.error('chat-log record failed:', e));
-      return payload;
+      return { ...payload, logKey };
     };
 
     // Multi-turn: sanitize the client-sent thread, then resolve short

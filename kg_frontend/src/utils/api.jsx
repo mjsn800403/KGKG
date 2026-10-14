@@ -866,6 +866,8 @@ export const adminApi = {
   aiCost: (days = 30) => adminFetch(`/api/admin/insights/ai-cost/?days=${days}`),
   searchInsights: (days = 30) => adminFetch(`/api/admin/insights/search/?days=${days}`),
   funnel: (days = 30) => adminFetch(`/api/admin/insights/funnel/?days=${days}`),
+  assistantBehavior: (days = 30, extra = {}) =>
+    adminFetch(`/api/admin/insights/assistant/?${new URLSearchParams({ days, ...extra })}`),
   grafanaTicket: () => adminFetch('/api/admin/grafana-ticket/', { method: 'POST', body: '{}' }),
   analytics: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -987,6 +989,20 @@ function adminHeaders() {
 
 // Human-in-the-loop: record a 👍/👎 verdict on an assistant answer. Best-effort
 // (never blocks the UI). The backend turns these into a guarded ranking boost.
+// Behaviour signal on one logged exchange (api/chatlog.feedback_view):
+// kind = vote | copy | source. Fire-and-forget.
+export function chatFeedback(key, body) {
+  if (!key) return;
+  const token = getPortalToken();
+  try {
+    fetch(`${API_BASE}/api/auth/chat-feedback/`, {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ key, ...body }),
+    }).catch(() => {});
+  } catch { /* never block the UI on telemetry */ }
+}
+
 export async function rateAnswer({ query, verdict, mode, topBlobs, blobId, reason, comment, brand, model, car }) {
   try {
     await fetch(`${API_BASE}/api/feedback/rate/`, {

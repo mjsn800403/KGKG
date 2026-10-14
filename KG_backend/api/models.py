@@ -1297,6 +1297,16 @@ class ChatLog(models.Model):
     output_tokens = models.IntegerField(null=True, blank=True)
     llm_cost = models.FloatField(null=True, blank=True)
     llm_usage = models.JSONField(default=dict, blank=True)
+    # Behaviour signals (api/behavior.py). client_key is minted by the Next
+    # chat route and handed to the browser so feedback can find this row.
+    client_key = models.CharField(max_length=40, blank=True, default='', db_index=True)
+    feedback = models.SmallIntegerField(null=True, blank=True)        # +1 / -1
+    feedback_reason = models.CharField(max_length=20, blank=True, default='')
+    feedback_comment = models.TextField(blank=True, default='')
+    feedback_at = models.DateTimeField(null=True, blank=True)
+    copied = models.BooleanField(default=False)
+    source_clicks = models.IntegerField(default=0)
+    rephrased = models.BooleanField(default=False)  # next question = same one reworded, quickly
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

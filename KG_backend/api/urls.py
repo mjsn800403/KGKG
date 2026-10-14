@@ -1,4 +1,5 @@
 from .audit import admin_audit_view
+from .behavior import admin_assistant_view
 from .insights import admin_ai_cost_view, admin_funnel_view, admin_search_view
 from django.http import JsonResponse
 from django.urls import path, re_path
@@ -44,6 +45,8 @@ urlpatterns = [
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
     path('api/auth/chat-log/', chatlog.record_view, name='chat_log_record'),
+    path('api/auth/chat-feedback/', chatlog.feedback_view, name='chat_feedback'),
+    path('api/admin/insights/assistant/', admin_assistant_view),
     path('api/team/chat-logs/', chatlog.team_view, name='team_chat_logs'),
     path('api/admin/chat-logs/', chatlog.admin_view, name='admin_chat_logs'),
     path('api/auth/ai-usage/', quota.ai_usage_view, name='ai_usage'),

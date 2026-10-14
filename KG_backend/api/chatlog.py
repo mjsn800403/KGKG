@@ -50,8 +50,64 @@ def record_view(request):
         latency_ms=_int(b.get('latency_ms')), llm_latency_ms=_int(b.get('llm_latency_ms')),
         input_tokens=_int(b.get('input_tokens')), output_tokens=_int(b.get('output_tokens')),
         llm_cost=_float(b.get('llm_cost')),
-        llm_usage=b.get('llm_usage') if isinstance(b.get('llm_usage'), dict) else {})
+        llm_usage=b.get('llm_usage') if isinstance(b.get('llm_usage'), dict) else {},
+        client_key=str(b.get('client_key') or '')[:40])
+    _mark_rephrase(log)
     return JsonResponse({'id': log.id}, status=201)
+
+
+REPHRASE_WINDOW_S = 150
+
+
+def _words(text):
+    import re
+    return {w for w in re.findall(r'\w+', text.lower()) if len(w) > 1}
+
+
+def _mark_rephrase(log):
+    """A quick follow-up that mostly repeats the previous question means the
+    previous answer missed: flag that previous row."""
+    from datetime import timedelta
+    prev = (ChatLog.objects.filter(user_id=log.user_id, session_id=log.session_id,
+                                   created_at__gte=log.created_at - timedelta(seconds=REPHRASE_WINDOW_S))
+            .exclude(pk=log.pk).order_by('-id').first())
+    if not prev:
+        return
+    a, b = _words(prev.question), _words(log.question)
+    if a and b and len(a & b) / len(a | b) >= 0.35:
+        ChatLog.objects.filter(pk=prev.pk).update(rephrased=True)
+
+
+@csrf_exempt
+def feedback_view(request):
+    """POST /api/auth/chat-feedback/ {key, kind: vote|copy|source, verdict, reason, comment}
+    — the signed-in user's own exchange only."""
+    from django.db.models import F
+    from django.utils import timezone
+    from .portal import portal_user
+    from .views import _post_body
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method not allowed'}, status=405)
+    user = portal_user(request)
+    if not user:
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    b = _post_body(request)
+    key = str(b.get('key') or '')[:40]
+    qs = ChatLog.objects.filter(client_key=key, user=user) if key else ChatLog.objects.none()
+    if not qs.exists():
+        return JsonResponse({'error': 'not found'}, status=404)
+    kind = b.get('kind')
+    if kind == 'vote':
+        v = _int(b.get('verdict')) or 0
+        qs.update(feedback=1 if v > 0 else -1, feedback_reason=str(b.get('reason') or '')[:20],
+                  feedback_comment=str(b.get('comment') or '')[:1000], feedback_at=timezone.now())
+    elif kind == 'copy':
+        qs.update(copied=True)
+    elif kind == 'source':
+        qs.update(source_clicks=F('source_clicks') + 1)
+    else:
+        return JsonResponse({'error': 'bad kind'}, status=400)
+    return JsonResponse({'ok': True})
 
 
 def _int(v):

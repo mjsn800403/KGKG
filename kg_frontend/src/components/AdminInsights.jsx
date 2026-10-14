@@ -403,3 +403,169 @@ export function GrafanaPanel({ guard }) {
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Assistant behaviour (api/behavior.py): what users ask, time spent, and
+// whether answers helped (👍/👎, copy, source clicks, quick rephrasing).
+// ---------------------------------------------------------------------------
+const dur = (s) => {
+  if (s == null) return '—';
+  if (s < 60) return `${fa(Math.round(s))} ثانیه`;
+  return `${fa(Math.round(s / 6) / 10)} دقیقه`;
+};
+const pctB = (x) => (x == null ? '—' : `${fa(Math.round(x * 1000) / 10)}٪`);
+const REASON_FA = { wrong: 'اشتباه بود', irrelevant: 'ربطی نداشت', incomplete: 'ناقص بود' };
+
+function Conversation({ guard, sessionKey, onClose }) {
+  const params = sessionKey.startsWith('log:') ? { log: sessionKey.slice(4) } : { session: sessionKey };
+  const [data, err] = useLoad(guard, () => adminApi.assistantBehavior(30, params), [guard, sessionKey]);
+  return (
+    <section className="an-card glass" style={{ gridColumn: '1 / -1' }}>
+      <div className="an-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3><Icon name="bot" size={16} /> متن گفتگو</h3>
+        <button className="btn" onClick={onClose}>بستن</button>
+      </div>
+      {!data ? <Loading err={err} /> : data.messages.map((m) => (
+        <div key={m.id} style={{ borderBottom: '1px solid var(--border, #2a2f3a)', padding: '10px 0' }}>
+          <div className="muted" style={{ fontSize: 12 }}>{m.user} · {m.vehicle || 'بدون خودرو'} · {when(m.at)} · {ms(m.latency_ms)}</div>
+          <div style={{ fontWeight: 600, margin: '6px 0' }}>❓ {m.question}</div>
+          <div style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{m.answer || <span className="muted">(پاسخ ثبت نشده)</span>}</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            {m.feedback > 0 && '👍 مفید بود '}
+            {m.feedback < 0 && `👎 ${REASON_FA[m.reason] || m.reason || ''} ${m.comment ? `«${m.comment}»` : ''} `}
+            {m.copied && '· کپی شد '}
+            {m.source_clicks > 0 && `· ${fa(m.source_clicks)} کلیک روی منبع `}
+            {m.rephrased && '· بلافاصله دوباره پرسیده شد '}
+            {!m.grounded && '· بدون منبع'}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+export function AssistantBehaviorPanel({ guard }) {
+  const [days, setDays] = useState(30);
+  const [open, setOpen] = useState(null);
+  const [data, err] = useLoad(guard, () => adminApi.assistantBehavior(days), [guard, days]);
+  const t = data?.totals;
+  return (
+    <>
+      <h1 className="page-title">رفتار کاربران با دستیار</h1>
+      <div className="page-sub">چه می‌پرسند، چقدر وقت می‌گذارند و آیا پاسخ به کارشان آمد</div>
+      <Ranges value={days} onChange={setDays} />
+      {!data ? <Loading err={err} /> : (
+        <>
+          {t.backfilled > 0 && (
+            <div className="page-sub" style={{ marginTop: 8 }}>
+              {fa(t.backfilled)} پرسش قدیمی (پیش از ثبت کامل) فقط در «پرتکرارترین پرسش‌ها» شمرده شده است.
+            </div>
+          )}
+          <div className="an-kpis">
+            <Kpi icon="bot" value={fa(t.questions)} label="پرسش‌ها" />
+            <Kpi icon="users" value={fa(t.users)} label="کاربران" />
+            <Kpi icon="chart" value={fa(t.sessions)} label="گفتگوها" />
+            <Kpi icon="clock" value={dur(t.avg_session_seconds)} label="میانگین زمان هر گفتگو" />
+            <Kpi icon="clock" value={`${fa(t.total_minutes)} دقیقه`} label="کل زمان استفاده" />
+            <Kpi icon="chart" value={pctB(t.satisfaction)} label={`رضایت (${fa(t.rated)} رأی)`} hot={t.satisfaction != null && t.satisfaction < 0.6} />
+            <Kpi icon="x" value={pctB(t.rephrase_rate)} label="دوباره‌پرسی سریع" hot={t.rephrase_rate > 0.2} />
+            <Kpi icon="link" value={pctB(t.source_click_rate)} label="کلیک روی منبع" />
+            <Kpi icon="chart" value={pctB(t.copy_rate)} label="کپی پاسخ" />
+            <Kpi icon="x" value={pctB(t.no_engagement_rate)} label="گفتگو بدون هیچ تعامل" />
+          </div>
+          <div className="an-grid">
+            {open && <Conversation guard={guard} sessionKey={open} onClose={() => setOpen(null)} />}
+            <section className="an-card glass" style={{ gridColumn: '1 / -1' }}>
+              <div className="an-card-head"><h3><Icon name="chart" size={16} /> گفتگوهای اخیر (برای دیدن متن کلیک کنید)</h3></div>
+              <table className="adm-table">
+                <thead><tr><th>کاربر</th><th>خودرو</th><th>اولین پرسش</th><th>پرسش‌ها</th><th>زمان</th><th>بازخورد</th><th>شروع</th></tr></thead>
+                <tbody>
+                  {data.sessions.map((s) => (
+                    <tr key={s.key} onClick={() => setOpen(s.key)} style={{ cursor: 'pointer' }}>
+                      <td>{s.user}<div className="muted" style={{ fontSize: 12 }}>{s.company}</div></td>
+                      <td>{s.vehicle || '—'}</td>
+                      <td>{s.first_question}</td>
+                      <td>{fa(s.questions)}</td>
+                      <td>{dur(s.seconds)}</td>
+                      <td>{s.up ? `👍${fa(s.up)} ` : ''}{s.down ? `👎${fa(s.down)} ` : ''}{s.rephrased ? `🔁${fa(s.rephrased)}` : ''}{!s.up && !s.down && !s.rephrased ? '—' : ''}</td>
+                      <td>{when(s.start)}</td>
+                    </tr>
+                  ))}
+                  {!data.sessions.length && <tr><td colSpan={7} className="muted">هنوز گفتگویی ثبت نشده است.</td></tr>}
+                </tbody>
+              </table>
+            </section>
+            <section className="an-card glass">
+              <div className="an-card-head"><h3><Icon name="x" size={16} /> پاسخ‌های 👎 (برای بررسی)</h3></div>
+              {data.downvoted.length ? (
+                <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+                  {data.downvoted.map((m) => (
+                    <li key={m.id} style={{ marginBottom: 8, cursor: 'pointer' }} onClick={() => setOpen(m.session || `log:${m.id}`)}>
+                      {m.question}
+                      <div className="muted" style={{ fontSize: 12 }}>{REASON_FA[m.reason] || m.reason || 'بدون دلیل'}{m.comment ? ` — «${m.comment}»` : ''} · {m.user} · {m.vehicle || 'بدون خودرو'} · {when(m.at)}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : <div className="muted">رأی منفی‌ای ثبت نشده است.</div>}
+            </section>
+            <section className="an-card glass">
+              <div className="an-card-head"><h3><Icon name="refresh" size={16} /> پرسش‌هایی که بلافاصله دوباره پرسیده شدند</h3></div>
+              {data.rephrased.length ? (
+                <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+                  {data.rephrased.map((m) => (
+                    <li key={m.id} style={{ marginBottom: 8, cursor: 'pointer' }} onClick={() => setOpen(m.session || `log:${m.id}`)}>
+                      {m.question}<div className="muted" style={{ fontSize: 12 }}>{m.user} · {when(m.at)}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : <div className="muted">موردی نیست.</div>}
+            </section>
+            <section className="an-card glass">
+              <div className="an-card-head"><h3><Icon name="search" size={16} /> پرتکرارترین پرسش‌ها</h3></div>
+              <table className="adm-table">
+                <thead><tr><th>پرسش</th><th>تعداد</th></tr></thead>
+                <tbody>
+                  {data.top_questions.map((q) => (<tr key={q.question}><td>{q.question}</td><td>{fa(q.count)}</td></tr>))}
+                  {!data.top_questions.length && <tr><td colSpan={2} className="muted">—</td></tr>}
+                </tbody>
+              </table>
+            </section>
+            <section className="an-card glass">
+              <div className="an-card-head"><h3><Icon name="users" size={16} /> کاربران</h3></div>
+              <table className="adm-table">
+                <thead><tr><th>کاربر</th><th>گفتگو</th><th>پرسش</th><th>زمان</th><th>👍/👎</th></tr></thead>
+                <tbody>
+                  {data.users.map((u) => (
+                    <tr key={u.user_id}><td>{u.user}<div className="muted" style={{ fontSize: 12 }}>{u.company}</div></td>
+                      <td>{fa(u.sessions)}</td><td>{fa(u.questions)}</td><td>{dur(u.seconds)}</td><td>{fa(u.up)} / {fa(u.down)}</td></tr>
+                  ))}
+                  {!data.users.length && <tr><td colSpan={5} className="muted">—</td></tr>}
+                </tbody>
+              </table>
+            </section>
+            <section className="an-card glass">
+              <div className="an-card-head"><h3><Icon name="car" size={16} /> رضایت به تفکیک خودرو</h3></div>
+              <table className="adm-table">
+                <thead><tr><th>خودرو</th><th>پرسش</th><th>رضایت</th><th>دوباره‌پرسی</th></tr></thead>
+                <tbody>
+                  {data.by_car.map((r) => (<tr key={r.name}><td>{r.name}</td><td>{fa(r.questions)}</td><td>{pctB(r.satisfaction)}</td><td>{fa(r.rephrased)}</td></tr>))}
+                  {!data.by_car.length && <tr><td colSpan={4} className="muted">—</td></tr>}
+                </tbody>
+              </table>
+            </section>
+            <section className="an-card glass">
+              <div className="an-card-head"><h3><Icon name="chart" size={16} /> رضایت به تفکیک شرکت</h3></div>
+              <table className="adm-table">
+                <thead><tr><th>شرکت</th><th>پرسش</th><th>رضایت</th><th>دوباره‌پرسی</th></tr></thead>
+                <tbody>
+                  {data.by_company.map((r) => (<tr key={r.name}><td>{r.name}</td><td>{fa(r.questions)}</td><td>{pctB(r.satisfaction)}</td><td>{fa(r.rephrased)}</td></tr>))}
+                  {!data.by_company.length && <tr><td colSpan={4} className="muted">—</td></tr>}
+                </tbody>
+              </table>
+            </section>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
