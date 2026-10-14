@@ -79,9 +79,23 @@ def admin_search_view(request):
     # Assistant questions answered without any grounding source = the same
     # "content gap" signal from the chat side.
     ungrounded = (ChatLog.objects.filter(created_at__gte=since, grounded=False)
+                  .exclude(mode='backfill')
                   .values('question', 'vehicle', 'created_at').order_by('-created_at')[:50])
+    # What people actually open (ActivityLog, long history) — demand signal
+    # that exists even before SearchLog had data.
+    views = ActivityLog.objects.filter(created_at__gte=since,
+                                       action__in=('view_node', 'view_section'))
+    top_viewed = [{'title': r['node_title'], 'car': ' '.join(filter(None, (r['car__brand_name'], r['car__car_name']))),
+                   'count': r['n'], 'users': r['u'], 'last': r['last'].isoformat()}
+                  for r in (views.exclude(node_title='')
+                            .values('node_title', 'car__brand_name', 'car__car_name')
+                            .annotate(n=Count('id'), u=Count('user_id', distinct=True),
+                                      last=Max('created_at'))
+                            .order_by('-n')[:50])]
     return JsonResponse({
         'days': days,
+        'total_views': views.count(),
+        'top_viewed': top_viewed,
         'total_searches': total,
         'searchers': qs.values('user_id').distinct().count(),
         'zero_result_searches': zero.count(),

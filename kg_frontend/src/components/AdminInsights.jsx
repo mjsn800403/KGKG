@@ -267,6 +267,16 @@ export function SearchInsightsPanel({ guard }) {
               <div className="an-card-head"><h3><Icon name="search" size={16} /> پرتکرارترین جستجوها</h3></div>
               <QueryTable rows={data.top_queries} empty="هنوز جستجویی ثبت نشده است." />
             </section>
+            <section className="an-card glass" style={{ gridColumn: '1 / -1' }}>
+              <div className="an-card-head"><h3><Icon name="chart" size={16} /> پربازدیدترین صفحات ({fa(data.total_views)} بازدید)</h3></div>
+              <table className="adm-table">
+                <thead><tr><th>صفحه</th><th>خودرو</th><th>بازدید</th><th>کاربران</th><th>آخرین بار</th></tr></thead>
+                <tbody>
+                  {data.top_viewed.map((r, i) => (<tr key={i}><td>{r.title}</td><td>{r.car || '—'}</td><td>{fa(r.count)}</td><td>{fa(r.users)}</td><td>{when(r.last)}</td></tr>))}
+                  {!data.top_viewed.length && <tr><td colSpan={5} className="muted">بازدیدی در این بازه نیست.</td></tr>}
+                </tbody>
+              </table>
+            </section>
             <section className="an-card glass">
               <div className="an-card-head"><h3><Icon name="car" size={16} /> جستجو به تفکیک خودرو</h3></div>
               <Bars rows={data.by_car} label={(r) => r.car || '—'} value={(r) => r.searches} />
