@@ -19,7 +19,7 @@ from django.utils import timezone
 
 log = logging.getLogger('kgkg.alerts')
 
-OWNED_PREFIXES = ('sec:', 'ai:', 'sms:')
+OWNED_PREFIXES = ('sec:', 'ai:', 'sms:', 'infra:')
 
 
 def _env_num(name, default, cast=int):
@@ -45,7 +45,7 @@ _AUTH_LOGIN = ('auth.login', 'auth.verify_otp', 'auth.recover_reset')
 
 def evaluate():
     firing = {}
-    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _ai_health):
+    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _ai_health, _infra):
         try:
             firing.update(rule())
         except Exception:
@@ -146,6 +146,66 @@ def _ai_health():
     return out
 
 
+# INFRA_RULES_V1
+# Server / container / uptime rules, read from Prometheus (ops/observability,
+# loopback :9090). Same delivery path as everything else: SMS + cooldown.
+PROM_URL = os.environ.get('KG_PROMETHEUS_URL', 'http://127.0.0.1:9090')
+DISK_PCT = _env_num('KG_ALERT_DISK_PCT', 85, float)
+MEM_FREE_PCT = _env_num('KG_ALERT_MEM_FREE_PCT', 10, float)
+RESTARTS_30M = _env_num('KG_ALERT_RESTARTS', 3)
+TLS_DAYS = _env_num('KG_ALERT_TLS_DAYS', 14)
+# SMS bodies may not contain links, so probe targets get plain names.
+PROBE_NAMES = {
+    'https://kgtechvault.com/': 'وب‌سایت',
+    'https://kgtechvault.com/kg-api/api/health/': 'API بک‌اند',
+    'https://api.metisai.ir/': 'سرویس هوش مصنوعی Metis',
+    'https://console.melipayamak.com/': 'سرویس پیامک ملی‌پیامک',
+}
+
+
+def _prom(query):
+    import json
+    import urllib.parse
+    import urllib.request
+    url = f"{PROM_URL}/api/v1/query?{urllib.parse.urlencode({'query': query})}"
+    with urllib.request.urlopen(url, timeout=10) as r:
+        return json.load(r)['data']['result']
+
+
+def _infra():
+    out = {}
+    try:
+        _prom('up')
+    except Exception as e:
+        return {'infra:prometheus': ('warning', 'پایش سرور (Prometheus) در دسترس نیست؛ هشدارهای دیسک/حافظه/دسترس‌پذیری کار نمی‌کنند.',
+                                     {'error': str(e)[:200]})}
+    for r in _prom('up{job="node"} == 0'):
+        out['infra:node_exporter'] = ('warning', 'آمار سرور (node-exporter) دریافت نمی‌شود.', {})
+    for r in _prom('100*(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})'):
+        pct = float(r['value'][1])
+        if pct >= DISK_PCT:
+            out['infra:disk'] = ('critical' if pct >= 95 else 'warning',
+                                 f'دیسک سرور {pct:.0f}٪ پر است (آستانه {DISK_PCT:.0f}٪).', {'used_pct': round(pct, 1)})
+    for r in _prom('100*node_memory_MemAvailable_bytes/node_memory_MemTotal_bytes'):
+        free = float(r['value'][1])
+        if free <= MEM_FREE_PCT:
+            out['infra:memory'] = ('critical', f'حافظهٔ آزاد سرور فقط {free:.0f}٪ است.', {'free_pct': round(free, 1)})
+    for r in _prom(f'changes(container_start_time_seconds{{name!=""}}[30m]) >= {RESTARTS_30M}'):
+        name = r['metric'].get('name', '?')
+        out[f'infra:restart:{name}'] = ('critical', f'کانتینر {name} در ۳۰ دقیقهٔ اخیر {int(float(r["value"][1]))} بار ری‌استارت شده است.',
+                                        {'container': name})
+    for r in _prom('max_over_time(probe_success[5m]) == 0'):
+        t = r['metric'].get('target', '')
+        if t in PROBE_NAMES:
+            out[f'infra:down:{t}'] = ('critical', f'{PROBE_NAMES[t]} در ۵ دقیقهٔ اخیر از دسترس خارج بوده است.', {'target': t})
+    for r in _prom('(probe_ssl_earliest_cert_expiry - time())/86400'):
+        t, d = r['metric'].get('target', ''), float(r['value'][1])
+        if t in PROBE_NAMES and d < TLS_DAYS:
+            out[f'infra:tls:{t}'] = ('critical' if d < 3 else 'warning',
+                                     f'گواهی امنیتی {PROBE_NAMES[t]} {max(d, 0):.0f} روز دیگر منقضی می‌شود.', {'target': t, 'days': round(d, 1)})
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Delivery
 # ---------------------------------------------------------------------------
@@ -156,7 +216,7 @@ def _phones():
 
 def deliver(key, severity, message):
     """SMS a newly-opened alert to the on-call numbers. Best-effort."""
-    if not (severity == 'critical' or key.startswith('sec:')):
+    if not (severity == 'critical' or key.startswith(('sec:', 'infra:'))):
         return
     phones = _phones()
     if not phones:

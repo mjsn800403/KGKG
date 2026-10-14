@@ -69,6 +69,7 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
+    ports: ["127.0.0.1:9090:9090"]  # alert_rules._infra
     mem_limit: 1g
     restart: unless-stopped
 
