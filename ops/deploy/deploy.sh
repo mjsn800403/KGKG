@@ -42,8 +42,14 @@ exec > >(tee -a "$LOG") 2>&1
 say()  { printf '\n[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 die()  { say "DEPLOY ABORTED: $*"; exit 1; }
 prod_clean() { [[ -z $(git -C "$PROD" status --porcelain --untracked-files=no) ]]; }
-port_pid() { ss -ltnp "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2 || true; }
-stop_port() { local p; p=$(port_pid "$1"); [[ -n $p ]] && kill "$p" 2>/dev/null && sleep 2; return 0; }
+port_pids() { ss -ltnp "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true; }
+# Kill EVERY process on the port (a gunicorn master respawns a killed worker).
+stop_port() {
+  local p i; p=$(port_pids "$1"); [[ -z $p ]] && return 0
+  kill $p 2>/dev/null || true
+  for ((i = 0; i < 20; i++)); do [[ -z $(port_pids "$1") ]] && return 0; sleep 1; done
+  kill -9 $(port_pids "$1") 2>/dev/null || true; return 0
+}
 wait_http() {  # url seconds
   local i
   for ((i = 0; i < $2; i++)); do
@@ -161,7 +167,7 @@ CSRF_COOKIE_SECURE = False
 SECURE_HSTS_SECONDS = 0
 PY
 stg_env() {  # run a command with the staging backend environment
-  ( cd "$STG/backend" && set -a && . "$PROD/KG_backend/.env.prod" && set +a &&
+  ( trap - ERR; cd "$STG/backend" && set -a && . "$PROD/KG_backend/.env.prod" && set +a &&
     unset SENTRY_DSN SMS_API_KEY SMS_USERNAME SMS_FROM TURNSTILE_SECRET KG_ALERT_PHONES &&
     export KG_WARMUP=0 KG_LOG_DIR=$STG/logs DJANGO_SETTINGS_MODULE=staging_settings \
            PYTHONPATH=$STG/stagecfg:$STG/backend HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 &&
@@ -177,7 +183,7 @@ stg_env setsid nohup "$VENV/gunicorn" KG_backend.wsgi:application --bind 127.0.0
   --workers 2 --threads 4 --timeout 300 > "$STG/logs/backend.out" 2>&1 < /dev/null &
 stop_port $STG_FE
 TERMS=$(grep -E '^TERMS_JSON_PATH=' "$PROD/kg_frontend/.env.production" | cut -d= -f2- || true)
-( cd "$W/kg_frontend" && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root NODE_ENV=production \
+( trap - ERR; cd "$W/kg_frontend" && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root NODE_ENV=production \
     BACKEND_URL=http://127.0.0.1:$STG_BE API_BASE_INTERNAL=http://127.0.0.1:$STG_BE TERMS_JSON_PATH="$TERMS" \
     setsid nohup npx next start -p $STG_FE -H 127.0.0.1 > "$STG/logs/frontend.out" 2>&1 < /dev/null & )
 wait_http http://127.0.0.1:$STG_BE/api/health/ 90 || die "staging backend did not start (log: $STG/logs/backend.out)"
