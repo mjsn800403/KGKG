@@ -155,6 +155,9 @@ git -C "$PROD" merge-base --is-ancestor "$PREV" "$SHA" || die "$SHORT does not c
 if [[ $SHA == "$PREV" && $FORCE -eq 0 && $MODE == full ]]; then say "already live; nothing to do (use --force to rebuild)"; exit 0; fi
 
 # ---- 1. gate ---------------------------------------------------------------
+# Old release checkouts (from earlier or aborted runs) are disposable; the lock
+# guarantees no other deploy is using them. ~0.7 GB each with node_modules.
+for old in "$REL"/w-*; do [[ -d $old ]] && git -C "$PROD" worktree remove --force "$old" 2>/dev/null; done; rm -rf "$REL"/w-*
 W=$REL/w-$SHORT
 git -C "$PROD" worktree remove --force "$W" 2>/dev/null || rm -rf "$W"
 git -C "$PROD" worktree prune
