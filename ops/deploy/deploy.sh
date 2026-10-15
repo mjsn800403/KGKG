@@ -58,6 +58,20 @@ wait_http() {  # url seconds
   done
   return 1
 }
+# Graceful gunicorn reload (HUP), then wait until EVERY old worker is gone: a
+# smoke test right after HUP can still hit an old worker running the old code.
+reload_backend() {
+  local main old cur i
+  main=$(systemctl show -p MainPID --value kgkg-backend)
+  old=$(pgrep -P "$main" | sort || true)
+  systemctl kill -s HUP --kill-whom=main kgkg-backend
+  for ((i = 0; i < 90; i++)); do
+    sleep 1
+    cur=$(pgrep -P "$main" | sort || true)
+    [[ -n $cur && -z $(comm -12 <(echo "$old") <(echo "$cur")) ]] && return 0
+  done
+  say "WARNING: old gunicorn workers still alive after 90s"
+}
 sqlite_copy() {  # src dst   (online backup API: consistent even while prod writes)
   python3 - "$1" "$2" <<'PY'
 import sqlite3, sys, os
@@ -93,7 +107,7 @@ rollback_to() {  # sha build-dir-name(or empty)
     ln -sfn "$build" "$PROD/kg_frontend/.next.new" && mv -Tf "$PROD/kg_frontend/.next.new" "$PROD/kg_frontend/.next"
     systemctl restart kgkg-frontend
   fi
-  systemctl kill -s HUP --kill-whom=main kgkg-backend
+  reload_backend
   wait_http http://127.0.0.1:8000/api/health/ 60 || say "WARNING: backend health not back after rollback"
   wait_http http://127.0.0.1:3000/ 90 || say "WARNING: frontend not back after rollback"
   say "Rolled back. Database migrations are not reversed; DB backups: $REL/db-backups/"
@@ -231,7 +245,7 @@ if (( NEED_FE )); then
   ln -sfn "$NEW_BUILD" "$FE_DIR/.next.new" && mv -Tf "$FE_DIR/.next.new" "$FE_DIR/.next"
 fi
 
-systemctl kill -s HUP --kill-whom=main kgkg-backend
+reload_backend
 if (( NEED_FE )); then
   T0=$(date +%s%N)
   systemctl restart kgkg-frontend
