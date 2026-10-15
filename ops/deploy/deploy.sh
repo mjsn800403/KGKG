@@ -42,7 +42,7 @@ exec > >(tee -a "$LOG") 2>&1
 say()  { printf '\n[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 die()  { say "DEPLOY ABORTED: $*"; exit 1; }
 prod_clean() { [[ -z $(git -C "$PROD" status --porcelain --untracked-files=no) ]]; }
-port_pid() { ss -ltnp "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2; }
+port_pid() { ss -ltnp "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2 || true; }
 stop_port() { local p; p=$(port_pid "$1"); [[ -n $p ]] && kill "$p" 2>/dev/null && sleep 2; return 0; }
 wait_http() {  # url seconds
   local i
@@ -70,6 +70,9 @@ save_state() {
   printf 'CURRENT=%s\nPREVIOUS=%s\nCURRENT_BUILD=%s\nPREVIOUS_BUILD=%s\nDEPLOYED_AT=%s\n' \
     "$1" "$2" "$3" "$4" "$TS" > "$STATE"
 }
+
+# Any unexpected non-zero exit (set -e) is reported with its line, never silent.
+trap 'say "DEPLOY FAILED at line $LINENO: $BASH_COMMAND"' ERR
 
 exec 9> "$REL/deploy.lock"
 flock -n 9 || die "another deploy is running ($REL/deploy.lock)"
@@ -189,7 +192,7 @@ if [[ $MODE == staging ]]; then say "STAGING PASSED for $SHORT (production untou
 say "3/4 PROMOTE ${PREV:0:9} -> $SHORT"
 prod_clean || die "live tree changed during the deploy; aborting before touching it"
 sqlite_copy "$PROD/KG_backend/db.sqlite3" "$REL/db-backups/db-$TS-${PREV:0:9}.sqlite3"
-ls -1t "$REL"/db-backups/db-*.sqlite3 | tail -n +4 | xargs -r rm -f
+{ ls -1t "$REL"/db-backups/db-*.sqlite3 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
 CHANGED=$(git -C "$PROD" diff --name-only "$PREV" "$SHA")
 git -C "$PROD" merge -q --ff-only "$SHA"
 
@@ -246,6 +249,6 @@ timeout 60 git -C "$PROD" push -q origin "HEAD:$(git -C "$PROD" rev-parse --abbr
   || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin HEAD $TAG"
 # keep the live build, the rollback build and the newest KEEP_BUILDS others
 ( cd "$FE_DIR" && ls -1dt .next-*/ 2>/dev/null | sed 's#/$##' | grep -vxF -e "$NEW_BUILD" -e "$OLD_BUILD" \
-    | tail -n +$((KEEP_BUILDS)) | xargs -r rm -rf )
+    | tail -n +$((KEEP_BUILDS)) | xargs -r rm -rf ) || true
 git -C "$PROD" worktree remove --force "$W" 2>/dev/null || true
 say "DEPLOYED $SHORT as $TAG (previous ${PREV:0:9}; rollback: ops/deploy/deploy.sh --rollback)"
