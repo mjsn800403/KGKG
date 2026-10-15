@@ -869,6 +869,11 @@ export const adminApi = {
   assistantBehavior: (days = 30, extra = {}) =>
     adminFetch(`/api/admin/insights/assistant/?${new URLSearchParams({ days, ...extra })}`),
   grafanaTicket: () => adminFetch('/api/admin/grafana-ticket/', { method: 'POST', body: '{}' }),
+  // A/B experiments (api/flags.py).
+  flags: () => adminFetch('/api/admin/flags/'),
+  saveFlag: (body) => adminFetch('/api/admin/flags/', { method: 'POST', body: JSON.stringify(body) }),
+  flagResults: (key, days = 30) =>
+    adminFetch(`/api/admin/flags/${encodeURIComponent(key)}/results/?days=${days}`),
   analytics: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/analytics/${qs ? `?${qs}` : ''}`);

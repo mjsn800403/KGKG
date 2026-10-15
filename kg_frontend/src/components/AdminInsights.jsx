@@ -569,3 +569,132 @@ export function AssistantBehaviorPanel({ guard }) {
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// A/B experiments (api/flags.py)
+// ---------------------------------------------------------------------------
+const pct = (r) => (r == null ? '—' : `${fa(Math.round(r * 1000) / 10)}٪`);
+const pval = (p) => (p == null ? '—' : p < 0.001 ? '< ۰٫۰۰۱' : fa(Math.round(p * 1000) / 1000));
+const METRICS = [
+  ['grounded', 'پاسخ مستند (منبع‌دار)', true],
+  ['up', 'رضایت (👍 از کل رأی‌ها)', true],
+  ['rephrased', 'بازنویسی پرسش', false],
+  ['copied', 'کپی پاسخ', true],
+  ['with_source_click', 'کلیک روی منبع', true],
+  ['degraded', 'پاسخ بدون مدل', false],
+];
+
+function FlagResults({ guard, flagKey }) {
+  const [days, setDays] = useState(30);
+  const [data, err] = useLoad(guard, () => adminApi.flagResults(flagKey, days), [guard, flagKey, days]);
+  return (
+    <section className="an-card glass an-span" style={{ marginTop: 16 }}>
+      <div className="an-card-head"><h3><Icon name="chart" size={16} /> نتیجهٔ آزمایش <span dir="ltr">{flagKey}</span></h3></div>
+      <Ranges value={days} onChange={setDays} />
+      {!data ? <Loading err={err} /> : (
+        <>
+          {!data.enough_data && (
+            <div className="muted" style={{ marginBottom: 8 }}>
+              دادهٔ کافی نیست (کمتر از ۱۰۰ پاسخ در هر گروه)؛ اعداد زیر هنوز قابل اتکا نیستند.
+            </div>
+          )}
+          <table className="adm-table">
+            <thead><tr><th>شاخص</th><th>گروه روشن</th><th>گروه خاموش</th><th>p-value</th></tr></thead>
+            <tbody>
+              <tr><td>تعداد پاسخ</td><td>{fa(data.arms.on.answers)}</td><td>{fa(data.arms.off.answers)}</td><td /></tr>
+              <tr><td>کاربران</td><td>{fa(data.arms.on.users)}</td><td>{fa(data.arms.off.users)}</td><td /></tr>
+              {METRICS.map(([k, label, higherIsBetter]) => {
+                const t = data.tests[k];
+                const sig = t.p_value != null && t.p_value < 0.05 && data.enough_data;
+                const better = sig && ((t.on_rate > t.off_rate) === higherIsBetter);
+                return (
+                  <tr key={k}>
+                    <td>{label}</td>
+                    <td style={sig ? { color: better ? 'var(--ok, #30a46c)' : 'var(--danger, #e5484d)', fontWeight: 600 } : undefined}>{pct(t.on_rate)}</td>
+                    <td>{pct(t.off_rate)}</td>
+                    <td>{pval(t.p_value)}</td>
+                  </tr>
+                );
+              })}
+              <tr><td>میانهٔ زمان پاسخ</td><td>{ms(data.arms.on.p50_latency_ms)}</td><td>{ms(data.arms.off.p50_latency_ms)}</td><td /></tr>
+              <tr><td>میانگین هزینهٔ هر پاسخ</td><td>{money(data.arms.on.avg_cost)}</td><td>{money(data.arms.off.avg_cost)}</td><td /></tr>
+            </tbody>
+          </table>
+          {data.untagged_answers > 0 && (
+            <div className="muted" style={{ marginTop: 8 }}>{fa(data.untagged_answers)} پاسخ پیش از تعریف این آزمایش ثبت شده و در مقایسه نیست.</div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+export function ExperimentsPanel({ guard }) {
+  const [reload, setReload] = useState(0);
+  const [data, err] = useLoad(guard, () => adminApi.flags(), [guard, reload]);
+  const [selected, setSelected] = useState('');
+  const [draft, setDraft] = useState({ key: '', description: '' });
+  // guard() flashes the server's error message and returns null on failure.
+  const save = useCallback(async (body) => {
+    const r = await guard(() => adminApi.saveFlag(body));
+    if (r) setReload((n) => n + 1);
+  }, [guard]);
+
+  return (
+    <>
+      <h1 className="page-title">آزمایش‌ها (A/B)</h1>
+      <div className="page-sub">
+        هر آزمایش کاربران را با یک تقسیم ثابت به دو گروه «روشن» و «خاموش» می‌برد؛ گروه هر کاربر در هر پاسخ دستیار ثبت می‌شود
+        و نتیجه از روی رضایت، بازنویسی پرسش و مستند بودن پاسخ مقایسه می‌شود.
+      </div>
+      {!data ? <Loading err={err} /> : (
+        <section className="an-card glass an-span" style={{ marginTop: 16 }}>
+          <table className="adm-table">
+            <thead><tr><th>کلید</th><th>توضیح</th><th>فعال</th><th>درصد گروه روشن</th><th>کاربران روشن / خاموش</th><th /></tr></thead>
+            <tbody>
+              {data.flags.map((f) => (
+                <tr key={f.key}>
+                  <td dir="ltr">{f.key}</td>
+                  <td>{f.description}</td>
+                  <td>
+                    <input type="checkbox" checked={f.enabled} aria-label="فعال"
+                      onChange={(e) => save({ key: f.key, enabled: e.target.checked })} />
+                  </td>
+                  <td>
+                    <select value={f.rollout_pct} aria-label="درصد"
+                      onChange={(e) => save({ key: f.key, rollout_pct: Number(e.target.value) })}>
+                      {[0, 10, 25, 50, 75, 100].concat([0, 10, 25, 50, 75, 100].includes(f.rollout_pct) ? [] : [f.rollout_pct])
+                        .map((p) => <option key={p} value={p}>{fa(p)}٪</option>)}
+                    </select>
+                  </td>
+                  <td>{fa(f.arm_sizes?.on)} / {fa(f.arm_sizes?.off)}</td>
+                  <td>
+                    <button className="range-chip" onClick={() => setSelected(f.key)}>نتیجه</button>{' '}
+                    <button className="range-chip" onClick={() => {
+                      if (window.confirm(`آزمایش ${f.key} حذف شود؟`)) save({ key: f.key, delete: true });
+                    }}>حذف</button>
+                  </td>
+                </tr>
+              ))}
+              {!data.flags.length && <tr><td colSpan={6} className="muted">هنوز آزمایشی تعریف نشده است.</td></tr>}
+              <tr>
+                <td><input dir="ltr" placeholder="new_flag_key" value={draft.key}
+                  onChange={(e) => setDraft({ ...draft, key: e.target.value.trim() })} /></td>
+                <td colSpan={4}><input style={{ width: '100%' }} placeholder="توضیح آزمایش" value={draft.description}
+                  onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></td>
+                <td><button className="range-chip" disabled={!draft.key} onClick={async () => {
+                  await save({ key: draft.key, description: draft.description, enabled: false, rollout_pct: 0 });
+                  setDraft({ key: '', description: '' });
+                }}>افزودن</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="muted" style={{ marginTop: 8 }}>
+            آزمایش تازه خاموش و ۰٪ ساخته می‌شود؛ تا وقتی کدی آن کلید را نخواند اثری ندارد. کلید <span dir="ltr">mq_translate</span> ترجمهٔ پرسش فارسی پیش از جستجو را کنترل می‌کند.
+          </div>
+        </section>
+      )}
+      {selected && <FlagResults guard={guard} flagKey={selected} />}
+    </>
+  );
+}

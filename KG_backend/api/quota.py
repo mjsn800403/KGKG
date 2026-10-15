@@ -70,9 +70,10 @@ def ai_usage_view(request):
         return JsonResponse({'error': 'unauthorized'}, status=401)
     u = usage(user)
     if request.method != 'POST':
+        from .flags import flags_for
         if u['remaining'] <= 0:
-            return JsonResponse({**u, 'error': exhausted_message(u)}, status=429)
-        return JsonResponse(u)
+            return JsonResponse({**u, 'error': exhausted_message(u), 'flags': flags_for(user)}, status=429)
+        return JsonResponse({**u, 'flags': flags_for(user)})
     if u['remaining'] <= 0:
         return JsonResponse({'error': exhausted_message(u), 'quota': u}, status=429)
     from .views import _post_body

@@ -100,8 +100,10 @@ const TRANSLATE_PROMPT = [
   'Persian question: ',
 ].join('\n');
 
-async function translateQuery(q) {
-  if (!MQ_TRANSLATE || !(API_KEY && BOT_ID) || !q || !FA_RE.test(q)) return null;
+// `enabled` is the user's mq_translate A/B arm (api/flags.py) when that flag
+// is defined, else the RAG_MQ_TRANSLATE env default.
+async function translateQuery(q, enabled = MQ_TRANSLATE) {
+  if (!enabled || !(API_KEY && BOT_ID) || !q || !FA_RE.test(q)) return null;
   const key = q.trim();
   if (_mqCache.has(key)) return _mqCache.get(key);
   try {
@@ -705,6 +707,8 @@ export async function POST(request) {
     }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }))
       .catch(() => ({ status: 0, body: {} }));
     let quota = null;
+    // A/B arms for this user (api/flags.py), delivered with the quota read.
+    let flags = {};
     {
       const q = await quotaCall('GET');
       if (q.status === 429) {
@@ -714,7 +718,9 @@ export async function POST(request) {
         return Response.json({ error: 'بررسی سهمیهٔ دستیار ممکن نشد؛ کمی بعد دوباره تلاش کنید.' },
           { status: 503 });
       }
-      quota = q.body;
+      const { flags: arms, ...usage } = q.body || {};
+      quota = usage;
+      flags = arms && typeof arms === 'object' ? arms : {};
     }
     const charge = async (payload) => {
       if (payload.degraded) return payload;
@@ -748,6 +754,7 @@ export async function POST(request) {
           llm_cost: llm.cost,
           llm_usage: llm.usage || {},
           client_key: logKey,
+          flags,
         }),
         signal: AbortSignal.timeout(10000),
       }).catch((e) => console.error('chat-log record failed:', e));
@@ -820,7 +827,7 @@ export async function POST(request) {
       // translation means we retrieve with the original Persian, exactly as
       // before. NOT applied to /api/diagnose above -- that engine matches
       // Persian symptom text.
-      const translated = await translateQuery(retrievalQuery);
+      const translated = await translateQuery(retrievalQuery, flags.mq_translate ?? MQ_TRANSLATE);
       const assistQuery = translated || retrievalQuery;
       try {
         rag = await backend('/api/assist/', { query: assistQuery, brand, model, car }, token);

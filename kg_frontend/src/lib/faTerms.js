@@ -118,7 +118,7 @@ function buildIndex(pairs) {
   return map;
 }
 
-function useFallback() {
+function applyFallback() {
   _state.index = buildIndex(FALLBACK_PAIRS);
   _state.faSet = new Set(FALLBACK_PAIRS.map(([, fa]) => normFa(fa)));
   _state.fallback = true;
@@ -149,7 +149,7 @@ function ensureLoaded() {
     }
   }
   // keep previously-loaded good data; only fall back if we never loaded any
-  if (!_state.index) useFallback();
+  if (!_state.index) applyFallback();
 }
 
 // Core scanner: walks the string's word tokens, calls onMatch(candidate,

@@ -29,6 +29,7 @@ def _clean_sources(raw):
 
 @csrf_exempt
 def record_view(request):
+    from .flags import clean_flags
     from .portal import portal_user
     from .views import _post_body
     if request.method != 'POST':
@@ -51,7 +52,8 @@ def record_view(request):
         input_tokens=_int(b.get('input_tokens')), output_tokens=_int(b.get('output_tokens')),
         llm_cost=_float(b.get('llm_cost')),
         llm_usage=b.get('llm_usage') if isinstance(b.get('llm_usage'), dict) else {},
-        client_key=str(b.get('client_key') or '')[:40])
+        client_key=str(b.get('client_key') or '')[:40],
+        flags=clean_flags(b.get('flags')))
     _mark_rephrase(log)
     return JsonResponse({'id': log.id}, status=201)
 

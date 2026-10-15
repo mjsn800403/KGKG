@@ -1,32 +1,69 @@
-name: backend-tests
+name: ci
 
+# Same checks as the server-side deploy gate (ops/deploy/gate.sh), on every
+# branch and pull request. Production deploys happen on the server through
+# ops/deploy/deploy.sh, which re-runs this gate on the exact commit.
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  rag-tests:
+  backend:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: KG_backend
     env:
-      # Boot settings without a real prod key; tests need no secret.
       DJANGO_DEBUG: "true"
+      KG_ADMIN_TOKEN: ci-dummy-token
+      KG_ENV_FILE: /tmp/ci-dummy.env
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      KG_WARMUP: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install lean test deps
-        # The RAG retrieve/service/feedback tests stub the embedding encoder, so
-        # we skip the heavy torch / sentence-transformers install and only pull
-        # what the import chain and sqlite-vec index actually need.
+          cache: pip
+      - name: System libraries (WeasyPrint PDF reports)
+        run: sudo apt-get update -q && sudo apt-get install -yq libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b
+      - name: Install dependencies
+        # torch is installed CPU-only; the RAG tests stub the embedding model.
         run: |
           python -m pip install --upgrade pip
-          pip install "Django>=4.2,<6" "django-cors-headers>=4.0" \
-                      "beautifulsoup4>=4.12" "html5lib>=1.1" \
-                      "numpy>=1.26" "sqlite-vec>=0.1.6"
-      - name: Run RAG integration + unit tests
-        run: python manage.py test api.rag -v 2
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "Django>=4.2,<6" "django-cors-headers>=4.0" "beautifulsoup4>=4.12" "html5lib>=1.1" \
+                      "numpy>=1.26,<2" "sqlite-vec>=0.1.6" "sentence-transformers>=2.7" "sentry-sdk>=2.0,<3" \
+                      weasyprint pillow requests
+      - name: Django system check
+        run: python manage.py check
+      - name: Migrations match models
+        run: python manage.py makemigrations --check --dry-run
+      - name: Full test suite
+        run: python manage.py test --noinput
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kg_frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: kg_frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Lint (ratchet, see ops/deploy/lint_max_warnings)
+        run: npx eslint src --max-warnings "$(cat ../ops/deploy/lint_max_warnings)"
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE: /kg-api

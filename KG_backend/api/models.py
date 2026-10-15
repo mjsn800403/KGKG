@@ -1307,6 +1307,7 @@ class ChatLog(models.Model):
     copied = models.BooleanField(default=False)
     source_clicks = models.IntegerField(default=0)
     rephrased = models.BooleanField(default=False)  # next question = same one reworded, quickly
+    flags = models.JSONField(default=dict, blank=True)  # A/B arms at answer time (api/flags.py)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1377,3 +1378,23 @@ class SearchLog(models.Model):
             models.Index(fields=['car', 'created_at']),
             models.Index(fields=['company_id', 'created_at']),
         ]
+
+
+class FeatureFlag(models.Model):
+    """A/B experiment or gradual-rollout switch (api/flags.py). A user is in the
+    "on" arm when the flag is enabled and a stable hash of (key, user id) falls
+    under ``rollout_pct``; ``force_on`` / ``force_off`` pin user ids."""
+    key = models.CharField(max_length=60, unique=True)
+    description = models.CharField(max_length=300, blank=True, default='')
+    enabled = models.BooleanField(default=False)
+    rollout_pct = models.PositiveSmallIntegerField(default=0)   # 0..100
+    force_on = models.JSONField(default=list, blank=True)       # user ids always "on"
+    force_off = models.JSONField(default=list, blank=True)      # user ids always "off" (wins)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+
+    def __str__(self):
+        return f'{self.key} ({"on" if self.enabled else "off"} {self.rollout_pct}%)'

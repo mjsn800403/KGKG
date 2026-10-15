@@ -9,6 +9,7 @@ from . import mediaauth
 from . import vncauth
 from . import grafanaauth
 from . import chatlog
+from . import flags
 
 
 def _api_not_found(request, rest=None):
@@ -45,6 +46,9 @@ urlpatterns = [
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
     path('api/auth/chat-log/', chatlog.record_view, name='chat_log_record'),
+    path('api/auth/flags/', flags.flags_view, name='user_flags'),
+    path('api/admin/flags/', flags.admin_flags_view, name='admin_flags'),
+    path('api/admin/flags/<str:key>/results/', flags.admin_flag_results_view, name='admin_flag_results'),
     path('api/auth/chat-feedback/', chatlog.feedback_view, name='chat_feedback'),
     path('api/admin/insights/assistant/', admin_assistant_view),
     path('api/team/chat-logs/', chatlog.team_view, name='team_chat_logs'),

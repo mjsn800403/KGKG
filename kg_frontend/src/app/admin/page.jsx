@@ -23,7 +23,7 @@ import AdminDashboard from '@/components/AdminDashboard';
 import JalaliDateTimeInput from '@/components/JalaliDateTimeInput';
 import RequestsInbox from '@/components/RequestsInbox';
 import ChatLogsView from '@/components/ChatLogsView';
-import { AiCostPanel, AssistantBehaviorPanel, AuditLogPanel, FunnelPanel, GrafanaPanel, SearchInsightsPanel } from '@/components/AdminInsights';
+import { AiCostPanel, AssistantBehaviorPanel, AuditLogPanel, ExperimentsPanel, FunnelPanel, GrafanaPanel, SearchInsightsPanel } from '@/components/AdminInsights';
 import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
 import { adminApi, adminLogout, getAdminUser, obtainAdminToken, shareAdminToken } from '@/utils/api';
 
@@ -222,6 +222,7 @@ const SECTIONS = [
   { id: 'search-insights', label: 'جستجوها و کمبود محتوا', icon: 'search', desc: 'پرتکرارترین و بی‌نتیجه‌ترین جستجوهای کاربران' },
   { id: 'assistant-behavior', label: 'رفتار کاربران با دستیار', icon: 'bot', desc: 'پرسش‌ها، زمان استفاده و رضایت از پاسخ‌ها' },
   { id: 'ai-cost', label: 'هزینهٔ دستیار', icon: 'bot', desc: 'هزینه، توکن و زمان پاسخ مدل زبانی' },
+  { id: 'experiments', label: 'آزمایش‌ها (A/B)', icon: 'chart', desc: 'تقسیم کاربران به دو گروه و مقایسهٔ رضایت از دستیار' },
   { id: 'audit', label: 'گزارش ممیزی', icon: 'shield', desc: 'ورودها و همهٔ تغییرات: چه کسی، چه کاری، از کجا' },
   { id: 'logs', label: 'داشبوردهای Grafana', icon: 'chart', desc: 'لاگ‌ها، منابع سرور و کانتینرها، آمار کسب‌وکار' },
 ];
@@ -231,7 +232,7 @@ const SECTIONS = [
 const SECTION_GROUPS = [
   { title: 'آنلاین', tag: 'داشبورد و درخواست‌ها', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
   { title: 'مشتریان و فروش', tag: 'درخواست خرید، شرکت‌ها، کاربران', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
-  { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت، گفتگوها', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'funnel', 'search-insights', 'activity', 'chats', 'assistant-behavior', 'ai-cost'] },
+  { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت، گفتگوها', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'funnel', 'search-insights', 'activity', 'chats', 'assistant-behavior', 'ai-cost', 'experiments'] },
   { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system', 'logs', 'audit'] },
 ];
 
@@ -444,6 +445,7 @@ export default function AdminPage() {
               {section === 'funnel' && <FunnelPanel guard={guard} />}
               {section === 'search-insights' && <SearchInsightsPanel guard={guard} />}
               {section === 'ai-cost' && <AiCostPanel guard={guard} />}
+              {section === 'experiments' && <ExperimentsPanel guard={guard} />}
               {section === 'assistant-behavior' && <AssistantBehaviorPanel guard={guard} />}
               {section === 'audit' && <AuditLogPanel guard={guard} />}
               {section === 'logs' && <GrafanaPanel guard={guard} />}
