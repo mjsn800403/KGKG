@@ -154,6 +154,12 @@ DISK_PCT = _env_num('KG_ALERT_DISK_PCT', 85, float)
 MEM_FREE_PCT = _env_num('KG_ALERT_MEM_FREE_PCT', 10, float)
 RESTARTS_30M = _env_num('KG_ALERT_RESTARTS', 3)
 TLS_DAYS = _env_num('KG_ALERT_TLS_DAYS', 14)
+# PROBE_BLIP_V1
+# A probe must fail for this many minutes straight before it alerts.
+PROBE_DOWN_MIN = _env_num('KG_ALERT_PROBE_DOWN_MIN', 10)
+# (Nearly) every probe failing together = the server's own network dropped,
+# not the services; that only alerts once it lasts this long.
+NETWORK_DOWN_MIN = _env_num('KG_ALERT_NETWORK_DOWN_MIN', 30)
 # SMS bodies may not contain links, so probe targets get plain names.
 PROBE_NAMES = {
     'https://kgtechvault.com/': 'وب‌سایت',
@@ -194,10 +200,16 @@ def _infra():
         name = r['metric'].get('name', '?')
         out[f'infra:restart:{name}'] = ('critical', f'کانتینر {name} در ۳۰ دقیقهٔ اخیر {int(float(r["value"][1]))} بار ری‌استارت شده است.',
                                         {'container': name})
-    for r in _prom('max_over_time(probe_success[5m]) == 0'):
-        t = r['metric'].get('target', '')
-        if t in PROBE_NAMES:
-            out[f'infra:down:{t}'] = ('critical', f'{PROBE_NAMES[t]} در ۵ دقیقهٔ اخیر از دسترس خارج بوده است.', {'target': t})
+    def _down(minutes):
+        return {r['metric'].get('target', '') for r in _prom(f'max_over_time(probe_success[{minutes}m]) == 0')} & set(PROBE_NAMES)
+    fa = lambda n: str(n).translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
+    down = _down(PROBE_DOWN_MIN)
+    if len(PROBE_NAMES) >= 3 and len(down) >= len(PROBE_NAMES) - 1:
+        if len(_down(NETWORK_DOWN_MIN)) >= len(PROBE_NAMES) - 1:
+            out['infra:network'] = ('critical', f'اتصال اینترنت سرور بیش از {fa(NETWORK_DOWN_MIN)} دقیقه قطع بوده است.', {})
+    else:
+        for t in down:
+            out[f'infra:down:{t}'] = ('critical', f'{PROBE_NAMES[t]} {fa(PROBE_DOWN_MIN)} دقیقه از دسترس خارج بوده است.', {'target': t})
     for r in _prom('(probe_ssl_earliest_cert_expiry - time())/86400'):
         t, d = r['metric'].get('target', ''), float(r['value'][1])
         if t in PROBE_NAMES and d < TLS_DAYS:
