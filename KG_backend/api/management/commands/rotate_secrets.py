@@ -12,7 +12,7 @@ deploy. This command makes rotation a one-liner with the sharp edges handled:
     still verify for one more window instead of erroring the moment you rotate;
   * a timestamped backup of the previous env file is kept, also 0600.
 
-Nothing takes effect until the service restarts — the command says so rather
+Nothing takes effect until the backend reloads (deploy.sh --reload) — the command says so rather
 than restarting on your behalf, because that's a production decision.
 
 Usage:
@@ -181,7 +181,7 @@ class Command(BaseCommand):
                               '(re-run with --print-new to display it)')
 
         self.stdout.write(self.style.WARNING(
-            'not live yet — run: systemctl restart kgkg-backend'))
+            'not live yet — run: ops/deploy/deploy.sh --reload'))
 
     def _status(self, path, env):
         st = os.stat(path)

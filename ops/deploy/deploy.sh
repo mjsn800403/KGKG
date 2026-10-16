@@ -5,6 +5,8 @@
 #   ops/deploy/deploy.sh --staging <git-ref>  gate + images + staging only (prod untouched)
 #   ops/deploy/deploy.sh --rollback           back to the previously deployed release
 #   ops/deploy/deploy.sh --status             what is live, and the previous release
+#   ops/deploy/deploy.sh --reload             restart the live release (no gap) to pick
+#                                             up .env.prod changes, e.g. after rotate_secrets
 #
 # Rules it enforces:
 #   * Production (/opt/KGKG) is never edited by hand. Changes are committed
@@ -152,14 +154,24 @@ while [[ $# -gt 0 ]]; do
     --staging) MODE=staging ;;
     --rollback) MODE=rollback ;;
     --status) MODE=status ;;
+    --reload) MODE=reload ;;
     --force) FORCE=1 ;;
-    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) REF=$1 ;;
   esac
   shift
 done
 
 if [[ $MODE == status ]]; then status; exit 0; fi
+if [[ $MODE == reload ]]; then
+  load_state
+  [[ -n $CURRENT ]] && have_images "$CURRENT" || die "no live release image recorded in $STATE"
+  say "reloading ${CURRENT:0:9} (new backend container beside the old one)"
+  swap_backend "$CURRENT" || die "reloaded backend did not become healthy; the old one is still serving"
+  bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || die "smoke failed after reload"
+  say "RELOADED ${CURRENT:0:9}"
+  exit 0
+fi
 if [[ $MODE == rollback ]]; then
   load_state
   [[ -n $PREVIOUS ]] || die "no previous release recorded in $STATE"

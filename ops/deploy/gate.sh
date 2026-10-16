@@ -27,6 +27,11 @@ step "backend: migrations match models"
 "${clean_env[@]}" "$VENV/python" manage.py makemigrations --check --dry-run > "$LOGS/migrations.log" 2>&1 \
   || fail "model changes without a migration (run makemigrations)" "$LOGS/migrations.log"
 
+step "backend: migrations are rollback-safe"
+BASE=${KG_MIGRATION_BASE:-$(git -C /opt/KGKG rev-parse HEAD)}
+"${clean_env[@]}" "$VENV/python" ../ops/deploy/check_migrations.py "$BASE" > "$LOGS/migsafety.log" 2>&1   || fail "a new migration would break rollback (see ops/deploy/check_migrations.py)" "$LOGS/migsafety.log"
+cat "$LOGS/migsafety.log"
+
 step "backend: full test suite"
 "${clean_env[@]}" timeout 1200 "$VENV/python" manage.py test --noinput > "$LOGS/tests.log" 2>&1 \
   || fail "backend tests" "$LOGS/tests.log"
