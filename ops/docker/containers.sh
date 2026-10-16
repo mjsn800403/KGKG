@@ -37,10 +37,12 @@ run_backend() {
     -e KG_PORT="$port" -e KG_WARMUP="${KG_WARMUP:-1}" "$@" "$image" >/dev/null
 }
 
-# be_run <image> <db-dir> <log-dir> <cmd...>   one-off command, e.g. migrate
+# be_run <image> <db-dir> <log-dir> [docker args...] -- <cmd...>   one-off, e.g. migrate
 be_run() {
-  local image=$1; be_args "$2" "$3"; shift 3
-  docker run --rm "${BE_ARGS[@]}" -e KG_WARMUP=0 "$image" "$@"
+  local image=$1 extra=(); be_args "$2" "$3"; shift 3
+  while [[ $# -gt 0 && $1 != -- ]]; do extra+=("$1"); shift; done
+  [[ ${1:-} == -- ]] && shift
+  docker run --rm "${BE_ARGS[@]}" -e KG_WARMUP=0 "${extra[@]}" "$image" "$@"
 }
 
 # run_frontend <name> <image> <port> <backend-url> [extra docker args...]

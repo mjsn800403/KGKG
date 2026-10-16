@@ -214,10 +214,10 @@ PY
 NOSEC=(-e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET= -e KG_ALERT_PHONES=
        -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro)
 STG_SPOOL=/run/kgkg-hostjobs-staging   # nobody serves it: staging can never start host jobs
-KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" python manage.py migrate --noinput \
+KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" -- python manage.py migrate --noinput \
   > "$REL/logs/staging-migrate-$TS.log" 2>&1 \
   || die "migrations failed on the prod-data copy (log: $REL/logs/staging-migrate-$TS.log); production untouched"
-TOKEN=$(KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" python manage.py shell -c \
+TOKEN=$(KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" -- python manage.py shell -c \
   "from api.models import AuthToken, PortalUser; print(AuthToken.issue(PortalUser.objects.get(username='$QA_USER')).key)" 2>/dev/null | tail -1)
 [[ ${#TOKEN} -ge 40 ]] || die "could not mint a staging QA token for $QA_USER"
 KG_SPOOL=$STG_SPOOL KG_WARMUP=0 run_backend kgkg-stg-backend "$(img_be "$SHA")" $STG_BE "$STG/db" "$STG/logs" \
@@ -245,7 +245,7 @@ if grep -qE '^(KG_backend/requirements.txt|ops/docker/backend-requirements.lock)
   "$VENV/pip" install -q -r "$PROD/ops/docker/backend-requirements.lock" --extra-index-url https://download.pytorch.org/whl/cpu \
     || { undo_code; die "host venv pip install failed; code reset to ${PREV:0:9}"; }
 fi
-be_run "$(img_be "$SHA")" "$KG_BE_DIR" /var/log/kgkg python manage.py migrate --noinput > "$REL/logs/prod-migrate-$TS.log" 2>&1 \
+be_run "$(img_be "$SHA")" "$KG_BE_DIR" /var/log/kgkg -- python manage.py migrate --noinput > "$REL/logs/prod-migrate-$TS.log" 2>&1 \
   || { undo_code; die "prod migrate failed; code reset to ${PREV:0:9} (log: $REL/logs/prod-migrate-$TS.log, DB backup: $REL/db-backups/)"; }
 ensure_hostjobs
 
