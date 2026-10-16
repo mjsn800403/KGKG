@@ -66,8 +66,10 @@ trap 'say "DEPLOY FAILED at line $LINENO: $BASH_COMMAND"' ERR
 exec 9> "$REL/deploy.lock"
 flock -n 9 || die "another deploy is running ($REL/deploy.lock)"
 
-# Helpers come from the commit being deployed when it has them, else from prod.
-source_containers() { . "${1:-$PROD}/ops/docker/containers.sh"; }
+# Container helpers: from the commit being deployed once it is checked out,
+# until then from this script's own checkout.
+SELF_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source_containers() { . "${1:-$SELF_ROOT}/ops/docker/containers.sh"; }
 source_containers
 
 PROD_LABELS=(--label kgkg.env=prod)
