@@ -19,6 +19,19 @@ def _presented_token(request):
     return (request.META.get('HTTP_X_ADMIN_TOKEN', '') or '').strip()
 
 
+_PROXY_HEADERS = ('HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP')
+
+
+def _from_server_itself(request):
+    """True only for a direct loopback call (server scripts, cron), never for
+    traffic relayed by Cloudflare/nginx/Next, which always carries a proxy
+    header. The static KG_ADMIN_TOKEN has no 2FA, so it must not work from
+    the internet; people sign in for an admin session instead."""
+    if request.META.get('REMOTE_ADDR') not in ('127.0.0.1', '::1'):
+        return False
+    return not any(request.META.get(h) for h in _PROXY_HEADERS)
+
+
 def _admin_session_valid(token):
     """Live, unexpired session belonging to an active admin?
 
@@ -48,7 +61,8 @@ def require_admin_token(view):
                  'detail': 'KG_ADMIN_TOKEN is not configured on the server.'},
                 status=503)
 
-        if configured and presented and hmac.compare_digest(presented, configured):
+        if (configured and presented and hmac.compare_digest(presented, configured)
+                and _from_server_itself(request)):
             return view(request, *args, **kwargs)
         if _admin_session_valid(presented):
             return view(request, *args, **kwargs)

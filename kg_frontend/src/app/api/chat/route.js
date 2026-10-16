@@ -33,8 +33,9 @@ async function metis(path, body) {
 
 // Streaming variant: Metis answers `<path>/stream` with SSE lines
 // `data:{"message":{"content":"<piece>"}}`. Calls onDelta per piece and
-// resolves with the whole reply.
-async function metisStream(path, body, onDelta) {
+// resolves with the whole reply. The closing event carries a `financial`
+// block (tokens + cost), handed to onUsage.
+async function metisStream(path, body, onDelta, onUsage) {
   const res = await fetch(`${METIS_BASE}/${path}/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': API_KEY },
@@ -62,6 +63,7 @@ async function metisStream(path, body, onDelta) {
       try { ev = JSON.parse(line.slice(5)); } catch { continue; }
       const piece = ev?.message?.content || '';
       if (piece) { full += piece; onDelta(piece); }
+      if (ev?.financial && onUsage) onUsage(ev.financial);
     }
   }
   return full;
@@ -98,8 +100,10 @@ const TRANSLATE_PROMPT = [
   'Persian question: ',
 ].join('\n');
 
-async function translateQuery(q) {
-  if (!MQ_TRANSLATE || !(API_KEY && BOT_ID) || !q || !FA_RE.test(q)) return null;
+// `enabled` is the user's mq_translate A/B arm (api/flags.py) when that flag
+// is defined, else the RAG_MQ_TRANSLATE env default.
+async function translateQuery(q, enabled = MQ_TRANSLATE) {
+  if (!enabled || !(API_KEY && BOT_ID) || !q || !FA_RE.test(q)) return null;
   const key = q.trim();
   if (_mqCache.has(key)) return _mqCache.get(key);
   try {
@@ -647,6 +651,7 @@ function buildDiagnosisPrompt({ message, d, contextText, terminology, historyTex
 }
 
 export async function POST(request) {
+  const t0 = Date.now();
   try {
     // Rate-limit BEFORE any work so abuse can't run up the Metis bill.
     if (rateLimited(clientIp(request))) {
@@ -702,6 +707,8 @@ export async function POST(request) {
     }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }))
       .catch(() => ({ status: 0, body: {} }));
     let quota = null;
+    // A/B arms for this user (api/flags.py), delivered with the quota read.
+    let flags = {};
     {
       const q = await quotaCall('GET');
       if (q.status === 429) {
@@ -711,7 +718,9 @@ export async function POST(request) {
         return Response.json({ error: 'بررسی سهمیهٔ دستیار ممکن نشد؛ کمی بعد دوباره تلاش کنید.' },
           { status: 503 });
       }
-      quota = q.body;
+      const { flags: arms, ...usage } = q.body || {};
+      quota = usage;
+      flags = arms && typeof arms === 'object' ? arms : {};
     }
     const charge = async (payload) => {
       if (payload.degraded) return payload;
@@ -720,8 +729,13 @@ export async function POST(request) {
       return { ...payload, quota };
     };
     const metisConfigured = !!(API_KEY && BOT_ID);
+    // Phraser usage for the chat log: streamed replies report tokens + cost,
+    // non-streamed ones only `billing.cost`.
+    const llm = { ms: null, usage: null, cost: null };
+    const fromFinancial = (f) => { llm.usage = f; llm.cost = f?.totalCost ?? null; };
     // Chat log for admins / managers (api/chatlog.py). Best-effort: a logging
     // failure never touches the user's answer.
+    const logKey = globalThis.crypto.randomUUID();
     const record = (payload) => {
       fetch(`${BACKEND_URL}/api/auth/chat-log/`, {
         method: 'POST',
@@ -733,10 +747,18 @@ export async function POST(request) {
           mode: payload.mode, grounded: !!payload.grounded, degraded: !!payload.degraded,
           vehicle: car || [brand, model].filter(Boolean).join(' '),
           sources: (payload.sources || []).map((s) => ({ title: s.title, href: s.url || s.href || '' })),
+          latency_ms: Date.now() - t0,
+          llm_latency_ms: llm.ms,
+          input_tokens: llm.usage?.inputTokens ?? null,
+          output_tokens: llm.usage?.outputTokens ?? null,
+          llm_cost: llm.cost,
+          llm_usage: llm.usage || {},
+          client_key: logKey,
+          flags,
         }),
         signal: AbortSignal.timeout(10000),
       }).catch((e) => console.error('chat-log record failed:', e));
-      return payload;
+      return { ...payload, logKey };
     };
 
     // Multi-turn: sanitize the client-sent thread, then resolve short
@@ -805,7 +827,7 @@ export async function POST(request) {
       // translation means we retrieve with the original Persian, exactly as
       // before. NOT applied to /api/diagnose above -- that engine matches
       // Persian symptom text.
-      const translated = await translateQuery(retrievalQuery);
+      const translated = await translateQuery(retrievalQuery, flags.mq_translate ?? MQ_TRANSLATE);
       const assistQuery = translated || retrievalQuery;
       try {
         rag = await backend('/api/assist/', { query: assistQuery, brand, model, car }, token);
@@ -926,9 +948,11 @@ export async function POST(request) {
               });
               sid = session.id;
             }
+            const tl = Date.now();
             reply = await metisStream(`session/${sid}/message`, {
               message: { type: 'USER', content: prompt },
-            }, (d) => send({ t: 'delta', d }));
+            }, (d) => send({ t: 'delta', d }), fromFinancial);
+            llm.ms = Date.now() - tl;
           } catch (e) {
             console.error('Metis stream failed -> serving no-LLM fallback:', e);
             deg = true;
@@ -960,9 +984,13 @@ export async function POST(request) {
           });
           sid = session.id;
         }
+        const tl = Date.now();
         const reply = await metis(`session/${sid}/message`, {
           message: { type: 'USER', content: prompt },
         });
+        llm.ms = Date.now() - tl;
+        llm.cost = reply?.billing?.cost ?? null;
+        if (reply?.billing) llm.usage = { billing: reply.billing };
         rawReply = reply?.content ?? '';
       } catch (e) {
         console.error('Metis failed -> serving no-LLM fallback:', e);

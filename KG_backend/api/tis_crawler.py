@@ -20,6 +20,8 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import hostjobs
+
 TIS_DIR = Path(os.environ.get('KG_TIS_DIR', '/root/Desktop/tis_crawler'))
 SCRIPT = TIS_DIR / 'toyota_tis.py'
 PYTHON = TIS_DIR / '.venv' / 'bin' / 'python'
@@ -77,11 +79,9 @@ def _pids():
     """PIDs of running crawler processes. No shell, so pgrep cannot match a
     wrapper that merely mentions the name."""
     try:
-        out = subprocess.run(['pgrep', '-f', r'toyota_tis\.py'],
-                             capture_output=True, text=True, timeout=5).stdout
-    except (OSError, subprocess.TimeoutExpired):
+        return hostjobs.pgrep(r'toyota_tis\.py')
+    except OSError:
         return []
-    return [int(p) for p in out.split() if p.isdigit() and int(p) != os.getpid()]
 
 
 def status_running():
@@ -144,11 +144,9 @@ def open_login():
 
 def _pgrep(pattern):
     try:
-        out = subprocess.run(['pgrep', '-f', pattern], capture_output=True,
-                             text=True, timeout=5).stdout
-    except (OSError, subprocess.TimeoutExpired):
+        return hostjobs.pgrep(pattern)
+    except OSError:
         return []
-    return [int(p) for p in out.split() if p.isdigit()]
 
 
 def _listening(port):
@@ -173,6 +171,12 @@ def start_chrome():
     Never kills or restarts an existing Chrome: that would throw away a
     session someone logged into with an OTP. Returns (ok, error)."""
     import shutil
+    if hostjobs.enabled():
+        try:
+            ok, err = hostjobs.call('tis_start_chrome', timeout=40)
+        except OSError as e:
+            return False, 'اجرای Chrome روی سرور ناموفق بود: %s' % e
+        return ok, err
     if _chrome()['reachable']:
         return False, 'Chrome از قبل در حال اجراست.'
     if _pgrep(CHROME_PROFILE):
@@ -268,7 +272,9 @@ def status():
 
 def start():
     """Start the crawler detached. Returns (pid, error)."""
-    if not SCRIPT.is_file() or not PYTHON.exists():
+    # In the container the crawler venv's python is a link into the host's
+    # /usr/bin, so only the host (spawn_crawl) can check it.
+    if not SCRIPT.is_file() or not (hostjobs.enabled() or PYTHON.exists()):
         return None, 'اسکریپت خزشگر TIS روی سرور پیدا نشد.'
     if _pids():
         return None, 'خزشگر TIS در حال اجراست.'
@@ -285,12 +291,10 @@ def start():
     # kgkg-backend's cgroup and be killed by every backend restart/deploy.
     unit = 'kgkg-tis-crawl-%d' % int(time.time())
     try:
-        subprocess.run(['systemd-run', '--unit', unit, '--collect', '--quiet',
-                        '-p', 'WorkingDirectory=%s' % TIS_DIR,
-                        '-p', 'StandardOutput=append:%s' % RUN_LOG,
-                        '-p', 'StandardError=append:%s' % RUN_LOG,
-                        str(PYTHON), str(SCRIPT)],
-                       check=True, capture_output=True, timeout=15)
+        if hostjobs.enabled():
+            hostjobs.call('tis_crawl_start', unit=unit)
+        else:
+            spawn_crawl(unit)
     except (OSError, subprocess.SubprocessError) as e:
         return None, 'اجرای خزشگر ناموفق بود: %s' % e
     _progress_cache['data'] = None
@@ -302,13 +306,25 @@ def start():
     return None, 'خزشگر اجرا شد اما فرایند آن پیدا نشد؛ گزارش اجرا را بررسی کنید.'
 
 
+def spawn_crawl(unit):
+    """Start the crawler as its own transient systemd unit (on the host)."""
+    if not PYTHON.exists():
+        raise FileNotFoundError(f'crawler python missing: {PYTHON}')
+    subprocess.run(['systemd-run', '--unit', unit, '--collect', '--quiet',
+                    '-p', 'WorkingDirectory=%s' % TIS_DIR,
+                    '-p', 'StandardOutput=append:%s' % RUN_LOG,
+                    '-p', 'StandardError=append:%s' % RUN_LOG,
+                    str(PYTHON), str(SCRIPT)],
+                   check=True, capture_output=True, timeout=15)
+
+
 def stop():
     """SIGTERM every crawler process. The crawler's state file makes it
     resume-safe, so the next start continues where this one stopped."""
     stopped = 0
     for pid in _pids():
         try:
-            os.kill(pid, signal.SIGTERM)
+            hostjobs.terminate(pid, 'tis')
             stopped += 1
         except OSError:
             pass

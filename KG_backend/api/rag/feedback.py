@@ -150,12 +150,13 @@ def rate(query, scope, mode, top_blobs, verdict, blob_id=None, reason=None,
         pass
 
 
+# 'at' is a time.monotonic() stamp; -inf means "never built". (0.0 is NOT safe:
+# monotonic() counts from boot, so within FB_CACHE_TTL of a reboot 0.0 looks fresh.)
 _BOOST_CACHE = {'at': float('-inf'), 'map': {}}
 _BOOST_LOCK = threading.Lock()
 
 
 def invalidate_boost_cache():
-    # -inf, not 0.0: time.monotonic() can be < FB_CACHE_TTL on a freshly booted host
     _BOOST_CACHE['at'] = float('-inf')
 
 

@@ -1288,6 +1288,26 @@ class ChatLog(models.Model):
     degraded = models.BooleanField(default=False)
     vehicle = models.CharField(max_length=200, blank=True, default='')
     sources = models.JSONField(default=list, blank=True)
+    # Cost/performance of the exchange, reported by the Next chat route.
+    # latency_ms = whole request; llm_* = the Metis phraser call only. Tokens are
+    # present for streamed replies; non-streamed ones only report a cost.
+    latency_ms = models.IntegerField(null=True, blank=True)
+    llm_latency_ms = models.IntegerField(null=True, blank=True)
+    input_tokens = models.IntegerField(null=True, blank=True)
+    output_tokens = models.IntegerField(null=True, blank=True)
+    llm_cost = models.FloatField(null=True, blank=True)
+    llm_usage = models.JSONField(default=dict, blank=True)
+    # Behaviour signals (api/behavior.py). client_key is minted by the Next
+    # chat route and handed to the browser so feedback can find this row.
+    client_key = models.CharField(max_length=40, blank=True, default='', db_index=True)
+    feedback = models.SmallIntegerField(null=True, blank=True)        # +1 / -1
+    feedback_reason = models.CharField(max_length=20, blank=True, default='')
+    feedback_comment = models.TextField(blank=True, default='')
+    feedback_at = models.DateTimeField(null=True, blank=True)
+    copied = models.BooleanField(default=False)
+    source_clicks = models.IntegerField(default=0)
+    rephrased = models.BooleanField(default=False)  # next question = same one reworded, quickly
+    flags = models.JSONField(default=dict, blank=True)  # A/B arms at answer time (api/flags.py)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1299,3 +1319,82 @@ class ChatLog(models.Model):
 
     def __str__(self):
         return f'{self.user.username}: {self.question[:40]}'
+
+
+class AuditLog(models.Model):
+    """Append-only security/business audit trail (see api/audit.py).
+
+    No foreign keys on purpose: the row must outlive the user, company or car it
+    describes. Never trimmed by the app — retention is a policy decision."""
+    SUCCESS, FAILURE, DENIED = 'success', 'failure', 'denied'
+    ADMIN, USER, SYSTEM, ANONYMOUS = 'admin', 'user', 'system', 'anonymous'
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    action = models.CharField(max_length=80, db_index=True)
+    actor_type = models.CharField(max_length=12)
+    actor_id = models.IntegerField(null=True, blank=True)
+    actor_label = models.CharField(max_length=150, blank=True, default='')
+    company_id = models.IntegerField(null=True, blank=True)
+    target_type = models.CharField(max_length=40, blank=True, default='')
+    target_id = models.CharField(max_length=64, blank=True, default='')
+    outcome = models.CharField(max_length=10)
+    status_code = models.SmallIntegerField(null=True, blank=True)
+    ip = models.CharField(max_length=64, blank=True, default='')
+    user_agent = models.CharField(max_length=300, blank=True, default='')
+    method = models.CharField(max_length=8, blank=True, default='')
+    path = models.CharField(max_length=300, blank=True, default='')
+    detail = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-id']
+        indexes = [
+            models.Index(fields=['actor_type', 'actor_id', 'created_at']),
+            models.Index(fields=['company_id', 'created_at']),
+            models.Index(fields=['outcome', 'created_at']),
+            models.Index(fields=['ip', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.created_at:%Y-%m-%d %H:%M} {self.actor_label or self.actor_type} {self.action} {self.outcome}'
+
+
+class SearchLog(models.Model):
+    """One manual search (api/insights.py). Plain ids, no FKs: the content-gap
+    history should survive account deletion."""
+    user_id = models.IntegerField(null=True, blank=True)
+    company_id = models.IntegerField(null=True, blank=True)
+    query = models.CharField(max_length=300)
+    query_norm = models.CharField(max_length=300, db_index=True)
+    car = models.CharField(max_length=200, blank=True, default='')
+    results = models.IntegerField(default=0)
+    top_title = models.CharField(max_length=300, blank=True, default='')
+    latency_ms = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-id']
+        indexes = [
+            models.Index(fields=['results', 'created_at']),
+            models.Index(fields=['car', 'created_at']),
+            models.Index(fields=['company_id', 'created_at']),
+        ]
+
+
+class FeatureFlag(models.Model):
+    """A/B experiment or gradual-rollout switch (api/flags.py). A user is in the
+    "on" arm when the flag is enabled and a stable hash of (key, user id) falls
+    under ``rollout_pct``; ``force_on`` / ``force_off`` pin user ids."""
+    key = models.CharField(max_length=60, unique=True)
+    description = models.CharField(max_length=300, blank=True, default='')
+    enabled = models.BooleanField(default=False)
+    rollout_pct = models.PositiveSmallIntegerField(default=0)   # 0..100
+    force_on = models.JSONField(default=list, blank=True)       # user ids always "on"
+    force_off = models.JSONField(default=list, blank=True)      # user ids always "off" (wins)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['key']
+
+    def __str__(self):
+        return f'{self.key} ({"on" if self.enabled else "off"} {self.rollout_pct}%)'

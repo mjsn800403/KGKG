@@ -415,18 +415,15 @@ def grant_all_cars(company):
     return len(new)
 
 
-_WELCOME_SMS = 'خدمات گستر\nحساب شما فعال شد\nنام کاربری: {u}\nرمز عبور: {p}\nورود: kgtechvault.com/login\nلغو11'
+_WELCOME_SMS = 'خدمات گستر\nحساب شما فعال شد\nنام کاربری: {u}\nرمز عبور: {p}\nلغو11'
 
 
 def _notify_provisioned(phone, username, password):
-    """Tell the buyer their account is live (username + password). Best effort;
-    retries without the address if the operator rejects links."""
+    """Tell the buyer their account is live (username + password). Best effort.
+    No link in the body: the operator rejects bodies that contain links."""
     if not phone:
         return False
-    body = _WELCOME_SMS.format(u=username, p=password)
-    sent, value = _post_sms(phone, body)
-    if not sent:
-        sent, value = _post_sms(phone, body.replace('\nورود: kgtechvault.com/login', ''))
+    sent, value = _post_sms(phone, _WELCOME_SMS.format(u=username, p=password))
     if not sent:
         _logger_sms.warning('welcome SMS failed for %s (Value=%s)', phone, value)
     return sent

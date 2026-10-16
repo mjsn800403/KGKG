@@ -1,0 +1,34 @@
+#!/bin/bash
+# Forced command for the GitHub Actions deploy key (authorized_keys command=).
+# The key can do exactly one thing: deploy a commit that is on origin/work,
+# through the normal gated pipeline (ops/deploy/deploy.sh). Accepted input:
+#     deploy <40-hex commit sha>
+# The deploy runs as its own systemd unit, so a dropped SSH connection never
+# kills it half-way; this script streams its log and exits with its result.
+set -uo pipefail
+LOG=/var/log/kg-deploy-gate.log
+echo "$(date -u +%FT%TZ) ${SSH_CLIENT:-local} :: ${SSH_ORIGINAL_COMMAND:-}" >> "$LOG"
+
+read -r verb sha extra <<< "${SSH_ORIGINAL_COMMAND:-}"
+if [[ $verb != deploy || ! $sha =~ ^[0-9a-f]{40}$ || -n ${extra:-} ]]; then
+  echo "denied: expected 'deploy <40-hex sha>'" >&2; exit 2
+fi
+
+exec 9>/run/kg-deploy.lock
+flock -n 9 || { echo "another deploy is running" >&2; exit 3; }
+
+git -C /opt/KGKG fetch -q origin work || { echo "git fetch failed" >&2; exit 4; }
+git -C /opt/KGKG merge-base --is-ancestor "$sha" origin/work 2>/dev/null \
+  || { echo "denied: $sha is not on origin/work" >&2; exit 2; }
+
+unit=kgkg-deploy-$(date -u +%Y%m%d-%H%M%S)
+echo "starting $unit for ${sha:0:9}"
+journalctl -q -f -o cat -n 0 -u "$unit" &
+follow=$!
+# --wait returns the deploy's exit status; if this SSH session dies, the unit
+# (and the deploy) carries on regardless.
+systemd-run -q --wait --unit "$unit" --property=RuntimeMaxSec=3600   /bin/bash /opt/KGKG/ops/deploy/deploy.sh "$sha"
+rc=$?
+sleep 2; kill $follow 2>/dev/null
+echo "deploy exit status: $rc"
+exit $rc

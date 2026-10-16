@@ -1,10 +1,15 @@
+from .audit import admin_audit_view
+from .behavior import admin_assistant_view
+from .insights import admin_ai_cost_view, admin_funnel_view, admin_search_view
 from django.http import JsonResponse
 from django.urls import path, re_path
 from . import adminops, events, recommend, requests_api, views, portal, team
 from . import orggraph_api, parts, labortimes, sst, quota, frm
 from . import mediaauth
 from . import vncauth
+from . import grafanaauth
 from . import chatlog
+from . import flags
 
 
 def _api_not_found(request, rest=None):
@@ -41,6 +46,11 @@ urlpatterns = [
     path('api/auth/logout/', portal.logout_view, name='portal_logout'),
     path('api/auth/me/', portal.me_view, name='portal_me'),
     path('api/auth/chat-log/', chatlog.record_view, name='chat_log_record'),
+    path('api/auth/flags/', flags.flags_view, name='user_flags'),
+    path('api/admin/flags/', flags.admin_flags_view, name='admin_flags'),
+    path('api/admin/flags/<str:key>/results/', flags.admin_flag_results_view, name='admin_flag_results'),
+    path('api/auth/chat-feedback/', chatlog.feedback_view, name='chat_feedback'),
+    path('api/admin/insights/assistant/', admin_assistant_view),
     path('api/team/chat-logs/', chatlog.team_view, name='team_chat_logs'),
     path('api/admin/chat-logs/', chatlog.admin_view, name='admin_chat_logs'),
     path('api/auth/ai-usage/', quota.ai_usage_view, name='ai_usage'),
@@ -85,6 +95,10 @@ urlpatterns = [
     path('api/admin/users/', portal.admin_users_view, name='admin_users'),
     path('api/admin/users/<int:user_id>/', portal.admin_user_detail_view, name='admin_user_detail'),
     path('api/admin/users/<int:user_id>/access/', portal.admin_user_access_view, name='admin_user_access'),
+    path('api/admin/insights/search/', admin_search_view),
+    path('api/admin/insights/funnel/', admin_funnel_view),
+    path('api/admin/insights/ai-cost/', admin_ai_cost_view),
+    path('api/admin/audit/', admin_audit_view),
     path('api/admin/activity/', portal.admin_activity_view, name='admin_activity'),
     path('api/admin/analytics/', portal.admin_analytics_view, name='admin_analytics'),
 
@@ -118,6 +132,8 @@ urlpatterns = [
     # nginx auth_request for /kg-api/media/ (see mediaauth.py)
     path('api/media-auth/', mediaauth.media_auth_view, name='media_auth'),
     path('api/vnc-auth/', vncauth.vnc_auth_view, name='vnc_auth'),
+    path('api/grafana-auth/', grafanaauth.grafana_auth_view, name='grafana_auth'),
+    path('api/admin/grafana-ticket/', grafanaauth.grafana_ticket_view, name='grafana_ticket'),
     path('api/labor-times/<str:brand_name>/<str:year>/<str:model_name>/',
          labortimes.labor_times_csv_view, name='labor_times_csv'),
     # Per-vehicle SST (Special Service Tools) CSV export: merges every system's

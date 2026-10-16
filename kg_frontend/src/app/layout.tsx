@@ -5,6 +5,7 @@ import './system.css';
 import BackgroundFX from '@/components/BackgroundFX';
 import Modal from '@/components/Modal';
 import Guidance from '@/guidance';
+import Analytics from '@/components/Analytics';
 
 export const metadata = {
   title: 'KGTechVault | پلتفرم هوشمند دانش و مستندات فنی',
@@ -27,8 +28,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="fa" dir="rtl" data-theme="dark" suppressHydrationWarning>
       <head>
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+        {/* Self-hosted Umami (see components/Analytics.jsx): page views are sent
+            manually so URLs can be redacted before they leave the browser. */}
+        <script defer nonce={nonce} src="/stats/kgs.js" data-website-id="86d05558-7aeb-4b11-8931-fdbd8b2f3eee"
+                data-host-url="/stats" data-auto-track="false" data-exclude-search="true" />
       </head>
       <body>
+        <Analytics />
         <BackgroundFX />
         <div className="microbar">
           <div className="track">

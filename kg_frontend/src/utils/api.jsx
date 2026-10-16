@@ -6,6 +6,8 @@
 // Browser-facing base: relative same-origin path in production ("/kg-api"),
 // so requests ride the current https origin through Cloudflare/nginx and never
 // trip mixed-content. Inlined into the client bundle (NEXT_PUBLIC_ prefix).
+import { track } from './analytics';
+
 const CLIENT_BASE = (process.env.NEXT_PUBLIC_API_BASE || '/kg-api').replace(/\/+$/, '');
 // Server-only origin used during SSR, where Node's fetch() cannot resolve a
 // relative URL. Talks straight to Django on localhost (bypassing the public
@@ -375,6 +377,7 @@ export async function submitPurchaseRequest(payload) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `ثبت درخواست ناموفق بود: ${res.status}`);
+  track('purchase_request', { demo: !!payload?.wants_demo, ai: !!payload?.wants_ai_assistant });
   return data;
 }
 
@@ -463,7 +466,8 @@ export async function portalLogin(username, password, turnstileToken) {
   if (!res.ok) throw new Error(data?.error || `ورود ناموفق بود: ${res.status}`);
   // login returns {otp_session, phone_hint} when the SMS step applies, or
   // {token, user} directly for password-only accounts (no phone / OTP off).
-  if (data.token) setPortalSession(data.token, data.user);
+  if (data.token) { setPortalSession(data.token, data.user); track('login', { otp: false }); }
+  else if (data.otp_session) track('login_otp_sent');
   return data;
 }
 
@@ -476,6 +480,7 @@ export async function verifyOtp(otpSession, code) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `تأیید ناموفق بود: ${res.status}`);
   setPortalSession(data.token, data.user);
+  track('login', { otp: true });
   return data;
 }
 
@@ -853,6 +858,22 @@ export const adminApi = {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/chat-logs/${qs ? `?${qs}` : ''}`);
   },
+  // Observability (api/audit.py, api/insights.py).
+  audit: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return adminFetch(`/api/admin/audit/${qs ? `?${qs}` : ''}`);
+  },
+  aiCost: (days = 30) => adminFetch(`/api/admin/insights/ai-cost/?days=${days}`),
+  searchInsights: (days = 30) => adminFetch(`/api/admin/insights/search/?days=${days}`),
+  funnel: (days = 30) => adminFetch(`/api/admin/insights/funnel/?days=${days}`),
+  assistantBehavior: (days = 30, extra = {}) =>
+    adminFetch(`/api/admin/insights/assistant/?${new URLSearchParams({ days, ...extra })}`),
+  grafanaTicket: () => adminFetch('/api/admin/grafana-ticket/', { method: 'POST', body: '{}' }),
+  // A/B experiments (api/flags.py).
+  flags: () => adminFetch('/api/admin/flags/'),
+  saveFlag: (body) => adminFetch('/api/admin/flags/', { method: 'POST', body: JSON.stringify(body) }),
+  flagResults: (key, days = 30) =>
+    adminFetch(`/api/admin/flags/${encodeURIComponent(key)}/results/?days=${days}`),
   analytics: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return adminFetch(`/api/admin/analytics/${qs ? `?${qs}` : ''}`);
@@ -973,6 +994,20 @@ function adminHeaders() {
 
 // Human-in-the-loop: record a 👍/👎 verdict on an assistant answer. Best-effort
 // (never blocks the UI). The backend turns these into a guarded ranking boost.
+// Behaviour signal on one logged exchange (api/chatlog.feedback_view):
+// kind = vote | copy | source. Fire-and-forget.
+export function chatFeedback(key, body) {
+  if (!key) return;
+  const token = getPortalToken();
+  try {
+    fetch(`${API_BASE}/api/auth/chat-feedback/`, {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ key, ...body }),
+    }).catch(() => {});
+  } catch { /* never block the UI on telemetry */ }
+}
+
 export async function rateAnswer({ query, verdict, mode, topBlobs, blobId, reason, comment, brand, model, car }) {
   try {
     await fetch(`${API_BASE}/api/feedback/rate/`, {

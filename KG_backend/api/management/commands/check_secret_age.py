@@ -86,7 +86,7 @@ class Command(BaseCommand):
                 msg,
                 {'age_days': age, 'limit_days': limit,
                  'last_rotation': ts.isoformat() if ts else None,
-                 'remedy': 'manage.py rotate_secrets --what all, then restart kgkg-backend'})
+                 'remedy': 'manage.py rotate_secrets --what all, then ops/deploy/deploy.sh --reload'})
             self.stdout.write(self.style.ERROR('OVERDUE: ' + msg))
         else:
             _close_alert()

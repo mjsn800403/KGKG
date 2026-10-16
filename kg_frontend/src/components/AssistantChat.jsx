@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import EvidencePanel from './EvidencePanel';
 import FeedbackBar from './FeedbackBar';
-import { rateAnswer } from '../utils/api';
+import { rateAnswer, chatFeedback } from '../utils/api';
+import { track } from '../utils/analytics';
 
 // Renders bot text and turns markdown links into clickable elements.
 // Supports both [label](href) and the instruction's [BUTTON](title="..", href="..")
@@ -205,6 +206,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
       .map((s) => s.title_en || s.title).filter(Boolean);
     setMessages((m) => [...m, { role: 'user', content: (displayText ?? text) }]);
     setLoading(true);
+    track('assistant_ask', { car: carName || model || '', followup: messages.length > 0 });
     // Replace the in-flight streaming bubble (if any) or append a new one.
     const putAi = (msg) => setMessages((m) => (
       m.length && m[m.length - 1].streaming ? [...m.slice(0, -1), msg] : [...m, msg]));
@@ -212,7 +214,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
       role: 'ai', content: data.reply || '...', query: text,
       sources: data.sources || [], confidence: data.confidence || null,
       grounded: data.grounded, mode: data.mode, topBlobs: data.topBlobs || [],
-      degraded: data.degraded || false, rated: false,
+      degraded: data.degraded || false, rated: false, logKey: data.logKey || null,
       suggestions: data.suggestions || [],
     });
     try {
@@ -292,6 +294,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
       topBlobs: msg.topBlobs, blobId: null,
       brand, model, car: carName,
     });
+    chatFeedback(msg.logKey, { kind: 'vote', verdict, reason, comment });
     setMessages((m) => m.map((x, i) => (i === idx ? { ...x, rated: true } : x)));
   }
 
@@ -326,7 +329,9 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
         {messages.map((msg, i) => (
           <div key={i} className={`chat-msg ${msg.role === 'user' ? 'from-user' : 'from-ai'}`}>
             {msg.role === 'ai' && <div className="chat-avatar">AI</div>}
-            <div className={`chat-bubble${msg.error ? ' error' : ''}`}>
+            <div className={`chat-bubble${msg.error ? ' error' : ''}`}
+              onCopy={msg.logKey ? () => chatFeedback(msg.logKey, { kind: 'copy' }) : undefined}
+              onClickCapture={msg.logKey ? (e) => { if (e.target.closest?.('a')) chatFeedback(msg.logKey, { kind: 'source' }); } : undefined}>
               {msg.role === 'ai' ? <RenderReply text={msg.content} streaming={!!msg.streaming} /> : msg.content}
               {msg.role === 'ai' && !msg.error && msg.query && msg.mode !== 'clarify' && (
                 <>

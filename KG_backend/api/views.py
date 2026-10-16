@@ -1,3 +1,4 @@
+import time
 import re
 import json
 from pathlib import Path
@@ -470,8 +471,11 @@ def search_view(request):
     limit = max(1, min(limit, 50))
     try:
         from .rag import service
+        _t0 = time.monotonic()
         results = service.search(q, brand=brand, model=model, car_stem=car, limit=limit,
                                  allowed_cars=allowed_stems)
+        from .insights import record_search
+        record_search(_user, q, car or model, results, _t0)
         return JsonResponse(results, safe=False)
     except FileNotFoundError:
         # Index not built yet -> degrade gracefully to the old keyword search so
