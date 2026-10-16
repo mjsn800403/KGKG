@@ -272,7 +272,9 @@ def status():
 
 def start():
     """Start the crawler detached. Returns (pid, error)."""
-    if not SCRIPT.is_file() or not PYTHON.exists():
+    # In the container the crawler venv's python is a link into the host's
+    # /usr/bin, so only the host (spawn_crawl) can check it.
+    if not SCRIPT.is_file() or not (hostjobs.enabled() or PYTHON.exists()):
         return None, 'اسکریپت خزشگر TIS روی سرور پیدا نشد.'
     if _pids():
         return None, 'خزشگر TIS در حال اجراست.'
@@ -306,6 +308,8 @@ def start():
 
 def spawn_crawl(unit):
     """Start the crawler as its own transient systemd unit (on the host)."""
+    if not PYTHON.exists():
+        raise FileNotFoundError(f'crawler python missing: {PYTHON}')
     subprocess.run(['systemd-run', '--unit', unit, '--collect', '--quiet',
                     '-p', 'WorkingDirectory=%s' % TIS_DIR,
                     '-p', 'StandardOutput=append:%s' % RUN_LOG,
