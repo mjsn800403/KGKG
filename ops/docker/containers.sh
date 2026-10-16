@@ -34,7 +34,17 @@ run_backend() {
   docker rm -f "$name" >/dev/null 2>&1 || true
   docker run -d --name "$name" --restart unless-stopped --stop-timeout 40 \
     --label kgkg.role=backend "${BE_ARGS[@]}" \
-    -e KG_PORT="$port" -e KG_WARMUP="${KG_WARMUP:-1}" "$@" "$image" >/dev/null
+    -e KG_PORT="$port" -e KG_HEALTH_PORT="$(free_port)" -e KG_WARMUP="${KG_WARMUP:-1}" \
+    "$@" "$image" >/dev/null
+}
+
+# A loopback port in 18100-18199 nothing listens on, for one container's health check.
+free_port() {
+  local p
+  for ((p = 18100; p < 18200; p++)); do
+    ss -ltn "sport = :$p" | grep -q LISTEN || { echo $p; return 0; }
+  done
+  return 1
 }
 
 # be_run <image> <db-dir> <log-dir> [docker args...] -- <cmd...>   one-off, e.g. migrate

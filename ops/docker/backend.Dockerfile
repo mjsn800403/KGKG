@@ -23,14 +23,14 @@ COPY KG_backend/ /opt/KGKG/KG_backend/
 
 ARG KG_RELEASE=dev
 ENV KG_RELEASE=$KG_RELEASE
-# Health goes through a socket private to THIS container: during a deploy the
-# old and new release share the TCP port, so the port alone can't say which
-# one answered.
+# Health goes through a second port unique to THIS container (KG_HEALTH_PORT,
+# picked by ops/docker/containers.sh): during a deploy the old and new release
+# share the main port, so that port alone can't say which one answered.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=180s --retries=4 \
-  CMD curl -fsS -o /dev/null --unix-socket /tmp/kg.sock http://127.0.0.1/api/health/ || exit 1
+  CMD curl -fsS -o /dev/null http://127.0.0.1:${KG_HEALTH_PORT:-18999}/api/health/ || exit 1
 # --reuse-port lets the next release bind the same port while this one
 # drains, so a backend deploy has no gap.
 CMD exec gunicorn KG_backend.wsgi:application --bind ${KG_BIND:-127.0.0.1}:${KG_PORT:-8000} \
-    --bind unix:/tmp/kg.sock --reuse-port \
+    --bind 127.0.0.1:${KG_HEALTH_PORT:-18999} --reuse-port \
     --workers ${KG_WORKERS:-3} --worker-class gthread --threads ${KG_THREADS:-8} --timeout 300 \
     --max-requests 2000 --max-requests-jitter 200 --graceful-timeout 30
