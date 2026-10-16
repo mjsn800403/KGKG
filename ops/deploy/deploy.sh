@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# KGKG gated deploy:  gate -> staging -> promote -> verify (auto-rollback)
+# KGKG gated deploy (Docker):  gate -> images -> staging -> promote -> verify (auto-rollback)
 #
 #   ops/deploy/deploy.sh <git-ref>            full pipeline to production
-#   ops/deploy/deploy.sh --staging <git-ref>  gate + staging only (prod untouched)
+#   ops/deploy/deploy.sh --staging <git-ref>  gate + images + staging only (prod untouched)
 #   ops/deploy/deploy.sh --rollback           back to the previously deployed release
 #   ops/deploy/deploy.sh --status             what is live, and the previous release
 #
 # Rules it enforces:
-#   * Production (/opt/KGKG) is never edited by hand any more. Changes are
-#     committed elsewhere (e.g. the /opt/KGKG_work worktree, branch `work`) and
-#     promoted here. The deploy refuses to run if the live tree has uncommitted
-#     edits, and only fast-forwards, so prod history stays linear.
-#   * The ref is tested in a fresh worktree (gate.sh: Django check, migration
-#     drift, full test suite, lint ratchet, next build). Nothing reaches
-#     staging unless the gate passes.
-#   * Staging = the same code on 127.0.0.1:8110 (backend) / :3107 (frontend),
-#     with a fresh COPY of the prod database, migrated, and SMS/Sentry/Metis
-#     disabled; smoke.sh runs signed-in checks with a QA token minted in the
-#     copy only.
-#   * Production: DB backup, fast-forward, migrate, frontend built into its own
-#     .next-<sha> (the live build is never overwritten), atomic symlink swap,
-#     graceful gunicorn reload (HUP), frontend restart, smoke test. Any failure
-#     after the swap rolls code + build back automatically. Migrations are NOT
-#     reversed (keep them additive); the pre-deploy DB backup is kept.
+#   * Production (/opt/KGKG) is never edited by hand. Changes are committed
+#     elsewhere (e.g. the /opt/KGKG_work worktree, branch `work`) and promoted
+#     here. The deploy refuses a dirty live tree and only fast-forwards. The
+#     live tree still matters: host timers and the pipeline/crawler jobs run
+#     from it with the host venv.
+#   * The ref is tested in a fresh worktree (gate.sh), then built into two
+#     images, kgkg-backend:<sha> and kgkg-frontend:<sha> (ops/docker/).
+#   * Staging = those images on 127.0.0.1:8110 / :3107 against a fresh COPY of
+#     the prod database, migrated, SMS/Sentry/Metis/host jobs disabled;
+#     smoke.sh runs signed-in checks with a QA token minted in the copy.
+#   * Production: DB backup, fast-forward, migrate (in the new image), then the
+#     new backend container starts NEXT TO the old one on :8000 (SO_REUSEPORT)
+#     and the old one stops only once the new one is healthy: no gap. The
+#     frontend is swapped stop/start (about a second). Smoke test; any failure
+#     rolls back to the previous images. Migrations are NOT reversed (keep
+#     them additive); the pre-deploy DB backup is kept.
 set -Eeuo pipefail
 
 PROD=/opt/KGKG
@@ -33,51 +33,21 @@ STATE=$REL/state.env
 STG_BE=8110
 STG_FE=3107
 QA_USER=${KG_STAGING_QA_USER:-qa_e_root}
-KEEP_BUILDS=3
+KEEP_IMAGES=4
 TS=$(date -u +%Y%m%d-%H%M%S)
-mkdir -p "$REL/logs" "$REL/db-backups" "$STG/logs" "$STG/db"
+mkdir -p "$REL/logs" "$REL/db-backups" "$STG/logs" "$STG/db" "$STG/stagecfg"
 LOG=$REL/logs/deploy-$TS.log
 exec > >(tee -a "$LOG") 2>&1
 
 say()  { printf '\n[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 die()  { say "DEPLOY ABORTED: $*"; exit 1; }
 prod_clean() { [[ -z $(git -C "$PROD" status --porcelain --untracked-files=no) ]]; }
-port_pids() { ss -ltnp "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true; }
-# Kill EVERY process on the port (a gunicorn master respawns a killed worker).
-stop_port() {
-  local p i; p=$(port_pids "$1"); [[ -z $p ]] && return 0
-  kill $p 2>/dev/null || true
-  for ((i = 0; i < 20; i++)); do [[ -z $(port_pids "$1") ]] && return 0; sleep 1; done
-  kill -9 $(port_pids "$1") 2>/dev/null || true; return 0
-}
-wait_http() {  # url seconds
-  local i
-  for ((i = 0; i < $2; i++)); do
-    [[ $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$1") =~ ^(200|30[0-9])$ ]] && return 0
-    sleep 1
-  done
-  return 1
-}
-# Graceful gunicorn reload (HUP), then wait until EVERY old worker is gone: a
-# smoke test right after HUP can still hit an old worker running the old code.
-reload_backend() {
-  local main old cur i
-  main=$(systemctl show -p MainPID --value kgkg-backend)
-  old=$(pgrep -P "$main" | sort || true)
-  systemctl kill -s HUP --kill-whom=main kgkg-backend
-  for ((i = 0; i < 90; i++)); do
-    sleep 1
-    cur=$(pgrep -P "$main" | sort || true)
-    [[ -n $cur && -z $(comm -12 <(echo "$old") <(echo "$cur")) ]] && return 0
-  done
-  say "WARNING: old gunicorn workers still alive after 90s"
-}
 sqlite_copy() {  # src dst   (online backup API: consistent even while prod writes)
   python3 - "$1" "$2" <<'PY'
 import sqlite3, sys, os
 src, dst = sys.argv[1], sys.argv[2]
 tmp = dst + '.tmp'
-for f in (tmp, tmp + '-wal', tmp + '-shm'):
+for f in (tmp, tmp + '-wal', tmp + '-shm', dst + '-wal', dst + '-shm'):
     if os.path.exists(f): os.remove(f)
 s = sqlite3.connect(f'file:{src}?mode=ro', uri=True, timeout=60)
 d = sqlite3.connect(tmp)
@@ -85,39 +55,91 @@ s.backup(d); d.close(); s.close()
 os.replace(tmp, dst)
 PY
 }
-load_state() { CURRENT=; PREVIOUS=; CURRENT_BUILD=; PREVIOUS_BUILD=; [[ -f $STATE ]] && . "$STATE"; return 0; }
-save_state() {
-  printf 'CURRENT=%s\nPREVIOUS=%s\nCURRENT_BUILD=%s\nPREVIOUS_BUILD=%s\nDEPLOYED_AT=%s\n' \
-    "$1" "$2" "$3" "$4" "$TS" > "$STATE"
-}
+load_state() { CURRENT=; PREVIOUS=; [[ -f $STATE ]] && . "$STATE"; return 0; }
+save_state() { printf 'CURRENT=%s\nPREVIOUS=%s\nDEPLOYED_AT=%s\n' "$1" "$2" "$TS" > "$STATE"; }
+img_be() { echo "kgkg-backend:${1:0:9}"; }
+img_fe() { echo "kgkg-frontend:${1:0:9}"; }
+have_images() { docker image inspect "$(img_be "$1")" "$(img_fe "$1")" >/dev/null 2>&1; }
 
-# Any unexpected non-zero exit (set -e) is reported with its line, never silent.
 trap 'say "DEPLOY FAILED at line $LINENO: $BASH_COMMAND"' ERR
 
 exec 9> "$REL/deploy.lock"
 flock -n 9 || die "another deploy is running ($REL/deploy.lock)"
 
+# Helpers come from the commit being deployed when it has them, else from prod.
+source_containers() { . "${1:-$PROD}/ops/docker/containers.sh"; }
+source_containers
+
+PROD_LABELS=(--label kgkg.env=prod)
+log_opts() { echo --log-driver=journald --log-opt "tag=$1"; }
+
 # ---------------------------------------------------------------------------
-rollback_to() {  # sha build-dir-name(or empty)
-  local sha=$1 build=$2
-  say "ROLLBACK to ${sha:0:9} ${build:+(build $build)}"
+# Host job bridge (ops/hostjobs) must run before a backend container needs it.
+ensure_hostjobs() {
+  local unit=/etc/systemd/system/kgkg-hostjobs.service src=$PROD/ops/hostjobs/kgkg-hostjobs.service
+  [[ -f $src ]] || return 0
+  if ! cmp -s "$src" "$unit"; then
+    cp "$src" "$unit"; systemctl daemon-reload
+  fi
+  systemctl enable -q kgkg-hostjobs
+  systemctl restart kgkg-hostjobs   # picks up daemon code from the new tree
+  sleep 1; systemctl is-active -q kgkg-hostjobs || die "kgkg-hostjobs did not start (journalctl -u kgkg-hostjobs)"
+}
+
+# Start <sha>'s backend beside whatever serves :8000, then retire the old one.
+swap_backend() {
+  local sha=$1 name=kgkg-backend-$TS old
+  old=$(prod_containers backend)
+  if systemctl is-active -q kgkg-backend 2>/dev/null; then
+    # One-time cutover from the systemd gunicorn (it does not use
+    # SO_REUSEPORT, so the container cannot share the port with it).
+    say "cutover: stopping the systemd kgkg-backend (one-time, short gap)"
+    systemctl stop kgkg-backend; systemctl disable -q kgkg-backend
+  fi
+  run_backend "$name" "$(img_be "$sha")" 8000 "$KG_BE_DIR" /var/log/kgkg \
+    "${PROD_LABELS[@]}" $(log_opts kgkg-backend) --label "kgkg.sha=$sha"
+  if ! wait_healthy "$name" 300; then
+    docker logs --tail 40 "$name" || true
+    docker rm -f "$name" >/dev/null 2>&1 || true
+    [[ -z $old ]] && ! systemctl is-active -q kgkg-backend && { systemctl enable -q kgkg-backend; systemctl start kgkg-backend; }
+    return 1
+  fi
+  local o; for o in $old; do docker stop -t 40 "$o" >/dev/null; docker rm "$o" >/dev/null; done
+  return 0
+}
+
+swap_frontend() {
+  local sha=$1 name=kgkg-frontend-$TS old T0
+  old=$(prod_containers frontend)
+  T0=$(date +%s%N)
+  if systemctl is-active -q kgkg-frontend 2>/dev/null; then
+    systemctl stop kgkg-frontend; systemctl disable -q kgkg-frontend
+  fi
+  local o; for o in $old; do docker stop -t 20 "$o" >/dev/null; docker rm "$o" >/dev/null; done
+  run_frontend "$name" "$(img_fe "$sha")" 3000 http://127.0.0.1:8000 \
+    "${PROD_LABELS[@]}" $(log_opts kgkg-frontend) --label "kgkg.sha=$sha"
+  wait_healthy "$name" 120 || { docker logs --tail 40 "$name" || true; return 1; }
+  say "frontend back after $(( ($(date +%s%N) - T0) / 1000000 )) ms"
+}
+
+rollback_to() {  # sha
+  local sha=$1
+  say "ROLLBACK to ${sha:0:9}"
+  have_images "$sha" || die "images for ${sha:0:9} are gone; cannot roll back automatically"
   prod_clean || die "live tree has uncommitted edits; refusing to reset it. Inspect: git -C $PROD status"
   git -C "$PROD" reset -q --hard "$sha"
-  if [[ -n $build && -d $PROD/kg_frontend/$build ]]; then
-    ln -sfn "$build" "$PROD/kg_frontend/.next.new" && mv -Tf "$PROD/kg_frontend/.next.new" "$PROD/kg_frontend/.next"
-    systemctl restart kgkg-frontend
-  fi
-  reload_backend
-  wait_http http://127.0.0.1:8000/api/health/ 60 || say "WARNING: backend health not back after rollback"
-  wait_http http://127.0.0.1:3000/ 90 || say "WARNING: frontend not back after rollback"
+  swap_backend "$sha" || say "WARNING: backend rollback container did not become healthy"
+  swap_frontend "$sha" || say "WARNING: frontend rollback container did not become healthy"
   say "Rolled back. Database migrations are not reversed; DB backups: $REL/db-backups/"
 }
 
 status() {
   load_state
   echo "live HEAD : $(git -C "$PROD" log -1 --format='%h %ci %s')"
-  echo "state     : CURRENT=${CURRENT:0:9} PREVIOUS=${PREVIOUS:0:9} build=$CURRENT_BUILD prev_build=$PREVIOUS_BUILD"
-  echo ".next ->  : $(readlink "$PROD/kg_frontend/.next" 2>/dev/null || echo '(plain directory)')"
+  echo "state     : CURRENT=${CURRENT:0:9} PREVIOUS=${PREVIOUS:0:9}"
+  docker ps --filter label=kgkg.env=prod --format '{{.Names}}  {{.Image}}  {{.Status}}'
+  systemctl is-active -q kgkg-backend 2>/dev/null && echo "NOTE: systemd kgkg-backend still active (pre-Docker)"
+  echo "hostjobs  : $(systemctl is-active kgkg-hostjobs 2>/dev/null)"
   prod_clean && echo "live tree : clean" || { echo "live tree : DIRTY"; git -C "$PROD" status --short --untracked-files=no; }
 }
 
@@ -139,9 +161,9 @@ if [[ $MODE == status ]]; then status; exit 0; fi
 if [[ $MODE == rollback ]]; then
   load_state
   [[ -n $PREVIOUS ]] || die "no previous release recorded in $STATE"
-  rollback_to "$PREVIOUS" "$PREVIOUS_BUILD"
+  rollback_to "$PREVIOUS"
   bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || say "WARNING: smoke failed after rollback"
-  save_state "$PREVIOUS" "$CURRENT" "$PREVIOUS_BUILD" "$CURRENT_BUILD"
+  save_state "$PREVIOUS" "$CURRENT"
   exit 0
 fi
 
@@ -152,126 +174,106 @@ PREV=$(git -C "$PROD" rev-parse HEAD)
 say "deploy $REF = $SHORT (live: ${PREV:0:9}) mode=$MODE log=$LOG"
 prod_clean || { git -C "$PROD" status --short --untracked-files=no; die "live tree has uncommitted edits. Commit them (or move them to the work branch) first."; }
 git -C "$PROD" merge-base --is-ancestor "$PREV" "$SHA" || die "$SHORT does not contain the live commit ${PREV:0:9}; rebase/merge onto it first (prod only fast-forwards)."
-if [[ $SHA == "$PREV" && $FORCE -eq 0 && $MODE == full ]]; then say "already live; nothing to do (use --force to rebuild)"; exit 0; fi
+if [[ $SHA == "$PREV" && $FORCE -eq 0 && $MODE == full ]] && [[ -n $(prod_containers backend) ]]; then
+  say "already live; nothing to do (use --force to rebuild)"; exit 0
+fi
 
 # ---- 1. gate ---------------------------------------------------------------
-# Old release checkouts (from earlier or aborted runs) are disposable; the lock
-# guarantees no other deploy is using them. ~0.7 GB each with node_modules.
 for old in "$REL"/w-*; do [[ -d $old ]] && git -C "$PROD" worktree remove --force "$old" 2>/dev/null; done; rm -rf "$REL"/w-*
 W=$REL/w-$SHORT
-git -C "$PROD" worktree remove --force "$W" 2>/dev/null || rm -rf "$W"
 git -C "$PROD" worktree prune
 git -C "$PROD" worktree add -q --detach "$W" "$SHA"
-say "1/4 GATE in $W"
+say "1/5 GATE in $W"
 KG_GATE_LOGS=$REL/logs/gate-$TS bash "$W/ops/deploy/gate.sh" "$W" || die "gate failed; production untouched (logs: $REL/logs/gate-$TS)"
+source_containers "$W"
 
-# ---- 2. staging ------------------------------------------------------------
-say "2/4 STAGING (backend :$STG_BE, frontend :$STG_FE, DB = fresh copy of prod)"
-rsync -a --delete --exclude Database_warehouse --exclude static_warehouse --exclude 'db.sqlite3*' \
-  --exclude .venv --exclude __pycache__ --exclude .gate-logs "$W/KG_backend/" "$STG/backend/"
-ln -sfn "$PROD/KG_backend/Database_warehouse" "$STG/backend/Database_warehouse"
-ln -sfn "$PROD/KG_backend/static_warehouse" "$STG/backend/static_warehouse"
-sqlite_copy "$PROD/KG_backend/db.sqlite3" "$STG/db/db.sqlite3"
-mkdir -p "$STG/stagecfg"
-cat > "$STG/stagecfg/staging_settings.py" <<PY
-# Staging backend (ops/deploy/deploy.sh): prod settings, a COPY of the prod DB.
+# ---- 2. images -------------------------------------------------------------
+say "2/5 IMAGES $(img_be "$SHA") $(img_fe "$SHA")"
+FE_PUBLIC=$(grep -E '^NEXT_PUBLIC_API_BASE=' "$PROD/kg_frontend/.env.production" | cut -d= -f2- || true)
+( trap - ERR; cd "$W" &&
+  nice -n 10 docker build -q -f ops/docker/backend.Dockerfile -t "$(img_be "$SHA")" --build-arg KG_RELEASE="$SHORT" . &&
+  nice -n 10 docker build -q -f ops/docker/frontend.Dockerfile -t "$(img_fe "$SHA")" --build-arg KG_RELEASE="$SHORT" \
+    ${FE_PUBLIC:+--build-arg NEXT_PUBLIC_API_BASE="$FE_PUBLIC"} . ) > "$REL/logs/images-$TS.log" 2>&1 \
+  || { tail -30 "$REL/logs/images-$TS.log"; die "image build failed; production untouched (log: $REL/logs/images-$TS.log)"; }
+
+# ---- 3. staging ------------------------------------------------------------
+say "3/5 STAGING (backend :$STG_BE, frontend :$STG_FE, DB = fresh copy of prod)"
+docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
+sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
+cat > "$STG/stagecfg/staging_settings.py" <<'PY'
+# Staging backend (ops/deploy/deploy.sh): prod settings on a COPY of the prod DB.
 from KG_backend.settings import *  # noqa
-DATABASES["default"]["NAME"] = "$STG/db/db.sqlite3"
 ALLOWED_HOSTS = ["*"]
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 SECURE_HSTS_SECONDS = 0
 PY
-stg_env() {  # run a command with the staging backend environment
-  ( trap - ERR; cd "$STG/backend" && set -a && . "$PROD/KG_backend/.env.prod" && set +a &&
-    unset SENTRY_DSN SMS_API_KEY SMS_USERNAME SMS_FROM TURNSTILE_SECRET KG_ALERT_PHONES &&
-    export KG_WARMUP=0 KG_LOG_DIR=$STG/logs DJANGO_SETTINGS_MODULE=staging_settings \
-           PYTHONPATH=$STG/stagecfg:$STG/backend HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 &&
-    "$@" )
-}
-stg_env "$VENV/python" manage.py migrate --noinput > "$REL/logs/staging-migrate-$TS.log" 2>&1 \
+NOSEC=(-e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET= -e KG_ALERT_PHONES=
+       -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro)
+STG_SPOOL=/run/kgkg-hostjobs-staging   # nobody serves it: staging can never start host jobs
+KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" python manage.py migrate --noinput \
+  > "$REL/logs/staging-migrate-$TS.log" 2>&1 \
   || die "migrations failed on the prod-data copy (log: $REL/logs/staging-migrate-$TS.log); production untouched"
-TOKEN=$(stg_env "$VENV/python" manage.py shell -c \
+TOKEN=$(KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" python manage.py shell -c \
   "from api.models import AuthToken, PortalUser; print(AuthToken.issue(PortalUser.objects.get(username='$QA_USER')).key)" 2>/dev/null | tail -1)
 [[ ${#TOKEN} -ge 40 ]] || die "could not mint a staging QA token for $QA_USER"
-stop_port $STG_BE
-stg_env setsid nohup "$VENV/gunicorn" KG_backend.wsgi:application --bind 127.0.0.1:$STG_BE \
-  --workers 2 --threads 4 --timeout 300 > "$STG/logs/backend.out" 2>&1 < /dev/null &
-stop_port $STG_FE
-TERMS=$(grep -E '^TERMS_JSON_PATH=' "$PROD/kg_frontend/.env.production" | cut -d= -f2- || true)
-( trap - ERR; cd "$W/kg_frontend" && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root NODE_ENV=production \
-    BACKEND_URL=http://127.0.0.1:$STG_BE API_BASE_INTERNAL=http://127.0.0.1:$STG_BE TERMS_JSON_PATH="$TERMS" \
-    setsid nohup npx next start -p $STG_FE -H 127.0.0.1 > "$STG/logs/frontend.out" 2>&1 < /dev/null & )
-wait_http http://127.0.0.1:$STG_BE/api/health/ 90 || die "staging backend did not start (log: $STG/logs/backend.out)"
-wait_http http://127.0.0.1:$STG_FE/ 90 || die "staging frontend did not start (log: $STG/logs/frontend.out)"
+KG_SPOOL=$STG_SPOOL KG_WARMUP=0 run_backend kgkg-stg-backend "$(img_be "$SHA")" $STG_BE "$STG/db" "$STG/logs" \
+  "${NOSEC[@]}" -e KG_WORKERS=2 -e KG_THREADS=4
+run_frontend kgkg-stg-frontend "$(img_fe "$SHA")" $STG_FE http://127.0.0.1:$STG_BE -e METIS_API_KEY= -e SENTRY_DSN=
+wait_healthy kgkg-stg-backend 240 || { docker logs --tail 40 kgkg-stg-backend; die "staging backend did not become healthy"; }
+wait_healthy kgkg-stg-frontend 120 || { docker logs --tail 40 kgkg-stg-frontend; die "staging frontend did not become healthy"; }
 STG_OK=0
 bash "$W/ops/deploy/smoke.sh" http://127.0.0.1:$STG_BE http://127.0.0.1:$STG_FE "$TOKEN" && STG_OK=1
-if [[ ${KG_KEEP_STAGING:-0} != 1 ]]; then stop_port $STG_FE; stop_port $STG_BE; fi
+[[ ${KG_KEEP_STAGING:-0} == 1 ]] || docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
 (( STG_OK )) || die "staging smoke tests failed; production untouched"
 if [[ $MODE == staging ]]; then say "STAGING PASSED for $SHORT (production untouched)"; exit 0; fi
 
-# ---- 3. promote --------------------------------------------------------------
-say "3/4 PROMOTE ${PREV:0:9} -> $SHORT"
+# ---- 4. promote --------------------------------------------------------------
+say "4/5 PROMOTE ${PREV:0:9} -> $SHORT"
 prod_clean || die "live tree changed during the deploy; aborting before touching it"
-sqlite_copy "$PROD/KG_backend/db.sqlite3" "$REL/db-backups/db-$TS-${PREV:0:9}.sqlite3"
+sqlite_copy "$KG_BE_DIR/db.sqlite3" "$REL/db-backups/db-$TS-${PREV:0:9}.sqlite3"
 { ls -1t "$REL"/db-backups/db-*.sqlite3 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
 CHANGED=$(git -C "$PROD" diff --name-only "$PREV" "$SHA")
 git -C "$PROD" merge -q --ff-only "$SHA"
-
-FE_DIR=$PROD/kg_frontend
-OLD_BUILD=$(readlink "$FE_DIR/.next" 2>/dev/null || true)
-NEED_FE=0
-{ grep -q '^kg_frontend/' <<<"$CHANGED" || [[ -z $OLD_BUILD || $FORCE -eq 1 ]]; } && NEED_FE=1
-
 undo_code() { git -C "$PROD" reset -q --hard "$PREV"; }
-if grep -q '^KG_backend/requirements.txt$' <<<"$CHANGED"; then
-  "$VENV/pip" install -q -r "$PROD/KG_backend/requirements.txt" || { undo_code; die "pip install failed; code reset to ${PREV:0:9}"; }
-fi
-( cd "$PROD/KG_backend" && set -a && . ./.env.prod && set +a && "$VENV/python" manage.py migrate --noinput ) \
-  || { undo_code; die "prod migrate failed; code reset to ${PREV:0:9} (DB backup: $REL/db-backups/)"; }
 
-NEW_BUILD=$OLD_BUILD
-if (( NEED_FE )); then
-  NEW_BUILD=.next-$SHORT
-  if grep -q '^kg_frontend/package-lock.json$' <<<"$CHANGED"; then
-    ( cd "$FE_DIR" && npm ci --no-audit --no-fund ) || { undo_code; die "npm ci failed; code reset"; }
+# Host jobs (timers, pipeline, crawler) keep using the host venv: keep it in step.
+if grep -qE '^(KG_backend/requirements.txt|ops/docker/backend-requirements.lock)$' <<<"$CHANGED"; then
+  "$VENV/pip" install -q -r "$PROD/ops/docker/backend-requirements.lock" --extra-index-url https://download.pytorch.org/whl/cpu \
+    || { undo_code; die "host venv pip install failed; code reset to ${PREV:0:9}"; }
+fi
+be_run "$(img_be "$SHA")" "$KG_BE_DIR" /var/log/kgkg python manage.py migrate --noinput > "$REL/logs/prod-migrate-$TS.log" 2>&1 \
+  || { undo_code; die "prod migrate failed; code reset to ${PREV:0:9} (log: $REL/logs/prod-migrate-$TS.log, DB backup: $REL/db-backups/)"; }
+ensure_hostjobs
+
+PREV_IMG_OK=0; have_images "$PREV" && PREV_IMG_OK=1
+fail_promote() {
+  if (( PREV_IMG_OK )); then rollback_to "$PREV"; else
+    undo_code
+    say "no images for ${PREV:0:9} (pre-Docker release): restoring the systemd services"
+    for r in backend frontend; do for c in $(prod_containers $r); do docker rm -f "$c" >/dev/null; done; done
+    systemctl enable -q kgkg-backend kgkg-frontend; systemctl start kgkg-backend kgkg-frontend
   fi
-  rm -rf "${FE_DIR:?}/$NEW_BUILD"
-  ( cd "$FE_DIR" && KG_NEXT_DIST=$NEW_BUILD nice -n 10 npm run build > "$REL/logs/prod-build-$TS.log" 2>&1 ) \
-    || { git -C "$PROD" checkout -q -- kg_frontend/tsconfig.json 2>/dev/null; undo_code; die "prod build failed; code reset, live build untouched (log: $REL/logs/prod-build-$TS.log)"; }
-  git -C "$PROD" checkout -q -- kg_frontend/tsconfig.json 2>/dev/null || true
-  if [[ -d $FE_DIR/.next && ! -L $FE_DIR/.next ]]; then
-    OLD_BUILD=.next-pre-${PREV:0:9}
-    mv "$FE_DIR/.next" "$FE_DIR/$OLD_BUILD"
-  fi
-  ln -sfn "$NEW_BUILD" "$FE_DIR/.next.new" && mv -Tf "$FE_DIR/.next.new" "$FE_DIR/.next"
-fi
+  die "$1 -> rolled back to ${PREV:0:9}"
+}
+swap_backend "$SHA" || fail_promote "new backend container did not become healthy"
+swap_frontend "$SHA" || fail_promote "new frontend container did not become healthy"
 
-reload_backend
-if (( NEED_FE )); then
-  T0=$(date +%s%N)
-  systemctl restart kgkg-frontend
-  wait_http http://127.0.0.1:3000/ 90 || true
-  say "frontend back after $(( ($(date +%s%N) - T0) / 1000000 )) ms"
-fi
-wait_http http://127.0.0.1:8000/api/health/ 60 || true
-
-# ---- 4. verify -----------------------------------------------------------------
-say "4/4 VERIFY production"
-if ! bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000; then
-  rollback_to "$PREV" "$OLD_BUILD"
-  die "production smoke failed -> rolled back to ${PREV:0:9}"
-fi
+# ---- 5. verify -----------------------------------------------------------------
+say "5/5 VERIFY production"
+bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || fail_promote "production smoke failed"
 
 load_state
-save_state "$SHA" "$PREV" "$NEW_BUILD" "$OLD_BUILD"
+save_state "$SHA" "$PREV"
 TAG=deploy-$TS
 git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT" "$SHA"
 timeout 60 git -C "$PROD" push -q origin "HEAD:$(git -C "$PROD" rev-parse --abbrev-ref HEAD)" "$TAG" \
   || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin HEAD $TAG"
-# keep the live build, the rollback build and the newest KEEP_BUILDS others
-( cd "$FE_DIR" && ls -1dt .next-*/ 2>/dev/null | sed 's#/$##' | grep -vxF -e "$NEW_BUILD" -e "$OLD_BUILD" \
-    | tail -n +$((KEEP_BUILDS)) | xargs -r rm -rf ) || true
+# Keep the live and rollback images plus the newest few others.
+for repo in kgkg-backend kgkg-frontend; do
+  docker images "$repo" --format '{{.Tag}}' | grep -xE '[0-9a-f]{9}' | grep -vxF -e "$SHORT" -e "${PREV:0:9}" \
+    | tail -n +$KEEP_IMAGES | xargs -r -I{} docker image rm -f "$repo:{}" >/dev/null 2>&1 || true
+done
 git -C "$PROD" worktree remove --force "$W" 2>/dev/null || true
 say "DEPLOYED $SHORT as $TAG (previous ${PREV:0:9}; rollback: ops/deploy/deploy.sh --rollback)"

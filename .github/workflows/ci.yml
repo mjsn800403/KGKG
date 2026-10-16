@@ -67,3 +67,15 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_BASE: /kg-api
+
+  images:
+    # The production images (ops/docker/) must build from every commit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Backend image
+        run: docker build -f ops/docker/backend.Dockerfile -t kgkg-backend:ci .
+      - name: Frontend image
+        run: docker build -f ops/docker/frontend.Dockerfile -t kgkg-frontend:ci .
+      - name: Backend image boots (Django check)
+        run: docker run --rm -e DJANGO_DEBUG=true -e KG_ADMIN_TOKEN=ci -e KG_ENV_FILE=/tmp/x.env kgkg-backend:ci python manage.py check

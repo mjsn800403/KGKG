@@ -62,6 +62,14 @@ loki.relabel "journal" {
     source_labels = ["__journal__systemd_unit"]
     target_label  = "unit"
   }
+  // Backend/frontend run in Docker (journald log driver, tag = old unit name):
+  // keep the unit label the dashboards and alerts already use.
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    regex         = "(kgkg-(backend|frontend))"
+    target_label  = "unit"
+    replacement   = "$1.service"
+  }
   rule {
     source_labels = ["__journal_priority_keyword"]
     target_label  = "level"
@@ -72,7 +80,7 @@ loki.source.journal "units" {
   path          = "/var/log/journal"
   max_age       = "12h"
   relabel_rules = loki.relabel.journal.rules
-  matches       = "_SYSTEMD_UNIT=kgkg-backend.service _SYSTEMD_UNIT=kgkg-frontend.service _SYSTEMD_UNIT=kgkg-pipeline.service _SYSTEMD_UNIT=kgkg-alerts.service _SYSTEMD_UNIT=kgkg-detect.service _SYSTEMD_UNIT=nginx.service"
+  matches       = "_SYSTEMD_UNIT=kgkg-backend.service _SYSTEMD_UNIT=kgkg-frontend.service _SYSTEMD_UNIT=kgkg-pipeline.service _SYSTEMD_UNIT=kgkg-alerts.service _SYSTEMD_UNIT=kgkg-detect.service _SYSTEMD_UNIT=nginx.service _SYSTEMD_UNIT=docker.service"
   labels        = {job = "systemd"}
   forward_to    = [loki.write.local.receiver]
 }

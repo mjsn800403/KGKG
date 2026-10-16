@@ -49,6 +49,7 @@ import sys
 from django.conf import settings
 from django.utils import timezone
 
+from . import hostjobs
 from .rag import config
 
 HEARTBEAT_EVERY_S = 5
@@ -241,21 +242,15 @@ def stage_definitions():
 def _foreign_build_running():
     """A build_rag/build_diag/run_pipeline started OUTSIDE job control (e.g. a
     shell run) — never start a second one on top of it."""
-    me = os.getpid()
+    me = None if hostjobs.enabled() else os.getpid()
     try:
-        for pid in os.listdir('/proc'):
-            if not pid.isdigit() or int(pid) == me:
-                continue
-            try:
-                with open(f'/proc/{pid}/cmdline', 'rb') as f:
-                    cmd = f.read().decode('utf-8', 'replace').replace('\x00', ' ')
-            except OSError:
-                continue
-            if 'manage.py' in cmd and any(k in cmd for k in
-                                          ('build_rag', 'build_diag', 'run_pipeline')):
-                return {'pid': int(pid), 'cmd': cmd.strip()}
+        procs = hostjobs.processes()
     except OSError:
-        pass
+        return None
+    for pid, cmd in procs:
+        if pid != me and 'manage.py' in cmd and any(
+                k in cmd for k in ('build_rag', 'build_diag', 'run_pipeline')):
+            return {'pid': pid, 'cmd': cmd}
     return None
 
 
@@ -267,12 +262,9 @@ def active_job():
 
 
 def _pid_alive(pid):
-    if not pid:
-        return False
     try:
-        os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, PermissionError, OSError):
+        return hostjobs.pid_alive(pid)
+    except OSError:
         return False
 
 
@@ -332,16 +324,16 @@ def launch_worker(job):
     }
 
     launched_via = ''
-    if shutil.which('systemd-run'):
-        cmd = ['systemd-run', '--collect', f'--unit={unit}',
-               f'--working-directory={base}',
-               f'--property=Nice={plan["nice"]}',
-               f'--property=IOSchedulingClass={plan["io_class"]}',
-               f'--property=CPUWeight={plan["cpu_weight"]}',
-               f'--property=EnvironmentFile={base}/.env.prod']
-        for k, v in env_pairs.items():
-            cmd.append(f'--setenv={k}={v}')
-        cmd += argv
+    if hostjobs.enabled():
+        # In the container: the host service starts the unit with the host venv.
+        try:
+            launched_via = hostjobs.call(
+                'pipeline_launch', job_id=job.id, attempt=attempt, nice=plan['nice'],
+                cpu_weight=plan['cpu_weight'], io_class=plan['io_class'], env=env_pairs)
+        except OSError:
+            launched_via = ''
+    elif shutil.which('systemd-run'):
+        cmd = hostjobs.pipeline_unit_cmd(base, unit, plan, env_pairs, argv)
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if res.returncode == 0:
@@ -438,15 +430,17 @@ def cancel_job(job):
     stopped = False
     if job.unit_name:
         try:
-            res = subprocess.run(['systemctl', 'stop', job.unit_name],
-                                 capture_output=True, timeout=30)
-            stopped = res.returncode == 0
+            if hostjobs.enabled():
+                stopped = bool(hostjobs.call('unit_stop', unit=job.unit_name))
+            else:
+                res = subprocess.run(['systemctl', 'stop', job.unit_name],
+                                     capture_output=True, timeout=30)
+                stopped = res.returncode == 0
         except (OSError, subprocess.TimeoutExpired):
             stopped = False
     if not stopped and job.pid and _pid_alive(job.pid):
         try:
-            os.kill(job.pid, signal.SIGTERM)
-            stopped = True
+            stopped = hostjobs.terminate(job.pid, 'pipeline')
         except OSError:
             stopped = False
     if not stopped:

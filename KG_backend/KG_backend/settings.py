@@ -119,7 +119,7 @@ WSGI_APPLICATION = 'KG_backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get('KG_DB_PATH') or BASE_DIR / 'db.sqlite3',
         'OPTIONS': {
             # WAL lets readers proceed during writes (metrics flush, activity
             # logging) — the classic "database is locked" fix for SQLite under
