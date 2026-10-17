@@ -21,13 +21,14 @@ SPOOL = Path(os.environ.pop('KG_HOSTJOBS_DIR', '/run/kgkg-hostjobs'))  # popped:
 HOST_PYTHON = BACKEND / '.venv' / 'bin' / 'python'
 
 sys.path.insert(0, str(BACKEND))
-from api import hostjobs, tis_crawler  # noqa: E402  (both Django-free)
+from api import hostjobs, partsouq_crawler, tis_crawler  # noqa: E402  (all Django-free)
 
 PIPELINE_UNIT = re.compile(r'kgkg-pipeline-job\d+-a\d+')
 TIS_UNIT = re.compile(r'kgkg-tis-crawl-\d+')
 TERMINABLE = {
     'pipeline': re.compile(r'manage\.py (run_pipeline|build_rag|build_diag)\b'),
     'tis': re.compile(r'toyota_tis\.py'),
+    'partsouq': re.compile(partsouq_crawler.PROC),
 }
 ENV_VALUE = re.compile(r'[\w.\-]{0,64}')
 REQ_ID = re.compile(r'[0-9a-f]{32}')
@@ -84,8 +85,15 @@ def a_tis_crawl_start(p):
     return unit
 
 
+def a_ps_crawl_start(p):
+    # spawn_crawl re-validates the unit name, URL and folder name.
+    partsouq_crawler.spawn_crawl(str(p['unit']), str(p['url']), str(p['name']))
+    return str(p['unit'])
+
+
 ACTIONS = {'procs': a_procs, 'pipeline_launch': a_pipeline_launch, 'unit_stop': a_unit_stop,
-           'term': a_term, 'tis_start_chrome': a_tis_start_chrome, 'tis_crawl_start': a_tis_crawl_start}
+           'term': a_term, 'tis_start_chrome': a_tis_start_chrome, 'tis_crawl_start': a_tis_crawl_start,
+           'ps_crawl_start': a_ps_crawl_start}
 
 
 def handle(path):
