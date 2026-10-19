@@ -8,8 +8,28 @@ import Guidance from '@/guidance';
 import Analytics from '@/components/Analytics';
 
 export const metadata = {
-  title: 'KGTechVault | پلتفرم هوشمند دانش و مستندات فنی',
-  description: 'پلتفرم هوشمند دانش و مستندات فنی خدمات گستر سپهر گیتی',
+  // Absolute base for the og:/twitter: image URLs Next derives from the
+  // opengraph-image / twitter-image files in this directory.
+  metadataBase: new URL('https://kgtechvault.com'),
+  title: {
+    default: 'KGTechVault | پلتفرم هوشمند دانش و مستندات فنی خودرو',
+    template: '%s | KGTechVault',
+  },
+  description: 'پلتفرم هوشمند دانش و مستندات فنی خودرو — منوال تعمیر، نقشهٔ سیم‌کشی، زمان استاندارد و کاتالوگ قطعات، همراه با دستیار هوشمند فارسی. خدمات گستر سپهر گیتی.',
+  applicationName: 'KGTechVault',
+  openGraph: {
+    type: 'website',
+    siteName: 'KGTechVault',
+    locale: 'fa_IR',
+    url: 'https://kgtechvault.com',
+    title: 'KGTechVault | پلتفرم هوشمند دانش و مستندات فنی خودرو',
+    description: 'منوال تعمیر، نقشهٔ سیم‌کشی، زمان استاندارد و کاتالوگ قطعات، همراه با دستیار هوشمند فارسی.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'KGTechVault | پلتفرم هوشمند دانش و مستندات فنی خودرو',
+    description: 'منوال تعمیر، نقشهٔ سیم‌کشی، زمان استاندارد و کاتالوگ قطعات، همراه با دستیار هوشمند فارسی.',
+  },
 };
 
 // Runs before first paint so the stored theme applies immediately — without it
