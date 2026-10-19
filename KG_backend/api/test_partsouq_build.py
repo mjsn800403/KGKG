@@ -30,5 +30,9 @@ class RealCrawlBuildTests(TestCase):
             self.assertGreater(counts['rows'], 1000)
             self.assertEqual(c.execute('select grade from frames').fetchone()[0], 'GXR')
             img = c.execute('select image_url from sections limit 1').fetchone()[0]
-            self.assertTrue(img.startswith('/media/_parts_assets/ps_jtmhu01j6l5165492_'), img)
-            self.assertTrue(Path(tmp, 'static_warehouse', '_parts_assets', Path(img).name).is_file())
+            self.assertTrue(img.startswith('/media/_parts_assets/ps_jtmhu01j6l5165492_c_'), img)
+            self.assertEqual(counts['uncleaned'], 0)
+            from PIL import Image
+            with Image.open(Path(tmp, 'static_warehouse', '_parts_assets', Path(img).name)) as im:
+                # only pure black and white left: the grey watermark is gone
+                self.assertEqual({v for _, v in im.convert('L').getcolors()}, {0, 255})

@@ -8,8 +8,8 @@ api/parts.py serves it unchanged:
 
 The crawl folder is named <Model>_<year>_<frame>_<VIN> (partsouq_crawler.parse_url).
 Output: Database_warehouse/_parts/<car name>.db, diagram images copied into
-static_warehouse/_parts_assets with a per-VIN prefix. Diagram images are kept
-as crawled (the PARTSOUQ watermark is not removed here).
+static_warehouse/_parts_assets with a per-VIN prefix, watermark removed
+(remove_watermark).
 """
 import html as H
 import os
@@ -32,6 +32,19 @@ CAR_NAME = re.compile(r'[\w ()\-.]{3,80}')
 
 class BuildError(Exception):
     pass
+
+
+def remove_watermark(src, dst):
+    """Drop the light-grey "PARTSOUQ.COM" watermark from a diagram.
+
+    The diagrams are pure black-on-white line art and the watermark is light
+    grey (about 223-246), so a threshold at 128 removes it without touching
+    the drawing. Saved as PNG (lossless) under a new name: media is served
+    `immutable`, so a cleaned image must never reuse a cached URL.
+    """
+    from PIL import Image
+    with Image.open(src) as im:
+        im.convert('L').point(lambda v: 255 if v >= 128 else 0).convert('1').save(dst, optimize=True)
 
 
 def _text(s):
@@ -92,7 +105,7 @@ def build_db(crawl, car, grade, backend=None):
     if not m:
         raise BuildError('folder name is not <Model>_<year>_<frame>_<VIN>')
     frame, vin = m['frame'], m['vin']
-    prefix = f'ps_{vin.lower()}_'          # shared asset dir: keep our names unique
+    prefix = f'ps_{vin.lower()}_c_'        # shared asset dir: unique per VIN; _c_ = cleaned
     out = backend / 'Database_warehouse' / '_parts' / f'{car}.db'
     assets = backend / 'static_warehouse' / '_parts_assets'
     fi = frame_info(crawl)
@@ -109,7 +122,7 @@ def build_db(crawl, car, grade, backend=None):
     ins = ('INSERT INTO nodes(id,parent_id,path,title,node_type,file_type,href,source_file,'
            'sort_order,depth,root_order,content,updated_at,frame,group_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     db.execute(ins, (root_id, None, root_path, frame, None, 'root_path', None, None, 0, 0, 0, None, now, frame, None))
-    counts = dict(groups=0, rows=0, labels=0, skipped=0)
+    counts = dict(groups=0, rows=0, labels=0, skipped=0, uncleaned=0)
     gid = 0
     for ci, cat in enumerate(CATEGORY_ORDER, start=1):
         cpath = f'{root_path}/{cat}'
@@ -128,9 +141,14 @@ def build_db(crawl, car, grade, backend=None):
             if label in seen:
                 label = f'{label} ({code})'
             seen.add(label)
-            dst = prefix + img_file
+            dst = prefix + Path(img_file).stem + '.png'
             if not (assets / dst).exists():
-                shutil.copy2(src, assets / dst)
+                try:
+                    remove_watermark(src, assets / dst)
+                except OSError:          # not an image PIL can read: keep the original
+                    dst = prefix + img_file
+                    shutil.copy2(src, assets / dst)
+                    counts['uncleaned'] += 1
             gid += 1
             lpath = f'{cpath}/{label}'
             lid = sha1(lpath)
