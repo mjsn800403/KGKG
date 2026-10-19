@@ -326,6 +326,14 @@ def admin_pipeline_view(request):
                 return JsonResponse({'error': err}, status=409)
             return JsonResponse({'ok': True, 'pid': pid})
 
+        if action == 'ps_build':
+            from . import partsouq_build
+            res, err = partsouq_build.build_and_register(
+                body.get('folder'), body.get('car_name'), body.get('grade'))
+            if err:
+                return JsonResponse({'error': err}, status=409)
+            return JsonResponse({'ok': True, **res})
+
         if action == 'ps_stop':
             return JsonResponse({'ok': True, 'stopped': partsouq_crawler.stop()})
 

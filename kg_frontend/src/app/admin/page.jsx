@@ -3001,6 +3001,14 @@ function PartsouqCrawlerCard({ data, act, busy }) {
     <span className="st-badge" style={{ background: ok ? '#22c55e22' : '#ef444422', color: ok ? '#22c55e' : '#ef4444' }}>{ok ? yes : no}</span>
   );
   const crawls = p.crawls || [];
+  const build = (c) => {
+    const [model, year] = c.name.split('_');
+    const name = window.prompt('نام خودرو در سامانه (لاتین):', `${model.replace(/([a-z])([A-Z])/g, '$1 $2')} (${year})`);
+    if (!name) return;
+    const grade = window.prompt('تیپ / گرید (اختیاری، مثلاً GXR):', '') || '';
+    act({ action: 'ps_build', folder: c.name, car_name: name.trim(), grade: grade.trim() },
+      `پایگاه دادهٔ قطعات «${name.trim()}» ساخته شد و خودرو اضافه شد.`);
+  };
   return (
     <div className="card glass" style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -3027,11 +3035,13 @@ function PartsouqCrawlerCard({ data, act, busy }) {
       <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
         در partsouq شمارهٔ VIN را جست‌وجو کنید و آدرس صفحهٔ گروه‌های قطعات را اینجا بچسبانید. اگر Chrome در دسترس نیست،
         «راه‌اندازی Chrome» را در کارت TIS بزنید (برای partsouq ورود لازم نیست). هم‌زمان با خزشگر TIS اجرا نمی‌شود.
+        پس از پایان خزش، «ساخت پایگاه داده» کاتالوگ قطعات را می‌سازد و خودرو را اضافه می‌کند؛ شرکت‌های دارای پلن «همهٔ خودروها»
+        خودکار دسترسی می‌گیرند و برای بقیه از ویرایش دسترسی شرکت استفاده کنید.
       </div>
       {crawls.length > 0 && (
         <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid rgba(120,120,160,.2)', borderRadius: 8 }}>
           <table className="adm-table" style={{ margin: 0 }}>
-            <thead><tr><th>خودرو</th><th>نقشه‌ها</th><th>تصاویر</th><th>وضعیت</th><th>آخرین فعالیت</th></tr></thead>
+            <thead><tr><th>خودرو</th><th>نقشه‌ها</th><th>تصاویر</th><th>وضعیت</th><th>آخرین فعالیت</th><th></th></tr></thead>
             <tbody>
               {crawls.map((c) => (
                 <tr key={c.name}>
@@ -3040,6 +3050,9 @@ function PartsouqCrawlerCard({ data, act, busy }) {
                   <td>{(c.images || 0).toLocaleString('fa-IR')}</td>
                   <td>{c.done ? 'کامل' : c.blocked ? 'متوقف (Cloudflare)' : 'ناتمام'}</td>
                   <td style={{ fontSize: 12 }}>{c.last_at ? new Date(c.last_at).toLocaleString('fa-IR') : '—'}</td>
+                  <td>{c.diagrams > 0 && !p.running && (
+                    <button className="btn" disabled={busy} onClick={() => build(c)}>ساخت پایگاه داده</button>
+                  )}</td>
                 </tr>
               ))}
             </tbody>
