@@ -66,3 +66,4 @@ weasyprint==69.0
 webencodings==0.5.1
 wheel==0.47.0
 zopfli==0.4.3
+cryptography==50.0.2

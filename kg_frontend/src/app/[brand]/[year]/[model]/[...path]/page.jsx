@@ -9,6 +9,7 @@ import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import StackedContent from '@/components/StackedContent';
 import ContentRenderer from '@/components/ContentRenderer';
+import { sealProp, sealStack } from '@/utils/shieldServer';
 import CarBrowser from '@/components/CarBrowser';
 import SearchBox from '@/components/SearchBox';
 import ActivityBeacon from '@/components/ActivityBeacon';
@@ -186,7 +187,7 @@ export default async function NodePage({ params }) {
     );
   } else if (stacked) {
     mode = 'همهٔ صفحه‌های این بخش، پشت سر هم';
-    body = <StackedContent payload={subtree} brand={brand} year={year} model={model} />;
+    body = <StackedContent {...sealStack(token, subtree)} brand={brand} year={year} model={model} />;
   } else if ((nodes || []).length === 1 && nodes[0].content != null) {
     // A resolved leaf: car_view returns the content node itself as a
     // single-element list (any node with content short-circuits the children
@@ -194,7 +195,7 @@ export default async function NodePage({ params }) {
     // self-referential .../X/X URL that 404s. Render its content directly.
     mode = 'صفحهٔ منوال';
     body = (
-      <ContentRenderer content={nodes[0].content} brand={brand} year={year} model={model} />
+      <ContentRenderer {...sealProp(token, 'content', nodes[0].content)} brand={brand} year={year} model={model} />
     );
   } else {
     const list = nodes || [];

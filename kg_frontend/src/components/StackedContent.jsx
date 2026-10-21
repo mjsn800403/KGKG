@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { resolveHref } from '@/utils/api';
+import useUnsealed, { SealedNotice } from '@/lib/useUnsealed';
 import { showModal } from '@/components/Modal';
 import Icon from '@/components/Icon';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
@@ -27,8 +28,10 @@ function isManualPageLink(href) {
   return /(^|\/)pages\/[^/]+\.html/i.test(href);
 }
 
-export default function StackedContent({ payload, brand, year, model }) {
+export default function StackedContent({ payload, sealed, brand, year, model }) {
   const router = useRouter();
+  // With the shield on, the bodies arrive as one sealed list (same order as items).
+  const bodies = useUnsealed(sealed, null);
   const items = useMemo(() => payload?.items || [], [payload]);
   const bodyRef = useRef(null);
   const [shown, setShown] = useState(() => Math.min(items.length, BATCH));
@@ -89,6 +92,8 @@ export default function StackedContent({ payload, brand, year, model }) {
     return <div className="empty-state">محتوایی برای نمایش در این بخش وجود ندارد.</div>;
   }
 
+  if (sealed && !bodies) return <SealedNotice value={bodies} />;
+
   return (
     <div className="viewer glass stack">
       <div className="viewer-body content-renderer" onClick={handleClick} ref={bodyRef}>
@@ -122,7 +127,7 @@ export default function StackedContent({ payload, brand, year, model }) {
           </nav>
         )}
 
-        {items.slice(0, shown).map((it) => (
+        {items.slice(0, shown).map((it, i) => (
           <section key={it.id} id={`node-${it.id}`} data-rel={(it.segments || []).join(SEP)} className="stack-section">
             <div className="stack-section-head">
               <h2 className="stack-section-title" dir="ltr">{it.title}</h2>
@@ -133,7 +138,7 @@ export default function StackedContent({ payload, brand, year, model }) {
             {it.segments && it.segments.length > 1 && (
               <div className="stack-section-crumb" dir="ltr">{it.segments.slice(0, -1).join(' / ')}</div>
             )}
-            <div className="content-wrapper" dangerouslySetInnerHTML={{ __html: sanitizeHtml(it.content) }} />
+            <div className="content-wrapper" dangerouslySetInnerHTML={{ __html: sanitizeHtml(sealed ? bodies[i] || '' : it.content) }} />
           </section>
         ))}
 

@@ -14,6 +14,7 @@
 // partsouq's own script keys off data-codeonimage.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
+import useUnsealed, { SealedNotice } from '@/lib/useUnsealed';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 6;
@@ -347,7 +348,9 @@ function PartsSection({ group, section }) {
   );
 }
 
-export default function PartsViewer({ group, sections }) {
+export default function PartsViewer({ group, sections: plain, sealed }) {
+  const sections = useUnsealed(sealed, plain);
+  if (sealed && !sections) return <SealedNotice value={sections} />;
   return (
     <div className="parts-viewer">
       {group?.category && (

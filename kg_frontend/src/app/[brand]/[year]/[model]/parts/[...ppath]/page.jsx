@@ -12,6 +12,7 @@ import DashboardShell from '@/components/DashboardShell';
 import CardGrid from '@/components/CardGrid';
 import ActivityBeacon from '@/components/ActivityBeacon';
 import PartsViewer from '@/components/PartsViewer';
+import { sealProp } from '@/utils/shieldServer';
 import {
   PARTS_LABEL, PARTS_CATEGORY_ANALYTICS, PartsBreadcrumb, partsHref,
 } from '@/components/PartsNav';
@@ -99,7 +100,7 @@ export default async function PartsNodePage({ params, searchParams }) {
         category={PARTS_CATEGORY_ANALYTICS[category] || ''}
       />
       {isLeaf ? (
-        <PartsViewer group={data.group} sections={data.sections || []} />
+        <PartsViewer group={data.group} {...sealProp(token, 'sections', data.sections || [])} />
       ) : (
         <CardGrid items={items} />
       )}

@@ -6,6 +6,7 @@ import { resolveHref } from '@/utils/api';
 import { showModal } from '@/components/Modal';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 import { enhanceManualRoot } from '@/lib/manualContent';
+import useUnsealed, { SealedNotice } from '@/lib/useUnsealed';
 
 // The manual's HTML content cross-links to other sections using the
 // original static site's flat "pages/<id>.html" filenames (optionally with
@@ -17,13 +18,15 @@ function isManualPageLink(href) {
   return /(^|\/)pages\/[^/]+\.html/i.test(href);
 }
 
-export default function ContentRenderer({ content, brand, year, model }) {
+export default function ContentRenderer({ content: plain, sealed, brand, year, model }) {
   const router = useRouter();
   const bodyRef = useRef(null);
+  const content = useUnsealed(sealed, plain);   // SSR may send it sealed (lib/shield)
 
   // Wide spec tables become scrollers, illustrations get their caption.
   useEffect(() => { enhanceManualRoot(bodyRef.current); }, [content]);
 
+  if (sealed && !content) return <SealedNotice value={content} />;
   if (!content) return null;
 
   function goToSegments(targetBrand, targetYear, targetModel, segments) {
