@@ -6,15 +6,18 @@ import { useEffect, useState } from 'react';
 import { unseal } from '@/lib/shield';
 
 export default function useUnsealed(sealed, plain) {
-  const [value, setValue] = useState(sealed ? undefined : plain);
+  // Result is keyed by the blob it came from, so a new blob reads as
+  // "opening" (undefined) without a synchronous reset inside the effect.
+  const [opened, setOpened] = useState({ blob: null, value: undefined });
   useEffect(() => {
-    if (!sealed) { setValue(plain); return undefined; }
+    if (!sealed) return undefined;
     let live = true;
-    setValue(undefined);
-    unseal(sealed).then((v) => { if (live) setValue(v); }, () => { if (live) setValue(null); });
+    unseal(sealed).then((value) => { if (live) setOpened({ blob: sealed, value }); },
+      () => { if (live) setOpened({ blob: sealed, value: null }); });
     return () => { live = false; };
-  }, [sealed, plain]);
-  return value;
+  }, [sealed]);
+  if (!sealed) return plain;
+  return opened.blob === sealed ? opened.value : undefined;
 }
 
 export function SealedNotice({ value }) {
