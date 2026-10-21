@@ -88,6 +88,8 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     # Append-only audit trail of logins and every mutating API call.
     'api.audit.AuditMiddleware',
+    # Per-user hourly caps on document reads + scraping alerts.
+    'api.contentguard.ContentGuardMiddleware',
 ]
 # CORS: allow-all only in DEBUG. In production set DJANGO_CORS_ORIGINS to a
 # comma-separated allowlist (e.g. "https://app.example.com").

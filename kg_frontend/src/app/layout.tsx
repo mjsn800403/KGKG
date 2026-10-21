@@ -6,6 +6,7 @@ import BackgroundFX from '@/components/BackgroundFX';
 import Modal from '@/components/Modal';
 import Guidance from '@/guidance';
 import Analytics from '@/components/Analytics';
+import ContentGuard from '@/components/ContentGuard';
 
 export const metadata = {
   // Absolute base for the og:/twitter: image URLs Next derives from the
@@ -69,6 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <Modal />
         <Guidance />
+        <ContentGuard />
       </body>
     </html>
   );

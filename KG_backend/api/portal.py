@@ -500,6 +500,10 @@ def _issue_session(user, request=None):
     user.last_login_at = timezone.now()
     user.save(update_fields=['last_login_at'])
     token = AuthToken.issue(user)
+    # One active session per account (KG_SINGLE_SESSION=0 turns it off): a new
+    # login signs every other browser out, so one account can't be shared.
+    if os.environ.get('KG_SINGLE_SESSION', '1') != '0':
+        AuthToken.objects.filter(user=user).exclude(pk=token.pk).delete()
     ActivityLog.objects.create(user=user, action='login', detail='ورود به سامانه')
     try:
         events.emit_company('activity', user.company_id, {
