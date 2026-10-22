@@ -10,6 +10,7 @@ from . import vncauth
 from . import grafanaauth
 from . import chatlog
 from . import flags
+from . import shield
 
 
 def _api_not_found(request, rest=None):
@@ -117,6 +118,7 @@ urlpatterns = [
     # /api/search/ -> semantic, cross-lingual per-car site search (replaces the
     # English-only SQL LIKE search). Falls back to LIKE if the index is missing.
     path('api/search/', views.search_view, name='search'),
+    path('api/shield/key/', shield.key_view, name='shield_key'),
     # /api/purchase-request/ -> legal-entity documentation purchase request (POST).
     # Declared before the <brand> patterns so "api" is never read as a brand.
     path('api/purchase-request/', views.purchase_request_view, name='purchase_request'),

@@ -9,6 +9,7 @@ import UserChip from '@/components/UserChip';
 import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import ContentRenderer from '@/components/ContentRenderer';
+import { sealProp } from '@/utils/shieldServer';
 import { friendlyError } from '@/lib/friendlyError';
 
 export default async function RawPage({ params }) {
@@ -41,7 +42,7 @@ export default async function RawPage({ params }) {
       <div className="page-sub">نمایش مستند</div>
 
       {page?.content ? (
-        <ContentRenderer content={page.content} brand={brand} year={year} model={model} />
+        <ContentRenderer {...sealProp(token, 'content', page.content)} brand={brand} year={year} model={model} />
       ) : (
         <div className="error-box">
           <p>این صفحه یافت نشد{error ? `: ${error}` : ''}.</p>

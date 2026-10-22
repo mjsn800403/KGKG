@@ -5,7 +5,7 @@ import { initialSelection } from '@/lib/pricing';
 import PlansPage from './PlansPage';
 
 export const metadata: Metadata = {
-  title: 'پلن‌ها و قیمت | KGTechVault',
+  title: 'پلن‌ها و قیمت',
   description: 'اشتراک ۲ روزه، ماهانه یا سالانهٔ KGTechVault: دسترسی به همهٔ خودروها و مستندات فنی، همراه با دستیار هوشمند و مدیریت تیم.',
 };
 

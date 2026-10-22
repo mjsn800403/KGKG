@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/obfuscate-shield.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -23,6 +24,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "javascript-obfuscator": "^4.1.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

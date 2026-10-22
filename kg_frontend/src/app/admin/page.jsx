@@ -2979,6 +2979,96 @@ function TisCrawlerCard({ data, act, busy }) {
   );
 }
 
+// Partsouq crawler card: crawls one vehicle's VIN parts catalog from partsouq
+// through the same server Chrome as TIS (plain HTTP is blocked by Cloudflare).
+// Resumable; it stops by itself if Cloudflare keeps challenging.
+function PartsouqCrawlerCard({ data, act, busy }) {
+  const p = data?.partsouq;
+  const [url, setUrl] = useState('');
+  if (!p) return null;
+  const title = <h3 style={{ margin: 0 }}><Icon name="refresh" size={16} /> خزشگر partsouq (کاتالوگ قطعات با VIN)</h3>;
+  if (p.error) {
+    return (
+      <div className="card glass" style={{ marginBottom: 16 }}>
+        {title}
+        <div dir="ltr" style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>{p.error}</div>
+      </div>
+    );
+  }
+  const ch = p.chrome || {};
+  const tisRunning = !!data?.tis?.running;
+  const flag = (ok, yes, no) => (
+    <span className="st-badge" style={{ background: ok ? '#22c55e22' : '#ef444422', color: ok ? '#22c55e' : '#ef4444' }}>{ok ? yes : no}</span>
+  );
+  const crawls = p.crawls || [];
+  const build = (c) => {
+    const [model, year] = c.name.split('_');
+    const name = window.prompt('نام خودرو در سامانه (لاتین):', `${model.replace(/([a-z])([A-Z])/g, '$1 $2')} (${year})`);
+    if (!name) return;
+    const grade = window.prompt('تیپ / گرید (اختیاری، مثلاً GXR):', '') || '';
+    act({ action: 'ps_build', folder: c.name, car_name: name.trim(), grade: grade.trim() },
+      `پایگاه دادهٔ قطعات «${name.trim()}» ساخته شد و خودرو اضافه شد.`);
+  };
+  return (
+    <div className="card glass" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        {title}
+        {p.running && (
+          <button className="btn" disabled={busy}
+            onClick={() => act({ action: 'ps_stop' }, 'خزشگر partsouq متوقف شد؛ اجرای بعدی از همان نقطه ادامه می‌یابد.')}>توقف خزشگر</button>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '10px 0', fontSize: 13 }}>
+        {flag(p.running, 'در حال اجرا', 'متوقف')}
+        {flag(ch.reachable, 'Chrome در دسترس است', 'Chrome در دسترس نیست')}
+        {tisRunning && <span className="st-badge" style={{ background: '#eab30822', color: '#eab308' }}>خزشگر TIS در حال اجراست</span>}
+      </div>
+      {!p.running && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          <input dir="ltr" style={{ flex: '1 1 380px', minWidth: 0 }} value={url}
+            placeholder="https://partsouq.com/en/catalog/toyota/vehicle/…/category/groups/vin/<VIN>"
+            onChange={(e) => setUrl(e.target.value)} />
+          <button className="btn btn-accent" disabled={busy || !url.trim() || !ch.reachable || tisRunning}
+            onClick={() => act({ action: 'ps_start', url: url.trim() }, 'خزشگر partsouq شروع شد.')}>شروع خزش</button>
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.9 }}>
+        در partsouq شمارهٔ VIN را جست‌وجو کنید و آدرس صفحهٔ گروه‌های قطعات را اینجا بچسبانید. اگر Chrome در دسترس نیست،
+        «راه‌اندازی Chrome» را در کارت TIS بزنید (برای partsouq ورود لازم نیست). هم‌زمان با خزشگر TIS اجرا نمی‌شود.
+        پس از پایان خزش، «ساخت پایگاه داده» کاتالوگ قطعات را می‌سازد و خودرو را اضافه می‌کند؛ شرکت‌های دارای پلن «همهٔ خودروها»
+        خودکار دسترسی می‌گیرند و برای بقیه از ویرایش دسترسی شرکت استفاده کنید.
+      </div>
+      {crawls.length > 0 && (
+        <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid rgba(120,120,160,.2)', borderRadius: 8 }}>
+          <table className="adm-table" style={{ margin: 0 }}>
+            <thead><tr><th>خودرو</th><th>نقشه‌ها</th><th>تصاویر</th><th>وضعیت</th><th>آخرین فعالیت</th><th></th></tr></thead>
+            <tbody>
+              {crawls.map((c) => (
+                <tr key={c.name}>
+                  <td dir="ltr" style={{ fontSize: 12 }}>{c.name}</td>
+                  <td>{(c.diagrams || 0).toLocaleString('fa-IR')}</td>
+                  <td>{(c.images || 0).toLocaleString('fa-IR')}</td>
+                  <td>{c.done ? 'کامل' : c.blocked ? 'متوقف (Cloudflare)' : 'ناتمام'}</td>
+                  <td style={{ fontSize: 12 }}>{c.last_at ? new Date(c.last_at).toLocaleString('fa-IR') : '—'}</td>
+                  <td>{c.diagrams > 0 && !p.running && (
+                    <button className="btn" disabled={busy} onClick={() => build(c)}>ساخت پایگاه داده</button>
+                  )}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {p.log_tail && (
+        <details style={{ marginTop: 10 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--text-dim)' }}>گزارش آخرین خزش</summary>
+          <pre dir="ltr" style={{ fontSize: 11, maxHeight: 220, overflow: 'auto', background: 'rgba(0,0,0,.25)', padding: 10, borderRadius: 8, whiteSpace: 'pre-wrap' }}>{p.log_tail}</pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
 // The parse queue: every discovered ZIP and finished TIS vehicle crawl with its
 // status; the scan button registers newly copied/crawled ones.
 function ZipQueueCard({ data, act, busy }) {
@@ -3278,6 +3368,9 @@ function Pipeline({ guard }) {
 
           {/* TIS crawler (observed; runs against a VNC-logged-in Chrome) */}
           <TisCrawlerCard data={data} act={act} busy={busy} />
+
+          {/* Partsouq VIN crawler (same server Chrome) */}
+          <PartsouqCrawlerCard data={data} act={act} busy={busy} />
 
           {/* ZIP parse queue */}
           <ZipQueueCard data={data} act={act} busy={busy} />

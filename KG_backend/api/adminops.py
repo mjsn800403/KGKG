@@ -17,7 +17,7 @@ from .models import (
     ProcessingJob, SystemAlert, TrafficStat, VehicleSpec, VisitorSeen,
     ZipPackage,
 )
-from . import dataquality, monitoring, pipeline, tis_crawler
+from . import dataquality, monitoring, partsouq_crawler, pipeline, tis_crawler
 
 
 def _json_body(request):
@@ -209,6 +209,13 @@ def _tis_status():
         return {'error': f'{e.__class__.__name__}: {e}'}
 
 
+def _ps_status():
+    try:
+        return partsouq_crawler.status()
+    except Exception as e:  # noqa: BLE001
+        return {'error': f'{e.__class__.__name__}: {e}'}
+
+
 def _zip_dict(p):
     return {'id': p.id, 'zip_name': p.zip_name, 'brand': p.brand,
             'year': p.year, 'car_name': p.car_name, 'stem': p.stem,
@@ -313,6 +320,23 @@ def admin_pipeline_view(request):
                 return JsonResponse({'error': err}, status=409)
             return JsonResponse({'ok': True, 'pid': pid})
 
+        if action == 'ps_start':
+            pid, err = partsouq_crawler.start(body.get('url'))
+            if err:
+                return JsonResponse({'error': err}, status=409)
+            return JsonResponse({'ok': True, 'pid': pid})
+
+        if action == 'ps_build':
+            from . import partsouq_build
+            res, err = partsouq_build.build_and_register(
+                body.get('folder'), body.get('car_name'), body.get('grade'))
+            if err:
+                return JsonResponse({'error': err}, status=409)
+            return JsonResponse({'ok': True, **res})
+
+        if action == 'ps_stop':
+            return JsonResponse({'ok': True, 'stopped': partsouq_crawler.stop()})
+
         if action == 'tis_stop':
             return JsonResponse({'ok': True, 'stopped': tis_crawler.stop()})
 
@@ -392,6 +416,7 @@ def admin_pipeline_view(request):
             for j in ProcessingJob.objects.all()[:12]
         ],
         'tis': _tis_status(),
+        'partsouq': _ps_status(),
         'zip_queue': {
             'counts': zip_counts,
             'rows': [_zip_dict(p) for p in

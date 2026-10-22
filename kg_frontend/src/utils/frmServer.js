@@ -22,5 +22,5 @@ export async function loadFrm(slug, part) {
   const error = !status ? '' : status === 403
     ? 'دسترسی به مستندات این خودرو در اشتراک شما نیست. برای افزودن این خودرو با مدیر یا پشتیبانی تماس بگیرید.'
     : 'بارگذاری زمان استاندارد تعمیراتی ناموفق بود.';
-  return { set, data, error };
+  return { set, data, error, token };
 }

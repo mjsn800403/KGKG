@@ -7,6 +7,7 @@
 // so requests ride the current https origin through Cloudflare/nginx and never
 // trip mixed-content. Inlined into the client bundle (NEXT_PUBLIC_ prefix).
 import { track } from './analytics';
+import { shieldFetch } from '@/lib/shield';
 
 const CLIENT_BASE = (process.env.NEXT_PUBLIC_API_BASE || '/kg-api').replace(/\/+$/, '');
 // Server-only origin used during SSR, where Node's fetch() cannot resolve a
@@ -124,7 +125,7 @@ export async function fetchNodes(brand, year, model, pathSegments = [], token) {
       ? `${API_BASE}/${encodedBrand}/${year}/${encodedModel}/?${query}`
       : `${API_BASE}/${encodedBrand}/${year}/${encodedModel}/`;
 
-    const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+    const res = await shieldFetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
 
     if (!res.ok) {
       throw await contentError(res, `Failed to fetch: ${res.status}`);
@@ -147,7 +148,7 @@ export async function resolveHref(brand, year, model, filename, token) {
   const encodedModel = encodeURIComponent(model);
   const url = `${API_BASE}/${encodedBrand}/${year}/${encodedModel}/?href=${encodeURIComponent(filename)}`;
 
-  const res = await fetch(url, { headers: { ...authHeaders(token) } });
+  const res = await shieldFetch(url, { headers: { ...authHeaders(token) } });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
     const err = new Error(error.error || `Failed to resolve link: ${res.status}`);
@@ -166,7 +167,7 @@ export async function fetchRawPage(brand, year, model, filename, token) {
   const encodedModel = encodeURIComponent(model);
   const url = `${API_BASE}/${encodedBrand}/${year}/${encodeURIComponent(model)}/?page=${encodeURIComponent(filename)}`;
 
-  const res = await fetch(url, { headers: { ...authHeaders(token) } });
+  const res = await shieldFetch(url, { headers: { ...authHeaders(token) } });
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) throw await contentError(res, 'unauthorized');
     return null;
@@ -188,7 +189,7 @@ export async function searchNodes(brand, year, model, q, limit = 30, token) {
     const params = new URLSearchParams({ q, car: model, limit: String(limit) });
     if (brand) params.set('brand', brand);
     const url = `${API_BASE}/api/search/?${params.toString()}`;
-    const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+    const res = await shieldFetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
     if (!res.ok) return [];
     return res.json();
   } catch (error) {
@@ -243,7 +244,7 @@ export async function fetchSstAvailable(brand, year, model, token) {
   // API_BASE, not the href helper above: this runs during SSR, where Node's
   // fetch() cannot resolve the relative public path.
   const url = `${API_BASE}/api/sst/${encodeURIComponent(brand)}/${encodeURIComponent(String(year))}/${encodeURIComponent(model)}/?probe=1`;
-  const res = await fetch(url, {
+  const res = await shieldFetch(url, {
     cache: 'no-store', headers: { ...authHeaders(token) },
   });
   if (!res.ok) return false;
@@ -282,7 +283,7 @@ export async function fetchNav(brand, year, model, pathSegments = [], token) {
   pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
   qs.set('nav', '1');
   const url = `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
-  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  const res = await shieldFetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
   if (!res.ok) throw await contentError(res, `Failed to fetch nav: ${res.status}`);
   return res.json();
 }
@@ -296,7 +297,7 @@ export async function fetchSubtree(brand, year, model, pathSegments = [], token,
   qs.set('subtree', '1');
   if (max) qs.set('max', String(max));
   const url = `${API_BASE}/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
-  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  const res = await shieldFetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
   if (!res.ok) throw await contentError(res, `Failed to fetch subtree: ${res.status}`);
   const data = await res.json();
   if (Array.isArray(data?.items)) {
@@ -330,7 +331,7 @@ export async function fetchModels(brand, year, model, token) {
 // Vehicle parts root: { car, frames[], default_frame, counts }.
 export async function fetchPartsRoot(brand, year, model, token) {
   const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/`;
-  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  const res = await shieldFetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
   if (!res.ok) throw await contentError(res, `Failed to fetch parts root: ${res.status}`);
   return res.json();
 }
@@ -344,7 +345,7 @@ export async function fetchPartsNodes(brand, year, model, cfg, pathSegments = []
   const qs = new URLSearchParams({ cfg });
   pathSegments.filter(Boolean).forEach((seg) => qs.append('seg', seg));
   const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
-  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  const res = await shieldFetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
   if (!res.ok) throw await contentError(res, `Failed to fetch parts: ${res.status}`);
   const data = await res.json();
   if (data && data.leaf && Array.isArray(data.sections)) {
@@ -360,7 +361,7 @@ export async function fetchPartsNodes(brand, year, model, cfg, pathSegments = []
 export async function fetchPartsSearch(brand, year, model, cfg, q, token) {
   const qs = new URLSearchParams({ cfg, q });
   const url = `${API_BASE}/api/parts/${encodeURIComponent(brand)}/${year}/${encodeURIComponent(model)}/?${qs.toString()}`;
-  const res = await fetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
+  const res = await shieldFetch(url, { cache: 'no-store', headers: { ...authHeaders(token) } });
   if (!res.ok) throw await contentError(res, `Failed to search parts: ${res.status}`);
   return res.json();
 }

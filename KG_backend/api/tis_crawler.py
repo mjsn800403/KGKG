@@ -278,6 +278,8 @@ def start():
         return None, 'اسکریپت خزشگر TIS روی سرور پیدا نشد.'
     if _pids():
         return None, 'خزشگر TIS در حال اجراست.'
+    if hostjobs.pgrep(r'partsouq_vin_crawl\.py'):
+        return None, 'خزشگر partsouq از همین مرورگر استفاده می‌کند؛ ابتدا آن را متوقف کنید.'
     chrome = _chrome()
     if not chrome['reachable']:
         return None, ('Chrome در دسترس نیست. ابتدا از طریق VNC مرورگر را باز '

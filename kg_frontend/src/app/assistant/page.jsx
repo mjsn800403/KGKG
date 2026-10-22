@@ -10,7 +10,7 @@ import ActivityBeacon from '@/components/ActivityBeacon';
 import { fetchAllBrands, fetchBrands } from '@/utils/api';
 
 export const metadata = {
-  title: 'دستیار هوشمند | KGtechvault',
+  title: 'دستیار هوشمند',
 };
 
 // Depends on live backend data (the car list) — render on request, never

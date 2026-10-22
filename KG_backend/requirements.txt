@@ -17,3 +17,6 @@ graphify>=0.8
 # --- Error monitoring (self-hosted GlitchTip, Sentry wire protocol) ---
 # Inert unless SENTRY_DSN is set, so dev and CI never phone home.
 sentry-sdk>=2.0,<3
+
+# --- Content shield (api/shield.py: AES-GCM sealed answers) ---
+cryptography>=42

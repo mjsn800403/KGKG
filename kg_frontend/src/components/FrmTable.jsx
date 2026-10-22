@@ -4,11 +4,14 @@
 // LTS browser: text search + per-column selects, rendered a page at a time
 // (the sheet has ~5,000 rows).
 import { useMemo, useState } from 'react';
+import useUnsealed, { SealedNotice } from '@/lib/useUnsealed';
 
 const PAGE = 100;
 const FA = (n) => Number(n).toLocaleString('fa-IR');
 
-export default function FrmTable({ columns, rows, filters = [], headTitles = {}, hideEmpty = false }) {
+export default function FrmTable({ columns, rows: plain, sealed, filters = [], headTitles = {}, hideEmpty = false }) {
+  const opened = useUnsealed(sealed, plain);
+  const rows = useMemo(() => opened || [], [opened]);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState({});
   const [shown, setShown] = useState(PAGE);
@@ -31,6 +34,8 @@ export default function FrmTable({ columns, rows, filters = [], headTitles = {},
   // Hour columns that are blank for every visible row are noise; drop them.
   const visibleCols = columns.map((c, i) => i).filter((i) =>
     !hideEmpty || !/^Hours\(/.test(columns[i]) || filtered.some((r) => r[i] !== ''));
+
+  if (sealed && !opened) return <SealedNotice value={opened} />;
 
   return (
     <div className="frm-wrap">
