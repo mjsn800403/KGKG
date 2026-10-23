@@ -37,3 +37,11 @@ class ProbeAlertTests(SimpleTestCase):
     def test_third_party_down_still_alerts(self):
         out = self.run_infra(fake_prom(['https://api.metisai.ir/']), True)
         self.assertIn('infra:down:https://api.metisai.ir/', out)
+
+
+class NoSmsInTestsTests(SimpleTestCase):
+    def test_deliver_never_sends_during_tests(self):
+        with mock.patch.dict("os.environ", {"KG_ALERT_PHONES": "09000000000"}), \
+                mock.patch("api.portal._post_sms") as post:
+            ar.deliver("sec:scrape:1", "warning", "test")
+        post.assert_not_called()
