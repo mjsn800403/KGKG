@@ -254,6 +254,11 @@ def deliver(key, severity, message):
     """SMS a newly-opened alert to the on-call numbers. Best-effort."""
     if not (severity == 'critical' or key.startswith(('sec:', 'infra:'))):
         return
+    # Never SMS from a test run: tests raise real-looking alerts (the cg_user
+    # scraping test reached the on-call phones on 2026-10-23).
+    from .monitoring import TESTING
+    if TESTING:
+        return
     phones = _phones()
     if not phones:
         return
