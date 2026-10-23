@@ -169,6 +169,25 @@ PROBE_NAMES = {
 }
 
 
+# Our own targets are probed through the public path (DNS -> Cloudflare ->
+# nginx). When that fails but the backend answers on loopback, the server is
+# fine and the fault is DNS/the network path (2026-10-22: the probe's DNS
+# lookups failed for ~80 min while every real request was served), so it is
+# not a "backend down" page; it alerts, as a warning, only after
+# NETWORK_DOWN_MIN.
+OWN_TARGETS = ('https://kgtechvault.com/', 'https://kgtechvault.com/kg-api/api/health/')
+LOCAL_HEALTH = os.environ.get('KG_LOCAL_HEALTH_URL', 'http://127.0.0.1:8000/api/health/')
+
+
+def _local_ok():
+    import urllib.request
+    try:
+        with urllib.request.urlopen(LOCAL_HEALTH, timeout=5) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
 def _prom(query):
     import json
     import urllib.parse
@@ -208,6 +227,11 @@ def _infra():
         if len(_down(NETWORK_DOWN_MIN)) >= len(PROBE_NAMES) - 1:
             out['infra:network'] = ('critical', f'اتصال اینترنت سرور بیش از {fa(NETWORK_DOWN_MIN)} دقیقه قطع بوده است.', {})
     else:
+        own_down = down & set(OWN_TARGETS)
+        if own_down and _local_ok():
+            down -= own_down
+            for t in own_down & _down(NETWORK_DOWN_MIN):
+                out[f'infra:path:{t}'] = ('warning', f'{PROBE_NAMES[t]} از مسیر عمومی (DNS/شبکه) {fa(NETWORK_DOWN_MIN)} دقیقه در دسترس نبوده، ولی سرور سالم است.', {'target': t})
         for t in down:
             out[f'infra:down:{t}'] = ('critical', f'{PROBE_NAMES[t]} {fa(PROBE_DOWN_MIN)} دقیقه از دسترس خارج بوده است.', {'target': t})
     for r in _prom('(probe_ssl_earliest_cert_expiry - time())/86400'):
