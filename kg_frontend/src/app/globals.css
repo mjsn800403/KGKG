@@ -2369,7 +2369,10 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
 .kg-watermark {
   position: fixed; inset: 0; z-index: 9999; pointer-events: none;
   background-repeat: repeat;
+  display: none;
 }
+/* Only over document leaves (manual page, parts diagram, repair-time table), not menus/cards. */
+html:has(.content-renderer, .parts-viewer, .frm-wrap) .kg-watermark { display: block; }
 @media print {
   .kg-guard body > * { display: none !important; }
   .kg-guard body::after {

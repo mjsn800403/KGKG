@@ -20,7 +20,7 @@ const EDITABLE = 'input, textarea, select, [contenteditable="true"]';
 function watermarkUrl(text) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="200">`
     + `<text x="20" y="120" transform="rotate(-24 180 100)" font-family="sans-serif" font-size="15" `
-    + `fill="rgba(128,128,128,0.16)">${text.replace(/[<>&"']/g, '')}</text></svg>`;
+    + `fill="rgba(128,128,128,0.08)">${text.replace(/[<>&"']/g, '')}</text></svg>`;
   return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
 }
 
