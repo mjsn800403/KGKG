@@ -2,7 +2,7 @@
 
 // Chrome shared by the public pages (landing, plans): wordmark, header icon
 // buttons and the footer. Styles live in landing.css (.lp-* namespace).
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { applyTheme } from '@/components/ThemeToggle';
 import Icon from '@/components/Icon';
@@ -81,8 +81,30 @@ export function LoginButton() {
   );
 }
 
+// The signature draws itself the first time the footer is actually looked at.
+// It lives below the fold, so a plain load animation would always finish
+// unseen. Undefined until mounted: without JS the CSS leaves it fully inked,
+// and reduced-motion opts out of the reveal entirely.
+function useInkReveal<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [phase, setPhase] = useState<'wait' | 'in' | undefined>(undefined);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    setPhase('wait');
+    const io = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setPhase('in'); io.disconnect(); } },
+      { rootMargin: '0px 0px -12% 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return [ref, phase] as const;
+}
+
 /** Site footer. `coverageHref` differs between the landing (#coverage) and other pages (/#coverage). */
 export function Footer({ coverageHref = '/#coverage' }: { coverageHref?: string }) {
+  const [signRef, signPhase] = useInkReveal<HTMLElement>();
   return (
     <footer className="lp-footer">
       <div className="lp-wrap lp-footer-grid">
@@ -93,7 +115,7 @@ export function Footer({ coverageHref = '/#coverage' }: { coverageHref?: string 
           <p className="lp-footer-credit">
             <span>توسعه و گردآوری:</span>
             تیم تحقیق و توسعه، خدمات گستر سپهر گیتی
-            <i className="lp-sign" aria-hidden="true" />
+            <i ref={signRef} className="lp-sign" data-ink={signPhase} aria-hidden="true" />
           </p>
         </div>
         <div data-tour="support">
