@@ -291,6 +291,7 @@ CSRF_COOKIE_SECURE = False
 SECURE_HSTS_SECONDS = 0
 PY
 NOSEC=(-e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET= -e KG_ALERT_PHONES=
+       -e RAG_FEEDBACK_DB=/data/db/feedback.db
        -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro)
 STG_SPOOL=/run/kgkg-hostjobs-staging   # nobody serves it: staging can never start host jobs
 KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" -- python manage.py migrate --noinput \

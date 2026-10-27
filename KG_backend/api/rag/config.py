@@ -629,7 +629,10 @@ CACHE_TTL = float(os.environ.get('RAG_CACHE_TTL', '900'))      # seconds (15 min
 CACHE_MAX = int(os.environ.get('RAG_CACHE_MAX', '512'))        # max cached answers
 # Log every query to a sidecar feedback DB (for analytics + future tuning).
 LOG_QUERIES = os.environ.get('RAG_LOG_QUERIES', '1') != '0'
-FEEDBACK_DB = RAG_DIR / 'feedback.db'
+# RAG_FEEDBACK_DB moves the store off the shared warehouse. Staging and QA
+# stacks mount production's _rag/ and must set it, or their queries and
+# ratings land in production's store and re-rank live search results.
+FEEDBACK_DB = Path(os.environ.get('RAG_FEEDBACK_DB') or (RAG_DIR / 'feedback.db'))
 
 # Optional cross-encoder reranker: a big precision boost for the top results,
 # at the cost of loading a second model. OFF by default (heavier); turn on with
