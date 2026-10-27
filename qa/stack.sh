@@ -110,8 +110,12 @@ PY
   chmod 600 "$QA/fixtures.json"
 
   say "starting backend :$BE_PORT (cpus=$BE_CPUS) and frontend :$FE_PORT (cpus=$FE_CPUS)"
+  # KG_QA_BACKEND_ENV="K=V K=V": extra settings for one run (e.g. the
+  # throttles-off capacity profile in qa/perf/run_perf.sh).
+  local extra=() kv
+  for kv in ${KG_QA_BACKEND_ENV:-}; do extra+=(-e "$kv"); done
   KG_WARMUP=1 run_backend "$BE" "kgkg-backend:$short" "$BE_PORT" "$QA/db" "$QA/logs" \
-    "${nosec[@]}" --cpus "$BE_CPUS" --memory 10g --restart no
+    "${nosec[@]}" "${extra[@]}" --cpus "$BE_CPUS" --memory 10g --restart no
   run_frontend "$FE" "kgkg-frontend:$short" "$FE_PORT" "http://127.0.0.1:$BE_PORT" \
     -e METIS_API_KEY= -e SENTRY_DSN= --label kgkg.env=qa --cpus "$FE_CPUS" --memory 3g --restart no
   wait_healthy "$BE" 300 || { docker logs --tail 40 "$BE"; die "backend not healthy"; }
@@ -130,6 +134,7 @@ QA_STARTED=$(date -u +%FT%TZ)
 QA_BACKEND=http://127.0.0.1:$BE_PORT
 QA_FRONTEND=http://127.0.0.1:$FE_PORT
 QA_ORIGIN=http://127.0.0.1:$PX_PORT
+QA_BACKEND_ENV=${KG_QA_BACKEND_ENV:-}
 EOF
   say "QA stack up for $short"; cat "$QA/stack.env"
 }
