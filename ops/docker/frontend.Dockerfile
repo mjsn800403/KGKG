@@ -10,7 +10,14 @@ ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE NEXT_TELEMETRY_DISABLED=1
 RUN npm run build && npm prune --omit=dev
 
 FROM node:20-bookworm-slim
-RUN apt-get update -q && apt-get install -yq --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Upgrade the base's OS packages (the pinned image lags the distribution's
+# security fixes) and drop the package managers: the server starts with
+# node_modules/.bin/next, and npm/yarn only bring their own bundled
+# dependencies (tar, cross-spawn, ...) into the image's vulnerability count.
+RUN apt-get update -q && apt-get upgrade -yq \
+    && apt-get install -yq --no-install-recommends curl && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
+              /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
 COPY --from=build /app /app

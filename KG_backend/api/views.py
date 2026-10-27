@@ -438,8 +438,10 @@ def feedback_recent_view(request):
     return JsonResponse({'count': len(rows), 'items': rows})
 
 
+@require_admin_token
 def eval_report_view(request):
-    """GET /api/eval/report/  -> the latest offline evaluation run (+ trend)."""
+    """GET /api/eval/report/  -> the latest offline evaluation run (+ trend).
+    Admin only: runs include logged real user queries."""
     try:
         from .rag import evalreport
         return JsonResponse(evalreport.latest_report())

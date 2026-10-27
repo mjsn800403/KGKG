@@ -1,0 +1,3952 @@
+# Generated from a reading of KG_backend/api/*.py views; edit by hand.
+# Kept in sync with api/urls.py by api/test_openapi_routes.py.
+openapi: 3.0.3
+info:
+  title: KGtechvault backend API
+  version: 1.0.0
+  description: 'Complete list of routes in KG_backend/api/urls.py (the catch-all api/* 404 route excepted). Enforced
+    by KG_backend/api/test_openapi_routes.py: adding or removing a route without updating this file fails CI. Every
+    operation carries x-kg-auth (public, portal, manager, analytics, root, admin, metrics, internal, portal_or_admin).
+    The static KG_ADMIN_TOKEN (adminToken / bearer) is honoured only from loopback without proxy headers; over the
+    internet admin calls use a platform-admin session token as Bearer.'
+servers:
+- url: /kg-api
+tags:
+- name: health
+- name: auth
+- name: chat
+- name: flags
+- name: content
+- name: assistant
+- name: parts
+- name: team
+- name: org
+- name: company-requests
+- name: events
+- name: admin
+- name: internal
+paths:
+  /api/health/:
+    get:
+      tags:
+      - health
+      summary: Liveness probe
+      description: 'Returns {ok, db, rag_index, uptime_s}; 503 when the DB is unreachable. Auth: public.'
+      x-kg-auth: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/metrics/:
+    get:
+      tags:
+      - health
+      summary: Prometheus metrics exposition
+      description: 'KG_METRICS_TOKEN as Bearer or X-Metrics-Token header; 503 metrics_disabled when the env token
+        is unset. nginx keeps it off the internet. Auth: metrics.'
+      x-kg-auth: metrics
+      security:
+      - bearer: []
+      - metricsToken: []
+      responses:
+        '200':
+          description: Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/data-quality/:
+    get:
+      tags:
+      - admin
+      summary: Latest data-quality audit report
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Start a background data-quality re-scan
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh:
+                  type: boolean
+                  description: must be true
+                fix:
+                  type: boolean
+            example:
+              refresh: true
+              fix: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/system/:
+    get:
+      tags:
+      - admin
+      summary: System snapshot + open alerts
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Evaluate alert conditions now
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum:
+                  - check_alerts
+              required:
+              - action
+            example:
+              action: check_alerts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/traffic/:
+    get:
+      tags:
+      - admin
+      summary: Website traffic from metric rollups
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        description: Days (1-90, default 7)
+        schema:
+          type: integer
+        example: 7
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/pipeline/:
+    get:
+      tags:
+      - admin
+      summary: Processing pipeline status
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Pipeline action
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum:
+                  - start
+                  - schedule
+                  - resume
+                  - cancel
+                  - settings
+                  - apply_power
+                  - tis_start
+                  - ps_start
+                  - ps_build
+                  - ps_stop
+                  - tis_stop
+                  - vnc_ticket
+                  - tis_chrome
+                  - scan_zips
+                  - skip_zip
+                  - requeue_zip
+                at:
+                  type: string
+                  description: schedule time
+                job_id:
+                  type: integer
+                zip_id:
+                  type: integer
+                url:
+                  type: string
+              required:
+              - action
+            example:
+              action: start
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/vehicle-specs/:
+    get:
+      tags:
+      - admin
+      summary: Vehicle spec coverage, or one car's spec
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: car_id
+        in: query
+        required: false
+        description: One car's full spec + provenance
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/events/stream/:
+    get:
+      tags:
+      - events
+      summary: Server-Sent Events stream for the caller's scope
+      description: 'Admin (admin session / env token) gets the admin audience, otherwise the portal user''s scope.
+        Resume with Last-Event-ID header or ?after. Recycles after 300s. Auth: portal_or_admin.'
+      x-kg-auth: portal_or_admin
+      security:
+      - portalCookie: []
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: after
+        in: query
+        required: false
+        description: Resume after this event id
+        schema:
+          type: integer
+        example: 0
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema:
+          type: string
+        example: '0'
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/events/recent/:
+    get:
+      tags:
+      - events
+      summary: Recent events (REST catch-up)
+      description: 'Auth: portal_or_admin.'
+      x-kg-auth: portal_or_admin
+      security:
+      - portalCookie: []
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: after
+        in: query
+        required: false
+        description: Event id cursor
+        schema:
+          type: integer
+        example: 0
+      - name: limit
+        in: query
+        required: false
+        description: 1-500, default 100
+        schema:
+          type: integer
+        example: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/admin/processing-snapshot/:
+    get:
+      tags:
+      - admin
+      summary: Pending-work processing snapshot
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/dashboard/:
+    get:
+      tags:
+      - admin
+      summary: Admin live-dashboard aggregate
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/company/requests/:
+    get:
+      tags:
+      - company-requests
+      summary: List own company's requests
+      description: 'Auth: manager.'
+      x-kg-auth: manager
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: Filter by status
+        schema:
+          type: string
+        example: pending
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+      - company-requests
+      summary: File a company request
+      description: 'Methods other than GET/POST return 405. Auth: manager.'
+      x-kg-auth: manager
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  description: request kind (default support)
+                subject:
+                  type: string
+                  description: max 200 chars
+                body:
+                  type: string
+                  description: max 4000 chars
+                priority:
+                  type: string
+                  description: default normal
+                payload:
+                  type: object
+                  description: 'whitelisted per kind: vehicle_access {car_ids[], documents[]}, seats {seats}'
+              required:
+              - subject
+            example:
+              kind: support
+              subject: Need access to Corolla manuals
+              body: Please add the vehicle
+              priority: normal
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/company/requests/{req_id}/:
+    parameters:
+    - $ref: '#/components/parameters/req_id'
+    get:
+      tags:
+      - company-requests
+      summary: Company request detail
+      description: 'Auth: manager.'
+      x-kg-auth: manager
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - company-requests
+      summary: Cancel own open request
+      description: 'Auth: manager.'
+      x-kg-auth: manager
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cancel:
+                  type: boolean
+                  description: must be true
+              required:
+              - cancel
+            example:
+              cancel: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/admin/company-requests/:
+    get:
+      tags:
+      - admin
+      summary: Company-request inbox
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: Filter by status
+        schema:
+          type: string
+        example: pending
+      - name: company_id
+        in: query
+        required: false
+        description: Filter by company
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/company-requests/{req_id}/:
+    parameters:
+    - $ref: '#/components/parameters/req_id'
+    post:
+      tags:
+      - admin
+      summary: Update a company request (status / note / handler)
+      description: 'Only POST (other methods 405 after the 404 lookup). Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                admin_note:
+                  type: string
+                handled_by:
+                  type: string
+            example:
+              status: in_progress
+              admin_note: on it
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/auth/login/:
+    post:
+      tags:
+      - auth
+      summary: Portal login
+      description: 'username may be a username or email. Returns {token, user} and sets the kg_portal_token cookie,
+        or {otp_required, otp_session} when SMS 2FA is on. Auth: public. Rate limit: 15/60s per IP per worker (429
+        + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                turnstile_token:
+                  type: string
+                  description: Cloudflare Turnstile token when enabled
+              required:
+              - username
+              - password
+            example:
+              username: x
+              password: x
+              turnstile_token: x
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/auth/logout/:
+    post:
+      tags:
+      - auth
+      summary: Logout (delete presented session token, clear cookie)
+      description: 'Auth: portal (optional).'
+      x-kg-auth: portal (optional)
+      security:
+      - portalCookie: []
+      - bearer: []
+      - {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/auth/me/:
+    get:
+      tags:
+      - auth
+      summary: Current portal user
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/chat-log/:
+    post:
+      tags:
+      - chat
+      summary: Record one assistant exchange
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question:
+                  type: string
+                answer:
+                  type: string
+                session_id:
+                  type: string
+                mode:
+                  type: string
+                grounded:
+                  type: boolean
+                degraded:
+                  type: boolean
+                vehicle:
+                  type: string
+                sources:
+                  type: array
+                  items: {}
+                latency_ms:
+                  type: integer
+                llm_latency_ms:
+                  type: integer
+                input_tokens:
+                  type: integer
+                output_tokens:
+                  type: integer
+                llm_cost:
+                  type: number
+                llm_usage:
+                  type: object
+                client_key:
+                  type: string
+                flags:
+                  type: object
+              required:
+              - question
+            example:
+              question: engine oil capacity
+              answer: 4.2 L
+              client_key: x
+      responses:
+        '200':
+          description: Created {id}
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/auth/flags/:
+    get:
+      tags:
+      - flags
+      summary: A/B flag arms for the current user
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/admin/flags/:
+    get:
+      tags:
+      - admin
+      summary: List feature flags
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Create / update / delete a feature flag
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: ^[a-z][a-z0-9_]*$
+                delete:
+                  type: boolean
+                description:
+                  type: string
+                enabled:
+                  type: boolean
+                rollout_pct:
+                  type: integer
+                force_on:
+                  type: array
+                  items:
+                    type: integer
+                force_off:
+                  type: array
+                  items:
+                    type: integer
+              required:
+              - key
+            example:
+              key: mq_translate
+              enabled: true
+              rollout_pct: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/flags/{key}/results/:
+    parameters:
+    - $ref: '#/components/parameters/key'
+    get:
+      tags:
+      - admin
+      summary: A/B results for one flag
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: days
+        in: query
+        required: false
+        description: 1-365, default 30
+        schema:
+          type: integer
+        example: 30
+      - name: exclude_companies
+        in: query
+        required: false
+        description: Comma-separated company ids
+        schema:
+          type: string
+        example: 1,2
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/auth/chat-feedback/:
+    post:
+      tags:
+      - chat
+      summary: Vote / copy / source-click signal on own exchange
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: client_key of the logged exchange
+                kind:
+                  type: string
+                  enum:
+                  - vote
+                  - copy
+                  - source
+                verdict:
+                  type: integer
+                reason:
+                  type: string
+                comment:
+                  type: string
+              required:
+              - key
+              - kind
+            example:
+              key: x
+              kind: vote
+              verdict: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/admin/insights/assistant/:
+    get:
+      tags:
+      - admin
+      summary: Assistant behaviour insights / one conversation
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: session
+        in: query
+        required: false
+        description: Conversation session id
+        schema:
+          type: string
+        example: x
+      - name: log
+        in: query
+        required: false
+        description: ChatLog id
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/team/chat-logs/:
+    get:
+      tags:
+      - team
+      summary: Chat logs of users in the viewer's org reach
+      description: 'Auth: analytics.'
+      x-kg-auth: analytics
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: Text search
+        schema:
+          type: string
+        example: oil
+      - name: user_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      - name: page
+        in: query
+        required: false
+        description: Page (1-based)
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/admin/chat-logs/:
+    get:
+      tags:
+      - admin
+      summary: All chat logs (with cost)
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: Text search
+        schema:
+          type: string
+        example: oil
+      - name: user_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      - name: page
+        in: query
+        required: false
+        description: Page (1-based)
+        schema:
+          type: integer
+        example: 1
+      - name: company_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/auth/ai-usage/:
+    get:
+      tags:
+      - chat
+      summary: AI assistant quota usage
+      description: '429 (with usage + flags) when the allowance is exhausted. Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      tags:
+      - chat
+      summary: Consume one assistant question
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                detail:
+                  type: string
+                car:
+                  type: string
+            example:
+              detail: engine oil capacity
+              car: Corolla Cross Hybrid S
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/auth/me/prefs/:
+    post:
+      tags:
+      - auth
+      summary: Update own display / security preferences
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                browse_mode:
+                  type: string
+                  enum:
+                  - modern
+                  - classic
+                otp_enabled:
+                  type: boolean
+                notify_manual_update:
+                  type: boolean
+                notify_new_device:
+                  type: boolean
+            example:
+              browse_mode: modern
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/auth/fleet/:
+    get:
+      tags:
+      - auth
+      summary: Granted and on-disk vehicles of the current user
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/verify-otp/:
+    post:
+      tags:
+      - auth
+      summary: Verify login SMS code, issue session
+      description: 'Auth: public. Rate limit: 10/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                otp_session:
+                  type: string
+                code:
+                  type: string
+              required:
+              - otp_session
+              - code
+            example:
+              otp_session: x
+              code: '123456'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/auth/resend-otp/:
+    post:
+      tags:
+      - auth
+      summary: Resend login SMS code
+      description: 'Auth: public. Rate limit: 3/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                otp_session:
+                  type: string
+              required:
+              - otp_session
+            example:
+              otp_session: x
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/auth/recover/start/:
+    post:
+      tags:
+      - auth
+      summary: Start password recovery (SMS code)
+      description: 'Auth: public. Rate limit: 5/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                identifier:
+                  type: string
+                  description: username, email or mobile
+                turnstile_token:
+                  type: string
+              required:
+              - identifier
+            example:
+              identifier: x
+              turnstile_token: x
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/auth/recover/reset/:
+    post:
+      tags:
+      - auth
+      summary: Finish password recovery, issue session
+      description: 'Auth: public. Rate limit: 10/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                otp_session:
+                  type: string
+                code:
+                  type: string
+                new_password:
+                  type: string
+                  description: min 8 chars
+              required:
+              - otp_session
+              - code
+              - new_password
+            example:
+              otp_session: x
+              code: '123456'
+              new_password: xxxxxxxx
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/activity/:
+    post:
+      tags:
+      - auth
+      summary: Usage beacon
+      description: 'Auth: portal. Rate limit: 120/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: not ask_assistant
+                detail:
+                  type: string
+                category:
+                  type: string
+                segments:
+                  type: array
+                  items:
+                    type: string
+                car_id:
+                  type: integer
+                node_title:
+                  type: string
+              required:
+              - action
+            example:
+              action: open_page
+              detail: Engine oil
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/team/analytics/:
+    get:
+      tags:
+      - team
+      summary: Team usage analytics (viewer's subtree)
+      description: 'Auth: analytics.'
+      x-kg-auth: analytics
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        description: Days (default 30)
+        schema:
+          type: integer
+        example: 30
+      - name: member_id
+        in: query
+        required: false
+        description: Drill into one member
+        schema:
+          type: integer
+        example: 1
+      - name: category
+        in: query
+        required: false
+        description: Category id
+        schema:
+          type: string
+        example: x
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/team/report/:
+    get:
+      tags:
+      - team
+      summary: Team usage report as PDF
+      description: 'Auth: analytics.'
+      x-kg-auth: analytics
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        description: Days (default 30)
+        schema:
+          type: integer
+        example: 30
+      responses:
+        '200':
+          description: PDF attachment
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/team/insights/:
+    get:
+      tags:
+      - team
+      summary: Manager behavioural insights
+      description: 'Requires can_view_analytics or can_manage_team. Auth: manager.'
+      x-kg-auth: manager
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        description: Days (default 30)
+        schema:
+          type: integer
+        example: 30
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/recommendations/:
+    get:
+      tags:
+      - team
+      summary: Personalised recommendations
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: 1-20, default 6
+        schema:
+          type: integer
+        example: 6
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/org/graph/:
+    get:
+      tags:
+      - org
+      summary: Org graph document scoped to the viewer
+      description: 'Any authed user; 403 without the team section. Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/org/nodes/:
+    post:
+      tags:
+      - org
+      summary: Create a seat (root only)
+      description: '403 also when the seat cap is reached. Auth: root.'
+      x-kg-auth: root
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                parent_id:
+                  type: integer
+                x:
+                  type: number
+                y:
+                  type: number
+            example:
+              label: x
+              parent_id: 1
+              x: 0
+              y: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/org/nodes/{node_id}/:
+    parameters:
+    - $ref: '#/components/parameters/node_id'
+    patch:
+      tags:
+      - org
+      summary: Update a seat (root only)
+      description: 'Auth: root.'
+      x-kg-auth: root
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                x:
+                  type: number
+                y:
+                  type: number
+                parent_id:
+                  type: integer
+                occupant_id:
+                  type: integer
+                occupant_otp_enabled:
+                  type: boolean
+            example:
+              label: x
+              parent_id: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+    delete:
+      tags:
+      - org
+      summary: Delete a seat (root only)
+      description: 'Auth: root.'
+      x-kg-auth: root
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/org/nodes/{node_id}/permission/:
+    parameters:
+    - $ref: '#/components/parameters/node_id'
+    post:
+      tags:
+      - org
+      summary: Set seat permission set (root only)
+      description: 'Auth: root.'
+      x-kg-auth: root
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                car_access:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      car_id:
+                        type: integer
+                      documents:
+                        type: array
+                        items:
+                          type: string
+                ai_eligible:
+                  type: boolean
+                admin_panels:
+                  type: array
+                  items:
+                    type: string
+            example:
+              car_access:
+              - car_id: 1
+                documents:
+                - manual
+              ai_eligible: true
+              admin_panels: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/org/nodes/{node_id}/create-user/:
+    parameters:
+    - $ref: '#/components/parameters/node_id'
+    post:
+      tags:
+      - org
+      summary: Create an employee in an empty seat (root only)
+      description: 'Auth: root.'
+      x-kg-auth: root
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                phone:
+                  type: string
+                username:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                  description: generated if empty
+              required:
+              - display_name
+              - phone
+            example:
+              display_name: x
+              phone: 09121234567
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/admin/org/reassign-root/:
+    post:
+      tags:
+      - admin
+      summary: Reassign a company's root seat
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                company_id:
+                  type: integer
+                occupant_id:
+                  type: integer
+                username:
+                  type: string
+              required:
+              - company_id
+            example:
+              company_id: 1
+              username: x
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/invite/{token}/:
+    parameters:
+    - $ref: '#/components/parameters/token'
+    get:
+      tags:
+      - auth
+      summary: Validate an invite link
+      description: 'Auth: public.'
+      x-kg-auth: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags:
+      - auth
+      summary: 'Accept invite: set password + auto-login'
+      description: 'Auth: public.'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  description: min 8 chars
+              required:
+              - password
+            example:
+              password: xxxxxxxx
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/admin/login/:
+    post:
+      tags:
+      - admin
+      summary: Platform-admin login
+      description: 'Returns {token, admin} or {otp_required, otp_session} when SMS 2FA applies. Auth: public. Rate
+        limit: 20/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                turnstile_token:
+                  type: string
+              required:
+              - username
+              - password
+            example:
+              username: x
+              password: x
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/admin/verify-otp/:
+    post:
+      tags:
+      - admin
+      summary: Platform-admin SMS code verification
+      description: 'Auth: public. Rate limit: 10/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                otp_session:
+                  type: string
+                code:
+                  type: string
+              required:
+              - otp_session
+              - code
+            example:
+              otp_session: x
+              code: '123456'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/admin/overview/:
+    get:
+      tags:
+      - admin
+      summary: Platform KPI summary
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/packages/:
+    get:
+      tags:
+      - admin
+      summary: Package list
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/requests/:
+    get:
+      tags:
+      - admin
+      summary: Purchase requests
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/requests/{req_id}/status/:
+    parameters:
+    - $ref: '#/components/parameters/req_id'
+    post:
+      tags:
+      - admin
+      summary: Update purchase-request status
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+              required:
+              - status
+            example:
+              status: contacted
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/requests/{req_id}/delete/:
+    parameters:
+    - $ref: '#/components/parameters/req_id'
+    post:
+      tags:
+      - admin
+      summary: Delete a purchase request
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/cars/:
+    get:
+      tags:
+      - admin
+      summary: Catalogue + per-car readiness / health
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/companies/:
+    get:
+      tags:
+      - admin
+      summary: List companies
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Create a company (with level-zero account)
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/companies/{company_id}/:
+    parameters:
+    - $ref: '#/components/parameters/company_id'
+    get:
+      tags:
+      - admin
+      summary: Company detail
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Update a company
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/companies/{company_id}/access/:
+    parameters:
+    - $ref: '#/components/parameters/company_id'
+    post:
+      tags:
+      - admin
+      summary: Replace a company's purchased scope
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accesses:
+                  type: array
+                  items:
+                    type: object
+              required:
+              - accesses
+            example:
+              accesses: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/companies/{company_id}/roles/:
+    parameters:
+    - $ref: '#/components/parameters/company_id'
+    get:
+      tags:
+      - admin
+      summary: Company role options
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Create a company role
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/companies/{company_id}/roles/delete/:
+    parameters:
+    - $ref: '#/components/parameters/company_id'
+    post:
+      tags:
+      - admin
+      summary: Delete a company role (reassign members)
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/users/:
+    get:
+      tags:
+      - admin
+      summary: Cross-company user list
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: company_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Create a user
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/users/{user_id}/:
+    parameters:
+    - $ref: '#/components/parameters/user_id'
+    get:
+      tags:
+      - admin
+      summary: User detail
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Update a user
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/users/{user_id}/access/:
+    parameters:
+    - $ref: '#/components/parameters/user_id'
+    post:
+      tags:
+      - admin
+      summary: Replace a user's vehicle grants
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+            example: {}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/insights/search/:
+    get:
+      tags:
+      - admin
+      summary: Search insights
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: car
+        in: query
+        required: false
+        description: Filter by car
+        schema:
+          type: string
+        example: Corolla Cross Hybrid S
+      - name: company_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/insights/funnel/:
+    get:
+      tags:
+      - admin
+      summary: Adoption funnel
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/insights/ai-cost/:
+    get:
+      tags:
+      - admin
+      summary: Assistant spend and latency
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: days
+        in: query
+        required: false
+        description: Window (default 30)
+        schema:
+          type: integer
+        example: 30
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/audit/:
+    get:
+      tags:
+      - admin
+      summary: Security audit log
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: action
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: string
+        example: x
+      - name: actor
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: string
+        example: x
+      - name: outcome
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: string
+        example: x
+      - name: company_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      - name: target_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: string
+        example: x
+      - name: before_id
+        in: query
+        required: false
+        description: Cursor
+        schema:
+          type: integer
+        example: 1
+      - name: limit
+        in: query
+        required: false
+        description: Page size
+        schema:
+          type: integer
+        example: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/activity/:
+    get:
+      tags:
+      - admin
+      summary: Activity report
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: 1-1000, default 200
+        schema:
+          type: integer
+        example: 200
+      - name: user_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      - name: company_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      - name: category
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: string
+        example: x
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/analytics/:
+    get:
+      tags:
+      - admin
+      summary: Cross-company usage analytics
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        description: Days 1-365, default 30
+        schema:
+          type: integer
+        example: 30
+      - name: company_id
+        in: query
+        required: false
+        description: Filter
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/assist/:
+    get:
+      tags:
+      - assistant
+      summary: Grounded RAG retrieval (query string)
+      description: 'Per-car gate: 403 when the resolved car is outside the user''s grants. Auth: portal. Rate limit:
+        60/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        description: 'Query (alias: query)'
+        schema:
+          type: string
+        example: engine oil capacity
+      - name: brand
+        in: query
+        required: false
+        description: Brand
+        schema:
+          type: string
+        example: Toyota
+      - name: model
+        in: query
+        required: false
+        description: Model
+        schema:
+          type: string
+        example: Corolla Cross Hybrid S
+      - name: car
+        in: query
+        required: false
+        description: Car stem (hard scope)
+        schema:
+          type: string
+        example: Corolla Cross Hybrid S
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - assistant
+      summary: Grounded RAG retrieval
+      description: 'Per-car gate: 403 when the resolved car is outside the user''s grants. Auth: portal. Rate limit:
+        60/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: also accepted as q
+                brand:
+                  type: string
+                model:
+                  type: string
+                car:
+                  type: string
+                  description: car stem; also accepted as car_stem. Hard-scopes citations to this car
+              required:
+              - query
+            example:
+              query: engine oil capacity
+              brand: Toyota
+              model: Corolla Cross Hybrid S
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/assist/feedback/:
+    post:
+      tags:
+      - assistant
+      summary: Result-click relevance signal
+      description: 'Auth: portal. Rate limit: 120/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                blob_id:
+                  type: string
+                app_url:
+                  type: string
+            example:
+              query: engine oil capacity
+              blob_id: x
+              app_url: /Toyota/2025/Corolla Cross Hybrid S/
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/feedback/rate/:
+    post:
+      tags:
+      - assistant
+      summary: Thumbs up/down verdict on an answer
+      description: 'Auth: portal. Rate limit: 20/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                verdict:
+                  type: integer
+                  enum:
+                  - 1
+                  - -1
+                mode:
+                  type: string
+                top_blobs:
+                  type: array
+                  items:
+                    type: string
+                blob_id:
+                  type: string
+                reason:
+                  type: string
+                comment:
+                  type: string
+                brand:
+                  type: string
+                model:
+                  type: string
+                car:
+                  type: string
+              required:
+              - query
+              - verdict
+            example:
+              query: engine oil capacity
+              verdict: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/feedback/pin/:
+    post:
+      tags:
+      - assistant
+      summary: Expert pinned answer
+      description: 'Auth: admin. Rate limit: 30/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pattern_query:
+                  type: string
+                  description: 'alias: query'
+                app_url:
+                  type: string
+                blob_id:
+                  type: string
+                title:
+                  type: string
+                note:
+                  type: string
+                by:
+                  type: string
+              required:
+              - pattern_query
+            example:
+              pattern_query: engine oil capacity
+              app_url: /Toyota/2025/Corolla Cross Hybrid S/
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/feedback/recent/:
+    get:
+      tags:
+      - assistant
+      summary: Recent downvotes review queue
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: 1-200, default 50
+        schema:
+          type: integer
+        example: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/eval/report/:
+    get:
+      tags:
+      - assistant
+      summary: Latest offline evaluation report
+      description: 'Platform admin only (runs include logged user queries). Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/diagnose/:
+    get:
+      tags:
+      - assistant
+      summary: DTC / symptom diagnosis (query string)
+      description: 'Auth: portal. Rate limit: 60/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        description: 'Query (alias: query)'
+        schema:
+          type: string
+        example: engine oil capacity
+      - name: brand
+        in: query
+        required: false
+        description: Brand
+        schema:
+          type: string
+        example: Toyota
+      - name: model
+        in: query
+        required: false
+        description: Model
+        schema:
+          type: string
+        example: Corolla Cross Hybrid S
+      - name: car
+        in: query
+        required: false
+        description: Car stem (hard scope)
+        schema:
+          type: string
+        example: Corolla Cross Hybrid S
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - assistant
+      summary: DTC / symptom diagnosis
+      description: 'Auth: portal. Rate limit: 60/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: symptom or DTC; alias q
+                brand:
+                  type: string
+                model:
+                  type: string
+                car:
+                  type: string
+                  description: alias car_stem
+              required:
+              - query
+            example:
+              query: P0300
+              brand: Toyota
+              model: Corolla Cross Hybrid S
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/search/:
+    get:
+      tags:
+      - content
+      summary: Semantic per-car site search
+      description: 'Empty q returns []. Falls back to SQL LIKE when the index is missing. Auth: portal. Rate limit:
+        90/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: 'Query (alias: query)'
+        schema:
+          type: string
+        example: engine oil
+      - name: brand
+        in: query
+        required: false
+        description: Brand
+        schema:
+          type: string
+        example: Toyota
+      - name: model
+        in: query
+        required: false
+        description: Model
+        schema:
+          type: string
+        example: Corolla Cross Hybrid S
+      - name: car
+        in: query
+        required: false
+        description: 'Car stem (alias: car_stem)'
+        schema:
+          type: string
+        example: Corolla Cross Hybrid S
+      - name: limit
+        in: query
+        required: false
+        description: 1-50, default 30
+        schema:
+          type: integer
+        example: 30
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/shield/key/:
+    get:
+      tags:
+      - content
+      summary: Content-shield keys for this session
+      description: 'Returns {on:false} without auth when KG_SHIELD is off. Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: e
+        in: query
+        required: false
+        description: Epoch (current or up to 2 back)
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/purchase-request/:
+    post:
+      tags:
+      - content
+      summary: Documentation purchase request (lead form)
+      description: 'Auth: public. Rate limit: 10/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brand:
+                  type: string
+                model:
+                  type: string
+                year:
+                  type: string
+                documents:
+                  type: array
+                  items:
+                    type: string
+                company:
+                  type: string
+                landline:
+                  type: string
+                mobile:
+                  type: string
+                reg_no:
+                  type: string
+                note:
+                  type: string
+                employees_count:
+                  type: integer
+                seats_count:
+                  type: integer
+                seat_plan:
+                  type: array
+                  items:
+                    type: object
+                wants_demo:
+                  type: boolean
+                wants_ai_assistant:
+                  type: boolean
+              required:
+              - brand
+              - model
+              - year
+              - documents
+              - mobile
+            example:
+              brand: Toyota
+              model: Corolla Cross Hybrid S
+              year: '2025'
+              documents:
+              - manual
+              company: x
+              mobile: 09121234567
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/parts/{brand_name}/{year}/{model_name}/:
+    parameters:
+    - $ref: '#/components/parameters/brand_name'
+    - $ref: '#/components/parameters/year'
+    - $ref: '#/components/parameters/model_name'
+    get:
+      tags:
+      - parts
+      summary: Parts catalogue tree for a vehicle
+      description: 'Auth: portal. Rate limit: 600/60s per IP per worker (429 + Retry-After).'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: cfg
+        in: query
+        required: false
+        description: Frame / configuration
+        schema:
+          type: string
+        example: x
+      - name: seg
+        in: query
+        required: false
+        description: Group-tree title, repeat per level
+        schema:
+          type: array
+          items:
+            type: string
+        example:
+        - x
+        style: form
+        explode: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/admin/parts/:
+    get:
+      tags:
+      - admin
+      summary: Parts warehouse summary
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/media-auth/:
+    get:
+      tags:
+      - internal
+      summary: nginx auth_request for /kg-api/media/
+      description: 'Called by nginx only. The view does not check the method. 204 serve / 401 not logged in / 403
+        car not granted. Auth: internal.'
+      x-kg-auth: internal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: X-Original-URI
+        in: header
+        required: true
+        schema:
+          type: string
+        example: /kg-api/media/x/a.png
+      responses:
+        '200':
+          description: unused
+  /api/vnc-auth/:
+    get:
+      tags:
+      - internal
+      summary: nginx auth_request for /kg-vnc/
+      description: 'Called by nginx only; checks the signed kg_vnc ticket cookie. 204 allow / 401 refuse. Auth:
+        internal.'
+      x-kg-auth: internal
+      security:
+      - vncTicket: []
+      responses:
+        '200':
+          description: unused
+  /api/grafana-auth/:
+    get:
+      tags:
+      - internal
+      summary: nginx auth_request for /grafana/
+      description: 'Called by nginx only; checks the signed kg_gf ticket cookie. 204 allow / 401 refuse. Auth: internal.'
+      x-kg-auth: internal
+      security:
+      - grafanaTicket: []
+      responses:
+        '200':
+          description: unused
+  /api/admin/grafana-ticket/:
+    post:
+      tags:
+      - admin
+      summary: Issue the /grafana/ ticket cookie
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/labor-times/{brand_name}/{year}/{model_name}/:
+    parameters:
+    - $ref: '#/components/parameters/brand_name'
+    - $ref: '#/components/parameters/year'
+    - $ref: '#/components/parameters/model_name'
+    get:
+      tags:
+      - parts
+      summary: Labor-times CSV for a vehicle
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: CSV download
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/sst/{brand_name}/{year}/{model_name}/:
+    parameters:
+    - $ref: '#/components/parameters/brand_name'
+    - $ref: '#/components/parameters/year'
+    - $ref: '#/components/parameters/model_name'
+    get:
+      tags:
+      - parts
+      summary: Special-service-tools CSV for a vehicle
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: probe
+        in: query
+        required: false
+        description: Only answer whether the car has an SST list
+        schema:
+          type: string
+        example: '1'
+      responses:
+        '200':
+          description: CSV download
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/frm/{slug}/:
+    parameters:
+    - $ref: '#/components/parameters/slug'
+    get:
+      tags:
+      - parts
+      summary: Flat-rate manual set
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: part
+        in: query
+        required: false
+        description: Restrict to one section
+        schema:
+          type: string
+        example: lts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /:
+    get:
+      tags:
+      - content
+      summary: Brand list
+      description: 'Auth: public.'
+      x-kg-auth: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {}
+  /{brand_name}/:
+    parameters:
+    - $ref: '#/components/parameters/brand_name'
+    get:
+      tags:
+      - content
+      summary: 'Public catalogue: cars of a brand'
+      description: 'Auth: public.'
+      x-kg-auth: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {}
+  /{brand_name}/{year}/:
+    parameters:
+    - $ref: '#/components/parameters/brand_name'
+    - $ref: '#/components/parameters/year'
+    get:
+      tags:
+      - content
+      summary: 'Public catalogue: cars of a brand + year'
+      description: 'Non-numeric year returns []. Auth: public.'
+      x-kg-auth: public
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {}
+  /{brand_name}/{year}/{model_name}/:
+    parameters:
+    - $ref: '#/components/parameters/brand_name'
+    - $ref: '#/components/parameters/year'
+    - $ref: '#/components/parameters/model_name'
+    get:
+      tags:
+      - content
+      summary: Manual content tree for a vehicle
+      description: 'Requires the car in the user''s grants. Walk with repeated ?seg (one per level, in order). Auth:
+        portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: seg
+        in: query
+        required: false
+        description: Node title, repeat per level
+        schema:
+          type: array
+          items:
+            type: string
+        example:
+        - Engine
+        style: form
+        explode: true
+      - name: href
+        in: query
+        required: false
+        description: Resolve a node by href
+        schema:
+          type: string
+        example: x
+      - name: page
+        in: query
+        required: false
+        description: Page file
+        schema:
+          type: string
+        example: x
+      - name: q
+        in: query
+        required: false
+        description: Legacy in-car search
+        schema:
+          type: string
+        example: oil
+      - name: limit
+        in: query
+        required: false
+        description: Search limit
+        schema:
+          type: integer
+        example: 30
+      - name: spec
+        in: query
+        required: false
+        description: Return the vehicle spec
+        schema:
+          type: string
+        example: '1'
+      - name: subtree
+        in: query
+        required: false
+        description: Return a subtree
+        schema:
+          type: string
+        example: '1'
+      - name: max
+        in: query
+        required: false
+        description: Subtree item cap
+        schema:
+          type: integer
+        example: 100
+      - name: nav
+        in: query
+        required: false
+        description: Navigation payload
+        schema:
+          type: string
+        example: '1'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    portalCookie:
+      type: apiKey
+      in: cookie
+      name: kg_portal_token
+      description: Portal session token as HttpOnly cookie (SSR / browser).
+    bearer:
+      type: http
+      scheme: bearer
+      description: Portal AuthToken, platform-admin session token, or (metrics) KG_METRICS_TOKEN.
+    adminToken:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+      description: Platform-admin session token or KG_ADMIN_TOKEN (loopback only).
+    metricsToken:
+      type: apiKey
+      in: header
+      name: X-Metrics-Token
+    vncTicket:
+      type: apiKey
+      in: cookie
+      name: kg_vnc
+      description: 'Signed ticket from POST /api/admin/pipeline/ {action: vnc_ticket}.'
+    grafanaTicket:
+      type: apiKey
+      in: cookie
+      name: kg_gf
+      description: Signed ticket from POST /api/admin/grafana-ticket/.
+  parameters:
+    brand_name:
+      name: brand_name
+      in: path
+      required: true
+      schema:
+        type: string
+      example: Toyota
+    year:
+      name: year
+      in: path
+      required: true
+      schema:
+        type: string
+      example: '2025'
+    model_name:
+      name: model_name
+      in: path
+      required: true
+      schema:
+        type: string
+      example: Corolla Cross Hybrid S
+    req_id:
+      name: req_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
+    node_id:
+      name: node_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
+    company_id:
+      name: company_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
+    user_id:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
+    token:
+      name: token
+      in: path
+      required: true
+      schema:
+        type: string
+      example: x
+    slug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+      example: x
+    key:
+      name: key
+      in: path
+      required: true
+      schema:
+        type: string
+      example: x
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+      required:
+      - error
+  responses:
+    BadRequest:
+      description: Validation error (Persian message)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: 'Not authenticated: {error: unauthorized}'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Authenticated but not allowed (role / car grant / seat cap / Turnstile)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    MethodNotAllowed:
+      description: 'Wrong method: {error: POST only}'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+    Unavailable:
+      description: Service unavailable (e.g. admin_disabled, metrics_disabled, index missing)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
