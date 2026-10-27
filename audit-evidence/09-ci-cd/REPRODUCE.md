@@ -28,7 +28,7 @@ python -m venv .venv && . .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install "Django>=4.2,<6" "django-cors-headers>=4.0" "beautifulsoup4>=4.12" "html5lib>=1.1" \
   "numpy>=1.26,<2" "sqlite-vec>=0.1.6" "sentence-transformers>=2.7" "sentry-sdk>=2.0,<3" \
-  weasyprint pillow requests coverage unittest-xml-reporting
+  "cryptography>=42" weasyprint pillow requests coverage unittest-xml-reporting
 export DJANGO_DEBUG=true KG_ADMIN_TOKEN=ci-dummy-token KG_ENV_FILE=/tmp/ci-dummy.env \
        HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 KG_WARMUP=0
 python manage.py check && python manage.py makemigrations --check --dry-run
