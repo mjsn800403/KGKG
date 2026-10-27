@@ -55,6 +55,7 @@ _PREFIX_GROUPS = (
     ('/api/purchase-request/', 'purchase'),
     ('/api/eval/', 'eval'),
     ('/api/health/', 'health'),
+    ('/api/metrics/', 'metrics'),
     ('/media/', 'media'),
     ('/admin/', 'django-admin'),
 )
