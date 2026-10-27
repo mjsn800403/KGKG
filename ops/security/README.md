@@ -48,6 +48,51 @@ As of 2026-10-27, after the remediation described in
 - **Images:** no fixable HIGH/CRITICAL remain. The base image's own OS
   packages are brought up to date during the build (`apt-get upgrade`).
 
+## Bandit (SAST) {#bandit}
+
+CI runs bandit on `KG_backend/api` and `KG_backend/KG_backend` (tests and
+migrations excluded) at medium severity and above. Findings present when the
+gate was introduced (2026-10-27, bandit 1.9.4) were triaged one by one and
+recorded in `bandit-baseline.json`; bandit compares by file, test and issue,
+not line number, so moving code does not trip it but a new finding does.
+
+Fixed rather than baselined:
+
+- **B324** weak hash (3): `dataquality.py`, `partsingest.py`, `rag/ingest.py`
+  use SHA-1 as a content fingerprint, never for security; now declared with
+  `usedforsecurity=False`.
+- **B613** Trojan-Source bidi characters (3): invisible RLM/LRM literals in
+  Persian normalisation tables (`assist_lookup.py`, `rag/glossary.py`,
+  `rag/terms.py`) are now written as `\u200f` / `\u200e` escapes. String
+  constants are unchanged (checked with `ast`), and the one raw-string regex
+  matches exactly the same three code points.
+
+Baselined, with the reason:
+
+- **B608** string-built SQL (29). Every site was read. The interpolated part
+  is a constant (`NODE_COLUMNS`, a fixed table name from a literal tuple), a
+  run of `?` placeholders, or a comma-joined list of `int()`-cast ids; user
+  values are always bound parameters. Most sites are offline build commands.
+  LIKE patterns built from user input are escaped (`cardb.like_escape`).
+- **B310** `urlopen` (10). Every URL is a constant `https://` endpoint (SMS
+  provider, Cloudflare Turnstile, the LLM API) or the loopback health URL;
+  none is built from request data, so `file:` and SSRF are not reachable.
+- **B108** `/tmp` path (1). `ratelimit.py`'s shared counter store defaults to
+  `/tmp/kg_ratelimit.sqlite3` inside the backend container (private `/tmp`,
+  one tenant); it holds only hit counters and is overridable by
+  `KG_RL_STORE`.
+
+Low-severity findings (`try/except/pass`, `random` for non-security jitter,
+subprocess with fixed argument lists) are not gated; they are listed in the
+dossier's SAST report.
+
+To accept a new finding, fix it if at all possible. If it is a false
+positive, add a reason here and regenerate the baseline in the same commit:
+
+    bandit -r KG_backend/api KG_backend/KG_backend \
+      -x '*/test_*,*/tests.py,*/tests_parts.py,*/migrations/*' -ll \
+      -f json -o ops/security/bandit-baseline.json
+
 ## Quarterly review
 
 Re-read every entry, drop the ones whose blocker is gone, and move the review

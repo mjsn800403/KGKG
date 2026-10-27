@@ -9,7 +9,7 @@ in the grounding context.
 """
 import re
 
-_ZW = re.compile(r'[‌‏‎]')
+_ZW = re.compile(r'[‌\u200f\u200e]')
 _WORD = re.compile(r'\w+')  # \w covers Persian letters, not ؟ ،
 
 PARTS_Q = re.compile(

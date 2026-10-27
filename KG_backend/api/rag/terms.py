@@ -40,7 +40,7 @@ norm_en = glossary._norm_en          # lowercase tokens, catalogue punctuation d
 _DISPLAY_MAP = {
     'ي': 'ی', 'ك': 'ک', 'ى': 'ی', 'ۀ': 'ه', 'ة': 'ه',
     'أ': 'ا', 'إ': 'ا', 'ٱ': 'ا', 'ؤ': 'و',
-    '‏': '', '‎': '', 'ـ': '',
+    '\u200f': '', '\u200e': '', 'ـ': '',
 }
 _DISPLAY_TABLE = str.maketrans(_DISPLAY_MAP)
 _DIACRITICS = re.compile(r'[ً-ْ]')

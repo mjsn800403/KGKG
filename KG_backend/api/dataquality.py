@@ -195,7 +195,7 @@ def audit_vehicle_db(path):
             s['mb'] = round(s['mb'] / 1e6, 2)
         info['sections'] = [dict(normalized=k, **v) for k, v in sorted(secs.items())]
 
-        h = hashlib.sha1()
+        h = hashlib.sha1(usedforsecurity=False)   # change fingerprint, not a secret
         for rel, clen in sorted(fp_rows):
             h.update(f'{rel}|{clen}\n'.encode('utf-8', 'replace'))
         info['fingerprint'] = h.hexdigest()
