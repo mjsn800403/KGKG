@@ -15,7 +15,7 @@ scrape_configs:
     metrics_path: /kg-metrics
     authorization:
       credentials_file: /etc/prometheus/metrics_token
-    static_configs: [{targets: ['172.19.0.1:80'], labels: {instance: kgkg-prod}}]
+    static_configs: [{targets: ['172.19.0.1:8081'], labels: {instance: kgkg-prod}}]
 
   # node-exporter runs on the host network, bound to this compose network's gateway.
   - job_name: node
