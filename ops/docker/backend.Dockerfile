@@ -9,7 +9,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 
 # WeasyPrint (PDF reports) needs pango + fonts; curl is for the healthcheck.
-RUN apt-get update -q && apt-get install -yq --no-install-recommends \
+# apt-get upgrade is deliberate: the pinned base image lags the distribution
+# security updates (e.g. CVE-2026-84782 in openssl), and the image must not
+# ship known-vulnerable system libraries. The base tag still pins the major
+# versions, so this only moves point releases forward.
+RUN apt-get update -q && apt-get upgrade -yq \
+    && apt-get install -yq --no-install-recommends \
       libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core \
       curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*

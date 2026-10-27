@@ -1,4 +1,5 @@
 # KGKG container helpers, sourced by ops/deploy/deploy.sh (usable by hand).
+# shellcheck shell=bash
 #
 # Both containers use the host network (nginx proxies to 127.0.0.1:8000/:3000,
 # the TIS crawler panel talks to Chrome on 127.0.0.1:9222) and bind loopback

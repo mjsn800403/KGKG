@@ -1,0 +1,29 @@
+# gitleaks configuration — secret scanning in CI (.github/workflows/ci.yml).
+#
+# The default rule set applies as-is. The allowlists below cover paths where a
+# credential-shaped string is a fixture by construction; they are deliberate
+# decisions, not a way to quieten a real finding. A rule firing anywhere else
+# fails CI and the commit does not ship.
+#
+# Real secrets live in .env.prod / .env.production on the server (gitignored)
+# and in GitHub Actions secrets. Nothing credential-bearing belongs in git.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths that cannot contain a production secret by design."
+paths = [
+  # Django/API test fixtures mint deliberate dummy tokens.
+  '''KG_backend/api/test_[^/]*\.py$''',
+  '''KG_backend/api/tests/.*''',
+  # Compiled Python; never committed, but present in a server work tree.
+  '''.*__pycache__/.*''',
+  # The smoke suite passes a staging-only QA token on its command line.
+  '''ops/deploy/smoke\.sh$''',
+  # Dependency locks: hashes and integrity digests look like secrets.
+  '''.*\.lock$''',
+  '''package-lock\.json$''',
+  # Documentation quotes example tokens.
+  '''docs/.*\.md$''',
+]

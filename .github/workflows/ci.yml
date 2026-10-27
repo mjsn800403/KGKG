@@ -1,8 +1,10 @@
 name: ci
 
 # Same checks as the server-side deploy gate (ops/deploy/gate.sh), on every
-# branch and pull request. Production deploys happen on the server through
-# ops/deploy/deploy.sh, which re-runs this gate on the exact commit.
+# branch and pull request, plus the supply-chain and security gates that only
+# make sense centrally (ops/security/README.md). Production deploys happen on
+# the server through ops/deploy/deploy.sh, which re-runs the gate on the exact
+# commit; nothing here can promote to production.
 on:
   push:
     branches: ['**']
@@ -12,9 +14,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: no job here writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: KG_backend
@@ -40,16 +47,29 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install "Django>=4.2,<6" "django-cors-headers>=4.0" "beautifulsoup4>=4.12" "html5lib>=1.1" \
                       "numpy>=1.26,<2" "sqlite-vec>=0.1.6" "sentence-transformers>=2.7" "sentry-sdk>=2.0,<3" \
-                      weasyprint pillow requests
+                      weasyprint pillow requests coverage
       - name: Django system check
         run: python manage.py check
       - name: Migrations match models
         run: python manage.py makemigrations --check --dry-run
-      - name: Full test suite
-        run: python manage.py test --noinput
+      - name: Full test suite (with coverage)
+        run: |
+          coverage run --source=api --omit='*/test_*,*/migrations/*' manage.py test --noinput
+      - name: Coverage ratchet (ops/deploy/coverage_min)
+        # A floor, not a target: it may only ever move up. Raise the file in the
+        # same commit that adds the tests, never lower it to make CI pass.
+        run: |
+          MIN=$(cat ../ops/deploy/coverage_min)
+          echo "coverage floor: ${MIN}%"
+          coverage report --skip-covered --sort=cover | tail -25
+          coverage report --fail-under="$MIN" >/dev/null
+      - name: Coverage summary
+        if: always()
+        run: coverage report --format=total | awk '{print "total coverage: "$1"%"}' >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: kg_frontend
@@ -68,9 +88,77 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE: /kg-api
 
-  images:
-    # The production images (ops/docker/) must build from every commit.
+  security:
+    # Supply chain and secrets. Fails closed: an advisory with a fix available
+    # is a bug to fix, not a number to accept. Exceptions live in
+    # ops/security/ and each carries a review date.
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # gitleaks scans the pushed commits too
+
+      - name: Shell lint (ops/)
+        # -x follows sourced files; ops/deploy/kg-deploy-gate has no .sh suffix
+        # but is the most security-sensitive script in the repository.
+        run: |
+          mapfile -t files < <(git ls-files 'ops/**/*.sh' 'ops/*.sh')
+          files+=(ops/deploy/kg-deploy-gate)
+          printf 'checking %s\n' "${files[@]}"
+          shellcheck -S warning -x "${files[@]}"
+
+      - name: Dockerfile lint
+        run: |
+          for f in ops/docker/*.Dockerfile; do
+            echo "== $f"
+            docker run --rm -i -v "$PWD/.hadolint.yaml:/.config/hadolint.yaml:ro" \
+              hadolint/hadolint:v2.12.0 hadolint --no-color - < "$f"
+          done
+
+      - name: Secret scan
+        # --no-git (filesystem scan of the checkout) is deliberate: gitleaks in
+        # git mode exits 0 when it cannot read the repository, which would turn
+        # a broken gate into a silent pass. The filesystem scan either reads
+        # the tree or fails loudly. The report file is then asserted to exist,
+        # so a crash cannot be mistaken for a clean result.
+        run: |
+          docker run --rm -v "$PWD":/repo:ro -v /tmp:/out \
+            zricethezav/gitleaks:v8.21.2 \
+            detect --source=/repo --no-git --config=/repo/.gitleaks.toml \
+                   --redact --no-banner --report-format json --report-path /out/leaks.json
+          test -f /tmp/leaks.json || { echo "gitleaks produced no report — treating as failure"; exit 1; }
+          count=$(python3 -c 'import json;print(len(json.load(open("/tmp/leaks.json"))))')
+          echo "secret scan: $count finding(s)"
+          test "$count" = "0"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python dependency audit
+        run: |
+          pip install --quiet pip-audit==2.9.0
+          # The lock pins torch to a +cpu local version that exists only on
+          # PyTorch's index; strip the local label so the advisory database can
+          # be queried by base version.
+          sed 's/+cpu$//' ops/docker/backend-requirements.lock > /tmp/lock-audit.txt
+          mapfile -t ignores < <(grep -vE '^\s*(#|$)' ops/security/pip-audit-ignore.txt | sed 's/^/--ignore-vuln=/')
+          echo "ignoring ${#ignores[@]} reviewed advisory id(s)"
+          pip-audit --no-deps -r /tmp/lock-audit.txt "${ignores[@]}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Node dependency audit
+        run: node ops/security/npm_audit_gate.mjs
+
+  images:
+    # The production images (ops/docker/) must build from every commit, boot,
+    # and carry no fixable HIGH/CRITICAL vulnerability.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Backend image
@@ -79,3 +167,20 @@ jobs:
         run: docker build -f ops/docker/frontend.Dockerfile -t kgkg-frontend:ci .
       - name: Backend image boots (Django check)
         run: docker run --rm -e DJANGO_DEBUG=true -e KG_ADMIN_TOKEN=ci -e KG_ENV_FILE=/tmp/x.env kgkg-backend:ci python manage.py check
+
+      - name: Vulnerability scan (both images)
+        # --ignore-unfixed: an advisory with no released fix is not actionable
+        # at build time; it is tracked in ops/security/README.md instead.
+        # Exceptions in .trivyignore.yaml expire on a date trivy enforces.
+        run: |
+          for img in kgkg-backend:ci kgkg-frontend:ci; do
+            echo "== $img"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD/.trivyignore.yaml:/.trivyignore.yaml:ro" \
+              -v trivy-cache:/root/.cache/trivy \
+              aquasec/trivy:0.58.1 image \
+                --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+                --ignorefile /.trivyignore.yaml \
+                --exit-code 1 --no-progress "$img"
+          done

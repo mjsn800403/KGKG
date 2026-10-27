@@ -1,0 +1,23 @@
+# Python advisories deliberately not blocking CI.
+#
+# One ID per line; blank lines and # comments ignored. The CI security job
+# turns each into a pip-audit --ignore-vuln flag. Policy and the four things
+# an entry needs: ops/security/README.md.
+#
+# -----------------------------------------------------------------------------
+# setuptools — fix needs 83.0.0 / 84.1.0, but torch 2.12.1 requires
+# setuptools<82, so 81.0.0 is the ceiling until torch moves. Build-time only:
+# the running containers never install packages, and setuptools is not imported
+# by any request path. Clears with the torch upgrade below.
+# Review: 2027-01-31
+PYSEC-2026-3447
+GHSA-xmj3-9gf7-h52w
+#
+# torch — fix is 2.13.0. Deferred deliberately: the embedding model behind the
+# RAG index runs on this torch, and an unverified minor bump risks drift
+# against a 57k-blob index that would need a full re-embed to repair. Needs a
+# planned window with an embedding-equivalence check, not a lock bump. The
+# model files are local and loaded with HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1;
+# no request-supplied data reaches torch.load.
+# Review: 2027-01-31
+PYSEC-2025-194

@@ -1,0 +1,10 @@
+{
+  "_comment": [
+    "Node advisories deliberately not blocking CI, keyed by GHSA id.",
+    "Read by ops/security/npm_audit_gate.mjs. Policy: ops/security/README.md.",
+    "Empty is the goal and the current state — next@16.4.3 cleared everything",
+    "on 2026-10-27. Anything added here needs blocker, reachability and review."
+  ],
+  "minSeverity": "high",
+  "allow": {}
+}

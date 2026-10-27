@@ -57,6 +57,8 @@ s.backup(d); d.close(); s.close()
 os.replace(tmp, dst)
 PY
 }
+# Release state, written by save_state below.
+# shellcheck source=/dev/null
 load_state() { CURRENT=; PREVIOUS=; [[ -f $STATE ]] && . "$STATE"; return 0; }
 save_state() { printf 'CURRENT=%s\nPREVIOUS=%s\nDEPLOYED_AT=%s\n' "$1" "$2" "$TS" > "$STATE"; }
 img_be() { echo "kgkg-backend:${1:0:9}"; }
@@ -75,7 +77,10 @@ source_containers() { . "${1:-$SELF_ROOT}/ops/docker/containers.sh"; }
 source_containers
 
 PROD_LABELS=(--label kgkg.env=prod)
-log_opts() { echo --log-driver=journald --log-opt "tag=$1"; }
+# Sets LOG_OPTS as an array; callers splice "${LOG_OPTS[@]}" rather than
+# relying on word splitting of a command substitution.
+LOG_OPTS=()
+log_opts() { LOG_OPTS=(--log-driver=journald --log-opt "tag=$1"); }
 
 # ---------------------------------------------------------------------------
 # Host job bridge (ops/hostjobs) must run before a backend container needs it.
@@ -100,8 +105,9 @@ swap_backend() {
     say "cutover: stopping the systemd kgkg-backend (one-time, short gap)"
     systemctl stop kgkg-backend; systemctl disable -q kgkg-backend
   fi
+  log_opts kgkg-backend
   run_backend "$name" "$(img_be "$sha")" 8000 "$KG_BE_DIR" /var/log/kgkg \
-    "${PROD_LABELS[@]}" $(log_opts kgkg-backend) --label "kgkg.sha=$sha"
+    "${PROD_LABELS[@]}" "${LOG_OPTS[@]}" --label "kgkg.sha=$sha"
   if ! wait_healthy "$name" 300; then
     docker logs --tail 40 "$name" || true
     docker rm -f "$name" >/dev/null 2>&1 || true
@@ -120,8 +126,9 @@ swap_frontend() {
     systemctl stop kgkg-frontend; systemctl disable -q kgkg-frontend
   fi
   local o; for o in $old; do docker stop -t 20 "$o" >/dev/null; docker rm "$o" >/dev/null; done
+  log_opts kgkg-frontend
   run_frontend "$name" "$(img_fe "$sha")" 3000 http://127.0.0.1:8000 \
-    "${PROD_LABELS[@]}" $(log_opts kgkg-frontend) --label "kgkg.sha=$sha"
+    "${PROD_LABELS[@]}" "${LOG_OPTS[@]}" --label "kgkg.sha=$sha"
   wait_healthy "$name" 120 || { docker logs --tail 40 "$name" || true; return 1; }
   say "frontend back after $(( ($(date +%s%N) - T0) / 1000000 )) ms"
 }
