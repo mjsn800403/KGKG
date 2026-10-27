@@ -81,7 +81,7 @@ function RenderReply({ text, streaming = false }) {
     // keeps the retrieved ones). So render ONLY internal "/..." hrefs as links;
     // anything else is a hallucinated/injected URL — show its label as plain
     // text, never an anchor. This also neutralises javascript:/data:/phishing.
-    if (href.startsWith('/')) {
+    if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/\\')) {
       nodes.push(
         <Link key={key++} href={href} className="chat-action-btn">
           {label} ←

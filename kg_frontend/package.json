@@ -7,7 +7,8 @@
     "prebuild": "node scripts/obfuscate-shield.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test --experimental-test-coverage src/"
   },
   "dependencies": {
     "@sentry/node": "^10.69.0",

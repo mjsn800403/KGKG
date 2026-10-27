@@ -43,7 +43,10 @@ const EN_FOLLOWUP_WORDS = new Set([
   'need', 'needed', 'next', 'also', 'about',
 ]);
 
-const DTC_RE = /\b[A-Za-z][0-9A-Za-z]{3,4}(?:[-:]\d{1,3})?\b/;
+// A DTC is a letter followed by 4 characters of which at least one is a digit
+// (P0301, B1A23, U0100-87). Requiring the digit keeps ordinary 4-5 letter
+// English words ("long", "again") from being read as codes.
+const DTC_RE = /\b[A-Za-z](?=[0-9A-Za-z]{0,3}\d)[0-9A-Za-z]{3,4}(?:[-:]\d{1,3})?\b/;
 
 // True when `message` cannot stand alone: short/anaphoric, carries no known
 // domain term, no substantive English word and no DTC code.

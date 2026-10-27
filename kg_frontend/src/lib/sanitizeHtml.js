@@ -51,7 +51,11 @@ const DROP_WITH_CONTENT = new Set([
 // relative and kept; anything with one must be on the short safe list.
 const HAS_SCHEME = /^[a-z][a-z0-9+.\-]*:/i;
 const SAFE_SCHEME = /^(?:https?:|mailto:|tel:|data:image\/)/i;
-const isSafeUrl = (u) => !HAS_SCHEME.test(u) || SAFE_SCHEME.test(u);
+// Judge the URL as the browser's URL parser will see it: it drops tab/CR/LF
+// anywhere and C0 controls/spaces at either end, so "java\tscript:" is a
+// javascript: URL to the browser even though it does not look like one here.
+const asParsed = (u) => String(u).replace(/[\t\n\r]/g, '').replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '');
+const isSafeUrl = (u) => { const v = asParsed(u); return !HAS_SCHEME.test(v) || SAFE_SCHEME.test(v); };
 const BAD_CSS = /(url\s*\(|expression\s*\(|javascript\s*:)/i;
 
 /**
