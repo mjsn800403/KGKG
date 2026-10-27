@@ -47,14 +47,19 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install "Django>=4.2,<6" "django-cors-headers>=4.0" "beautifulsoup4>=4.12" "html5lib>=1.1" \
                       "numpy>=1.26,<2" "sqlite-vec>=0.1.6" "sentence-transformers>=2.7" "sentry-sdk>=2.0,<3" \
-                      weasyprint pillow requests coverage
+                      weasyprint pillow requests coverage unittest-xml-reporting
       - name: Django system check
         run: python manage.py check
       - name: Migrations match models
         run: python manage.py makemigrations --check --dry-run
       - name: Full test suite (with coverage)
+        # Branch coverage of application code only: every test module
+        # (test_*.py, tests.py, tests_parts.py) and migrations are excluded,
+        # so the figure cannot be inflated by tests covering themselves.
+        # JUnit XML goes to test-reports/ for the published results.
         run: |
-          coverage run --source=api --omit='*/test_*,*/migrations/*' manage.py test --noinput
+          coverage run --branch --source=api --omit='*/test_*,*/tests.py,*/tests_*.py,*/migrations/*' \
+            manage.py test --noinput --testrunner xmlrunner.extra.djangotestrunner.XMLTestRunner
       - name: Coverage ratchet (ops/deploy/coverage_min)
         # A floor, not a target: it may only ever move up. Raise the file in the
         # same commit that adds the tests, never lower it to make CI pass.
@@ -67,7 +72,30 @@ jobs:
         if: always()
         run: |
           total=$(coverage report --format=total)
-          echo "total coverage: ${total}% (floor $(cat ../ops/deploy/coverage_min)%)" >> "$GITHUB_STEP_SUMMARY"
+          echo "total coverage (line+branch): ${total}% (floor $(cat ../ops/deploy/coverage_min)%)" >> "$GITHUB_STEP_SUMMARY"
+          coverage xml -o coverage.xml
+          coverage html -d coverage-html
+          python - >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          t = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+          for f in glob.glob('test-reports/*.xml'):
+              r = ET.parse(f).getroot()
+              for s in ([r] if r.tag == 'testsuite' else r.iter('testsuite')):
+                  for k in t:
+                      t[k] += int(s.get(k, 0))
+          print(f"tests: {t['tests']}, failures: {t['failures']}, errors: {t['errors']}, skipped: {t['skipped']}")
+          PY
+
+      - name: Publish test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports-${{ github.sha }}
+          path: |
+            KG_backend/test-reports/
+            KG_backend/coverage.xml
+            KG_backend/coverage-html/
+          retention-days: 90
 
   frontend:
     runs-on: ubuntu-latest
@@ -85,6 +113,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Lint (ratchet, see ops/deploy/lint_max_warnings)
         run: npx eslint src --max-warnings "$(cat ../ops/deploy/lint_max_warnings)"
+      - name: Unit tests (node:test, with coverage)
+        run: npm test
       - name: Production build
         run: npm run build
         env:
@@ -105,7 +135,7 @@ jobs:
         # -x follows sourced files; ops/deploy/kg-deploy-gate has no .sh suffix
         # but is the most security-sensitive script in the repository.
         run: |
-          mapfile -t files < <(git ls-files 'ops/**/*.sh' 'ops/*.sh')
+          mapfile -t files < <(git ls-files 'ops/**/*.sh' 'ops/*.sh' 'qa/*.sh' 'qa/**/*.sh')
           files+=(ops/deploy/kg-deploy-gate)
           printf 'checking %s\n' "${files[@]}"
           shellcheck -S warning -x "${files[@]}"
@@ -149,6 +179,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Static application security testing (bandit)
+        # Medium and high severity only. Every finding present when the gate
+        # was introduced was triaged (ops/security/README.md#bandit) and is
+        # recorded in bandit-baseline.json; any finding not in it fails.
+        run: |
+          pip install --quiet bandit==1.9.4
+          bandit -r KG_backend/api KG_backend/KG_backend \
+            -x '*/test_*,*/tests.py,*/tests_parts.py,*/migrations/*' \
+            -ll -b ops/security/bandit-baseline.json
+
+      - name: QA suites parse (E2E, load)
+        run: |
+          for f in qa/e2e/playwright.config.js qa/e2e/tests/*.js qa/perf/*.js; do
+            node --check "$f" 2>/dev/null || node --input-type=module --check < "$f"
+          done
 
       - name: Python dependency audit
         run: |

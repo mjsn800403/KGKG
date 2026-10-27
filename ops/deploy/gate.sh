@@ -48,6 +48,10 @@ npx eslint src --max-warnings "$MAXW" > "$LOGS/lint.log" 2>&1 \
   || fail "lint: new errors, or warnings above the cap of $MAXW (ops/deploy/lint_max_warnings)" "$LOGS/lint.log"
 tail -2 "$LOGS/lint.log"
 
+step "frontend: unit tests"
+npm test > "$LOGS/fe-tests.log" 2>&1 || fail "frontend unit tests" "$LOGS/fe-tests.log"
+grep -E '^# (tests|pass|fail)' "$LOGS/fe-tests.log" || true
+
 step "frontend: production build"
 # Build-time env is only NEXT_PUBLIC_*; runtime secrets are not needed here.
 grep -E '^NEXT_PUBLIC_' /opt/KGKG/kg_frontend/.env.production > .env.production || true
