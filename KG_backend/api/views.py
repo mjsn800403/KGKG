@@ -502,12 +502,12 @@ def _search_like_fallback(brand, model, car, q, limit):
         return JsonResponse([], safe=False)
     conn = get_car_db(car_obj.db_address)
     cur = conn.cursor()
-    like = f'%{q}%'
+    like = f'%{cardb.like_escape(q)}%'
     cur.execute(f"""
         SELECT {NODE_COLUMNS},
-               CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
+               CASE WHEN title LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END AS rank
         FROM nodes
-        WHERE (title LIKE ? OR content LIKE ?)
+        WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')
               AND (href IS NULL OR href != '404.html')
         ORDER BY rank, depth, sort_order
         LIMIT ?
@@ -687,7 +687,8 @@ def read_page_content(cur, car_name, filename):
     if base is None:
         return None
     candidates = [base / 'pages' / filename, base / filename]
-    fp = next((c for c in candidates if c.exists()), None)
+    # Regular files only: '..' or '.' would otherwise resolve to a directory.
+    fp = next((c for c in candidates if c.is_file()), None)
     if fp is None:
         return None
     html = fp.read_text(encoding='utf-8', errors='replace')
@@ -773,6 +774,15 @@ def car_view(request, brand_name=None, year=None, model_name=None):
             # otherwise unambiguous /brand/.../car_name link — car_name is the
             # real identifier. Exact (brand, year, name) first; any year
             # mismatch falls back to (brand, name).
+            # A specific vehicle's manual is paid content: require a logged-in
+            # portal user who has this car in their effective grants — checked
+            # BEFORE anything else (even the Car lookup) so readiness/existence
+            # isn't revealed to anonymous callers. (The brand and year listings
+            # above stay public for the sales catalog; opening a vehicle does not.)
+            _content_user = portal_user(request)
+            if not _content_user:
+                return _unauthorized()
+
             base_qs = Car.objects.filter(
                 brand_name__iexact=brand_name, car_name__iexact=model_name)
             try:
@@ -782,14 +792,6 @@ def car_view(request, brand_name=None, year=None, model_name=None):
             if car is None:
                 raise Car.DoesNotExist
 
-            # A specific vehicle's manual is paid content: require a logged-in
-            # portal user who has this car in their effective grants — checked
-            # BEFORE anything else so readiness/existence isn't revealed to
-            # anonymous callers. (The brand and year listings above stay public
-            # for the sales catalog; opening a vehicle does not.)
-            _content_user = portal_user(request)
-            if not _content_user:
-                return _unauthorized()
             if not user_can_open_car(_content_user, car):
                 return _forbidden_car()
 
@@ -837,12 +839,12 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 except (TypeError, ValueError):
                     limit = 30
                 limit = max(1, min(limit, 50))
-                like = f'%{q}%'
+                like = f'%{cardb.like_escape(q)}%'
                 cur.execute(f"""
                     SELECT {NODE_COLUMNS},
-                           CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
+                           CASE WHEN title LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END AS rank
                     FROM nodes
-                    WHERE (title LIKE ? OR content LIKE ?)
+                    WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')
                           AND (href IS NULL OR href != '404.html')
                     ORDER BY rank, depth, sort_order
                     LIMIT ?
@@ -890,8 +892,8 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 # guessing.
                 filename = href_lookup.rstrip('/').split('/')[-1]
                 cur.execute(f"""
-                    SELECT {NODE_COLUMNS} FROM nodes WHERE href LIKE ? LIMIT 1
-                """, ('%/' + filename,))
+                    SELECT {NODE_COLUMNS} FROM nodes WHERE href LIKE ? ESCAPE '\\' LIMIT 1
+                """, ('%/' + cardb.like_escape(filename),))
                 node = cur.fetchone()
 
                 if not node:

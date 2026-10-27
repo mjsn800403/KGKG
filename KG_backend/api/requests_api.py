@@ -182,7 +182,9 @@ def admin_company_requests_view(request):
         qs = qs.filter(status=status)
     company_id = request.GET.get('company_id')
     if company_id:
-        qs = qs.filter(company_id=company_id)
+        if not company_id.isdigit():
+            return JsonResponse({'error': 'invalid company_id'}, status=400)
+        qs = qs.filter(company_id=int(company_id))
     items = [_request_dict(r, include_company=True) for r in qs[:500]]
     counts = {s: 0 for s, _ in CompanyRequest.STATUS_CHOICES}
     for r in CompanyRequest.objects.values('status'):

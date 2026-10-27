@@ -99,6 +99,12 @@ def breadcrumbs(conn, node_id):
     return [r['title'] for r in rows if r['parent_id'] is not None]
 
 
+def like_escape(s):
+    """Escape user text for a LIKE pattern used with ``ESCAPE '\\'`` so
+    '%' and '_' match literally instead of as wildcards."""
+    return s.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 # ---------------------------------------------------------------------------
 # TTL-cached readiness checks
 # ---------------------------------------------------------------------------
