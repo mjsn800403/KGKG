@@ -41,7 +41,7 @@ case $MODE in
   full) SCRIPT=zap-full-scan.py; EXTRA=(-m 5 -T 60 -j) ;;
   api)
     # Absolute server URL for the scanner; the spec itself uses /kg-api.
-    sed "s#^  - url: /kg-api#  - url: $ORIGIN/kg-api#" "$HERE/../../docs/openapi.yaml" > "$OUT/openapi-scan.yaml"
+    sed "s#^- url: /kg-api#- url: $ORIGIN/kg-api#" "$HERE/../../docs/openapi.yaml" > "$OUT/openapi-scan.yaml"
     SCRIPT=zap-api-scan.py; EXTRA=(-f openapi -T 60) ;;
   *) echo "usage: $0 baseline|full|api" >&2; exit 2 ;;
 esac
