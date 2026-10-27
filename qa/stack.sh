@@ -74,6 +74,11 @@ PY
   python3 -I "$REPO/ops/deploy/sanitize_staging_db.py" "$QA/db/db.sqlite3" --quiet \
     || die "sanitizer failed; refusing to serve the copy"
   : > "$QA/db/.qa-stack"
+  # The backend resolves the warehouses next to its database (/data/db): give
+  # the copy the same view production has. Staging relies on a hand-made
+  # symlink for this; here it is part of the script.
+  ln -sfn "$KG_BE_DIR/Database_warehouse" "$QA/db/Database_warehouse"
+  ln -sfn "$KG_BE_DIR/static_warehouse" "$QA/db/static_warehouse"
   cat > "$QA/cfg/qa_settings.py" <<'PY'
 # QA stack backend (qa/stack.sh): production settings on a sanitized COPY.
 from KG_backend.settings import *  # noqa
@@ -114,8 +119,9 @@ PY
     "$(dirname "$0")/nginx-qa.conf" > "$QA/cfg/nginx-qa.conf"
   docker run -d --name "$PX" --network host --label kgkg.env=qa --cpus 1 \
     -v "$QA/cfg/nginx-qa.conf":/etc/nginx/conf.d/default.conf:ro -v "$QA/logs":/var/log/nginx \
+    -v "$KG_BE_DIR/static_warehouse":/static_warehouse:ro \
     nginx:1.27-alpine >/dev/null
-  for _ in $(seq 30); do curl -fsS -o /dev/null "http://127.0.0.1:$PX_PORT/kg-api/api/health/" && break; sleep 1; done
+  for _ in $(seq 30); do curl -fs -o /dev/null "http://127.0.0.1:$PX_PORT/kg-api/api/health/" && break; sleep 1; done
   curl -fsS -o /dev/null "http://127.0.0.1:$PX_PORT/kg-api/api/health/" || die "proxy not answering"
   cat > "$QA/stack.env" <<EOF
 QA_SHA=$sha
