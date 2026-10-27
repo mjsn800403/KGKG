@@ -61,6 +61,32 @@ class SweepFreshnessTests(unittest.TestCase):
         self.assertFalse(ok)
 
 
+class FailedUnitTests(unittest.TestCase):
+    """A unit can fail silently for a long time: logrotate failed for 14 hours
+    on 2026-10-27 and nothing said so."""
+
+    def test_no_failed_units(self):
+        ok, detail = watchdog.check_failed_units(show_output='')
+        self.assertTrue(ok)
+        self.assertEqual(detail, 'no failed units')
+
+    def test_failed_units_named(self):
+        ok, detail = watchdog.check_failed_units(
+            show_output='logrotate.service loaded failed failed Rotate log files\n')
+        self.assertFalse(ok)
+        self.assertIn('logrotate.service', detail)
+
+    def test_many_failures_are_truncated(self):
+        out = ''.join(f'u{i}.service loaded failed failed x\n' for i in range(9))
+        ok, detail = watchdog.check_failed_units(show_output=out)
+        self.assertFalse(ok)
+        self.assertEqual(detail.count(','), 4)      # five names at most
+
+    def test_failed_units_do_not_page(self):
+        """The alert engine owns paging; this check is for visibility."""
+        self.assertNotIn('systemd_units', watchdog.PAGING_PATH)
+
+
 class CooldownTests(unittest.TestCase):
     def test_first_page_is_due(self):
         self.assertTrue(watchdog.due({}, 'k', 1000.0))

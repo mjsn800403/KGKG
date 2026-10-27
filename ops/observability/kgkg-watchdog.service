@@ -15,7 +15,10 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 -I /opt/KGKG/ops/observability/watchdog.py
+# Runs from /usr/local/lib/kgkg/, not from the git tree: an untracked
+# file at a path the release adds would make a fast-forward promote
+# refuse. ops/deploy/deploy.sh refreshes this copy on every promote.
+ExecStart=/usr/bin/python3 -I /usr/local/lib/kgkg/watchdog.py
 TimeoutStartSec=120
 
 # It must keep working when the disk is nearly full and the app is wedged, so

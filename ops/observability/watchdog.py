@@ -209,6 +209,22 @@ def check_containers() -> tuple[bool, str]:
     return True, f'{len(out.splitlines())} production container(s) healthy'
 
 
+def check_failed_units(show_output: str | None = None) -> tuple[bool, str]:
+    """Any systemd unit in a failed state.
+
+    Not a paging check — the alert engine owns paging — but it is reported and
+    turned into a metric, because a unit can fail silently for a long time.
+    logrotate did exactly that for 14 hours on 2026-10-27, which meant nginx
+    logs stopped rotating on a disk at 73%.
+    """
+    out = show_output if show_output is not None else _systemctl(
+        'list-units', '--failed', '--no-legend', '--plain', '--no-pager')
+    units = [line.split()[0] for line in out.splitlines() if line.strip()]
+    if not units:
+        return True, 'no failed units'
+    return False, 'failed: ' + ','.join(units[:5])
+
+
 def check_disk(path: str = '/', critical_pct: float = 95.0) -> tuple[bool, str]:
     try:
         st = os.statvfs(path)
@@ -341,6 +357,7 @@ def run_checks() -> list[tuple[str, bool, str]]:
     checks.append(('backend_health', *check_url(LOCAL_HEALTH, 'سلامت بک‌اند')))
     checks.append(('containers', *check_containers()))
     checks.append(('disk', *check_disk()))
+    checks.append(('systemd_units', *check_failed_units()))
     return checks
 
 

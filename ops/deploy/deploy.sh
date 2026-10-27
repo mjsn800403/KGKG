@@ -345,6 +345,17 @@ for w in kg-deploy-gate kg-ci-gate kgkg-promote; do
   fi
 done
 
+# The alerting watchdog runs from outside the git tree for the same reason its
+# unit says: an untracked file where the release wants to add one would make a
+# fast-forward refuse.
+if [[ -f $PROD/ops/observability/watchdog.py ]]; then
+  install -d /usr/local/lib/kgkg
+  if ! cmp -s "$PROD/ops/observability/watchdog.py" /usr/local/lib/kgkg/watchdog.py; then
+    install -m 755 "$PROD/ops/observability/watchdog.py" /usr/local/lib/kgkg/watchdog.py \
+      && say "refreshed /usr/local/lib/kgkg/watchdog.py"
+  fi
+fi
+
 PREV_IMG_OK=0; have_images "$PREV" && PREV_IMG_OK=1
 fail_promote() {
   if (( PREV_IMG_OK )); then rollback_to "$PREV"; else
