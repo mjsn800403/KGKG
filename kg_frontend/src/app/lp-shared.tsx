@@ -93,6 +93,7 @@ export function Footer({ coverageHref = '/#coverage' }: { coverageHref?: string 
           <p className="lp-footer-credit">
             <span>توسعه و گردآوری:</span>
             تیم تحقیق و توسعه، خدمات گستر سپهر گیتی
+            <i className="lp-sign" aria-hidden="true" />
           </p>
         </div>
         <div data-tour="support">
