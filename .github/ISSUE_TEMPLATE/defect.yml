@@ -1,0 +1,44 @@
+name: Defect
+description: Something in the product behaves wrongly (found by a test, a customer, monitoring or review)
+labels: ["defect", "triage"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Critical = cross-tenant data, money or security exposure; High = a core journey broken for some users; Medium = degraded or wrong but with a workaround; Low = cosmetic or rare edge case
+      options: [Critical, High, Medium, Low]
+    validations: { required: true }
+  - type: dropdown
+    id: source
+    attributes:
+      label: Found by
+      options: [Automated test, CI security gate, Customer request (in-product ticket), Monitoring / GlitchTip / alert, Code review, Load / DAST test, Other]
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Version and commit
+      description: "VERSION and short sha (live sha: Grafana release panel or `kgkg-promote --status`)"
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact requests or clicks. Never paste real customer data, tokens or passwords.
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Failing test name, log lines (redacted), GlitchTip issue link, screenshots
+  - type: textarea
+    id: fix
+    attributes:
+      label: Root cause, fix and regression test (filled when closing)
+      description: "Root cause / commit / test that now guards it / verified on staging (yes/no)"

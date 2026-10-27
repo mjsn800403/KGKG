@@ -275,6 +275,9 @@ FE_PUBLIC=$(grep -E '^NEXT_PUBLIC_API_BASE=' "$PROD/kg_frontend/.env.production"
 say "3/5 STAGING (backend :$STG_BE, frontend :$STG_FE, DB = fresh copy of prod)"
 docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
 sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
+# The backend finds the warehouses next to its database (/data/db). This link
+# used to exist only because someone made it by hand; recreate it every run.
+ln -sfn "$KG_BE_DIR/Database_warehouse" "$STG/db/Database_warehouse"
 # Staging runs real code against real data shapes, which means a copy of real
 # customers. Strip what identifies a person or opens a door before anything is
 # served from it: a session token lifted from staging would otherwise work
@@ -393,7 +396,8 @@ load_state
 save_state "$SHA" "$PREV"
 write_release_metrics
 TAG=deploy-$TS
-git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT" "$SHA"
+VERSION=$(git -C "$PROD" show "$SHA:VERSION" 2>/dev/null | head -1 || true)
+git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT${VERSION:+ version $VERSION}" "$SHA"
 timeout 60 git -C "$PROD" push -q origin "HEAD:$(git -C "$PROD" rev-parse --abbrev-ref HEAD)" "$TAG" \
   || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin HEAD $TAG"
 # Keep the live and rollback images plus the newest few others.

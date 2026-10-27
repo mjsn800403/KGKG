@@ -1,0 +1,25 @@
+name: Customer support escalation
+description: A customer ticket (in-product request) that needs engineering work
+labels: ["support", "triage"]
+body:
+  - type: input
+    id: ticket
+    attributes:
+      label: In-product request id
+      description: The CompanyRequest id from the admin inbox (/admin → requests). Do not copy customer personal data here.
+    validations: { required: true }
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options: [Vehicle access, Seats, AI assistant, Documents package, Support / problem, Other]
+    validations: { required: true }
+  - type: textarea
+    id: summary
+    attributes:
+      label: What the customer needs and what engineering must do
+    validations: { required: true }
+  - type: input
+    id: due
+    attributes:
+      label: Promised response date (if any)
