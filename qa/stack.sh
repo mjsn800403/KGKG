@@ -3,6 +3,7 @@
 #
 #   qa/stack.sh up [git-ref]   build images if needed, start the stack
 #   qa/stack.sh down           remove the stack's containers
+#   qa/stack.sh reseed         re-issue the test accounts' sessions (before each suite run)
 #   qa/stack.sh status
 #
 # What makes it safe to point a browser, a load generator or a scanner at:
@@ -133,9 +134,19 @@ EOF
   say "QA stack up for $short"; cat "$QA/stack.env"
 }
 
+reseed() {
+  # shellcheck disable=SC1091
+  . "$QA/qa.env"
+  docker exec -e KG_QA_STACK=1 -e KG_QA_PASSWORD="$KG_QA_PASSWORD" "$BE" \
+    python manage.py seed_qa_fixtures | tail -1 > "$QA/fixtures.json.new" || die "reseed failed"
+  chmod 600 "$QA/fixtures.json.new" && mv "$QA/fixtures.json.new" "$QA/fixtures.json"
+  say "sessions re-issued"
+}
+
 case ${1:-} in
   up) up "${2:-HEAD}" ;;
   down) down ;;
+  reseed) reseed ;;
   status) status ;;
-  *) echo "usage: qa/stack.sh up [git-ref] | down | status" >&2; exit 2 ;;
+  *) echo "usage: qa/stack.sh up [git-ref] | down | reseed | status" >&2; exit 2 ;;
 esac

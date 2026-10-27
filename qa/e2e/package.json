@@ -1,0 +1,12 @@
+{
+  "name": "kgkg-e2e",
+  "private": true,
+  "description": "Browser end-to-end suite for KGTechVault (runs against qa/stack.sh)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.1",
+    "@playwright/test": "1.52.0"
+  }
+}
