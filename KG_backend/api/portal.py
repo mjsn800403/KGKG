@@ -553,7 +553,7 @@ def login_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
-    username = (b.get('username') or '').strip()
+    username = str(b.get('username') or '').strip()
     password = b.get('password') or ''
     if not _verify_turnstile(request, b.get("turnstile_token") or "", "login"):
         return JsonResponse({"error": "تأیید امنیتی ناموفق بود. دوباره تلاش کنید."}, status=403)
@@ -616,8 +616,8 @@ def verify_otp_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
-    session_id = (b.get('otp_session') or '').strip()
-    code = (b.get('code') or '').strip()
+    session_id = str(b.get('otp_session') or '').strip()
+    code = str(b.get('code') or '').strip()
     if not session_id or not code:
         return JsonResponse({'error': 'اطلاعات ناقص است.'}, status=400)
     challenge = OtpChallenge.resolve(session_id)
@@ -676,7 +676,7 @@ def recover_start_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
-    identifier = (b.get('identifier') or '').strip()
+    identifier = str(b.get('identifier') or '').strip()
     if not identifier:
         return JsonResponse({'error': 'نام کاربری، ایمیل یا شماره موبایل را وارد کنید.'}, status=400)
     if not _verify_turnstile(request, b.get('turnstile_token') or '', 'login'):
@@ -714,8 +714,8 @@ def recover_reset_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
-    session_id = (b.get('otp_session') or '').strip()
-    code = (b.get('code') or '').strip()
+    session_id = str(b.get('otp_session') or '').strip()
+    code = str(b.get('code') or '').strip()
     new_password = b.get('new_password') or ''
     if not session_id or not code:
         return JsonResponse({'error': 'اطلاعات ناقص است.'}, status=400)
@@ -747,7 +747,7 @@ def resend_otp_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
     b = _body(request)
-    session_id = (b.get('otp_session') or '').strip()
+    session_id = str(b.get('otp_session') or '').strip()
     challenge = OtpChallenge.resolve(session_id)
     if challenge is None:
         return JsonResponse({'error': 'جلسه منقضی شده است. دوباره وارد شوید.'}, status=400)
@@ -935,7 +935,7 @@ def admin_login_view(request):
     b = _body(request)
     if not _verify_turnstile(request, b.get('turnstile_token') or '', 'login'):
         return JsonResponse({'error': 'تأیید «ربات نیستم» ناموفق بود؛ دوباره تلاش کنید.'}, status=403)
-    username = (b.get('username') or '').strip()
+    username = str(b.get('username') or '').strip()
     password = b.get('password') or ''
     admin = PlatformAdmin.objects.filter(username__iexact=username).first()
     if not admin or not admin.check_password(password):
