@@ -109,8 +109,6 @@ have_images() { docker image inspect "$(img_be "$1")" "$(img_fe "$1")" >/dev/nul
 
 trap 'say "DEPLOY FAILED at line $LINENO: $BASH_COMMAND"' ERR
 
-exec 9> "$REL/deploy.lock"
-flock -n 9 || die "another deploy is running ($REL/deploy.lock)"
 
 # Container helpers: from the commit being deployed once it is checked out,
 # until then from this script's own checkout.
@@ -212,6 +210,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $MODE == status ]]; then status; exit 0; fi
+
+# The lock lives below --status on purpose: asking what is live is read-only,
+# and it is most wanted precisely while a deploy holds the lock.
+#
+# It waits rather than refuses. Two pushes a minute apart are a queue, not an
+# error, and a CI run that goes red because another run held the lock teaches
+# people to ignore red runs. KG_DEPLOY_LOCK_WAIT=0 restores fail-fast.
+LOCK_WAIT=${KG_DEPLOY_LOCK_WAIT:-1800}
+exec 9> "$REL/deploy.lock"
+if ! flock -n 9; then
+  say "another deploy is running; waiting up to ${LOCK_WAIT}s for the lock"
+  flock -w "$LOCK_WAIT" 9 || die "still locked after ${LOCK_WAIT}s ($REL/deploy.lock)"
+fi
 if [[ $MODE == reload ]]; then
   load_state
   [[ -n $CURRENT ]] && have_images "$CURRENT" || die "no live release image recorded in $STATE"
@@ -322,6 +333,17 @@ fi
 be_run "$(img_be "$SHA")" "$KG_BE_DIR" /var/log/kgkg -- python manage.py migrate --noinput > "$REL/logs/prod-migrate-$TS.log" 2>&1 \
   || { undo_code; die "prod migrate failed; code reset to ${PREV:0:9} (log: $REL/logs/prod-migrate-$TS.log, DB backup: $REL/db-backups/)"; }
 ensure_hostjobs
+
+# The forced-command gate, the CI wrapper and the promote wrapper live in
+# /usr/local/bin as copies of ops/deploy/*. Nothing re-installed them, so they
+# could drift from the release that defines them — and the gate is the file
+# that decides whether a key may promote. Refresh them from the tree that was
+# just promoted.
+for w in kg-deploy-gate kg-ci-gate kgkg-promote; do
+  if [[ -f $PROD/ops/deploy/$w ]] && ! cmp -s "$PROD/ops/deploy/$w" "/usr/local/bin/$w"; then
+    install -m 755 "$PROD/ops/deploy/$w" "/usr/local/bin/$w" && say "refreshed /usr/local/bin/$w"
+  fi
+done
 
 PREV_IMG_OK=0; have_images "$PREV" && PREV_IMG_OK=1
 fail_promote() {
