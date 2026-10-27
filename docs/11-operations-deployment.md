@@ -10,7 +10,7 @@ Everything lives in `/opt/KGKG` (git working copy = deployed copy). Python venv:
 
 | Unit | What |
 |---|---|
-| `kgkg-backend.service` (retired; containers serve now — see 11.3) | gunicorn `KG_backend.wsgi` on `:8000` — 3 gthread workers × 8 threads, `--timeout 300 --max-requests 2000(+jitter)`; env from `.env.prod` + offline-HF vars + `KG_WARMUP=1` |
+| `kgkg-backend.service` (retired; containers serve now — see 11.3) | gunicorn `KG_backend.wsgi` on `:8000` — 3 gthread workers × 8 threads, `--timeout 300 --max-requests 20000(+jitter)`; env from `.env.prod` + offline-HF vars + `KG_WARMUP=1` |
 | `kgkg-frontend.service` (retired; containers serve now — see 11.3) | `npm run start` (Next.js) on `:3000`; env from `kg_frontend/.env.production` |
 | `nginx` | Reverse proxy on `:80` (see 11.2) |
 | `kgkg-alerts.timer` → service | `manage.py check_alerts` every 5 min (alert sweep + retention pruning) |
