@@ -31,13 +31,35 @@
    lengths (SQLite ignores VARCHAR limits).
 8. **Privacy:** daily-unique visitor tracking stores salted, truncated, irreversible IP
    hashes only; activity logging is per authenticated seat (business requirement).
+9. **Deploy privilege is scoped by key, on the server** (2026-10-27). Each deploy key is
+   pinned to a forced command whose role decides which verbs exist: the CI key may `stage`
+   and read `status`, and has no `deploy` verb at all. CI therefore cannot promote to
+   production — not by policy, by construction — and a leaked CI secret buys a staging run.
+   The matrix is tested (`ops/deploy/test_gate_roles.sh`). Promotion requires a person
+   typing a confirmation into `kgkg-promote`; no timer, cron or workflow can reach it.
+   The previous `deploy.yml` would have promoted on green CI, held back only by a GitHub
+   environment setting; it was deleted.
+10. **Staging holds no usable credentials** (2026-10-27). The database copy staging runs on
+   is sanitized before it serves anything: session/OTP/invite tables emptied, password
+   hashes replaced with an unusable sentinel, phone numbers and e-mails replaced, audit IPs
+   masked to the /24. Previously a session token lifted from staging would have worked
+   against production.
+11. **Monitoring has its own credential.** `KG_METRICS_TOKEN` gates `/api/metrics/` and is
+   separate from `KG_ADMIN_TOKEN`, so handing a scrape credential to Prometheus does not
+   hand it the admin surface. The public path to the endpoint is denied at nginx regardless,
+   and the scrape reaches it only over a loopback-plus-docker-bridge listener.
+12. **Supply chain is gated in CI** (2026-10-27). shellcheck, hadolint, gitleaks, pip-audit,
+   npm audit and a trivy scan of both production images, failing closed; exceptions need a
+   stated blocker, a reachability argument and a review date (`ops/security/README.md`).
+   The gates' first run found an unauthenticated-RCE advisory range covering the installed
+   Next.js and a WeasyPrint arbitrary-code-execution issue on the PDF path; both are fixed.
 
 ## 12.2 Known limitations / accepted risks (ranked)
 
 | # | Risk | Notes / path |
 |---|---|---|
-| 1 | **HTTP only (no TLS).** All credentials and tokens cross the wire in cleartext. | Highest-value fix: put the IP (or a domain) behind TLS — certbot or a fronting CDN. Until then, treat all passwords as network-visible. |
-| 2 | **No off-host backups.** Single disk holds the only copy of `db.sqlite3` + the 21 GB warehouse. | Nightly rsync/restic to object storage or a second host. |
+| ~~1~~ | ~~**HTTP only (no TLS)**~~ — **closed.** The site is served over TLS with Cloudflare origin certificates, and ufw admits 80/443 only from Cloudflare ranges, so the origin is not directly reachable. |
+| **1** | **No off-host backups** — now the top risk. One disk holds the only copy of `db.sqlite3` and the 21 GB warehouse; the RAG tier is rebuildable, those are not. Every promote takes a local DB snapshot and every release is a pushed commit, so code and schema are recoverable — the data is not. | Needs a decision on destination (object storage or a second host), then a nightly encrypted job with a verified restore test. |
 | 3 | **Portal token readable by JS.** Token lives in localStorage + a JS-set (non-HttpOnly) cookie. XSS ⇒ token theft. Mitigation: React escaping; no third-party scripts; manual HTML content is served from our own parsed DBs. | Move to HttpOnly cookie sessions when auth is next touched. |
 | 4 | **No password reset / self-service change** for portal users or the platform admin (re-rotate via ORM `set_password`). | Add flows; requires SMTP decision (see 6). |
 | 5 | **No CSRF tokens on state-changing endpoints** — acceptable *only because* auth is header-Bearer for mutations; the cookie path is used by GET/SSR reads. Keep it that way: any cookie-authenticated mutation would need CSRF. |
