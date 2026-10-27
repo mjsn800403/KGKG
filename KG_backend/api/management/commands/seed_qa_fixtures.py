@@ -10,7 +10,10 @@ in. This command adds a small, clearly named set of test accounts to that copy:
   qa_e2e_other       company "QA-E2E-B", manager (cross-tenant probes)
 
 None has a phone, so they sign in with password only (no SMS). The password
-comes from KG_QA_PASSWORD, which qa/stack.sh generates per run.
+comes from KG_QA_PASSWORD, which qa/stack.sh generates per run. Password login
+still needs a Cloudflare Turnstile pass, which automation cannot (and must not)
+produce, so the command also prints one session token per account (and a spare
+for the logout journey); qa/stack.sh stores them mode 600 for the suites.
 
 Two independent guards keep it off production: KG_QA_STACK=1 must be set, and
 the database directory must hold the `.qa-stack` marker that only qa/stack.sh
@@ -24,9 +27,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from api.access import VALID_DOCS
-from api.models import Car, Company, CompanyCarAccess, PortalUser, UserCarAccess
+from api.models import AuthToken, Car, Company, CompanyCarAccess, PortalUser, UserCarAccess
 
-CAR = ('Toyota', 2025, 'Corolla Cross')
+CAR = ('Toyota', 2025, 'Corolla Cross Hybrid S')
 MARKER = '.qa-stack'
 
 
@@ -75,14 +78,18 @@ class Command(BaseCommand):
             u.save()
             return u
 
-        mgr = user('qa_e2e_manager', a, 'after_sales_manager', can_manage_team=True,
+        accounts = {}
+        mgr = accounts['manager'] = user('qa_e2e_manager', a, 'after_sales_manager', can_manage_team=True,
                    can_view_analytics=True, ai_assistant_enabled=True)
-        user('qa_e2e_specialist', a, 'after_sales_specialist', reports_to=mgr)
+        accounts['specialist'] = user('qa_e2e_specialist', a, 'after_sales_specialist', reports_to=mgr)
         user('qa_e2e_locked', a, 'after_sales_specialist', locked=True)
-        user('qa_e2e_other', b, 'after_sales_manager', can_manage_team=True)
+        accounts['other'] = user('qa_e2e_other', b, 'after_sales_manager', can_manage_team=True)
         UserCarAccess.objects.update_or_create(
             user=mgr, car=car, defaults={'documents': docs, 'admin_granted': True})
+        tokens = {k: AuthToken.issue(u).key for k, u in accounts.items()}
+        tokens['manager_logout'] = AuthToken.issue(mgr).key
         self.stdout.write(json.dumps({
+            'tokens': tokens,
             'companies': ['QA-E2E-A', 'QA-E2E-B'],
             'users': ['qa_e2e_manager', 'qa_e2e_specialist', 'qa_e2e_locked', 'qa_e2e_other'],
             'car': {'brand': car.brand_name, 'year': car.year, 'model': car.car_name},

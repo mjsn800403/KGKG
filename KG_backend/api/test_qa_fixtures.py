@@ -1,4 +1,5 @@
 """The QA fixture seeder must refuse to run anywhere but the QA stack."""
+import json
 import os
 import tempfile
 from io import StringIO
@@ -23,7 +24,7 @@ class SeedGuardTest(TestCase):
         p = mock.patch.object(seed, 'db_dir', return_value=self.dir)
         p.start()
         self.addCleanup(p.stop)
-        Car.objects.create(brand_name='Toyota', car_name='Corolla Cross', year=2025,
+        Car.objects.create(brand_name='Toyota', car_name='Corolla Cross Hybrid S', year=2025,
                            db_address='/nonexistent.db')
 
     def run_seed(self, env):
@@ -56,7 +57,7 @@ class SeedGuardTest(TestCase):
         (self.dir / seed.MARKER).write_text('')
         env = {'KG_QA_STACK': '1', 'KG_QA_PASSWORD': PW}
         self.run_seed(env)
-        self.run_seed(env)   # second run updates, never duplicates
+        out = json.loads(self.run_seed(env))   # second run updates, never duplicates
         users = PortalUser.objects.filter(username__startswith='qa_e2e_')
         self.assertEqual(users.count(), 4)
         mgr = users.get(username='qa_e2e_manager')
@@ -67,3 +68,8 @@ class SeedGuardTest(TestCase):
         self.assertEqual(UserCarAccess.objects.filter(user=mgr).count(), 1)
         self.assertFalse(UserCarAccess.objects.filter(
             user=users.get(username='qa_e2e_specialist')).exists())
+        # Each printed token is a working session for its own account.
+        self.assertEqual(set(out['tokens']), {'manager', 'specialist', 'other', 'manager_logout'})
+        me = self.client.get('/api/auth/me/', HTTP_AUTHORIZATION=f"Bearer {out['tokens']['other']}")
+        self.assertEqual(me.status_code, 200, me.content)
+        self.assertIn('qa_e2e_other', me.content.decode())

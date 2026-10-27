@@ -7,7 +7,7 @@
 #
 # What makes it safe to point a browser, a load generator or a scanner at:
 #   * its own containers (label kgkg.env=qa), ports :8120 backend / :3117
-#     frontend on loopback; production (:8000/:3000) and staging (:8110/:3107)
+#     frontend / :8130 single-origin proxy (qa/nginx-qa.conf) on loopback; production (:8000/:3000) and staging (:8110/:3107)
 #     are never touched
 #   * a fresh copy of the production database taken with SQLite's online
 #     backup API and run through ops/deploy/sanitize_staging_db.py, so no real
@@ -27,12 +27,13 @@ FE_PORT=${KG_QA_FE_PORT:-3117}
 BE_CPUS=${KG_QA_BE_CPUS:-6}
 FE_CPUS=${KG_QA_FE_CPUS:-2}
 PROD_DB=${KG_QA_SOURCE_DB:-/opt/KGKG/KG_backend/db.sqlite3}
-BE=kgkg-qa-backend FE=kgkg-qa-frontend
+PX_PORT=${KG_QA_PROXY_PORT:-8130}
+BE=kgkg-qa-backend FE=kgkg-qa-frontend PX=kgkg-qa-proxy
 
 say() { printf '[qa %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 die() { say "ERROR: $*"; exit 1; }
 
-down() { docker rm -f "$BE" "$FE" >/dev/null 2>&1 || true; say "stack removed"; }
+down() { docker rm -f "$BE" "$FE" "$PX" >/dev/null 2>&1 || true; say "stack removed"; }
 
 status() {
   docker ps -a --filter label=kgkg.env=qa --format '{{.Names}}  {{.Image}}  {{.Status}}'
@@ -100,6 +101,7 @@ PY
   say "seeding test accounts"
   be_run "kgkg-backend:$short" "$QA/db" "$QA/logs" "${nosec[@]}" -e KG_QA_STACK=1 -e KG_QA_PASSWORD="$pw" \
     -- python manage.py seed_qa_fixtures | tail -1 > "$QA/fixtures.json" || die "seeding failed"
+  chmod 600 "$QA/fixtures.json"
 
   say "starting backend :$BE_PORT (cpus=$BE_CPUS) and frontend :$FE_PORT (cpus=$FE_CPUS)"
   KG_WARMUP=1 run_backend "$BE" "kgkg-backend:$short" "$BE_PORT" "$QA/db" "$QA/logs" \
@@ -108,11 +110,19 @@ PY
     -e METIS_API_KEY= -e SENTRY_DSN= --label kgkg.env=qa --cpus "$FE_CPUS" --memory 3g --restart no
   wait_healthy "$BE" 300 || { docker logs --tail 40 "$BE"; die "backend not healthy"; }
   wait_healthy "$FE" 120 || { docker logs --tail 40 "$FE"; die "frontend not healthy"; }
+  sed -e "s/__PROXY_PORT__/$PX_PORT/" -e "s/__BE_PORT__/$BE_PORT/g" -e "s/__FE_PORT__/$FE_PORT/g" \
+    "$(dirname "$0")/nginx-qa.conf" > "$QA/cfg/nginx-qa.conf"
+  docker run -d --name "$PX" --network host --label kgkg.env=qa --cpus 1 \
+    -v "$QA/cfg/nginx-qa.conf":/etc/nginx/conf.d/default.conf:ro -v "$QA/logs":/var/log/nginx \
+    nginx:1.27-alpine >/dev/null
+  for _ in $(seq 30); do curl -fsS -o /dev/null "http://127.0.0.1:$PX_PORT/kg-api/api/health/" && break; sleep 1; done
+  curl -fsS -o /dev/null "http://127.0.0.1:$PX_PORT/kg-api/api/health/" || die "proxy not answering"
   cat > "$QA/stack.env" <<EOF
 QA_SHA=$sha
 QA_STARTED=$(date -u +%FT%TZ)
 QA_BACKEND=http://127.0.0.1:$BE_PORT
 QA_FRONTEND=http://127.0.0.1:$FE_PORT
+QA_ORIGIN=http://127.0.0.1:$PX_PORT
 EOF
   say "QA stack up for $short"; cat "$QA/stack.env"
 }
