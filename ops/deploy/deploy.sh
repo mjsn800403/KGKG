@@ -61,6 +61,48 @@ PY
 # shellcheck source=/dev/null
 load_state() { CURRENT=; PREVIOUS=; [[ -f $STATE ]] && . "$STATE"; return 0; }
 save_state() { printf 'CURRENT=%s\nPREVIOUS=%s\nDEPLOYED_AT=%s\n' "$1" "$2" "$TS" > "$STATE"; }
+
+# Staging provenance: what was last proven against a copy of production data.
+# kgkg-promote refuses a release that has no passing record here, and the
+# textfile metrics below put the stage-to-promote gap on a dashboard.
+STAGING_STATE=$REL/staging.env
+save_staging_state() {  # sha, smoke-result
+  printf 'STAGED_SHA=%s\nSTAGED_AT=%s\nGATE=%s\nSMOKE=%s\n' \
+    "$1" "$(date -u +%FT%TZ)" pass "$2" > "$STAGING_STATE"
+}
+
+# node-exporter textfile collector (ops/observability): release state as
+# metrics, so "what is live" and "how long since it was staged" are answerable
+# from Grafana rather than only over SSH.
+TEXTFILE_DIR=${KG_TEXTFILE_DIR:-/var/lib/node-exporter-textfile}
+write_release_metrics() {
+  local f=$TEXTFILE_DIR/kgkg_release.prom t
+  mkdir -p "$TEXTFILE_DIR" 2>/dev/null || return 0
+  t=$(mktemp "$TEXTFILE_DIR/.kgkg_release.XXXXXX") || return 0
+  local cur='' prev='' staged='' staged_at='' smoke=''
+  [[ -f $STATE ]] && { cur=$(sed -n 's/^CURRENT=//p' "$STATE"); prev=$(sed -n 's/^PREVIOUS=//p' "$STATE"); }
+  if [[ -f $STAGING_STATE ]]; then
+    staged=$(sed -n 's/^STAGED_SHA=//p' "$STAGING_STATE")
+    staged_at=$(sed -n 's/^STAGED_AT=//p' "$STAGING_STATE")
+    smoke=$(sed -n 's/^SMOKE=//p' "$STAGING_STATE")
+  fi
+  local staged_epoch=0
+  [[ -n $staged_at ]] && staged_epoch=$(date -u -d "$staged_at" +%s 2>/dev/null || echo 0)
+  {
+    echo '# HELP kgkg_release_info Release currently live on this host, as labels.'
+    echo '# TYPE kgkg_release_info gauge'
+    echo "kgkg_release_info{current=\"${cur:0:9}\",previous=\"${prev:0:9}\"} 1"
+    echo '# HELP kgkg_staging_info Last release proven against a copy of production data.'
+    echo '# TYPE kgkg_staging_info gauge'
+    echo "kgkg_staging_info{staged=\"${staged:0:9}\",smoke=\"${smoke:-none}\"} 1"
+    echo '# HELP kgkg_staging_last_pass_timestamp_seconds Unix time of the last passing staging run.'
+    echo '# TYPE kgkg_staging_last_pass_timestamp_seconds gauge'
+    echo "kgkg_staging_last_pass_timestamp_seconds $staged_epoch"
+    echo '# HELP kgkg_release_staged_matches_live 1 when the live release is the one that was last staged.'
+    echo '# TYPE kgkg_release_staged_matches_live gauge'
+    if [[ -n $cur && "$cur" == "$staged" ]]; then echo 'kgkg_release_staged_matches_live 1'; else echo 'kgkg_release_staged_matches_live 0'; fi
+  } > "$t" && chmod 644 "$t" && mv "$t" "$f"
+}
 img_be() { echo "kgkg-backend:${1:0:9}"; }
 img_fe() { echo "kgkg-frontend:${1:0:9}"; }
 have_images() { docker image inspect "$(img_be "$1")" "$(img_fe "$1")" >/dev/null 2>&1; }
@@ -185,6 +227,7 @@ if [[ $MODE == rollback ]]; then
   rollback_to "$PREVIOUS"
   bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || say "WARNING: smoke failed after rollback"
   save_state "$PREVIOUS" "$CURRENT"
+  write_release_metrics
   exit 0
 fi
 
@@ -221,6 +264,12 @@ FE_PUBLIC=$(grep -E '^NEXT_PUBLIC_API_BASE=' "$PROD/kg_frontend/.env.production"
 say "3/5 STAGING (backend :$STG_BE, frontend :$STG_FE, DB = fresh copy of prod)"
 docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
 sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
+# Staging runs real code against real data shapes, which means a copy of real
+# customers. Strip what identifies a person or opens a door before anything is
+# served from it: a session token lifted from staging would otherwise work
+# against production. Representative row counts and relationships are kept.
+python3 -I "$W/ops/deploy/sanitize_staging_db.py" "$STG/db/db.sqlite3" --quiet \
+  || die "could not sanitize the staging database copy; refusing to serve real credentials from staging"
 cat > "$STG/stagecfg/staging_settings.py" <<'PY'
 # Staging backend (ops/deploy/deploy.sh): prod settings on a COPY of the prod DB.
 from KG_backend.settings import *  # noqa
@@ -248,7 +297,13 @@ STG_OK=0
 bash "$W/ops/deploy/smoke.sh" http://127.0.0.1:$STG_BE http://127.0.0.1:$STG_FE "$TOKEN" && STG_OK=1
 [[ ${KG_KEEP_STAGING:-0} == 1 ]] || docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
 (( STG_OK )) || die "staging smoke tests failed; production untouched"
-if [[ $MODE == staging ]]; then say "STAGING PASSED for $SHORT (production untouched)"; exit 0; fi
+save_staging_state "$SHA" pass
+write_release_metrics
+if [[ $MODE == staging ]]; then
+  say "STAGING PASSED for $SHORT (production untouched)"
+  say "promote it with: kgkg-promote $SHA"
+  exit 0
+fi
 
 # ---- 4. promote --------------------------------------------------------------
 say "4/5 PROMOTE ${PREV:0:9} -> $SHORT"
@@ -287,6 +342,7 @@ bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || 
 
 load_state
 save_state "$SHA" "$PREV"
+write_release_metrics
 TAG=deploy-$TS
 git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT" "$SHA"
 timeout 60 git -C "$PROD" push -q origin "HEAD:$(git -C "$PROD" rev-parse --abbrev-ref HEAD)" "$TAG" \

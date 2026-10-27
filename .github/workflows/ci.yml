@@ -65,7 +65,9 @@ jobs:
           coverage report --fail-under="$MIN" >/dev/null
       - name: Coverage summary
         if: always()
-        run: coverage report --format=total | awk '{print "total coverage: "$1"%"}' >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          total=$(coverage report --format=total)
+          echo "total coverage: ${total}% (floor $(cat ../ops/deploy/coverage_min)%)" >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
     runs-on: ubuntu-latest
@@ -168,7 +170,7 @@ jobs:
       - name: Backend image boots (Django check)
         run: docker run --rm -e DJANGO_DEBUG=true -e KG_ADMIN_TOKEN=ci -e KG_ENV_FILE=/tmp/x.env kgkg-backend:ci python manage.py check
 
-      - name: Vulnerability scan (both images)
+      - name: Scan both images for vulnerabilities
         # --ignore-unfixed: an advisory with no released fix is not actionable
         # at build time; it is tracked in ops/security/README.md instead.
         # Exceptions in .trivyignore.yaml expire on a date trivy enforces.
@@ -184,3 +186,69 @@ jobs:
                 --ignorefile /.trivyignore.yaml \
                 --exit-code 1 --no-progress "$img"
           done
+
+  stage:
+    # Push to `work`, everything green -> stage that exact commit on the
+    # server: gate in a clean worktree, build both images, run them against a
+    # sanitized copy of the production database, smoke the signed-in paths.
+    #
+    # This job CANNOT reach production. The key in DEPLOY_SSH_KEY is pinned on
+    # the server to /usr/local/bin/kg-ci-gate, whose role has no `deploy`
+    # verb (ops/deploy/kg-deploy-gate, matrix tested by
+    # ops/deploy/test_gate_roles.sh). A leaked secret buys a staging run.
+    # Promotion is `kgkg-promote <sha>`, typed by a person on the host.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/work'
+    needs: [backend, frontend, security, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: kgkg-staging
+      cancel-in-progress: false
+    steps:
+      - name: Check the staging credential is configured
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          missing=
+          [ -n "$KEY" ]  || missing="$missing DEPLOY_SSH_KEY"
+          [ -n "$HOST" ] || missing="$missing DEPLOY_HOST"
+          if [ -n "$missing" ]; then
+            echo "::error::Staging cannot run: missing repository secret(s):$missing"
+            echo "Add them under Settings -> Secrets and variables -> Actions."
+            echo "The key must be the one pinned to kg-ci-gate in the server's authorized_keys."
+            exit 1
+          fi
+
+      - name: Stage ${{ github.sha }}
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          SHA: ${{ github.sha }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+            strict=yes
+          else
+            # Without a pinned host key the connection is not authenticated in
+            # the server's direction, so say so loudly rather than pretend.
+            echo "::warning::DEPLOY_KNOWN_HOSTS is not set; the server's host key is not verified."
+            strict=accept-new
+          fi
+          ssh -i ~/.ssh/deploy -o "StrictHostKeyChecking=$strict" \
+              -o ServerAliveInterval=30 -o ConnectTimeout=20 \
+              "root@$HOST" "stage $SHA"
+
+      - name: What the server reports
+        if: always()
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          [ -n "$KEY" ] || exit 0
+          ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=20 "root@$HOST" "status" >> "$GITHUB_STEP_SUMMARY" 2>&1 || true

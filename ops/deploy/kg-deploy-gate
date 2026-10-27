@@ -1,34 +1,110 @@
 #!/bin/bash
-# Forced command for the GitHub Actions deploy key (authorized_keys command=).
-# The key can do exactly one thing: deploy a commit that is on origin/work,
-# through the normal gated pipeline (ops/deploy/deploy.sh). Accepted input:
-#     deploy <40-hex commit sha>
-# The deploy runs as its own systemd unit, so a dropped SSH connection never
-# kills it half-way; this script streams its log and exits with its result.
+# ---------------------------------------------------------------------------
+# Forced command for deploy keys (authorized_keys command=).
+#
+# A key gets a role, and the role decides which verbs exist. The role comes
+# from which wrapper the key is pinned to, not from anything the client sends:
+#
+#   command="/usr/local/bin/kg-ci-gate"      -> role ci       (stage, status)
+#   command="/usr/local/bin/kg-deploy-gate"  -> role operator (stage, status, deploy)
+#
+# That is the whole point. CI holds a key that physically cannot promote to
+# production: not because the workflow chooses not to, not because a GitHub
+# environment has reviewers configured, but because the command on the other
+# end of the key refuses the verb. A leaked CI secret buys a staging deploy.
+#
+# Verbs:
+#   stage <40-hex>   gate + build images + staging on a sanitized copy of the
+#                    production database + smoke. Production untouched.
+#   deploy <40-hex>  the full pipeline including promotion. Operator only.
+#   status           what is live, and what was last staged. Read-only.
+#
+# Both mutating verbs accept only a commit already on origin/work, run under
+# flock so two deploys cannot interleave, and run as a transient systemd unit
+# so a dropped SSH connection cannot kill a deploy half-way.
+#
+# KG_GATE_DRYRUN=1 reports the decision and the command it would run without
+# running it. ops/deploy/test_gate_roles.sh uses it to assert the whole
+# role x verb matrix, because this file is where an access-control mistake
+# would be a production incident.
+# ---------------------------------------------------------------------------
 set -uo pipefail
-LOG=/var/log/kg-deploy-gate.log
-echo "$(date -u +%FT%TZ) ${SSH_CLIENT:-local} :: ${SSH_ORIGINAL_COMMAND:-}" >> "$LOG"
 
-read -r verb sha extra <<< "${SSH_ORIGINAL_COMMAND:-}"
-if [[ $verb != deploy || ! $sha =~ ^[0-9a-f]{40}$ || -n ${extra:-} ]]; then
-  echo "denied: expected 'deploy <40-hex sha>'" >&2; exit 2
+ROLE=${KG_GATE_ROLE:-operator}
+LOG=${KG_GATE_LOG:-/var/log/kg-deploy-gate.log}
+DEPLOY=${KG_DEPLOY_SH:-/opt/KGKG/ops/deploy/deploy.sh}
+PROD=${KG_PROD_DIR:-/opt/KGKG}
+REL=${KG_REL_DIR:-/opt/KGKG_release}
+DRYRUN=${KG_GATE_DRYRUN:-0}
+
+read -r verb sha extra <<< "${SSH_ORIGINAL_COMMAND:-${*:-}}"
+verb=${verb:-}
+
+printf '%s %s role=%s :: %s\n' "$(date -u +%FT%TZ)" "${SSH_CLIENT:-local}" "$ROLE" \
+  "${SSH_ORIGINAL_COMMAND:-${*:-}}" >> "$LOG" 2>/dev/null
+
+deny() { echo "denied: $1" >&2; exit 2; }
+
+# ---- what may this role ask for? ------------------------------------------
+case $ROLE in
+  ci)       allowed="stage status" ;;
+  operator) allowed="stage status deploy" ;;
+  *)        deny "unknown role '$ROLE'" ;;
+esac
+
+case " $allowed " in
+  *" $verb "*) ;;
+  *) [[ -n $verb ]] || deny "no command given; expected one of: $allowed"
+     deny "role '$ROLE' may not '$verb'; allowed: $allowed" ;;
+esac
+
+# ---- status ----------------------------------------------------------------
+if [[ $verb == status ]]; then
+  [[ -n ${extra:-}${sha:-} ]] && deny "status takes no arguments"
+  if [[ $DRYRUN == 1 ]]; then echo "would run: status"; exit 0; fi
+  bash "$DEPLOY" --status
+  echo
+  if [[ -f $REL/staging.env ]]; then
+    echo "last staging:"; sed 's/^/  /' "$REL/staging.env"
+  else
+    echo "last staging: none recorded"
+  fi
+  exit 0
+fi
+
+# ---- stage / deploy --------------------------------------------------------
+[[ $sha =~ ^[0-9a-f]{40}$ ]] || deny "expected '$verb <40-hex sha>'"
+[[ -z ${extra:-} ]] || deny "$verb takes exactly one argument"
+
+if [[ $DRYRUN != 1 ]]; then
+  git -C "$PROD" fetch -q origin work || { echo "git fetch failed" >&2; exit 4; }
+  git -C "$PROD" merge-base --is-ancestor "$sha" origin/work 2>/dev/null \
+    || deny "$sha is not on origin/work"
+fi
+
+if [[ $verb == stage ]]; then
+  args=(--staging "$sha"); label=stage
+else
+  args=("$sha"); label=deploy
+fi
+
+if [[ $DRYRUN == 1 ]]; then
+  echo "would run: $DEPLOY ${args[*]}"
+  exit 0
 fi
 
 exec 9>/run/kg-deploy.lock
-flock -n 9 || { echo "another deploy is running" >&2; exit 3; }
+flock -n 9 || { echo "another deploy or staging run is in progress" >&2; exit 3; }
 
-git -C /opt/KGKG fetch -q origin work || { echo "git fetch failed" >&2; exit 4; }
-git -C /opt/KGKG merge-base --is-ancestor "$sha" origin/work 2>/dev/null \
-  || { echo "denied: $sha is not on origin/work" >&2; exit 2; }
-
-unit=kgkg-deploy-$(date -u +%Y%m%d-%H%M%S)
-echo "starting $unit for ${sha:0:9}"
+unit=kgkg-$label-$(date -u +%Y%m%d-%H%M%S)
+echo "starting $unit for ${sha:0:9} (role=$ROLE)"
 journalctl -q -f -o cat -n 0 -u "$unit" &
 follow=$!
-# --wait returns the deploy's exit status; if this SSH session dies, the unit
-# (and the deploy) carries on regardless.
-systemd-run -q --wait --unit "$unit" --property=RuntimeMaxSec=3600   /bin/bash /opt/KGKG/ops/deploy/deploy.sh "$sha"
+# --wait returns the run's exit status; if this SSH session dies, the unit
+# carries on regardless.
+systemd-run -q --wait --unit "$unit" --property=RuntimeMaxSec=3600 \
+  /bin/bash "$DEPLOY" "${args[@]}"
 rc=$?
 sleep 2; kill $follow 2>/dev/null
-echo "deploy exit status: $rc"
+echo "$label exit status: $rc"
 exit $rc

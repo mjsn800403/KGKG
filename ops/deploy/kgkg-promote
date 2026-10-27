@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# Promote a release to production. The only intended way to do it.
+#
+#   kgkg-promote <sha|ref>     promote that commit
+#   kgkg-promote               promote whatever CI last staged successfully
+#   kgkg-promote --status      what is live, what was staged, what would change
+#
+# Why a wrapper around ops/deploy/deploy.sh, which already does the work:
+#
+#   * It refuses a commit that has not passed staging. CI stages every push to
+#     `work` against a sanitized copy of the production database; promoting
+#     something that never went through that is now a deliberate act with a
+#     different, longer confirmation, not a typo away from the normal one.
+#   * It shows what will change before it changes it: the live release, the
+#     target, the commits and files between them, whether migrations are
+#     involved, and how old the staging evidence is.
+#   * It requires the word `promote` to be typed. There is no --yes flag, and
+#     no timer, cron or CI path that reaches this script: production does not
+#     move without a person.
+#
+# deploy.sh then re-runs the gate and staging on the exact commit before it
+# touches production. That repetition is deliberate — CI's result is evidence,
+# not permission.
+# ---------------------------------------------------------------------------
+set -Eeuo pipefail
+
+PROD=${KG_PROD_DIR:-/opt/KGKG}
+REL=${KG_REL_DIR:-/opt/KGKG_release}
+DEPLOY=${KG_DEPLOY_SH:-$PROD/ops/deploy/deploy.sh}
+STAGING_MAX_AGE_H=${KG_PROMOTE_STAGING_MAX_AGE_H:-72}
+
+die() { echo "kgkg-promote: $*" >&2; exit 1; }
+
+STAGED_SHA=; STAGED_AT=; SMOKE=; GATE=
+# shellcheck source=/dev/null
+[[ -f $REL/staging.env ]] && . "$REL/staging.env"
+
+CURRENT=; PREVIOUS=
+# shellcheck source=/dev/null
+[[ -f $REL/state.env ]] && . "$REL/state.env"
+
+human_age() {  # epoch -> "3h 12m ago"
+  local then=$1 now delta
+  now=$(date -u +%s); delta=$(( now - then ))
+  (( delta < 0 )) && { echo "in the future"; return; }
+  printf '%dh %dm ago\n' $(( delta / 3600 )) $(( (delta % 3600) / 60 ))
+}
+
+staged_epoch() {
+  [[ -n $STAGED_AT ]] || { echo 0; return; }
+  date -u -d "$STAGED_AT" +%s 2>/dev/null || echo 0
+}
+
+show_status() {
+  echo "live release    : ${CURRENT:0:9}${CURRENT:+ (previous ${PREVIOUS:0:9})}"
+  if [[ -n $STAGED_SHA ]]; then
+    local e; e=$(staged_epoch)
+    echo "last staged     : ${STAGED_SHA:0:9}  gate=${GATE:-?} smoke=${SMOKE:-?}  $( (( e )) && human_age "$e" || echo "$STAGED_AT")"
+  else
+    echo "last staged     : nothing recorded"
+  fi
+}
+
+if [[ ${1:-} == --status ]]; then
+  show_status
+  exit 0
+fi
+
+REF=${1:-}
+if [[ -z $REF ]]; then
+  [[ -n $STAGED_SHA ]] || die "no ref given and no staging record to fall back on. Run: kgkg-promote <sha>"
+  REF=$STAGED_SHA
+  echo "no ref given; using the last successfully staged commit"
+fi
+
+git -C "$PROD" fetch -q origin work || die "could not fetch origin/work"
+SHA=$(git -C "$PROD" rev-parse --verify "$REF^{commit}" 2>/dev/null) \
+  || die "unknown ref: $REF"
+SHORT=${SHA:0:9}
+
+[[ $SHA != "$CURRENT" ]] || die "$SHORT is already live (use ops/deploy/deploy.sh --force to rebuild it)"
+
+git -C "$PROD" merge-base --is-ancestor "$SHA" origin/work 2>/dev/null \
+  || die "$SHORT is not on origin/work; push it first"
+
+# ---- staging evidence ------------------------------------------------------
+UNSTAGED_REASON=
+if [[ -z $STAGED_SHA ]]; then
+  UNSTAGED_REASON="nothing has been staged on this host"
+elif [[ $STAGED_SHA != "$SHA" ]]; then
+  UNSTAGED_REASON="the last staged commit is ${STAGED_SHA:0:9}, not $SHORT"
+elif [[ ${SMOKE:-} != pass ]]; then
+  UNSTAGED_REASON="the staging run for $SHORT did not pass smoke (smoke=${SMOKE:-?})"
+else
+  AGE_S=$(( $(date -u +%s) - $(staged_epoch) ))
+  if (( AGE_S > STAGING_MAX_AGE_H * 3600 )); then
+    UNSTAGED_REASON="the staging evidence for $SHORT is older than ${STAGING_MAX_AGE_H}h"
+  fi
+fi
+
+# ---- what will change ------------------------------------------------------
+echo
+echo "========================================================================"
+show_status
+echo "promoting       : $SHORT"
+echo
+echo "commits to apply:"
+git -C "$PROD" log --oneline --no-decorate "${CURRENT:-HEAD}..$SHA" | sed 's/^/  /' | head -20
+N=$(git -C "$PROD" rev-list --count "${CURRENT:-HEAD}..$SHA" 2>/dev/null || echo 0)
+(( N > 20 )) && echo "  ... and $(( N - 20 )) more"
+echo
+CHANGED=$(git -C "$PROD" diff --name-only "${CURRENT:-HEAD}" "$SHA" || true)
+echo "files changed   : $(wc -l <<<"$CHANGED") "
+MIGRATIONS=$(grep -c '/migrations/' <<<"$CHANGED" || true)
+echo "migrations      : ${MIGRATIONS:-0} file(s)$( (( ${MIGRATIONS:-0} )) && echo '  <-- forward-only; the pre-deploy DB backup is the way back')"
+grep -qE '^ops/docker/backend-requirements.lock$' <<<"$CHANGED" \
+  && echo "dependencies    : the backend lock changed; the host venv will be updated too"
+grep -qE '^ops/' <<<"$CHANGED" && echo "ops tooling     : ops/ changed; re-read it before the next deploy"
+echo "========================================================================"
+echo
+
+# ---- confirmation ----------------------------------------------------------
+if [[ -n $UNSTAGED_REASON ]]; then
+  cat >&2 <<WARN
+REFUSING THE NORMAL PATH: $UNSTAGED_REASON.
+
+Staging is how a release is shown to work against real data shapes before it
+reaches customers. Promoting without it is a judgement call that should feel
+different from the usual one.
+
+Stage it first (recommended):
+    ops/deploy/deploy.sh --staging $SHA
+
+Or, to promote anyway, type the full phrase at the prompt.
+WARN
+  printf 'type "promote %s without staging" to continue: ' "$SHORT"
+  read -r reply
+  [[ $reply == "promote $SHORT without staging" ]] || die "not confirmed; nothing was done"
+else
+  echo "staging evidence: $SHORT passed gate=${GATE:-?} and smoke=$SMOKE $(human_age "$(staged_epoch)")"
+  printf 'type "promote" to continue: '
+  read -r reply
+  [[ $reply == promote ]] || die "not confirmed; nothing was done"
+fi
+
+echo
+exec bash "$DEPLOY" "$SHA"
