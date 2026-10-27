@@ -24,7 +24,10 @@ mkdir -p "$OUT"; chmod 777 "$OUT"
 TOKEN=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["tokens"]["manager"])' "$QA/fixtures.json")
 
 # Signed in as qa_e2e_manager for every request; logout is excluded so the
-# scan cannot end its own session; the rules file records triaged decisions.
+# scan cannot end its own session. Production and staging ports and the public
+# domain are excluded outright: the frontend bundle contains the server-side
+# fallback URL http://127.0.0.1:8000, and on 2026-10-27 the spider extracted it
+# from JavaScript and sent one passive GET / to the production backend.
 ZAPOPTS="-config replacer.full_list(0).description=session \
  -config replacer.full_list(0).enabled=true \
  -config replacer.full_list(0).matchtype=REQ_HEADER \
@@ -34,7 +37,11 @@ ZAPOPTS="-config replacer.full_list(0).description=session \
  -config globalexcludeurl.url_list.url(0).regex=.*/logout/?.* \
  -config globalexcludeurl.url_list.url(0).enabled=true \
  -config globalexcludeurl.url_list.url(1).regex=.*/api/events/stream/.* \
- -config globalexcludeurl.url_list.url(1).enabled=true"
+ -config globalexcludeurl.url_list.url(1).enabled=true \
+ -config globalexcludeurl.url_list.url(2).regex=^https?://(127\\.0\\.0\\.1|localhost):(8000|3000|8110|3107)(/.*)?$ \
+ -config globalexcludeurl.url_list.url(2).enabled=true \
+ -config globalexcludeurl.url_list.url(3).regex=^https?://([a-z0-9-]+\\.)*kgtechvault\\.com(/.*)?$ \
+ -config globalexcludeurl.url_list.url(3).enabled=true"
 
 case $MODE in
   baseline) SCRIPT=zap-baseline.py; EXTRA=(-m 3) ;;
