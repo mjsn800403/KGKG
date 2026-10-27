@@ -93,8 +93,16 @@ if [[ $DRYRUN == 1 ]]; then
   exit 0
 fi
 
+# Wait for the lock rather than refusing. Two pushes landing a minute apart
+# are a queue, not an error, and a CI run that goes red because another run
+# held the lock teaches people to ignore red. KG_GATE_LOCK_WAIT=0 restores the
+# fail-fast behaviour for an interactive operator who would rather know now.
+LOCK_WAIT=${KG_GATE_LOCK_WAIT:-1800}
 exec 9>/run/kg-deploy.lock
-flock -n 9 || { echo "another deploy or staging run is in progress" >&2; exit 3; }
+if ! flock -n 9; then
+  echo "another deploy or staging run is in progress; waiting up to ${LOCK_WAIT}s for it"
+  flock -w "$LOCK_WAIT" 9 || { echo "still locked after ${LOCK_WAIT}s; giving up" >&2; exit 3; }
+fi
 
 unit=kgkg-$label-$(date -u +%Y%m%d-%H%M%S)
 echo "starting $unit for ${sha:0:9} (role=$ROLE)"
