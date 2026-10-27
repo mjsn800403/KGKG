@@ -1,6 +1,22 @@
 global:
   scrape_interval: 30s
 scrape_configs:
+  # Prometheus watching itself: without this, whether Prometheus is healthy is
+  # only answerable from outside it.
+  - job_name: prometheus
+    static_configs: [{targets: ['localhost:9090']}]
+
+  # The application state (api/metrics_exposition.py), reached through the
+  # internal-only /kg-metrics location in nginx because the backend binds
+  # loopback and this container is not on the host network. The bearer token
+  # comes from a mounted file, never inline in this config.
+  - job_name: kgkg_app
+    scrape_interval: 30s
+    metrics_path: /kg-metrics
+    authorization:
+      credentials_file: /etc/prometheus/metrics_token
+    static_configs: [{targets: ['172.19.0.1:80'], labels: {instance: kgkg-prod}}]
+
   # node-exporter runs on the host network, bound to this compose network's gateway.
   - job_name: node
     static_configs: [{targets: ['172.19.0.1:9100'], labels: {instance: kgkg-vps}}]

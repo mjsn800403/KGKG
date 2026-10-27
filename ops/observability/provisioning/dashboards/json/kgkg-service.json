@@ -1,0 +1,320 @@
+{
+  "uid": "kgkg-service",
+  "title": "KGKG — Service health & delivery",
+  "description": "Application-level signals from api/metrics_exposition.py plus the alerting watchdog. The top row answers the two questions worth asking first: is anybody watching, and what is live. Panels fed by the application scrape stay empty until a release carrying /api/metrics/ is promoted.",
+  "tags": ["kgkg", "service", "delivery"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Is anybody watching?",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Alerting engine",
+      "description": "kgkg-alerts.timer active, its last sweep recent and successful, and Prometheus answering. Written by ops/observability/watchdog.py, which pages by SMS when this drops to 0 — independently of Django, so the application being down cannot silence it.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 1 },
+      "targets": [
+        { "refId": "A", "expr": "kgkg_watchdog_alerting_healthy", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "NOT WATCHING", "color": "red", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "watching", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] },
+          "noValue": "no watchdog data"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Watchdog checks failing",
+      "description": "Individual checks the watchdog runs. Non-zero while the engine is healthy means the engine owns the page, not the watchdog.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 5, "w": 5, "x": 5, "y": 1 },
+      "targets": [
+        { "refId": "A", "expr": "count(kgkg_watchdog_check == 0) or vector(0)", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 3 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Open alerts",
+      "description": "SystemAlert rows still open, by severity, straight from the application.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 5, "w": 8, "x": 10, "y": 1 },
+      "targets": [
+        { "refId": "A", "expr": "kgkg_open_alerts", "legendFormat": "{{severity}}", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] },
+          "noValue": "—"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "A" },
+            "properties": []
+          }
+        ]
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Live release",
+      "description": "The commit the running backend reports as KG_RELEASE. Compare with ops/deploy/deploy.sh --status on the host.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "targets": [
+        { "refId": "A", "expr": "kgkg_build_info", "legendFormat": "{{release}}", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "name"
+      },
+      "fieldConfig": { "defaults": { "noValue": "not scraped yet" }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "Traffic and errors (current UTC hour, per route group)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests",
+      "description": "Counts reset at the top of each UTC hour by design — the exposition window is the current hour, so a cleared condition cannot linger.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (endpoint) (kgkg_http_requests_current_hour)", "legendFormat": "{{endpoint}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" },
+          "unit": "short",
+          "noValue": "waiting for the application scrape"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Server errors (5xx)",
+      "description": "Any sustained non-zero line here is worth opening GlitchTip for.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (endpoint) (kgkg_http_errors_5xx_current_hour) > 0", "legendFormat": "{{endpoint}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 60, "showPoints": "never" },
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "noValue": "no 5xx"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error ratio (guarded: at least 50 requests in the hour)",
+      "description": "The guard matters: a partial hour starts with a handful of requests, where one error is 100%. Mirrors how the application's own alert rule thinks.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (endpoint) (kgkg_http_errors_5xx_current_hour) / sum by (endpoint) (kgkg_http_requests_current_hour) and sum by (endpoint) (kgkg_http_requests_current_hour) > 50",
+          "legendFormat": "{{endpoint}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" },
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.02 }, { "color": "red", "value": 0.05 } ] },
+          "noValue": "below the volume guard"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency (mean and worst)",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "targets": [
+        { "refId": "A", "expr": "max by (endpoint) (kgkg_http_latency_mean_ms_current_hour)", "legendFormat": "mean {{endpoint}}" },
+        { "refId": "B", "expr": "max by (endpoint) (kgkg_http_latency_max_ms_current_hour)", "legendFormat": "worst {{endpoint}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "unit": "ms",
+          "noValue": "waiting for the application scrape"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "worst.*" },
+            "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 4] } } ]
+          }
+        ]
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "row",
+      "title": "Data and pipeline",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Database and index size",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 24 },
+      "targets": [
+        { "refId": "A", "expr": "kgkg_main_db_bytes", "legendFormat": "main database" },
+        { "refId": "B", "expr": "kgkg_rag_index_bytes", "legendFormat": "RAG index" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" },
+          "unit": "bytes",
+          "noValue": "waiting for the application scrape"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pipeline jobs by status",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 24 },
+      "targets": [
+        { "refId": "A", "expr": "kgkg_processing_jobs", "legendFormat": "{{status}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 20, "stacking": { "mode": "normal" }, "showPoints": "never" },
+          "unit": "short",
+          "noValue": "waiting for the application scrape"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Data quality (last audit)",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 24 },
+      "targets": [
+        { "refId": "A", "expr": "kgkg_data_quality_complete", "legendFormat": "complete" },
+        { "refId": "B", "expr": "kgkg_data_quality_incomplete", "legendFormat": "incomplete" },
+        { "refId": "C", "expr": "kgkg_data_quality_corrupt", "legendFormat": "corrupt" },
+        { "refId": "D", "expr": "kgkg_data_quality_duplicates", "legendFormat": "duplicates" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 0, "showPoints": "auto" },
+          "unit": "short",
+          "noValue": "waiting for the application scrape"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "row",
+      "title": "Scrape health",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Scrape targets up",
+      "description": "kgkg_app stays down until a release carrying /api/metrics/ is promoted; that is expected, not a fault.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        { "refId": "A", "expr": "up", "legendFormat": "{{job}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true },
+          "max": 1,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Exposition build time",
+      "description": "How long the application takes to assemble its own metrics. A climb here means the scrape is starting to cost something.",
+      "datasource": { "type": "prometheus", "uid": "prom" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        { "refId": "A", "expr": "kgkg_scrape_duration_seconds", "legendFormat": "build time" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" },
+          "unit": "s",
+          "noValue": "waiting for the application scrape"
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    }
+  ]
+}

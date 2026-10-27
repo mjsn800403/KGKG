@@ -1,0 +1,41 @@
+# Watches the alerting engine itself (ops/observability/watchdog.py).
+#
+# Deliberately independent of the application: no virtualenv, no Django, no
+# database — system python only, so the thing that breaks the app cannot also
+# break the only process that would tell anyone about it.
+#
+# Exit 1 means "the engine is not watching and a page went out", so the unit
+# shows as failed on purpose: a failed watchdog run is itself a signal, and it
+# is visible in `systemctl list-units --failed`.
+[Unit]
+Description=KGKG watchdog over the alerting engine (pages if nobody is watching)
+Documentation=file:/opt/KGKG/docs/11-operations-deployment.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /opt/KGKG/ops/observability/watchdog.py
+TimeoutStartSec=120
+
+# It must keep working when the disk is nearly full and the app is wedged, so
+# it stays cheap and cannot itself become the load.
+Nice=0
+CPUWeight=50
+IOSchedulingClass=best-effort
+
+# Needs: read .env.prod (SMS credentials), talk to systemd and docker, write
+# its state and the node-exporter textfile. Nothing else.
+StateDirectory=kgkg-watchdog
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kgkg-watchdog /var/lib/node-exporter-textfile
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
