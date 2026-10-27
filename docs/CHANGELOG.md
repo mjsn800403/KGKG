@@ -37,8 +37,13 @@ short and point at the doc section that was updated.
 - **Verified:** 402 backend tests in the upgraded image, 14 new metrics tests, 24 watchdog
   tests, 18 gate-role tests, the sanitizer against a real database copy, and 24 smoke checks
   against live production. A full staging run through the CI path was exercised end to end.
-- **Still open:** no off-host backup (now the top security risk, doc 12 §12.2); the torch
-  upgrade is deferred pending a re-embed window.
+- **Correction (same day):** this entry first said no off-host backup existed, repeating a
+  stale claim in doc 11 without checking. It was wrong — an hourly off-host snapshot
+  already existed (internal server pulls `/root/backup_snapshot`, built with the SQLite
+  online backup API). Verified by a restore test: integrity ok, business tables matching
+  live exactly. Doc 11 §11.6 and doc 12 §12.2 now describe it. What remains open is
+  retention on the far side, which is a question for that server, not a missing system.
+- **Still open:** the torch upgrade, deferred pending a re-embed window.
 
 ## 2026-08-05 — security hardening: secrets, rate limiting, WAF, error monitoring
 - **Secrets**: `.env.prod` / `.env.production` / `db.sqlite3` and ~24 stray backup copies were

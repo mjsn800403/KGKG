@@ -38,6 +38,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import pathlib
 from pathlib import Path
 
 ENV_FILE = Path(os.environ.get('KG_ENV_FILE_WATCHDOG', '/opt/KGKG/KG_backend/.env.prod'))
@@ -70,6 +71,13 @@ SMS_OPT_OUT = 'لغو11'
 SMS_MAX_BODY = 250
 
 ALERT_UNITS = ('kgkg-alerts.timer',)
+
+# The internal company server pulls an off-host snapshot hourly and runs
+# /root/kgkg_snapshot.py to build it (doc 11 §11.6). Six hours allows for a
+# few missed pulls before anyone is told something is wrong.
+SNAPSHOT_STAMP = pathlib.Path(
+    os.environ.get('KG_SNAPSHOT_STAMP', '/root/backup_snapshot/SNAPSHOT_AT'))
+SNAPSHOT_MAX_H = float(os.environ.get('KG_WATCHDOG_SNAPSHOT_MAX_H', '6'))
 
 FA_DIGITS = str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹')
 
@@ -222,6 +230,26 @@ def check_containers() -> tuple[bool, str]:
     if bad:
         return False, f'unhealthy: {",".join(bad)}'
     return True, f'{len(out.splitlines())} production container(s) healthy'
+
+
+def check_backup_snapshot(now: float | None = None,
+                          stamp: pathlib.Path | None = None) -> tuple[bool, str]:
+    """Is the off-host snapshot still being taken?
+
+    Reads the stamp the snapshot script writes. Not a paging check: a late
+    backup wants looking at, not waking someone for. It is the silence that
+    this catches — an hourly job that quietly stopped looks exactly like an
+    hourly job that is fine.
+    """
+    path = stamp if stamp is not None else SNAPSHOT_STAMP
+    try:
+        age_s = (now if now is not None else time.time()) - path.stat().st_mtime
+    except OSError:
+        return False, 'no off-host snapshot stamp found'
+    hours = age_s / 3600
+    if hours > SNAPSHOT_MAX_H:
+        return False, f'off-host snapshot is {hours:.1f}h old (limit {SNAPSHOT_MAX_H:.0f}h)'
+    return True, f'off-host snapshot {hours:.1f}h old'
 
 
 def check_failed_units(show_output: str | None = None) -> tuple[bool, str]:
@@ -386,6 +414,7 @@ def run_checks() -> list[tuple[str, bool, str]]:
     checks.append(('containers', *check_containers()))
     checks.append(('disk', *check_disk()))
     checks.append(('systemd_units', *check_failed_units()))
+    checks.append(('backup_snapshot', *check_backup_snapshot()))
     return checks
 
 

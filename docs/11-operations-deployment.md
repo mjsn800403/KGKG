@@ -237,26 +237,60 @@ history pruned by `check_alerts`.
 
 ## 11.6 Backups & recovery
 
-What exists, and it is on one disk:
+**There is an hourly off-host backup, and it was verified on 2026-10-27.**
 
-- **Before every promote:** a consistent copy of `db.sqlite3` via the SQLite
-  online backup API into `/opt/KGKG_release/db-backups/` (last three kept).
-  This is the way back from a migration, since migrations are forward-only.
-- **Before migrations and remediation:** timestamped `db.sqlite3.bak_*` beside
-  the database.
-- **Code:** every release is a git commit, tagged `deploy-<ts>` and pushed, and
-  the previous release's images stay on the host for `--rollback`.
-- **Warehouse and `_rag` (21 GB):** copied only before targeted operations.
+An internal company server (`81.12.110.58`) connects once an hour through a
+forced-command key (`/usr/local/bin/kg-sync-gate`, which accepts only an rsync
+sender and the snapshot script — no shell) and:
 
-**There is still no off-host backup.** A disk or host loss takes the main
-database and the warehouse with it; the RAG tier is rebuildable, those two are
-not. This is the largest remaining operational risk and it is open
-deliberately — it needs a decision about where the copies go. Everything else
-in this doc has been automated; this is the one that has not.
+1. runs `/root/kgkg_snapshot.py`, which builds `/root/backup_snapshot/` from
+   the state that cannot be rebuilt from the source ZIPs — `db.sqlite3`,
+   `terms.db`, `translation.db` (all three via the SQLite **online backup
+   API**, because these run in WAL mode and a byte-copy taken mid-transaction
+   is torn), plus the terminology export, the evaluation gold sets, the nginx
+   config and the backend/frontend source;
+2. pulls that snapshot (~650 MB, of which `db.sqlite3` is ~600 MB);
+3. pulls `/root/downloads/` (~13 GB of source ZIPs) and `/var/log/nginx/`.
 
-Recovery, in the order worth trying: `ops/deploy/deploy.sh --rollback` (code
-and containers, seconds); restore a `db-backups/` snapshot and
-`--reload`; rebuild the RAG tier from the warehouse (`run_rag_build.sh`).
+Secrets are deliberately excluded: no `.env.prod`, no Cloudflare origin key.
+That is the right call for a copy leaving the host, and it means a bare-metal
+rebuild needs those values from wherever they are kept — they are not in any
+backup by design.
+
+What this covers, and why the 21 GB warehouse is not in it: the warehouse and
+the RAG index are **derived** from the source ZIPs, which are themselves copied
+off-host hourly. Losing them costs a rebuild, not data.
+
+On top of that, the hosting provider takes a full server backup monthly (5th).
+That bounds a total-host-loss scenario; the hourly snapshot is what bounds
+everyday loss to an hour.
+
+Local, same-disk copies also exist and are the fastest way back from a bad
+deploy rather than a disaster: `/opt/KGKG_release/db-backups/` (the last three,
+taken before each promote) and timestamped `db.sqlite3.bak_*` beside the
+database.
+
+### Verifying it (do this occasionally — a backup nobody restores is a guess)
+
+```bash
+# integrity + row counts of the snapshot against live, read-only
+python3 -I /root/verify_restore.py
+```
+
+The 2026-10-27 run: `quick_check ok`, and `api_portaluser`, `api_company`,
+`api_companycaraccess`, `api_usercaraccess`, `api_activitylog`, `api_chatlog`
+and `api_systemalert` all matched the live database exactly, with only
+`api_trafficstat` 7 rows behind — the expected drift for an hourly snapshot.
+
+### What is NOT guaranteed from this host
+
+- **Retention on the far side.** If the internal server mirrors rather than
+  keeping versions, a corruption here propagates within the hour and the good
+  copy is gone. The monthly provider backup is then the only older restore
+  point. Worth confirming on that server, not here.
+- **That the pull is still happening.** `kgkg_watchdog_check{check="backup_snapshot"}`
+  covers this: it reads `/root/backup_snapshot/SNAPSHOT_AT` and goes to 0 when
+  the snapshot is older than `KG_WATCHDOG_SNAPSHOT_MAX_H` (default 6 hours).
 
 ## 11.7 Operational runbook snippets
 

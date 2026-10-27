@@ -87,6 +87,40 @@ class FailedUnitTests(unittest.TestCase):
         self.assertNotIn('systemd_units', watchdog.PAGING_PATH)
 
 
+class BackupSnapshotTests(unittest.TestCase):
+    """An hourly job that quietly stopped looks exactly like one that is fine."""
+
+    def _stamp(self, tmp, age_h):
+        p = Path(tmp) / 'SNAPSHOT_AT'
+        p.write_text('2026-10-27 15:00:12 UTC\n')
+        import os
+        when = watchdog.time.time() - age_h * 3600
+        os.utime(p, (when, when))
+        return p
+
+    def test_recent_snapshot_is_fine(self):
+        with tempfile.TemporaryDirectory() as d:
+            ok, detail = watchdog.check_backup_snapshot(stamp=self._stamp(d, 1))
+        self.assertTrue(ok)
+        self.assertIn('1.0h old', detail)
+
+    def test_stale_snapshot_is_reported(self):
+        with tempfile.TemporaryDirectory() as d:
+            ok, detail = watchdog.check_backup_snapshot(stamp=self._stamp(d, 48))
+        self.assertFalse(ok)
+        self.assertIn('limit', detail)
+
+    def test_missing_stamp_fails_closed(self):
+        ok, detail = watchdog.check_backup_snapshot(
+            stamp=Path('/nonexistent/SNAPSHOT_AT'))
+        self.assertFalse(ok)
+        self.assertIn('no off-host snapshot', detail)
+
+    def test_backup_does_not_page(self):
+        """A late backup wants looking at, not waking someone for."""
+        self.assertNotIn('backup_snapshot', watchdog.PAGING_PATH)
+
+
 class CooldownTests(unittest.TestCase):
     def test_first_page_is_due(self):
         self.assertTrue(watchdog.due({}, 'k', 1000.0))
