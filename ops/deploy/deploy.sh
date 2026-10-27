@@ -217,7 +217,7 @@ if [[ $MODE == reload ]]; then
   [[ -n $CURRENT ]] && have_images "$CURRENT" || die "no live release image recorded in $STATE"
   say "reloading ${CURRENT:0:9} (new backend container beside the old one)"
   swap_backend "$CURRENT" || die "reloaded backend did not become healthy; the old one is still serving"
-  bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || die "smoke failed after reload"
+  KG_SMOKE_NGINX=${KG_SMOKE_NGINX:-http://127.0.0.1} bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || die "smoke failed after reload"
   say "RELOADED ${CURRENT:0:9}"
   exit 0
 fi
@@ -225,7 +225,7 @@ if [[ $MODE == rollback ]]; then
   load_state
   [[ -n $PREVIOUS ]] || die "no previous release recorded in $STATE"
   rollback_to "$PREVIOUS"
-  bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || say "WARNING: smoke failed after rollback"
+  KG_SMOKE_NGINX=${KG_SMOKE_NGINX:-http://127.0.0.1} bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || say "WARNING: smoke failed after rollback"
   save_state "$PREVIOUS" "$CURRENT"
   write_release_metrics
   exit 0
@@ -338,7 +338,7 @@ swap_frontend "$SHA" || fail_promote "new frontend container did not become heal
 
 # ---- 5. verify -----------------------------------------------------------------
 say "5/5 VERIFY production"
-bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || fail_promote "production smoke failed"
+KG_SMOKE_NGINX=${KG_SMOKE_NGINX:-http://127.0.0.1} bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || fail_promote "production smoke failed"
 
 load_state
 save_state "$SHA" "$PREV"
