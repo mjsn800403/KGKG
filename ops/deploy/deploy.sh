@@ -356,6 +356,21 @@ if [[ -f $PROD/ops/observability/watchdog.py ]]; then
   fi
 fi
 
+# Its systemd units too: the sandbox in the unit file is part of the code (a
+# ProtectHome setting silently broke the backup check today), so it must not
+# be left behind by a deploy.
+_units_changed=0
+for u in kgkg-watchdog.service kgkg-watchdog.timer; do
+  if [[ -f $PROD/ops/observability/$u ]] && ! cmp -s "$PROD/ops/observability/$u" "/etc/systemd/system/$u"; then
+    install -m 644 "$PROD/ops/observability/$u" "/etc/systemd/system/$u" && _units_changed=1
+    say "refreshed /etc/systemd/system/$u"
+  fi
+done
+if (( _units_changed )); then
+  systemctl daemon-reload
+  systemctl enable -q --now kgkg-watchdog.timer || say "WARNING: could not re-enable kgkg-watchdog.timer"
+fi
+
 PREV_IMG_OK=0; have_images "$PREV" && PREV_IMG_OK=1
 fail_promote() {
   if (( PREV_IMG_OK )); then rollback_to "$PREV"; else

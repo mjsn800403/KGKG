@@ -32,7 +32,11 @@ IOSchedulingClass=best-effort
 StateDirectory=kgkg-watchdog
 ProtectSystem=strict
 ReadWritePaths=/var/lib/kgkg-watchdog /var/lib/node-exporter-textfile
-ProtectHome=yes
+# read-only, not yes: the off-host snapshot stamp this checks lives under
+# /root (/root/backup_snapshot/SNAPSHOT_AT), and ProtectHome=yes hides /root
+# entirely — the check reported "no stamp found" under the unit while passing
+# when run by hand. Writes to /root stay blocked.
+ProtectHome=read-only
 PrivateTmp=yes
 NoNewPrivileges=yes
 RestrictSUIDSGID=yes
