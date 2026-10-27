@@ -24,8 +24,10 @@ header() {  # name, header-name, expected-substring, url, [curl args...]
   local got
   got=$(curl -s -D - -o /dev/null --max-time 30 "$@" "$url" \
         | tr -d '\r' | grep -i "^$hdr:" | head -1 | cut -d' ' -f2-)
-  if [[ ${got,,} == *${want,,}* ]]; then printf '  ok    %-38s %s\n' "$name" "$got"
-  else printf '  FAIL  %-38s %s header is %s, want %s\n' "$name" "$hdr" "${got:-absent}" "$want"; FAILS=$((FAILS+1)); fi
+  # An empty $want means "any value, but the header must be there": a check
+  # that passes on an absent header is worse than no check.
+  if [[ -n $got && ${got,,} == *${want,,}* ]]; then printf '  ok    %-38s %s\n' "$name" "$got"
+  else printf '  FAIL  %-38s %s header is %s, want %s\n' "$name" "$hdr" "${got:-absent}" "${want:-any value}"; FAILS=$((FAILS+1)); fi
 }
 
 contains() {  # name, needle (checks the last response body)
