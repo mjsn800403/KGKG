@@ -391,6 +391,18 @@ def evaluate_alerts():
             alert.save(update_fields=['is_open', 'resolved_at'])
             resolved.append(alert.key)
 
+    # pipeline_disk_low stays owned by the pipeline (above), but ownership must
+    # not mean "open for ever": the pipeline may not run for months, and one of
+    # these read critical from July to October 2026 with 75GB free. Ask the
+    # pipeline to re-check the real condition — this never closes the alert
+    # merely because this sweep did not raise it.
+    try:
+        from . import ingest
+        if ingest.resolve_disk_guard_if_recovered() is not None:
+            resolved.append('pipeline_disk_low')
+    except Exception:
+        pass
+
     if resolved:
         try:
             from . import events
