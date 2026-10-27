@@ -1,0 +1,490 @@
+2026-10-27T20:03:06Z,kgkg-qa-backend,0.05%,3.145GiB / 10GiB
+2026-10-27T20:03:06Z,kgkg-qa-frontend,0.00%,79.62MiB / 3GiB
+2026-10-27T20:03:06Z,kgkg-qa-proxy,0.00%,13.58MiB / 31.34GiB
+2026-10-27T20:03:06Z,host-loadavg,4.67,
+2026-10-27T20:03:06Z,prod-health-ms,200:0.004293,
+2026-10-27T20:03:10Z,kgkg-qa-backend,0.05%,3.145GiB / 10GiB
+2026-10-27T20:03:10Z,kgkg-qa-frontend,0.00%,79.62MiB / 3GiB
+2026-10-27T20:03:10Z,kgkg-qa-proxy,0.00%,13.58MiB / 31.34GiB
+2026-10-27T20:03:10Z,host-loadavg,4.62,
+2026-10-27T20:03:10Z,prod-health-ms,200:0.004432,
+2026-10-27T20:03:14Z,kgkg-qa-backend,598.42%,3.145GiB / 10GiB
+2026-10-27T20:03:14Z,kgkg-qa-frontend,0.00%,79.62MiB / 3GiB
+2026-10-27T20:03:14Z,kgkg-qa-proxy,0.00%,13.59MiB / 31.34GiB
+2026-10-27T20:03:14Z,host-loadavg,4.62,
+2026-10-27T20:03:14Z,prod-health-ms,200:0.003844,
+2026-10-27T20:03:18Z,kgkg-qa-backend,602.56%,3.158GiB / 10GiB
+2026-10-27T20:03:18Z,kgkg-qa-frontend,0.03%,79.62MiB / 3GiB
+2026-10-27T20:03:18Z,kgkg-qa-proxy,0.35%,13.59MiB / 31.34GiB
+2026-10-27T20:03:18Z,host-loadavg,4.57,
+2026-10-27T20:03:18Z,prod-health-ms,200:0.005440,
+2026-10-27T20:03:22Z,kgkg-qa-backend,114.98%,3.159GiB / 10GiB
+2026-10-27T20:03:22Z,kgkg-qa-frontend,0.03%,79.64MiB / 3GiB
+2026-10-27T20:03:22Z,kgkg-qa-proxy,0.20%,13.64MiB / 31.34GiB
+2026-10-27T20:03:22Z,host-loadavg,4.52,
+2026-10-27T20:03:22Z,prod-health-ms,200:0.004510,
+2026-10-27T20:03:26Z,kgkg-qa-backend,8.26%,3.16GiB / 10GiB
+2026-10-27T20:03:26Z,kgkg-qa-frontend,2.76%,79.66MiB / 3GiB
+2026-10-27T20:03:26Z,kgkg-qa-proxy,0.45%,13.84MiB / 31.34GiB
+2026-10-27T20:03:26Z,host-loadavg,4.56,
+2026-10-27T20:03:26Z,prod-health-ms,200:0.004792,
+2026-10-27T20:03:30Z,kgkg-qa-backend,115.43%,3.167GiB / 10GiB
+2026-10-27T20:03:30Z,kgkg-qa-frontend,1.54%,80.27MiB / 3GiB
+2026-10-27T20:03:30Z,kgkg-qa-proxy,0.25%,13.65MiB / 31.34GiB
+2026-10-27T20:03:30Z,host-loadavg,4.92,
+2026-10-27T20:03:30Z,prod-health-ms,200:0.003765,
+2026-10-27T20:03:34Z,kgkg-qa-backend,112.68%,3.17GiB / 10GiB
+2026-10-27T20:03:34Z,kgkg-qa-frontend,5.35%,89.7MiB / 3GiB
+2026-10-27T20:03:34Z,kgkg-qa-proxy,0.57%,13.61MiB / 31.34GiB
+2026-10-27T20:03:34Z,host-loadavg,5.40,
+2026-10-27T20:03:34Z,prod-health-ms,200:0.004869,
+2026-10-27T20:03:38Z,kgkg-qa-backend,117.90%,2.037GiB / 10GiB
+2026-10-27T20:03:38Z,kgkg-qa-frontend,3.59%,95.18MiB / 3GiB
+2026-10-27T20:03:38Z,kgkg-qa-proxy,0.13%,13.64MiB / 31.34GiB
+2026-10-27T20:03:38Z,host-loadavg,5.40,
+2026-10-27T20:03:38Z,prod-health-ms,200:0.004144,
+2026-10-27T20:03:42Z,kgkg-qa-backend,195.85%,2.326GiB / 10GiB
+2026-10-27T20:03:42Z,kgkg-qa-frontend,3.63%,98.18MiB / 3GiB
+2026-10-27T20:03:42Z,kgkg-qa-proxy,0.65%,13.65MiB / 31.34GiB
+2026-10-27T20:03:42Z,host-loadavg,5.69,
+2026-10-27T20:03:42Z,prod-health-ms,200:0.004830,
+2026-10-27T20:03:47Z,kgkg-qa-backend,190.09%,3.119GiB / 10GiB
+2026-10-27T20:03:47Z,kgkg-qa-frontend,7.47%,98.38MiB / 3GiB
+2026-10-27T20:03:47Z,kgkg-qa-proxy,0.27%,13.8MiB / 31.34GiB
+2026-10-27T20:03:47Z,host-loadavg,6.20,
+2026-10-27T20:03:47Z,prod-health-ms,200:0.004159,
+2026-10-27T20:03:51Z,kgkg-qa-backend,253.29%,3.048GiB / 10GiB
+2026-10-27T20:03:51Z,kgkg-qa-frontend,4.43%,99.33MiB / 3GiB
+2026-10-27T20:03:51Z,kgkg-qa-proxy,0.57%,13.97MiB / 31.34GiB
+2026-10-27T20:03:51Z,host-loadavg,6.10,
+2026-10-27T20:03:51Z,prod-health-ms,200:0.004615,
+2026-10-27T20:03:55Z,kgkg-qa-backend,181.20%,3.073GiB / 10GiB
+2026-10-27T20:03:55Z,kgkg-qa-frontend,8.70%,98.93MiB / 3GiB
+2026-10-27T20:03:55Z,kgkg-qa-proxy,0.71%,13.71MiB / 31.34GiB
+2026-10-27T20:03:55Z,host-loadavg,6.01,
+2026-10-27T20:03:55Z,prod-health-ms,200:0.004612,
+2026-10-27T20:03:59Z,kgkg-qa-backend,363.45%,3.079GiB / 10GiB
+2026-10-27T20:03:59Z,kgkg-qa-frontend,11.91%,98.98MiB / 3GiB
+2026-10-27T20:03:59Z,kgkg-qa-proxy,0.46%,13.73MiB / 31.34GiB
+2026-10-27T20:03:59Z,host-loadavg,6.01,
+2026-10-27T20:03:59Z,prod-health-ms,200:0.003742,
+2026-10-27T20:04:03Z,kgkg-qa-backend,196.72%,2.135GiB / 10GiB
+2026-10-27T20:04:03Z,kgkg-qa-frontend,9.21%,99.08MiB / 3GiB
+2026-10-27T20:04:03Z,kgkg-qa-proxy,0.68%,13.72MiB / 31.34GiB
+2026-10-27T20:04:03Z,host-loadavg,6.25,
+2026-10-27T20:04:03Z,prod-health-ms,200:0.003876,
+2026-10-27T20:04:07Z,kgkg-qa-backend,278.94%,2.292GiB / 10GiB
+2026-10-27T20:04:07Z,kgkg-qa-frontend,2.74%,99.17MiB / 3GiB
+2026-10-27T20:04:07Z,kgkg-qa-proxy,0.79%,13.82MiB / 31.34GiB
+2026-10-27T20:04:07Z,host-loadavg,6.15,
+2026-10-27T20:04:07Z,prod-health-ms,200:0.004620,
+2026-10-27T20:04:11Z,kgkg-qa-backend,106.56%,2.767GiB / 10GiB
+2026-10-27T20:04:11Z,kgkg-qa-frontend,5.81%,99.23MiB / 3GiB
+2026-10-27T20:04:11Z,kgkg-qa-proxy,0.27%,13.89MiB / 31.34GiB
+2026-10-27T20:04:11Z,host-loadavg,6.06,
+2026-10-27T20:04:11Z,prod-health-ms,200:0.005235,
+2026-10-27T20:04:15Z,kgkg-qa-backend,307.92%,3.045GiB / 10GiB
+2026-10-27T20:04:15Z,kgkg-qa-frontend,5.23%,99.24MiB / 3GiB
+2026-10-27T20:04:15Z,kgkg-qa-proxy,0.64%,13.86MiB / 31.34GiB
+2026-10-27T20:04:15Z,host-loadavg,6.13,
+2026-10-27T20:04:15Z,prod-health-ms,200:0.004057,
+2026-10-27T20:04:19Z,kgkg-qa-backend,225.75%,3.057GiB / 10GiB
+2026-10-27T20:04:19Z,kgkg-qa-frontend,7.17%,97.79MiB / 3GiB
+2026-10-27T20:04:19Z,kgkg-qa-proxy,0.72%,13.79MiB / 31.34GiB
+2026-10-27T20:04:19Z,host-loadavg,6.13,
+2026-10-27T20:04:19Z,prod-health-ms,200:0.004742,
+2026-10-27T20:04:22Z,kgkg-qa-backend,378.85%,3.059GiB / 10GiB
+2026-10-27T20:04:22Z,kgkg-qa-frontend,4.63%,100.3MiB / 3GiB
+2026-10-27T20:04:22Z,kgkg-qa-proxy,1.11%,13.81MiB / 31.34GiB
+2026-10-27T20:04:22Z,host-loadavg,6.04,
+2026-10-27T20:04:22Z,prod-health-ms,200:0.003991,
+2026-10-27T20:04:26Z,kgkg-qa-backend,142.16%,3.082GiB / 10GiB
+2026-10-27T20:04:26Z,kgkg-qa-frontend,9.02%,100.1MiB / 3GiB
+2026-10-27T20:04:26Z,kgkg-qa-proxy,0.78%,13.84MiB / 31.34GiB
+2026-10-27T20:04:26Z,host-loadavg,6.04,
+2026-10-27T20:04:26Z,prod-health-ms,200:0.004501,
+2026-10-27T20:04:30Z,kgkg-qa-backend,379.41%,3.087GiB / 10GiB
+2026-10-27T20:04:30Z,kgkg-qa-frontend,10.72%,100.9MiB / 3GiB
+2026-10-27T20:04:30Z,kgkg-qa-proxy,0.66%,13.84MiB / 31.34GiB
+2026-10-27T20:04:30Z,host-loadavg,6.12,
+2026-10-27T20:04:30Z,prod-health-ms,200:0.003587,
+2026-10-27T20:04:34Z,kgkg-qa-backend,188.05%,3.046GiB / 10GiB
+2026-10-27T20:04:34Z,kgkg-qa-frontend,12.08%,98.98MiB / 3GiB
+2026-10-27T20:04:34Z,kgkg-qa-proxy,0.63%,13.84MiB / 31.34GiB
+2026-10-27T20:04:34Z,host-loadavg,6.12,
+2026-10-27T20:04:34Z,prod-health-ms,200:0.004044,
+2026-10-27T20:04:38Z,kgkg-qa-backend,284.40%,3.048GiB / 10GiB
+2026-10-27T20:04:38Z,kgkg-qa-frontend,12.01%,99.17MiB / 3GiB
+2026-10-27T20:04:38Z,kgkg-qa-proxy,1.12%,14.16MiB / 31.34GiB
+2026-10-27T20:04:38Z,host-loadavg,6.03,
+2026-10-27T20:04:38Z,prod-health-ms,200:0.003660,
+2026-10-27T20:04:42Z,kgkg-qa-backend,170.95%,3.057GiB / 10GiB
+2026-10-27T20:04:42Z,kgkg-qa-frontend,6.43%,99.33MiB / 3GiB
+2026-10-27T20:04:42Z,kgkg-qa-proxy,0.71%,14.14MiB / 31.34GiB
+2026-10-27T20:04:42Z,host-loadavg,6.02,
+2026-10-27T20:04:42Z,prod-health-ms,200:0.004530,
+2026-10-27T20:04:46Z,kgkg-qa-backend,255.76%,3.067GiB / 10GiB
+2026-10-27T20:04:46Z,kgkg-qa-frontend,11.35%,99.04MiB / 3GiB
+2026-10-27T20:04:46Z,kgkg-qa-proxy,1.07%,13.93MiB / 31.34GiB
+2026-10-27T20:04:46Z,host-loadavg,5.94,
+2026-10-27T20:04:46Z,prod-health-ms,200:0.005222,
+2026-10-27T20:04:50Z,kgkg-qa-backend,329.17%,3.071GiB / 10GiB
+2026-10-27T20:04:50Z,kgkg-qa-frontend,6.08%,99.23MiB / 3GiB
+2026-10-27T20:04:50Z,kgkg-qa-proxy,0.85%,13.91MiB / 31.34GiB
+2026-10-27T20:04:50Z,host-loadavg,5.95,
+2026-10-27T20:04:50Z,prod-health-ms,200:0.003918,
+2026-10-27T20:04:54Z,kgkg-qa-backend,259.93%,3.085GiB / 10GiB
+2026-10-27T20:04:54Z,kgkg-qa-frontend,8.83%,99.38MiB / 3GiB
+2026-10-27T20:04:54Z,kgkg-qa-proxy,0.96%,13.96MiB / 31.34GiB
+2026-10-27T20:04:54Z,host-loadavg,5.95,
+2026-10-27T20:04:54Z,prod-health-ms,200:0.006486,
+2026-10-27T20:04:58Z,kgkg-qa-backend,57.65%,3.087GiB / 10GiB
+2026-10-27T20:04:58Z,kgkg-qa-frontend,7.65%,99.55MiB / 3GiB
+2026-10-27T20:04:58Z,kgkg-qa-proxy,0.86%,13.91MiB / 31.34GiB
+2026-10-27T20:04:58Z,host-loadavg,7.23,
+2026-10-27T20:04:58Z,prod-health-ms,200:0.003773,
+2026-10-27T20:05:02Z,kgkg-qa-backend,393.57%,3.09GiB / 10GiB
+2026-10-27T20:05:02Z,kgkg-qa-frontend,8.68%,100MiB / 3GiB
+2026-10-27T20:05:02Z,kgkg-qa-proxy,1.00%,13.93MiB / 31.34GiB
+2026-10-27T20:05:02Z,host-loadavg,7.13,
+2026-10-27T20:05:02Z,prod-health-ms,200:0.004380,
+2026-10-27T20:05:06Z,kgkg-qa-backend,46.19%,3.096GiB / 10GiB
+2026-10-27T20:05:06Z,kgkg-qa-frontend,7.81%,98.95MiB / 3GiB
+2026-10-27T20:05:06Z,kgkg-qa-proxy,1.23%,13.92MiB / 31.34GiB
+2026-10-27T20:05:06Z,host-loadavg,6.96,
+2026-10-27T20:05:06Z,prod-health-ms,200:0.004456,
+2026-10-27T20:05:10Z,kgkg-qa-backend,339.35%,3.099GiB / 10GiB
+2026-10-27T20:05:10Z,kgkg-qa-frontend,8.40%,99.83MiB / 3GiB
+2026-10-27T20:05:10Z,kgkg-qa-proxy,0.79%,14.25MiB / 31.34GiB
+2026-10-27T20:05:10Z,host-loadavg,6.81,
+2026-10-27T20:05:10Z,prod-health-ms,200:0.004559,
+2026-10-27T20:05:14Z,kgkg-qa-backend,277.14%,3.101GiB / 10GiB
+2026-10-27T20:05:14Z,kgkg-qa-frontend,6.73%,99.83MiB / 3GiB
+2026-10-27T20:05:14Z,kgkg-qa-proxy,0.72%,13.98MiB / 31.34GiB
+2026-10-27T20:05:14Z,host-loadavg,6.74,
+2026-10-27T20:05:14Z,prod-health-ms,200:0.004446,
+2026-10-27T20:05:18Z,kgkg-qa-backend,246.12%,3.104GiB / 10GiB
+2026-10-27T20:05:18Z,kgkg-qa-frontend,4.73%,99.83MiB / 3GiB
+2026-10-27T20:05:18Z,kgkg-qa-proxy,1.43%,13.97MiB / 31.34GiB
+2026-10-27T20:05:18Z,host-loadavg,6.74,
+2026-10-27T20:05:18Z,prod-health-ms,200:0.003594,
+2026-10-27T20:05:22Z,kgkg-qa-backend,286.80%,3.105GiB / 10GiB
+2026-10-27T20:05:22Z,kgkg-qa-frontend,11.36%,100.7MiB / 3GiB
+2026-10-27T20:05:22Z,kgkg-qa-proxy,0.82%,14.23MiB / 31.34GiB
+2026-10-27T20:05:22Z,host-loadavg,6.68,
+2026-10-27T20:05:22Z,prod-health-ms,200:0.004338,
+2026-10-27T20:05:26Z,kgkg-qa-backend,324.46%,3.114GiB / 10GiB
+2026-10-27T20:05:26Z,kgkg-qa-frontend,5.79%,98.88MiB / 3GiB
+2026-10-27T20:05:26Z,kgkg-qa-proxy,1.08%,13.98MiB / 31.34GiB
+2026-10-27T20:05:26Z,host-loadavg,6.55,
+2026-10-27T20:05:26Z,prod-health-ms,200:0.004209,
+2026-10-27T20:05:31Z,kgkg-qa-backend,155.73%,3.123GiB / 10GiB
+2026-10-27T20:05:31Z,kgkg-qa-frontend,8.52%,98.88MiB / 3GiB
+2026-10-27T20:05:31Z,kgkg-qa-proxy,1.04%,14.19MiB / 31.34GiB
+2026-10-27T20:05:31Z,host-loadavg,6.66,
+2026-10-27T20:05:31Z,prod-health-ms,200:0.005804,
+2026-10-27T20:05:35Z,kgkg-qa-backend,397.57%,3.123GiB / 10GiB
+2026-10-27T20:05:35Z,kgkg-qa-frontend,6.77%,99.64MiB / 3GiB
+2026-10-27T20:05:35Z,kgkg-qa-proxy,1.22%,14.48MiB / 31.34GiB
+2026-10-27T20:05:35Z,host-loadavg,6.53,
+2026-10-27T20:05:35Z,prod-health-ms,200:0.004970,
+2026-10-27T20:05:39Z,kgkg-qa-backend,172.22%,3.126GiB / 10GiB
+2026-10-27T20:05:39Z,kgkg-qa-frontend,5.77%,99.69MiB / 3GiB
+2026-10-27T20:05:39Z,kgkg-qa-proxy,0.54%,13.94MiB / 31.34GiB
+2026-10-27T20:05:39Z,host-loadavg,6.53,
+2026-10-27T20:05:39Z,prod-health-ms,200:0.005094,
+2026-10-27T20:05:43Z,kgkg-qa-backend,68.98%,3.127GiB / 10GiB
+2026-10-27T20:05:43Z,kgkg-qa-frontend,7.40%,100.3MiB / 3GiB
+2026-10-27T20:05:43Z,kgkg-qa-proxy,0.64%,14.21MiB / 31.34GiB
+2026-10-27T20:05:43Z,host-loadavg,6.33,
+2026-10-27T20:05:43Z,prod-health-ms,200:0.004883,
+2026-10-27T20:05:47Z,kgkg-qa-backend,215.93%,3.129GiB / 10GiB
+2026-10-27T20:05:47Z,kgkg-qa-frontend,9.65%,100.4MiB / 3GiB
+2026-10-27T20:05:47Z,kgkg-qa-proxy,0.62%,13.96MiB / 31.34GiB
+2026-10-27T20:05:47Z,host-loadavg,6.30,
+2026-10-27T20:05:47Z,prod-health-ms,200:0.004199,
+2026-10-27T20:05:51Z,kgkg-qa-backend,171.23%,3.133GiB / 10GiB
+2026-10-27T20:05:51Z,kgkg-qa-frontend,4.49%,100.7MiB / 3GiB
+2026-10-27T20:05:51Z,kgkg-qa-proxy,0.79%,14.21MiB / 31.34GiB
+2026-10-27T20:05:51Z,host-loadavg,6.28,
+2026-10-27T20:05:51Z,prod-health-ms,200:0.003912,
+2026-10-27T20:05:55Z,kgkg-qa-backend,331.95%,3.133GiB / 10GiB
+2026-10-27T20:05:55Z,kgkg-qa-frontend,5.24%,101.2MiB / 3GiB
+2026-10-27T20:05:55Z,kgkg-qa-proxy,1.35%,14.01MiB / 31.34GiB
+2026-10-27T20:05:55Z,host-loadavg,6.33,
+2026-10-27T20:05:55Z,prod-health-ms,200:0.004578,
+2026-10-27T20:05:59Z,kgkg-qa-backend,141.72%,3.133GiB / 10GiB
+2026-10-27T20:05:59Z,kgkg-qa-frontend,8.77%,101.2MiB / 3GiB
+2026-10-27T20:05:59Z,kgkg-qa-proxy,1.15%,14.18MiB / 31.34GiB
+2026-10-27T20:05:59Z,host-loadavg,6.33,
+2026-10-27T20:05:59Z,prod-health-ms,200:0.004368,
+2026-10-27T20:06:03Z,kgkg-qa-backend,138.62%,3.136GiB / 10GiB
+2026-10-27T20:06:03Z,kgkg-qa-frontend,8.27%,100.7MiB / 3GiB
+2026-10-27T20:06:03Z,kgkg-qa-proxy,0.74%,14.48MiB / 31.34GiB
+2026-10-27T20:06:03Z,host-loadavg,6.31,
+2026-10-27T20:06:03Z,prod-health-ms,200:0.005392,
+2026-10-27T20:06:07Z,kgkg-qa-backend,207.56%,3.116GiB / 10GiB
+2026-10-27T20:06:07Z,kgkg-qa-frontend,11.16%,101.6MiB / 3GiB
+2026-10-27T20:06:07Z,kgkg-qa-proxy,1.14%,13.96MiB / 31.34GiB
+2026-10-27T20:06:07Z,host-loadavg,6.44,
+2026-10-27T20:06:07Z,prod-health-ms,200:0.003839,
+2026-10-27T20:06:11Z,kgkg-qa-backend,195.79%,3.117GiB / 10GiB
+2026-10-27T20:06:11Z,kgkg-qa-frontend,4.51%,100.7MiB / 3GiB
+2026-10-27T20:06:11Z,kgkg-qa-proxy,0.72%,14.2MiB / 31.34GiB
+2026-10-27T20:06:11Z,host-loadavg,6.49,
+2026-10-27T20:06:11Z,prod-health-ms,200:0.005932,
+2026-10-27T20:06:15Z,kgkg-qa-backend,198.87%,3.121GiB / 10GiB
+2026-10-27T20:06:15Z,kgkg-qa-frontend,15.13%,100.7MiB / 3GiB
+2026-10-27T20:06:15Z,kgkg-qa-proxy,0.71%,13.93MiB / 31.34GiB
+2026-10-27T20:06:15Z,host-loadavg,6.37,
+2026-10-27T20:06:15Z,prod-health-ms,200:0.003816,
+2026-10-27T20:06:19Z,kgkg-qa-backend,324.11%,3.126GiB / 10GiB
+2026-10-27T20:06:19Z,kgkg-qa-frontend,10.81%,101MiB / 3GiB
+2026-10-27T20:06:19Z,kgkg-qa-proxy,0.69%,13.96MiB / 31.34GiB
+2026-10-27T20:06:19Z,host-loadavg,6.37,
+2026-10-27T20:06:19Z,prod-health-ms,200:0.005370,
+2026-10-27T20:06:23Z,kgkg-qa-backend,227.37%,3.126GiB / 10GiB
+2026-10-27T20:06:23Z,kgkg-qa-frontend,14.77%,101.3MiB / 3GiB
+2026-10-27T20:06:23Z,kgkg-qa-proxy,0.71%,14.2MiB / 31.34GiB
+2026-10-27T20:06:23Z,host-loadavg,6.34,
+2026-10-27T20:06:23Z,prod-health-ms,200:0.005729,
+2026-10-27T20:06:26Z,kgkg-qa-backend,329.43%,3.128GiB / 10GiB
+2026-10-27T20:06:26Z,kgkg-qa-frontend,9.28%,100.7MiB / 3GiB
+2026-10-27T20:06:26Z,kgkg-qa-proxy,1.10%,13.96MiB / 31.34GiB
+2026-10-27T20:06:26Z,host-loadavg,6.39,
+2026-10-27T20:06:26Z,prod-health-ms,200:0.004695,
+2026-10-27T20:06:30Z,kgkg-qa-backend,228.86%,3.128GiB / 10GiB
+2026-10-27T20:06:30Z,kgkg-qa-frontend,12.69%,99.79MiB / 3GiB
+2026-10-27T20:06:30Z,kgkg-qa-proxy,1.43%,14.23MiB / 31.34GiB
+2026-10-27T20:06:30Z,host-loadavg,6.20,
+2026-10-27T20:06:30Z,prod-health-ms,200:0.004397,
+2026-10-27T20:06:34Z,kgkg-qa-backend,333.96%,3.135GiB / 10GiB
+2026-10-27T20:06:34Z,kgkg-qa-frontend,7.03%,100.2MiB / 3GiB
+2026-10-27T20:06:34Z,kgkg-qa-proxy,1.09%,14.24MiB / 31.34GiB
+2026-10-27T20:06:34Z,host-loadavg,6.20,
+2026-10-27T20:06:34Z,prod-health-ms,200:0.005466,
+2026-10-27T20:06:38Z,kgkg-qa-backend,217.57%,3.137GiB / 10GiB
+2026-10-27T20:06:38Z,kgkg-qa-frontend,10.02%,102MiB / 3GiB
+2026-10-27T20:06:38Z,kgkg-qa-proxy,1.11%,14.05MiB / 31.34GiB
+2026-10-27T20:06:38Z,host-loadavg,6.18,
+2026-10-27T20:06:38Z,prod-health-ms,200:0.003759,
+2026-10-27T20:06:42Z,kgkg-qa-backend,405.88%,3.137GiB / 10GiB
+2026-10-27T20:06:42Z,kgkg-qa-frontend,14.05%,102MiB / 3GiB
+2026-10-27T20:06:42Z,kgkg-qa-proxy,0.66%,14.22MiB / 31.34GiB
+2026-10-27T20:06:42Z,host-loadavg,6.41,
+2026-10-27T20:06:42Z,prod-health-ms,200:0.005009,
+2026-10-27T20:06:46Z,kgkg-qa-backend,96.67%,3.14GiB / 10GiB
+2026-10-27T20:06:46Z,kgkg-qa-frontend,7.52%,101.6MiB / 3GiB
+2026-10-27T20:06:46Z,kgkg-qa-proxy,1.05%,14.21MiB / 31.34GiB
+2026-10-27T20:06:46Z,host-loadavg,6.38,
+2026-10-27T20:06:46Z,prod-health-ms,200:0.004153,
+2026-10-27T20:06:50Z,kgkg-qa-backend,353.97%,3.142GiB / 10GiB
+2026-10-27T20:06:50Z,kgkg-qa-frontend,15.29%,100.6MiB / 3GiB
+2026-10-27T20:06:50Z,kgkg-qa-proxy,0.89%,14.47MiB / 31.34GiB
+2026-10-27T20:06:50Z,host-loadavg,6.43,
+2026-10-27T20:06:50Z,prod-health-ms,200:0.005397,
+2026-10-27T20:06:54Z,kgkg-qa-backend,296.14%,3.145GiB / 10GiB
+2026-10-27T20:06:54Z,kgkg-qa-frontend,5.28%,101.7MiB / 3GiB
+2026-10-27T20:06:54Z,kgkg-qa-proxy,0.68%,14.01MiB / 31.34GiB
+2026-10-27T20:06:54Z,host-loadavg,6.39,
+2026-10-27T20:06:54Z,prod-health-ms,200:0.004826,
+2026-10-27T20:06:58Z,kgkg-qa-backend,253.84%,3.151GiB / 10GiB
+2026-10-27T20:06:58Z,kgkg-qa-frontend,8.08%,100.7MiB / 3GiB
+2026-10-27T20:06:58Z,kgkg-qa-proxy,1.33%,14MiB / 31.34GiB
+2026-10-27T20:06:58Z,host-loadavg,6.39,
+2026-10-27T20:06:58Z,prod-health-ms,200:0.004947,
+2026-10-27T20:07:02Z,kgkg-qa-backend,355.23%,3.151GiB / 10GiB
+2026-10-27T20:07:02Z,kgkg-qa-frontend,14.95%,101.9MiB / 3GiB
+2026-10-27T20:07:02Z,kgkg-qa-proxy,0.83%,13.92MiB / 31.34GiB
+2026-10-27T20:07:02Z,host-loadavg,6.60,
+2026-10-27T20:07:02Z,prod-health-ms,200:0.005025,
+2026-10-27T20:07:07Z,kgkg-qa-backend,195.01%,3.153GiB / 10GiB
+2026-10-27T20:07:07Z,kgkg-qa-frontend,8.32%,102.1MiB / 3GiB
+2026-10-27T20:07:07Z,kgkg-qa-proxy,0.96%,13.95MiB / 31.34GiB
+2026-10-27T20:07:07Z,host-loadavg,6.63,
+2026-10-27T20:07:07Z,prod-health-ms,200:0.005051,
+2026-10-27T20:07:11Z,kgkg-qa-backend,422.51%,3.157GiB / 10GiB
+2026-10-27T20:07:11Z,kgkg-qa-frontend,2.47%,100.6MiB / 3GiB
+2026-10-27T20:07:11Z,kgkg-qa-proxy,1.78%,14.53MiB / 31.34GiB
+2026-10-27T20:07:11Z,host-loadavg,6.58,
+2026-10-27T20:07:11Z,prod-health-ms,200:0.004133,
+2026-10-27T20:07:15Z,kgkg-qa-backend,258.26%,3.158GiB / 10GiB
+2026-10-27T20:07:15Z,kgkg-qa-frontend,12.79%,101.1MiB / 3GiB
+2026-10-27T20:07:15Z,kgkg-qa-proxy,0.77%,13.94MiB / 31.34GiB
+2026-10-27T20:07:15Z,host-loadavg,6.54,
+2026-10-27T20:07:15Z,prod-health-ms,200:0.004742,
+2026-10-27T20:07:19Z,kgkg-qa-backend,238.52%,3.163GiB / 10GiB
+2026-10-27T20:07:19Z,kgkg-qa-frontend,13.32%,101.5MiB / 3GiB
+2026-10-27T20:07:19Z,kgkg-qa-proxy,1.20%,13.95MiB / 31.34GiB
+2026-10-27T20:07:19Z,host-loadavg,6.54,
+2026-10-27T20:07:19Z,prod-health-ms,200:0.003981,
+2026-10-27T20:07:22Z,kgkg-qa-backend,307.49%,3.163GiB / 10GiB
+2026-10-27T20:07:22Z,kgkg-qa-frontend,10.11%,101.3MiB / 3GiB
+2026-10-27T20:07:22Z,kgkg-qa-proxy,0.54%,13.93MiB / 31.34GiB
+2026-10-27T20:07:22Z,host-loadavg,6.41,
+2026-10-27T20:07:22Z,prod-health-ms,200:0.004873,
+2026-10-27T20:07:26Z,kgkg-qa-backend,349.71%,3.165GiB / 10GiB
+2026-10-27T20:07:26Z,kgkg-qa-frontend,11.34%,102.4MiB / 3GiB
+2026-10-27T20:07:26Z,kgkg-qa-proxy,1.13%,13.95MiB / 31.34GiB
+2026-10-27T20:07:26Z,host-loadavg,6.38,
+2026-10-27T20:07:26Z,prod-health-ms,200:0.004442,
+2026-10-27T20:07:30Z,kgkg-qa-backend,237.74%,3.165GiB / 10GiB
+2026-10-27T20:07:30Z,kgkg-qa-frontend,9.96%,102.4MiB / 3GiB
+2026-10-27T20:07:30Z,kgkg-qa-proxy,0.69%,13.95MiB / 31.34GiB
+2026-10-27T20:07:30Z,host-loadavg,7.63,
+2026-10-27T20:07:30Z,prod-health-ms,200:0.005308,
+2026-10-27T20:07:34Z,kgkg-qa-backend,205.53%,3.165GiB / 10GiB
+2026-10-27T20:07:34Z,kgkg-qa-frontend,7.04%,102.8MiB / 3GiB
+2026-10-27T20:07:34Z,kgkg-qa-proxy,0.55%,13.94MiB / 31.34GiB
+2026-10-27T20:07:34Z,host-loadavg,7.63,
+2026-10-27T20:07:34Z,prod-health-ms,200:0.003805,
+2026-10-27T20:07:38Z,kgkg-qa-backend,198.85%,3.165GiB / 10GiB
+2026-10-27T20:07:38Z,kgkg-qa-frontend,7.37%,102.8MiB / 3GiB
+2026-10-27T20:07:38Z,kgkg-qa-proxy,0.90%,13.98MiB / 31.34GiB
+2026-10-27T20:07:38Z,host-loadavg,7.50,
+2026-10-27T20:07:38Z,prod-health-ms,200:0.003986,
+2026-10-27T20:07:42Z,kgkg-qa-backend,136.97%,3.177GiB / 10GiB
+2026-10-27T20:07:42Z,kgkg-qa-frontend,9.14%,102.6MiB / 3GiB
+2026-10-27T20:07:42Z,kgkg-qa-proxy,1.08%,13.95MiB / 31.34GiB
+2026-10-27T20:07:42Z,host-loadavg,7.62,
+2026-10-27T20:07:42Z,prod-health-ms,200:0.004019,
+2026-10-27T20:07:46Z,kgkg-qa-backend,250.05%,3.179GiB / 10GiB
+2026-10-27T20:07:46Z,kgkg-qa-frontend,12.50%,102.4MiB / 3GiB
+2026-10-27T20:07:46Z,kgkg-qa-proxy,0.77%,14MiB / 31.34GiB
+2026-10-27T20:07:46Z,host-loadavg,7.73,
+2026-10-27T20:07:46Z,prod-health-ms,200:0.004598,
+2026-10-27T20:07:50Z,kgkg-qa-backend,200.69%,3.18GiB / 10GiB
+2026-10-27T20:07:50Z,kgkg-qa-frontend,12.17%,102.5MiB / 3GiB
+2026-10-27T20:07:50Z,kgkg-qa-proxy,1.17%,14.02MiB / 31.34GiB
+2026-10-27T20:07:50Z,host-loadavg,7.59,
+2026-10-27T20:07:50Z,prod-health-ms,200:0.003962,
+2026-10-27T20:07:54Z,kgkg-qa-backend,226.43%,3.184GiB / 10GiB
+2026-10-27T20:07:54Z,kgkg-qa-frontend,7.62%,102.2MiB / 3GiB
+2026-10-27T20:07:54Z,kgkg-qa-proxy,0.92%,14.52MiB / 31.34GiB
+2026-10-27T20:07:54Z,host-loadavg,7.59,
+2026-10-27T20:07:54Z,prod-health-ms,200:0.004459,
+2026-10-27T20:07:58Z,kgkg-qa-backend,351.86%,3.184GiB / 10GiB
+2026-10-27T20:07:58Z,kgkg-qa-frontend,7.78%,101.8MiB / 3GiB
+2026-10-27T20:07:58Z,kgkg-qa-proxy,0.87%,14MiB / 31.34GiB
+2026-10-27T20:07:58Z,host-loadavg,7.30,
+2026-10-27T20:07:58Z,prod-health-ms,200:0.005176,
+2026-10-27T20:08:02Z,kgkg-qa-backend,89.22%,3.184GiB / 10GiB
+2026-10-27T20:08:02Z,kgkg-qa-frontend,16.87%,102.4MiB / 3GiB
+2026-10-27T20:08:02Z,kgkg-qa-proxy,1.01%,14MiB / 31.34GiB
+2026-10-27T20:08:02Z,host-loadavg,7.04,
+2026-10-27T20:08:02Z,prod-health-ms,200:0.005023,
+2026-10-27T20:08:06Z,kgkg-qa-backend,346.52%,3.196GiB / 10GiB
+2026-10-27T20:08:06Z,kgkg-qa-frontend,6.47%,102.4MiB / 3GiB
+2026-10-27T20:08:06Z,kgkg-qa-proxy,0.83%,13.97MiB / 31.34GiB
+2026-10-27T20:08:06Z,host-loadavg,7.84,
+2026-10-27T20:08:06Z,prod-health-ms,200:0.003897,
+2026-10-27T20:08:10Z,kgkg-qa-backend,33.49%,3.195GiB / 10GiB
+2026-10-27T20:08:10Z,kgkg-qa-frontend,10.01%,102.3MiB / 3GiB
+2026-10-27T20:08:10Z,kgkg-qa-proxy,1.00%,14.45MiB / 31.34GiB
+2026-10-27T20:08:10Z,host-loadavg,7.53,
+2026-10-27T20:08:10Z,prod-health-ms,200:0.003945,
+2026-10-27T20:08:14Z,kgkg-qa-backend,376.60%,3.196GiB / 10GiB
+2026-10-27T20:08:14Z,kgkg-qa-frontend,14.32%,102.5MiB / 3GiB
+2026-10-27T20:08:14Z,kgkg-qa-proxy,0.62%,14.27MiB / 31.34GiB
+2026-10-27T20:08:14Z,host-loadavg,7.53,
+2026-10-27T20:08:14Z,prod-health-ms,200:0.003766,
+2026-10-27T20:08:18Z,kgkg-qa-backend,52.87%,3.196GiB / 10GiB
+2026-10-27T20:08:18Z,kgkg-qa-frontend,6.50%,102.5MiB / 3GiB
+2026-10-27T20:08:18Z,kgkg-qa-proxy,1.03%,13.96MiB / 31.34GiB
+2026-10-27T20:08:18Z,host-loadavg,7.65,
+2026-10-27T20:08:18Z,prod-health-ms,200:0.003857,
+2026-10-27T20:08:22Z,kgkg-qa-backend,303.75%,3.202GiB / 10GiB
+2026-10-27T20:08:22Z,kgkg-qa-frontend,4.40%,102.8MiB / 3GiB
+2026-10-27T20:08:22Z,kgkg-qa-proxy,0.92%,14.29MiB / 31.34GiB
+2026-10-27T20:08:22Z,host-loadavg,7.52,
+2026-10-27T20:08:22Z,prod-health-ms,200:0.003806,
+2026-10-27T20:08:26Z,kgkg-qa-backend,190.15%,3.204GiB / 10GiB
+2026-10-27T20:08:26Z,kgkg-qa-frontend,7.57%,103MiB / 3GiB
+2026-10-27T20:08:26Z,kgkg-qa-proxy,0.71%,13.95MiB / 31.34GiB
+2026-10-27T20:08:26Z,host-loadavg,7.31,
+2026-10-27T20:08:26Z,prod-health-ms,200:0.004664,
+2026-10-27T20:08:30Z,kgkg-qa-backend,208.40%,3.204GiB / 10GiB
+2026-10-27T20:08:30Z,kgkg-qa-frontend,7.02%,102.5MiB / 3GiB
+2026-10-27T20:08:30Z,kgkg-qa-proxy,0.91%,14.04MiB / 31.34GiB
+2026-10-27T20:08:30Z,host-loadavg,7.13,
+2026-10-27T20:08:30Z,prod-health-ms,200:0.004876,
+2026-10-27T20:08:34Z,kgkg-qa-backend,89.04%,3.205GiB / 10GiB
+2026-10-27T20:08:34Z,kgkg-qa-frontend,9.73%,102.3MiB / 3GiB
+2026-10-27T20:08:34Z,kgkg-qa-proxy,1.31%,14.2MiB / 31.34GiB
+2026-10-27T20:08:34Z,host-loadavg,6.96,
+2026-10-27T20:08:34Z,prod-health-ms,200:0.005512,
+2026-10-27T20:08:38Z,kgkg-qa-backend,258.24%,3.206GiB / 10GiB
+2026-10-27T20:08:38Z,kgkg-qa-frontend,8.52%,102.5MiB / 3GiB
+2026-10-27T20:08:38Z,kgkg-qa-proxy,0.53%,14MiB / 31.34GiB
+2026-10-27T20:08:38Z,host-loadavg,6.96,
+2026-10-27T20:08:38Z,prod-health-ms,200:0.003774,
+2026-10-27T20:08:42Z,kgkg-qa-backend,141.92%,3.207GiB / 10GiB
+2026-10-27T20:08:42Z,kgkg-qa-frontend,16.15%,99.84MiB / 3GiB
+2026-10-27T20:08:42Z,kgkg-qa-proxy,1.12%,14.53MiB / 31.34GiB
+2026-10-27T20:08:42Z,host-loadavg,6.80,
+2026-10-27T20:08:42Z,prod-health-ms,200:0.003926,
+2026-10-27T20:08:46Z,kgkg-qa-backend,276.74%,3.216GiB / 10GiB
+2026-10-27T20:08:46Z,kgkg-qa-frontend,9.85%,102.3MiB / 3GiB
+2026-10-27T20:08:46Z,kgkg-qa-proxy,0.24%,14MiB / 31.34GiB
+2026-10-27T20:08:46Z,host-loadavg,6.82,
+2026-10-27T20:08:46Z,prod-health-ms,200:0.004655,
+2026-10-27T20:08:51Z,kgkg-qa-backend,131.91%,3.216GiB / 10GiB
+2026-10-27T20:08:51Z,kgkg-qa-frontend,9.84%,102.3MiB / 3GiB
+2026-10-27T20:08:51Z,kgkg-qa-proxy,0.60%,13.94MiB / 31.34GiB
+2026-10-27T20:08:51Z,host-loadavg,6.59,
+2026-10-27T20:08:51Z,prod-health-ms,200:0.003701,
+2026-10-27T20:08:55Z,kgkg-qa-backend,301.97%,3.224GiB / 10GiB
+2026-10-27T20:08:55Z,kgkg-qa-frontend,2.12%,101.4MiB / 3GiB
+2026-10-27T20:08:55Z,kgkg-qa-proxy,0.42%,13.98MiB / 31.34GiB
+2026-10-27T20:08:55Z,host-loadavg,6.59,
+2026-10-27T20:08:55Z,prod-health-ms,200:0.004174,
+2026-10-27T20:08:58Z,kgkg-qa-backend,18.68%,3.224GiB / 10GiB
+2026-10-27T20:08:58Z,kgkg-qa-frontend,7.03%,102.4MiB / 3GiB
+2026-10-27T20:08:58Z,kgkg-qa-proxy,0.89%,13.94MiB / 31.34GiB
+2026-10-27T20:08:58Z,host-loadavg,6.54,
+2026-10-27T20:08:58Z,prod-health-ms,200:0.004091,
+2026-10-27T20:09:02Z,kgkg-qa-backend,305.73%,3.228GiB / 10GiB
+2026-10-27T20:09:02Z,kgkg-qa-frontend,2.91%,102.4MiB / 3GiB
+2026-10-27T20:09:02Z,kgkg-qa-proxy,1.26%,14.12MiB / 31.34GiB
+2026-10-27T20:09:02Z,host-loadavg,6.42,
+2026-10-27T20:09:02Z,prod-health-ms,200:0.004229,
+2026-10-27T20:09:06Z,kgkg-qa-backend,133.92%,3.23GiB / 10GiB
+2026-10-27T20:09:06Z,kgkg-qa-frontend,7.84%,102.5MiB / 3GiB
+2026-10-27T20:09:06Z,kgkg-qa-proxy,0.83%,13.94MiB / 31.34GiB
+2026-10-27T20:09:06Z,host-loadavg,6.23,
+2026-10-27T20:09:06Z,prod-health-ms,200:0.004768,
+2026-10-27T20:09:10Z,kgkg-qa-backend,335.91%,3.243GiB / 10GiB
+2026-10-27T20:09:10Z,kgkg-qa-frontend,4.40%,101MiB / 3GiB
+2026-10-27T20:09:10Z,kgkg-qa-proxy,1.37%,14.02MiB / 31.34GiB
+2026-10-27T20:09:10Z,host-loadavg,6.21,
+2026-10-27T20:09:10Z,prod-health-ms,200:0.005395,
+2026-10-27T20:09:14Z,kgkg-qa-backend,18.35%,3.243GiB / 10GiB
+2026-10-27T20:09:14Z,kgkg-qa-frontend,5.44%,102.1MiB / 3GiB
+2026-10-27T20:09:14Z,kgkg-qa-proxy,0.52%,13.96MiB / 31.34GiB
+2026-10-27T20:09:14Z,host-loadavg,6.21,
+2026-10-27T20:09:14Z,prod-health-ms,200:0.004216,
+2026-10-27T20:09:18Z,kgkg-qa-backend,145.09%,3.247GiB / 10GiB
+2026-10-27T20:09:18Z,kgkg-qa-frontend,7.85%,102.5MiB / 3GiB
+2026-10-27T20:09:18Z,kgkg-qa-proxy,0.68%,13.93MiB / 31.34GiB
+2026-10-27T20:09:18Z,host-loadavg,7.55,
+2026-10-27T20:09:18Z,prod-health-ms,200:0.004513,
+2026-10-27T20:09:22Z,kgkg-qa-backend,129.03%,3.251GiB / 10GiB
+2026-10-27T20:09:22Z,kgkg-qa-frontend,4.16%,101.9MiB / 3GiB
+2026-10-27T20:09:22Z,kgkg-qa-proxy,0.30%,13.94MiB / 31.34GiB
+2026-10-27T20:09:22Z,host-loadavg,7.35,
+2026-10-27T20:09:22Z,prod-health-ms,200:0.003625,
+2026-10-27T20:09:26Z,kgkg-qa-backend,31.87%,3.253GiB / 10GiB
+2026-10-27T20:09:26Z,kgkg-qa-frontend,4.02%,102.6MiB / 3GiB
+2026-10-27T20:09:26Z,kgkg-qa-proxy,0.06%,13.91MiB / 31.34GiB
+2026-10-27T20:09:26Z,host-loadavg,7.16,
+2026-10-27T20:09:26Z,prod-health-ms,200:0.003982,
+2026-10-27T20:09:30Z,kgkg-qa-backend,5.51%,3.253GiB / 10GiB
+2026-10-27T20:09:30Z,kgkg-qa-frontend,2.77%,102.6MiB / 3GiB
+2026-10-27T20:09:30Z,kgkg-qa-proxy,0.27%,13.89MiB / 31.34GiB
+2026-10-27T20:09:30Z,host-loadavg,6.91,
+2026-10-27T20:09:30Z,prod-health-ms,200:0.005026,
+2026-10-27T20:09:34Z,kgkg-qa-backend,7.36%,3.253GiB / 10GiB
+2026-10-27T20:09:34Z,kgkg-qa-frontend,7.68%,63.48MiB / 3GiB
+2026-10-27T20:09:34Z,kgkg-qa-proxy,0.13%,13.88MiB / 31.34GiB
+2026-10-27T20:09:34Z,host-loadavg,6.91,
+2026-10-27T20:09:34Z,prod-health-ms,200:0.004577,

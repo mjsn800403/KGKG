@@ -1,0 +1,7 @@
+# media-gate bypass reproduction  2026-10-27T18:56:00Z  backend sha QA_SHA=42acfa5c11079139e279dd35f8f1395b54a2e276
+# account: qa_e2e_manager (granted ONLY Toyota 2025 Corolla Cross Hybrid S); target: 4Runner Platinum (not granted)
+/4Runner%20Platinum/GTY1268854.png                           -> HTTP 403, 153 bytes
+/_parts_assets/../4Runner%20Platinum/GTY1268854.png          -> HTTP 200, 8143 bytes
+/_parts_assets/%2e%2e/4Runner%20Platinum/GTY1268854.png      -> HTTP 200, 8143 bytes
+/nonexistent/../4Runner%20Platinum/GTY1268854.png            -> HTTP 200, 8143 bytes
+//4Runner%20Platinum/GTY1268854.png                          -> HTTP 200, 8143 bytes

@@ -1,0 +1,8 @@
+profile=soak
+started=2026-10-27T20:17:48Z
+QA_SHA=c43998c457c24ff70791902702e95671dea3860f
+host=16 vCPU, 31 GiB RAM
+/kgkg-qa-backend cpus=6000000000 mem=10737418240
+/kgkg-qa-frontend cpus=2000000000 mem=3221225472
+/kgkg-qa-proxy cpus=1000000000 mem=0
+finished=2026-10-27T20:37:51Z exit=0

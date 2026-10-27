@@ -1,0 +1,8 @@
+profile=load  requests=7599  throughput=19.45 req/s  iterations=1787  max_vus=10
+error_rate=0.00%  http_req_failed=0.00%
+latency (ms)          avg      p50      p90      p95      p99      max
+page (landing)       13.5     12.4     18.1     21.0     28.2     33.9
+api (me/fleet/..)     23.3      9.8     31.6     38.4    132.2   3823.7
+assist (RAG)       1350.2   1107.3   2025.6   2241.9   6371.8   9110.9
+all http             99.7     11.6     36.7    971.2   1758.4   9110.9
+thresholds: kg_errors rate<0.01 PASS; kg_page_ms p(95)<1500 PASS; kg_api_ms p(95)<500 PASS; kg_assist_ms p(95)<4000 PASS
