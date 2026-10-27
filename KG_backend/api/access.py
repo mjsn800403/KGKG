@@ -108,10 +108,19 @@ def role_can_manage(actor_role, target_role):
 
 
 def effective_documents(access_row, company_scope=None):
-    """Resolved package list for one car grant."""
+    """Resolved package list for one car grant.
+
+    An empty list means "everything available": all packages, or with
+    ``company_scope`` everything the company bought for that car. An explicit
+    list is always clamped to ``company_scope`` when one is given, so a seat can
+    never hold a layer its company did not buy (or no longer has after an
+    admin narrowed the company's grant)."""
     docs = access_row.documents or []
     if docs:
-        return [d for d in docs if d in VALID_PACKAGES]
+        docs = [d for d in docs if d in VALID_PACKAGES]
+        if company_scope is not None:
+            docs = [d for d in docs if d in company_scope]
+        return docs
     if company_scope is not None:
         return [d for d in company_scope if d in VALID_PACKAGES]
     return list(VALID_PACKAGES)
