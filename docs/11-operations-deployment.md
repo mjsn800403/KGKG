@@ -316,3 +316,10 @@ curl -s -H "Authorization: Bearer $KG_ADMIN_TOKEN" http://127.0.0.1:8000/api/adm
 12. `torch` pins `setuptools<82`, which caps two advisories we therefore carry
     deliberately (`ops/security/pip-audit-ignore.txt`). The torch upgrade needs
     a planned re-embed window, not a lock bump.
+13. SMS bodies have a contract the provider enforces silently: a Persian body
+    without the trailing opt-out line is refused (Value 11), and anything that
+    looks like a link or an @domain is refused (Value 14) — a dotted number
+    such as an IP or a percentage counts. Use the same envelope as
+    api/alert_rules.deliver / ops/observability/watchdog.py sms_body(), and
+    check the returned Value: a long record id means sent, anything else means
+    nobody was paged.

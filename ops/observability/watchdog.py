@@ -54,6 +54,21 @@ PROM_URL = os.environ.get('KG_PROMETHEUS_URL', 'http://127.0.0.1:9090')
 LOCAL_HEALTH = os.environ.get('KG_LOCAL_HEALTH_URL', 'http://127.0.0.1:8000/api/health/')
 SMS_ENDPOINT = 'https://rest.payamak-panel.com/api/SendSMS/SendSMS'
 
+# What the provider will actually accept, learnt the hard way: the first real
+# page from this file came back Value 11. The rules are documented in
+# api/portal.py and implemented in api/alert_rules.deliver, which is the path
+# the application has used in production for months:
+#
+#   * a Persian (unicode) body is refused unless it ends with the opt-out line
+#     (Value 11); an ASCII body does not need it
+#   * anything that looks like a link or an @domain is refused (Value 14), and
+#     a dotted number such as an IP or "75.6%" reads as one, so the dots
+#     become a Persian decimal separator
+#   * bodies are kept short; the provider charges per segment
+SMS_BRAND = 'خدمات گستر'
+SMS_OPT_OUT = 'لغو11'
+SMS_MAX_BODY = 250
+
 ALERT_UNITS = ('kgkg-alerts.timer',)
 
 FA_DIGITS = str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹')
@@ -280,6 +295,19 @@ def phones(env: dict[str, str]) -> list[str]:
     return [p.strip() for p in raw.split(',') if p.strip()]
 
 
+def sms_body(message: str) -> str:
+    """Wrap a message in the envelope the provider requires.
+
+    Mirrors api/alert_rules.deliver deliberately: brand line, the message with
+    dotted numbers and @ defused, then the opt-out line. Without the opt-out
+    line a Persian body is simply refused, and a refused page is indis-
+    tinguishable from no page at all.
+    """
+    import re
+    body = re.sub(r'(\d)\.(?=\d)', '\\1٫', message[:SMS_MAX_BODY]).replace('@', ' at ')
+    return f'{SMS_BRAND}\n{body}\n{SMS_OPT_OUT}'
+
+
 def send_sms(env: dict[str, str], phone: str, text: str) -> tuple[bool, str]:
     """Post to the same provider the application uses.
 
@@ -293,7 +321,7 @@ def send_sms(env: dict[str, str], phone: str, text: str) -> tuple[bool, str]:
         return False, 'sms_not_configured'
     payload = json.dumps({
         'username': user, 'password': key, 'to': phone, 'from': sender,
-        'text': text, 'isFlash': False,
+        'text': sms_body(text), 'isFlash': False,
     }).encode()
     req = urllib.request.Request(
         SMS_ENDPOINT, data=payload, headers={'Content-Type': 'application/json'},
@@ -487,6 +515,16 @@ def selftest() -> int:
 
     expect('scrub drops a url', scrub('health http://127.0.0.1:8000/x -> 502'),
            'health -> 502')
+
+    body = sms_body('disk 75.6% used; probe at a@b.com failed')
+    if not body.startswith(SMS_BRAND):
+        failures.append('sms body lacks the brand line')
+    if not body.endswith(SMS_OPT_OUT):
+        failures.append('sms body lacks the opt-out line (provider returns 11)')
+    if '75.6' in body:
+        failures.append('dotted number not defused (provider reads it as a link)')
+    if '@' in body:
+        failures.append('@ not defused (provider returns 14)')
     expect('scrub drops a hostname', scrub('probe kgtechvault.com failed'),
            'probe failed')
 
