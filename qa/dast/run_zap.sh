@@ -48,7 +48,17 @@ case $MODE in
   full) SCRIPT=zap-full-scan.py; EXTRA=(-m 5 -T 60 -j) ;;
   api)
     # Absolute server URL for the scanner; the spec itself uses /kg-api.
-    sed "s#^- url: /kg-api#- url: $ORIGIN/kg-api#" "$HERE/../../docs/openapi.yaml" > "$OUT/openapi-scan.yaml"
+    # The global URL excludes do not apply to operations imported from a spec,
+    # so logout is removed from the scanner's copy (it would revoke the scan's
+    # own session and turn the rest of the run into signed-out probing).
+    python3 - "$HERE/../../docs/openapi.yaml" "$ORIGIN" > "$OUT/openapi-scan.yaml" <<'PY'
+import re, sys
+spec, origin = open(sys.argv[1]).read(), sys.argv[2]
+spec = spec.replace('- url: /kg-api', f'- url: {origin}/kg-api', 1)
+spec = re.sub(r'\n  /api/auth/logout/:\n(?:    .*\n|\n)*?(?=  /)', '\n', spec)
+assert '/api/auth/logout/' not in spec, 'logout still in scan spec'
+print(spec, end='')
+PY
     SCRIPT=zap-api-scan.py; EXTRA=(-f openapi -T 60) ;;
   *) echo "usage: $0 baseline|full|api" >&2; exit 2 ;;
 esac

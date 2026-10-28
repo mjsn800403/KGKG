@@ -6,6 +6,7 @@ READ-ONLY view of the same graph (their own seat flagged). Reads are open to any
 authenticated portal user in the company.
 """
 import json
+import math
 from functools import wraps
 
 from django.http import JsonResponse
@@ -16,6 +17,34 @@ from .access import PACKAGE_CHOICES
 from .models import ActivityLog, Car, NodePermission, OrgGraph, OrgNode, PortalUser
 from . import orggraph as og
 from .portal import portal_user
+
+
+def _as_id(raw):
+    """A positive integer id from JSON (int or digit string), else None."""
+    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+        return None
+    try:
+        v = int(raw)
+    except ValueError:
+        return None
+    return v if v > 0 else None
+
+
+def _as_coord(raw):
+    """A finite canvas coordinate from JSON (missing/empty = 0), else None."""
+    if raw in (None, ''):
+        return 0.0
+    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+        return None
+    try:
+        v = float(raw)
+    except ValueError:
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _bad_input(field):
+    return JsonResponse({'error': f'invalid {field}'}, status=400)
 
 
 def _body(request):
@@ -269,14 +298,20 @@ def nodes_view(request):
                 {'error': f'به سقف مجاز صندلی‌ها رسیده‌اید ({cap}).', 'code': 'seat_cap',
                  'cap': cap, 'used': used}, status=403)
     parent = None
-    if b.get('parent_id'):
-        parent = graph.nodes.filter(id=b['parent_id']).first()
+    if b.get('parent_id') not in (None, ''):
+        pid = _as_id(b['parent_id'])
+        if pid is None:
+            return _bad_input('parent_id')
+        parent = graph.nodes.filter(id=pid).first()
         if parent is None:
             return JsonResponse({'error': 'parent not found'}, status=400)
+    x, y = _as_coord(b.get('x')), _as_coord(b.get('y'))
+    if x is None or y is None:
+        return _bad_input('coordinates')
     node = OrgNode.objects.create(
         graph=graph, parent=parent, is_root=False,
-        label=(b.get('label') or '').strip()[:120],
-        canvas_x=float(b.get('x') or 0), canvas_y=float(b.get('y') or 0))
+        label=str(b.get('label') or '').strip()[:120],
+        canvas_x=x, canvas_y=y)
     NodePermission.objects.create(node=node)
     graph.updated_by = request.root_user
     graph.save(update_fields=['updated_by', 'updated_at'])
@@ -314,22 +349,29 @@ def node_detail_view(request, node_id):
         return JsonResponse({'error': 'method'}, status=405)
 
     b = _body(request)
+    # Validate every typed field before changing anything.
+    for key in ('x', 'y'):
+        if key in b and _as_coord(b.get(key)) is None:
+            return _bad_input(key)
+    for key in ('parent_id', 'occupant_id'):
+        if b.get(key) is not None and _as_id(b.get(key)) is None:
+            return _bad_input(key)
     fields = []
     if 'label' in b:
-        node.label = (b.get('label') or '').strip()[:120]
+        node.label = str(b.get('label') or '').strip()[:120]
         fields.append('label')
     if 'x' in b:
-        node.canvas_x = float(b.get('x') or 0)
+        node.canvas_x = _as_coord(b.get('x'))
         fields.append('canvas_x')
     if 'y' in b:
-        node.canvas_y = float(b.get('y') or 0)
+        node.canvas_y = _as_coord(b.get('y'))
         fields.append('canvas_y')
     if 'parent_id' in b and not node.is_root:
         raw = b.get('parent_id')
         if raw is None:
             node.parent = None
         else:
-            parent = graph.nodes.filter(id=raw).first()
+            parent = graph.nodes.filter(id=_as_id(raw)).first()
             if parent is None:
                 return JsonResponse({'error': 'parent not found'}, status=400)
             if _would_cycle(node, parent):
@@ -348,7 +390,7 @@ def node_detail_view(request, node_id):
         if raw is None:
             node.occupant = None
         else:
-            u = graph.company.users.filter(id=raw, active=True).first()
+            u = graph.company.users.filter(id=_as_id(raw), active=True).first()
             if u is None:
                 return JsonResponse({'error': 'employee not found'}, status=400)
             # One seat per person: vacate any prior seat.
