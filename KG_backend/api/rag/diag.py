@@ -41,11 +41,18 @@ _SOURCE_VIA = {'symptom_table': 'diagnostic', 'direct': 'semantic',
 
 
 # --- car resolution --------------------------------------------------------
-def _resolve_stem(brand, model, car_stem):
+def _resolve_stem(brand, model, car_stem, allowed_cars=None):
     """The frontend passes the car_name (== on-disk DB stem) as `model` and/or
-    `car`. Pick the first that has a built sidecar."""
+    `car`. Pick the first that has a built sidecar and that the caller may open
+    (``allowed_cars``, when given). Names are user input: anything path-like or
+    too long for a filename is not a car."""
     for cand in (car_stem, model):
-        if cand and config.diag_db_path(cand).exists():
+        if not cand or len(cand) > 200 or any(ch in cand for ch in ('/', '\\', '\x00')) \
+                or cand in ('.', '..'):
+            continue
+        if allowed_cars is not None and cand not in allowed_cars:
+            continue
+        if config.diag_db_path(cand).exists():
             return cand
     return None
 
@@ -212,7 +219,7 @@ def _fts_match(query):
 # --- main entry ------------------------------------------------------------
 def diagnose(query, brand=None, model=None, car_stem=None, k=None,
              allowed_cars=None):
-    stem = _resolve_stem(brand, model, car_stem)
+    stem = _resolve_stem(brand, model, car_stem, allowed_cars)
     if stem is None:
         return {'query': query, 'intent': 'unknown', 'error': 'no_diag_index',
                 'available_cars': available_cars(), 'candidates': [], 'symptoms': []}

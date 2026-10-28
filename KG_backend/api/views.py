@@ -74,6 +74,13 @@ def _guard_car_content(request, stem, brand=None, year=None):
     car = _resolve_car(stem, brand=brand, year=year)
     if car is not None and not user_can_open_car(user, car):
         return None, None, _forbidden_car()
+    if car is None and stem:
+        # brand/year only narrow the lookup; they must not switch the check off.
+        # A name that matches catalog cars is checked against all of them, or a
+        # mismatched brand would let the name select a car nobody verified.
+        named = list(Car.objects.filter(car_name__iexact=stem))
+        if named and not any(user_can_open_car(user, c) for c in named):
+            return None, None, _forbidden_car()
     return user, _user_allowed_stems(user), None
 
 def brands_list_view(request):
