@@ -498,5 +498,15 @@ for repo in kgkg-backend kgkg-frontend; do
   docker images "$repo" --format '{{.Tag}}' | grep -xE '[0-9a-f]{9}' | grep -vxF -e "$SHORT" -e "${PREV:0:9}" \
     | tail -n +$KEEP_IMAGES | xargs -r -I{} docker image rm -f "$repo:{}" >/dev/null 2>&1 || true
 done
+
+# The builder leaves an untagged intermediate per build step, twice per run,
+# and nothing removed them: 102 had piled up by 2026-10-28, worth ~40GB of
+# disk. Dangling only — `prune -a` would delete tagged-but-unused images,
+# which is precisely the previous release that --rollback restores.
+reclaimed=$(docker image prune -f 2>/dev/null | sed -n 's/^Total reclaimed space: //p')
+# The `|| true` matters: a bare `[[ ]] && say` returns non-zero when nothing
+# was reclaimed, and with set -e plus the ERR trap that would make a perfectly
+# good deploy announce DEPLOY FAILED on its last line.
+if [[ -n ${reclaimed:-} && $reclaimed != 0B ]]; then say "pruned dangling build images ($reclaimed)"; fi
 git -C "$PROD" worktree remove --force "$W" 2>/dev/null || true
 say "DEPLOYED $SHORT as $TAG (previous ${PREV:0:9}; rollback: ops/deploy/deploy.sh --rollback)"
