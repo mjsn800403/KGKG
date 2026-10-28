@@ -123,6 +123,85 @@ LOG_OPTS=()
 log_opts() { LOG_OPTS=(--log-driver=journald --log-opt "tag=$1"); }
 
 # ---------------------------------------------------------------------------
+# nginx config lives in ops/nginx/ and is part of the release: the media-gate
+# fix needs the normalized cache key there as well as the normalized path check
+# in api/mediaauth.py, and neither half closes the hole alone.
+NGINX_SITE=${KG_NGINX_SITE:-/etc/nginx/sites-enabled/kgkg}
+NGINX_CONFD=${KG_NGINX_CONFD:-/etc/nginx/conf.d}
+NGINX_BACKUPS=${KG_NGINX_BACKUPS:-/etc/nginx/config-backups}
+
+nginx_config_differs() {  # 0 when the release config is not what is installed
+  local src=$PROD/ops/nginx
+  [[ -d $src ]] || return 1
+  ! cmp -s "$src/kgkg.conf" "$NGINX_SITE" && return 0
+  local f
+  for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+    [[ -f $f ]] || continue
+    ! cmp -s "$f" "$NGINX_CONFD/$(basename "$f")" && return 0
+  done
+  return 1
+}
+
+# Validate the release config against the running nginx without installing it:
+# a syntax error must stop the deploy while production is still untouched.
+nginx_config_check() {
+  local src=$PROD/ops/nginx t
+  t=$(mktemp -d)
+  mkdir -p "$t/conf.d" "$t/sites-enabled"
+  cp "$src/kgkg.conf" "$t/sites-enabled/kgkg"
+  local f
+  for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+    [[ -f $f ]] && cp "$f" "$t/conf.d/"
+  done
+  # Reuse the real nginx.conf, pointing its includes at the candidate copies.
+  sed -e "s#include /etc/nginx/conf.d/\*\.conf;#include $t/conf.d/*.conf;#" \
+      -e "s#include /etc/nginx/sites-enabled/\*;#include $t/sites-enabled/*;#" \
+      /etc/nginx/nginx.conf > "$t/nginx.conf"
+  local out
+  if out=$(nginx -t -c "$t/nginx.conf" 2>&1); then
+    rm -rf "$t"; return 0
+  fi
+  say "candidate nginx config is invalid:"; echo "$out" | tail -5
+  rm -rf "$t"; return 1
+}
+
+install_nginx_config() {
+  local src=$PROD/ops/nginx f dest changed=0
+  mkdir -p "$NGINX_BACKUPS"
+  local stamp; stamp=$(date -u +%Y%m%d-%H%M%S)
+
+  # Backups go outside sites-enabled and conf.d on purpose: nginx includes
+  # everything in those directories, and a backup left there breaks reloads.
+  if ! cmp -s "$src/kgkg.conf" "$NGINX_SITE"; then
+    cp "$NGINX_SITE" "$NGINX_BACKUPS/kgkg.bak-deploy-$stamp"
+    install -m 644 "$src/kgkg.conf" "$NGINX_SITE"; changed=1
+    say "installed $NGINX_SITE from the release"
+  fi
+  for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+    [[ -f $f ]] || continue
+    dest=$NGINX_CONFD/$(basename "$f")
+    if ! cmp -s "$f" "$dest"; then
+      [[ -f $dest ]] && cp "$dest" "$NGINX_BACKUPS/$(basename "$f").bak-deploy-$stamp"
+      install -m 644 "$f" "$dest"; changed=1
+      say "installed $dest from the release"
+    fi
+  done
+  (( changed )) || return 0
+
+  if ! nginx -t >/dev/null 2>&1; then
+    say "nginx rejected the installed config; restoring the previous files"
+    [[ -f $NGINX_BACKUPS/kgkg.bak-deploy-$stamp ]] && install -m 644 "$NGINX_BACKUPS/kgkg.bak-deploy-$stamp" "$NGINX_SITE"
+    for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+      [[ -f $NGINX_BACKUPS/$(basename "$f").bak-deploy-$stamp ]] \
+        && install -m 644 "$NGINX_BACKUPS/$(basename "$f").bak-deploy-$stamp" "$NGINX_CONFD/$(basename "$f")"
+    done
+    nginx -t >/dev/null 2>&1 && systemctl reload nginx
+    return 1
+  fi
+  systemctl reload nginx && say "nginx reloaded with the release config"
+}
+
+# ---------------------------------------------------------------------------
 # Host job bridge (ops/hostjobs) must run before a backend container needs it.
 ensure_hostjobs() {
   local unit=/etc/systemd/system/kgkg-hostjobs.service src=$PROD/ops/hostjobs/kgkg-hostjobs.service
@@ -258,6 +337,13 @@ for old in "$REL"/w-*; do [[ -d $old ]] && git -C "$PROD" worktree remove --forc
 W=$REL/w-$SHORT
 git -C "$PROD" worktree prune
 git -C "$PROD" worktree add -q --detach "$W" "$SHA"
+# A bad nginx config must stop the deploy here, with production untouched,
+# rather than after the containers have been swapped.
+if nginx_config_differs; then
+  say "nginx config in this release differs from what is installed; validating it"
+  nginx_config_check || die "the release nginx config does not validate; production untouched"
+fi
+
 say "1/5 GATE in $W"
 KG_GATE_LOGS=$REL/logs/gate-$TS bash "$W/ops/deploy/gate.sh" "$W" || die "gate failed; production untouched (logs: $REL/logs/gate-$TS)"
 source_containers "$W"
@@ -387,6 +473,13 @@ fail_promote() {
 }
 swap_backend "$SHA" || fail_promote "new backend container did not become healthy"
 swap_frontend "$SHA" || fail_promote "new frontend container did not become healthy"
+
+# nginx last, so the config pairs with the code that is now serving. The
+# media-gate fix needs both halves: the normalized path check in
+# api/mediaauth.py and the normalized cache key here. A failure rolls the
+# release back rather than leaving a half-applied pair, and the verify smoke
+# below then exercises the real end state.
+install_nginx_config || fail_promote "the release nginx config could not be installed"
 
 # ---- 5. verify -----------------------------------------------------------------
 say "5/5 VERIFY production"

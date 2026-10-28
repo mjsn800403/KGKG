@@ -103,6 +103,16 @@ not by a setting in GitHub.
    `deploy.sh` then re-runs the gate and staging on that commit before touching
    production: CI's result is evidence, not permission.
 
+5. **nginx config is part of the release.** `ops/nginx/kgkg.conf`,
+   `kgkg-limits.conf` and `kgkg-mediaauth.conf` are validated against the
+   running nginx *before* the gate (a bad config aborts with production
+   untouched) and installed *after* the container swap, so the config pairs
+   with the code now serving. A config nginx rejects is restored and the
+   release rolls back. This exists because the media-gate fix needs both
+   halves — the normalized path check in `api/mediaauth.py` and the normalized
+   cache key in nginx — and a security fix must not depend on someone
+   remembering a manual step. Backups go to `/etc/nginx/config-backups/`.
+
 5. **Promote itself:** DB backup → fast-forward → migrate in the new image →
    the new backend container starts *beside* the old one on `:8000`
    (SO_REUSEPORT) and the old one stops only once the new one is healthy, so
