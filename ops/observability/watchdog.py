@@ -51,6 +51,12 @@ TEXTFILE = TEXTFILE_DIR / 'kgkg_watchdog.prom'
 # slow minute.
 ALERTS_STALE_S = int(os.environ.get('KG_WATCHDOG_STALE_S', '1200'))
 COOLDOWN_H = float(os.environ.get('KG_WATCHDOG_COOLDOWN_H', '6'))
+
+# One bad sample is not an outage. Even with the mid-run race below fixed, a
+# single unlucky read must not reach anyone's phone — the same reasoning as a
+# Prometheus rule carrying `for:`. Two consecutive failures, five minutes
+# apart, is still a ten-minute detection time for a real outage.
+PAGE_AFTER_FAILURES = int(os.environ.get('KG_WATCHDOG_PAGE_AFTER', '2'))
 PROM_URL = os.environ.get('KG_PROMETHEUS_URL', 'http://127.0.0.1:9090')
 LOCAL_HEALTH = os.environ.get('KG_LOCAL_HEALTH_URL', 'http://127.0.0.1:8000/api/health/')
 SMS_ENDPOINT = 'https://rest.payamak-panel.com/api/SendSMS/SendSMS'
@@ -144,34 +150,73 @@ def parse_monotonic_usec(show_output: str, key: str) -> int | None:
     return None
 
 
+def _prop(show_output: str, key: str) -> str:
+    """Read a `systemctl show` property as text ('' when absent)."""
+    for line in show_output.splitlines():
+        name, _, value = line.partition('=')
+        if name == key:
+            return value.strip()
+    return ''
+
+
 def check_alert_sweep_fresh(now: float | None = None,
                             show_output: str | None = None) -> tuple[bool, str]:
-    """Did the sweep finish recently, and successfully?
+    """Did the sweep run recently, and succeed?
 
-    Read from systemd rather than from the application's own tables: if the
-    sweep cannot reach the database, its tables are exactly the wrong place to
-    ask whether it ran.
+    Read from systemd rather than from the application tables: if the sweep
+    cannot reach the database, its own tables are the wrong place to ask
+    whether it ran.
+
+    The subtlety that cost two false pages on 2026-10-28: while a oneshot
+    service is running, systemd zeroes ExecMainExitTimestampMonotonic. The
+    sweep takes about two seconds every five minutes and this watchdog also
+    runs every five minutes, so the two collide regularly — six times in ten
+    hours. A sweep that is mid-run is proof it is alive, so that is now the
+    first thing checked, and the last *start* is accepted as evidence when the
+    exit stamp is missing for any other reason.
     """
     out = show_output if show_output is not None else _systemctl(
         'show', 'kgkg-alerts.service',
         '-p', 'ExecMainStatus', '-p', 'ExecMainExitTimestampMonotonic',
-        '-p', 'NRestarts',
+        '-p', 'InactiveExitTimestampMonotonic', '-p', 'ActiveState',
+        '-p', 'SubState', '-p', 'NRestarts',
     )
     if not out:
         return False, 'systemd did not answer for kgkg-alerts.service'
 
-    status = parse_monotonic_usec(out, 'ExecMainStatus')
-    exited = parse_monotonic_usec(out, 'ExecMainExitTimestampMonotonic')
-    if exited is None or exited == 0:
-        return False, 'kgkg-alerts.service has no recorded successful run'
-
     uptime = now if now is not None else _monotonic_now()
-    age_s = uptime - (exited / 1_000_000)
+    state = _prop(out, 'ActiveState')
+
+    # Running right now: alive by definition. Its exit status belongs to the
+    # previous run and is judged on the next cycle.
+    if state in ('activating', 'active', 'reloading'):
+        return True, f'alert sweep is running now ({state}/{_prop(out, "SubState")})'
+
+    status = parse_monotonic_usec(out, 'ExecMainStatus')
+    exited = parse_monotonic_usec(out, 'ExecMainExitTimestampMonotonic') or 0
+    started = parse_monotonic_usec(out, 'InactiveExitTimestampMonotonic') or 0
+
     if status not in (0, None):
-        return False, f'last alert sweep exited {status} ({int(age_s)}s ago)'
-    if age_s > ALERTS_STALE_S:
-        return False, f'last alert sweep was {int(age_s)}s ago (limit {ALERTS_STALE_S}s)'
-    return True, f'last alert sweep {int(age_s)}s ago, exit 0'
+        age = uptime - (exited / 1_000_000) if exited else 0
+        return False, f'last alert sweep exited {status} ({int(age)}s ago)'
+
+    if exited:
+        age_s = uptime - (exited / 1_000_000)
+        if age_s > ALERTS_STALE_S:
+            return False, f'last alert sweep was {int(age_s)}s ago (limit {ALERTS_STALE_S}s)'
+        return True, f'last alert sweep {int(age_s)}s ago, exit 0'
+
+    # No exit stamp. A recent start still shows it is running.
+    if started:
+        age_s = uptime - (started / 1_000_000)
+        if age_s <= ALERTS_STALE_S:
+            return True, f'alert sweep started {int(age_s)}s ago, still finishing'
+        return False, f'alert sweep started {int(age_s)}s ago and never finished'
+
+    # Never run at all. Shortly after a reboot the timer simply has not fired.
+    if uptime <= ALERTS_STALE_S:
+        return True, f'no sweep yet, {int(uptime)}s since boot (within the grace period)'
+    return False, 'kgkg-alerts.service has no recorded successful run'
 
 
 def _monotonic_now() -> float:
@@ -308,6 +353,23 @@ def due(state: dict, key: str, now: float, cooldown_h: float = COOLDOWN_H) -> bo
     if not isinstance(last, (int, float)):
         return True
     return (now - last) >= cooldown_h * 3600
+
+
+def should_page(state: dict, key: str, now: float) -> bool:
+    """Count a failing sample and say whether it has persisted long enough.
+
+    Returns True once PAGE_AFTER_FAILURES consecutive samples have failed.
+    The counter is part of the on-disk state, so it survives between runs —
+    each run is a separate process.
+    """
+    fails = state.setdefault('fails', {})
+    fails[key] = int(fails.get(key, 0)) + 1
+    return fails[key] >= PAGE_AFTER_FAILURES
+
+
+def clear_failures(state: dict, key: str) -> None:
+    """A healthy sample resets the streak, so unrelated blips never add up."""
+    state.setdefault('fails', {}).pop(key, None)
 
 
 def mark_sent(state: dict, key: str, now: float) -> None:
@@ -478,26 +540,42 @@ def main(argv: list[str] | None = None) -> int:
 
     write_textfile(checks, watched)
 
+    now = time.time()
+    state = load_state()
+    key = 'alerting_down'
+
     if watched:
+        clear_failures(state, key)
+        save_state(state)
         print('the engine is alive and owns every other alert; staying quiet')
         return 0
 
     message = compose_message(checks)
-    print(f'\npaging: {message}')
+
     if args.dry_run:
-        print('(dry run: nothing sent)')
+        print(f'\nwould page: {message}')
+        print('(dry run: nothing sent, no state written)')
         return 1
+
+    # Debounce before anything leaves the machine.
+    if not should_page(state, key, now):
+        streak = state['fails'][key]
+        save_state(state)
+        print(f'\nfailing sample {streak} of {PAGE_AFTER_FAILURES}; '
+              f'not paging until it persists')
+        return 0
+
+    print(f'\npaging: {message}')
+
+    if not due(state, key, now):
+        save_state(state)
+        print('within cooldown; not sending again')
+        return 0
 
     env = read_env()
-    now = time.time()
-    state = load_state()
-    key = 'alerting_down'
-    if not due(state, key, now):
-        print('within cooldown; not sending again')
-        return 1
-
     targets = phones(env)
     if not targets:
+        save_state(state)
         print('no KG_ALERT_PHONES configured — cannot page', file=sys.stderr)
         return 2
 
@@ -508,8 +586,14 @@ def main(argv: list[str] | None = None) -> int:
         sent_any = sent_any or ok
     if sent_any:
         mark_sent(state, key, now)
-        save_state(state)
-    return 1
+    save_state(state)
+    if not sent_any:
+        # Could not do its one job: that is a real unit failure.
+        print('every page attempt failed', file=sys.stderr)
+        return 2
+    # Having paged successfully is not a failure of this unit. Reporting it as
+    # one made the watchdog show up in its own failed-units check.
+    return 0
 
 
 def selftest() -> int:

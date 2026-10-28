@@ -49,12 +49,26 @@ class SweepFreshnessTests(unittest.TestCase):
         self.assertIn('exited 1', detail)
 
     def test_never_run_fails(self):
+        """Long after boot, a service that has never run is a real fault.
+
+        The time here is deliberately past the post-boot grace period: inside
+        it, a sweep that has not run yet only means the timer has not fired,
+        which is not worth waking anyone for.
+        """
         ok, detail = watchdog.check_alert_sweep_fresh(
-            now=1100.0,
+            now=watchdog.ALERTS_STALE_S * 3,
             show_output=SHOW_OK.replace('ExecMainExitTimestampMonotonic=1000000000',
                                         'ExecMainExitTimestampMonotonic=0'))
         self.assertFalse(ok)
         self.assertIn('no recorded successful run', detail)
+
+    def test_never_run_within_the_boot_grace_is_tolerated(self):
+        ok, detail = watchdog.check_alert_sweep_fresh(
+            now=60.0,
+            show_output=SHOW_OK.replace('ExecMainExitTimestampMonotonic=1000000000',
+                                        'ExecMainExitTimestampMonotonic=0'))
+        self.assertTrue(ok)
+        self.assertIn('grace', detail)
 
     def test_systemd_silence_fails_closed(self):
         ok, _ = watchdog.check_alert_sweep_fresh(now=1100.0, show_output='')
@@ -119,6 +133,108 @@ class BackupSnapshotTests(unittest.TestCase):
     def test_backup_does_not_page(self):
         """A late backup wants looking at, not waking someone for."""
         self.assertNotIn('backup_snapshot', watchdog.PAGING_PATH)
+
+
+def _show(**kw):
+    """systemctl show output with the properties the check reads."""
+    base = {
+        'ExecMainStatus': '0',
+        'ExecMainExitTimestampMonotonic': '1000000000',   # 1000s since boot
+        'InactiveExitTimestampMonotonic': '990000000',    # started at 990s
+        'ActiveState': 'inactive',
+        'SubState': 'dead',
+        'NRestarts': '0',
+    }
+    base.update({k: str(v) for k, v in kw.items()})
+    return ''.join(f'{k}={v}\n' for k, v in base.items())
+
+
+class SweepRaceTests(unittest.TestCase):
+    """The sweep being mid-run is proof it is alive, not proof it never ran.
+
+    This is the bug that paged the owner twice overnight on 2026-10-28: while
+    a oneshot service runs, systemd zeroes ExecMainExitTimestampMonotonic.
+    """
+
+    def test_running_right_now_is_healthy(self):
+        out = _show(ExecMainExitTimestampMonotonic=0, ActiveState='activating',
+                    SubState='start', InactiveExitTimestampMonotonic=1099000000)
+        ok, detail = watchdog.check_alert_sweep_fresh(now=1100.0, show_output=out)
+        self.assertTrue(ok, f'a running sweep must not read as broken: {detail}')
+        self.assertIn('running', detail)
+
+    def test_active_state_is_healthy_too(self):
+        out = _show(ExecMainExitTimestampMonotonic=0, ActiveState='active',
+                    SubState='running', InactiveExitTimestampMonotonic=1099000000)
+        ok, _ = watchdog.check_alert_sweep_fresh(now=1100.0, show_output=out)
+        self.assertTrue(ok)
+
+    def test_zero_exit_stamp_but_recent_start_is_healthy(self):
+        """Belt to the braces: if the exit stamp is missing for any other
+        reason, a recent start still shows the sweep is running."""
+        out = _show(ExecMainExitTimestampMonotonic=0,
+                    InactiveExitTimestampMonotonic=1090000000)
+        ok, detail = watchdog.check_alert_sweep_fresh(now=1100.0, show_output=out)
+        self.assertTrue(ok, detail)
+
+    def test_zero_exit_stamp_and_stale_start_still_fails(self):
+        """The real condition must still be caught."""
+        out = _show(ExecMainExitTimestampMonotonic=0,
+                    InactiveExitTimestampMonotonic=1000000)        # 1s after boot
+        ok, detail = watchdog.check_alert_sweep_fresh(
+            now=watchdog.ALERTS_STALE_S + 5000, show_output=out)
+        self.assertFalse(ok, detail)
+
+    def test_no_run_at_all_shortly_after_boot_is_tolerated(self):
+        """After a reboot the timer has not fired yet; that is not a fault."""
+        out = _show(ExecMainExitTimestampMonotonic=0,
+                    InactiveExitTimestampMonotonic=0)
+        ok, detail = watchdog.check_alert_sweep_fresh(now=60.0, show_output=out)
+        self.assertTrue(ok, detail)
+        self.assertIn('boot', detail)
+
+    def test_no_run_at_all_long_after_boot_fails(self):
+        out = _show(ExecMainExitTimestampMonotonic=0,
+                    InactiveExitTimestampMonotonic=0)
+        ok, _ = watchdog.check_alert_sweep_fresh(
+            now=watchdog.ALERTS_STALE_S * 3, show_output=out)
+        self.assertFalse(ok)
+
+    def test_failed_run_is_still_caught_while_inactive(self):
+        out = _show(ExecMainStatus=1)
+        ok, detail = watchdog.check_alert_sweep_fresh(now=1100.0, show_output=out)
+        self.assertFalse(ok)
+        self.assertIn('exited 1', detail)
+
+
+class DebounceTests(unittest.TestCase):
+    """One bad sample is not an outage.
+
+    Even with the race fixed, a single unlucky read must not reach anyone's
+    phone — the same reasoning as a Prometheus rule carrying `for:`.
+    """
+
+    def test_first_failure_does_not_page(self):
+        state = {}
+        self.assertFalse(watchdog.should_page(state, 'alerting_down', now=1000.0))
+
+    def test_second_consecutive_failure_pages(self):
+        state = {}
+        watchdog.should_page(state, 'alerting_down', now=1000.0)
+        self.assertTrue(watchdog.should_page(state, 'alerting_down', now=1300.0))
+
+    def test_recovery_resets_the_counter(self):
+        state = {}
+        watchdog.should_page(state, 'alerting_down', now=1000.0)
+        watchdog.clear_failures(state, 'alerting_down')
+        self.assertFalse(watchdog.should_page(state, 'alerting_down', now=1600.0))
+
+    def test_cooldown_still_applies_after_debounce(self):
+        state = {}
+        watchdog.should_page(state, 'alerting_down', now=1000.0)
+        self.assertTrue(watchdog.should_page(state, 'alerting_down', now=1300.0))
+        watchdog.mark_sent(state, 'alerting_down', 1300.0)
+        self.assertFalse(watchdog.due(state, 'alerting_down', 1400.0))
 
 
 class CooldownTests(unittest.TestCase):
