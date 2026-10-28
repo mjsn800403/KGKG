@@ -3,6 +3,12 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## Unreleased
+- **Fix (D-31):** a read of a missing RAG index created an empty `index.rag.db`, after which the
+  assistant answered 500 ("no such table") instead of 503 until the file was removed by hand; one
+  recommendations-panel view was enough. Read-only opens now raise `FileNotFoundError` and create
+  nothing (`api/rag/store.py`, test `api/rag/test_store_ro.py`).
+
 ## 2026-10-28 — v1.0.0: test architecture, security fixes, audit evidence (branch `qa-audit`)
 - **Security fixes found by the new tests** (each with a regression test; details in
   `audit-evidence/14-risk-and-corrective-actions/`): cross-company paid-media download through
