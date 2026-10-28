@@ -46,7 +46,7 @@ Final reports: `dast-final/` (commit `2f65a1d`).
 |---|---|---|
 | Baseline (passive spider) | 63 rules pass, **0 fail**; warnings: CSP `style-src 'unsafe-inline'` (Medium), COEP absent (Low), cache/content-type notes (Info) | Same on every run |
 | **API scan** (active; all 209 operations of `docs/openapi.yaml`, logout removed) | 118 rules pass, **0 fail, 0 server errors**; warnings: CSP `script-src 'unsafe-inline'` on non-page responses (nginx fallback policy), unexpected content type (Info), COEP (Low) | First runs provoked HTTP 500s on `/api/org/nodes/*` (→ D-29) and `/api/diagnose/` (→ investigation found D-30, a cross-vehicle entitlement bypass); a "SQL injection" heuristic on `events/recent?limit=102-2` was a false positive (invalid integers fall back to the default limit) |
-| Full (active, classic + AJAX spider) | `dast-final/zap-full.*` | Earlier runs: 141 rules pass, 0 fail. The classic spider alone reaches only ~6 URLs of this SPA, which is why the API scan exists |
+| Full (active, classic + AJAX spider) | 141 rules pass, **0 fail**; warnings on our origin: CSP `style-src 'unsafe-inline'` (Medium, accepted), COEP absent (Low). The browser-driven spider also loaded third-party hosts (Cloudflare Turnstile, Google); their header findings are listed in the report and are outside our control. No request reached production or staging (production traffic table checked for the scan hour) | Earlier runs: same pass/fail. The classic spider alone reaches only ~6 URLs of this SPA, which is why the API scan exists |
 
 Accepted: CSP `style-src 'unsafe-inline'` (React and manual content use
 inline styles; scripts on pages are nonce-restricted). Recommendation: the

@@ -1,0 +1,4999 @@
+{
+	"@programName": "ZAP",
+	"@version": "2.17.0",
+	"@generated": "Wed, 28 Oct 2026 00:44:30",
+	"created": "2026-10-28T00:44:30.935617912Z",
+	"insights":[
+		{
+			"level": "Medium",
+			"reason": "Exceeded High",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.code.4xx",
+			"description": "Percentage of responses with status code 4xx",
+			"statistic": "78"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.code.2xx",
+			"description": "Percentage of responses with status code 2xx",
+			"statistic": "20"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.ctype.application/json",
+			"description": "Percentage of endpoints with content type application/json",
+			"statistic": "92"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.ctype.text/event-stream",
+			"description": "Percentage of endpoints with content type text/event-stream",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.ctype.text/html",
+			"description": "Percentage of endpoints with content type text/html",
+			"statistic": "6"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.method.DELETE",
+			"description": "Percentage of endpoints with method DELETE",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.method.GET",
+			"description": "Percentage of endpoints with method GET",
+			"statistic": "89"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.method.PATCH",
+			"description": "Percentage of endpoints with method PATCH",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.method.POST",
+			"description": "Percentage of endpoints with method POST",
+			"statistic": "9"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.endpoint.total",
+			"description": "Count of total endpoints",
+			"statistic": "423"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://127.0.0.1:8130",
+			"key": "insight.response.slow",
+			"description": "Percentage of slow responses",
+			"statistic": "3"
+		}
+	],
+	"site":[ 
+		{
+			"@name": "http://127.0.0.1:8130",
+			"@host": "127.0.0.1",
+			"@port": "8130",
+			"@ssl": "false",
+			"alerts": [ 
+				{
+					"pluginid": "10055",
+					"alertRef": "10055-5",
+					"alert": "CSP: script-src unsafe-inline",
+					"name": "CSP: script-src unsafe-inline",
+					"riskcode": "2",
+					"confidence": "3",
+					"riskdesc": "Medium (High)",
+					"desc": "<p>Content Security Policy (CSP) is an added layer of security that helps to detect and mitigate certain types of attacks. Including (but not limited to) Cross Site Scripting (XSS), and data injection attacks. These attacks are used for everything from data theft to site defacement or distribution of malware. CSP provides a set of standard HTTP headers that allow website owners to declare approved sources of content that browsers should be allowed to load on that page \u2014 covered types are JavaScript, CSS, HTML frames, fonts, images and embeddable objects such as Java applets, ActiveX, audio and video files.</p>",
+					"instances":[ 
+						{
+							"id": "110",
+							"uri": "http://127.0.0.1:8130/kg-api/api/grafana-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/grafana-auth\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "script-src includes unsafe-inline."
+						},
+						{
+							"id": "104",
+							"uri": "http://127.0.0.1:8130/kg-api/api/media-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/media-auth\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "script-src includes unsafe-inline."
+						},
+						{
+							"id": "44",
+							"uri": "http://127.0.0.1:8130/kg-api/api/metrics/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/metrics\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "script-src includes unsafe-inline."
+						},
+						{
+							"id": "106",
+							"uri": "http://127.0.0.1:8130/kg-api/api/vnc-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/vnc-auth\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "script-src includes unsafe-inline."
+						},
+						{
+							"id": "84",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/x/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/x\/ ()({password})",
+							"method": "POST",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "script-src includes unsafe-inline."
+						}
+					],
+					"count": "5",
+					"systemic": false,
+					"solution": "<p>Ensure that your web server, application server, load balancer, etc. is properly configured to set the Content-Security-Policy header.</p>",
+					"otherinfo": "<p>script-src includes unsafe-inline.</p>",
+					"reference": "<p>https://www.w3.org/TR/CSP/</p><p>https://caniuse.com/#search=content+security+policy</p><p>https://content-security-policy.com/</p><p>https://github.com/HtmlUnit/htmlunit-csp</p><p>https://web.dev/articles/csp#resource-options</p>",
+					"cweid": "693",
+					"wascid": "15",
+					"sourceid": "198"
+				},
+				{
+					"pluginid": "10055",
+					"alertRef": "10055-6",
+					"alert": "CSP: style-src unsafe-inline",
+					"name": "CSP: style-src unsafe-inline",
+					"riskcode": "2",
+					"confidence": "3",
+					"riskdesc": "Medium (High)",
+					"desc": "<p>Content Security Policy (CSP) is an added layer of security that helps to detect and mitigate certain types of attacks. Including (but not limited to) Cross Site Scripting (XSS), and data injection attacks. These attacks are used for everything from data theft to site defacement or distribution of malware. CSP provides a set of standard HTTP headers that allow website owners to declare approved sources of content that browsers should be allowed to load on that page \u2014 covered types are JavaScript, CSS, HTML frames, fonts, images and embeddable objects such as Java applets, ActiveX, audio and video files.</p>",
+					"instances":[ 
+						{
+							"id": "111",
+							"uri": "http://127.0.0.1:8130/kg-api/api/grafana-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/grafana-auth\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "style-src includes unsafe-inline."
+						},
+						{
+							"id": "105",
+							"uri": "http://127.0.0.1:8130/kg-api/api/media-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/media-auth\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "style-src includes unsafe-inline."
+						},
+						{
+							"id": "45",
+							"uri": "http://127.0.0.1:8130/kg-api/api/metrics/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/metrics\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "style-src includes unsafe-inline."
+						},
+						{
+							"id": "107",
+							"uri": "http://127.0.0.1:8130/kg-api/api/vnc-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/vnc-auth\/",
+							"method": "GET",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "style-src includes unsafe-inline."
+						},
+						{
+							"id": "85",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/x/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/x\/ ()({password})",
+							"method": "POST",
+							"param": "Content-Security-Policy",
+							"attack": "",
+							"evidence": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+							"otherinfo": "style-src includes unsafe-inline."
+						}
+					],
+					"count": "5",
+					"systemic": false,
+					"solution": "<p>Ensure that your web server, application server, load balancer, etc. is properly configured to set the Content-Security-Policy header.</p>",
+					"otherinfo": "<p>style-src includes unsafe-inline.</p>",
+					"reference": "<p>https://www.w3.org/TR/CSP/</p><p>https://caniuse.com/#search=content+security+policy</p><p>https://content-security-policy.com/</p><p>https://github.com/HtmlUnit/htmlunit-csp</p><p>https://web.dev/articles/csp#resource-options</p>",
+					"cweid": "693",
+					"wascid": "15",
+					"sourceid": "198"
+				},
+				{
+					"pluginid": "90004",
+					"alertRef": "90004-2",
+					"alert": "Cross-Origin-Embedder-Policy Header Missing or Invalid",
+					"name": "Cross-Origin-Embedder-Policy Header Missing or Invalid",
+					"riskcode": "1",
+					"confidence": "2",
+					"riskdesc": "Low (Medium)",
+					"desc": "<p>Cross-Origin-Embedder-Policy header is a response header that prevents a document from loading any cross-origin resources that don't explicitly grant the document permission (using CORP or CORS).</p>",
+					"instances":[ 
+						{
+							"id": "112",
+							"uri": "http://127.0.0.1:8130/kg-api/api/media-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/media-auth\/",
+							"method": "GET",
+							"param": "Cross-Origin-Embedder-Policy",
+							"attack": "",
+							"evidence": "",
+							"otherinfo": ""
+						}
+					],
+					"count": "1",
+					"systemic": false,
+					"solution": "<p>Ensure that the application/web server sets the Cross-Origin-Embedder-Policy header appropriately, and that it sets the Cross-Origin-Embedder-Policy header to 'require-corp' for documents.</p><p>If possible, ensure that the end user uses a standards-compliant and modern web browser that supports the Cross-Origin-Embedder-Policy header (https://caniuse.com/mdn-http_headers_cross-origin-embedder-policy).</p>",
+					"otherinfo": "",
+					"reference": "<p>https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cross-Origin-Embedder-Policy</p>",
+					"cweid": "693",
+					"wascid": "14",
+					"sourceid": "194"
+				},
+				{
+					"pluginid": "100001",
+					"alertRef": "100001",
+					"alert": "Unexpected Content-Type was returned",
+					"name": "Unexpected Content-Type was returned",
+					"riskcode": "1",
+					"confidence": "3",
+					"riskdesc": "Low (High)",
+					"desc": "<p>A Content-Type of text/html was returned by the server.</p><p>This is not one of the types expected to be returned by an API.</p><p>Raised by the 'Alert on Unexpected Content Types' script</p>",
+					"instances":[ 
+						{
+							"id": "1101",
+							"uri": "http://127.0.0.1:8130",
+							"nodeName": "http:\/\/127.0.0.1:8130",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "12594",
+							"uri": "http://127.0.0.1:8130/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "109",
+							"uri": "http://127.0.0.1:8130/1357444200388016700",
+							"nodeName": "http:\/\/127.0.0.1:8130\/1357444200388016700",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "114",
+							"uri": "http://127.0.0.1:8130/7687322987418052976",
+							"nodeName": "http:\/\/127.0.0.1:8130\/7687322987418052976",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "123",
+							"uri": "http://127.0.0.1:8130/Toyota/2025/1324656364141298873",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/2025\/1324656364141298873",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "238",
+							"uri": "http://127.0.0.1:8130/Toyota/2025/2604667812767378316",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/2025\/2604667812767378316",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "239",
+							"uri": "http://127.0.0.1:8130/Toyota/2025/4327963923563575231",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/2025\/4327963923563575231",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "121",
+							"uri": "http://127.0.0.1:8130/Toyota/2025/5456861108869616225",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/2025\/5456861108869616225",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "237",
+							"uri": "http://127.0.0.1:8130/Toyota/742538007232261763",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/742538007232261763",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "118",
+							"uri": "http://127.0.0.1:8130/Toyota/7585234352835102562",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/7585234352835102562",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1169",
+							"uri": "http://127.0.0.1:8130/kg-api",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "116",
+							"uri": "http://127.0.0.1:8130/kg-api/7687322987418052976",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/7687322987418052976",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1170",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1172",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "124",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/1324656364141298873",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/1324656364141298873",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "122",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/5456861108869616225",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/5456861108869616225",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1176",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/Corolla%20Cross%20Hybrid%20S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/Corolla Cross Hybrid S",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "120",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/7585234352835102562",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/7585234352835102562",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1178",
+							"uri": "http://127.0.0.1:8130/kg-api/api",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1270",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events/stream",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events\/stream",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "99",
+							"uri": "http://127.0.0.1:8130/kg-api/api/grafana-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/grafana-auth\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "101",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025/Corolla%20Cross%20Hybrid%20S/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025\/Corolla Cross Hybrid S\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/csv",
+							"otherinfo": ""
+						},
+						{
+							"id": "95",
+							"uri": "http://127.0.0.1:8130/kg-api/api/media-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/media-auth\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "1",
+							"uri": "http://127.0.0.1:8130/kg-api/api/metrics/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/metrics\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "12512",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/2025/Corolla%20Cross%20Hybrid%20S/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/2025\/Corolla Cross Hybrid S\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/csv",
+							"otherinfo": ""
+						},
+						{
+							"id": "14376",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/2025/Corolla%20Cross%20Hybrid%20S/?probe=",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/2025\/Corolla Cross Hybrid S\/ (probe)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/csv",
+							"otherinfo": ""
+						},
+						{
+							"id": "12521",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/report/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/report\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "application/pdf",
+							"otherinfo": ""
+						},
+						{
+							"id": "380",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/report/?range=http%3A%2F%2Fwww.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/report\/ (range)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "application/pdf",
+							"otherinfo": ""
+						},
+						{
+							"id": "97",
+							"uri": "http://127.0.0.1:8130/kg-api/api/vnc-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/vnc-auth\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "9458",
+							"uri": "http://127.0.0.1:8130/metadata/instance",
+							"nodeName": "http:\/\/127.0.0.1:8130\/metadata\/instance",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "9461",
+							"uri": "http://127.0.0.1:8130/metadata/v1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/metadata\/v1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "9464",
+							"uri": "http://127.0.0.1:8130/openstack/latest/meta_data.json",
+							"nodeName": "http:\/\/127.0.0.1:8130\/openstack\/latest\/meta_data.json",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						},
+						{
+							"id": "37",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/x/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/x\/ ()({password})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "text/html",
+							"otherinfo": ""
+						}
+					],
+					"count": "33",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "-1",
+					"wascid": "-1",
+					"sourceid": "1610"
+				},
+				{
+					"pluginid": "100000",
+					"alertRef": "100000-1",
+					"alert": "A Client Error response code was returned by the server",
+					"name": "A Client Error response code was returned by the server",
+					"riskcode": "0",
+					"confidence": "3",
+					"riskdesc": "Informational (High)",
+					"desc": "<p>A response code of 404 was returned by the server.</p><p>This may indicate that the application is failing to handle unexpected input correctly.</p><p>Raised by the 'Alert on HTTP Response Code Error' script</p>",
+					"instances":[ 
+						{
+							"id": "30",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/",
+							"method": "DELETE",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "108",
+							"uri": "http://127.0.0.1:8130/1357444200388016700",
+							"nodeName": "http:\/\/127.0.0.1:8130\/1357444200388016700",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "113",
+							"uri": "http://127.0.0.1:8130/7687322987418052976",
+							"nodeName": "http:\/\/127.0.0.1:8130\/7687322987418052976",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "236",
+							"uri": "http://127.0.0.1:8130/Toyota/742538007232261763",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/742538007232261763",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "117",
+							"uri": "http://127.0.0.1:8130/Toyota/7585234352835102562",
+							"nodeName": "http:\/\/127.0.0.1:8130\/Toyota\/7585234352835102562",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "115",
+							"uri": "http://127.0.0.1:8130/kg-api/7687322987418052976",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/7687322987418052976",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "8515",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/Corolla%20Cross%20Hybrid%20S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/Corolla Cross Hybrid S",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12553",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/Corolla%20Cross%20Hybrid%20S/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/Corolla Cross Hybrid S\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "103",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/Corolla%20Cross%20Hybrid%20S/?seg=%5B%22Engine%22%5D&href=x&page=x&q=oil&limit=30&spec=1&subtree=1&max=100&nav=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/Corolla Cross Hybrid S\/ (href,limit,max,nav,page,q,seg,spec,subtree)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "8020",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/Corolla%20Cross%20Hybrid%20S/?seg=%5B%22Engine%22%5D&href=x&page=x&q=oil&limit=30&spec=1%3Bget-help+%23&subtree=1&max=100&nav=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/Corolla Cross Hybrid S\/ (href,limit,max,nav,page,q,seg,spec,subtree)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "125",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/2025/Corolla%20Cross%20Hybrid%20S/694653114150344654",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/2025\/Corolla Cross Hybrid S\/694653114150344654",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "119",
+							"uri": "http://127.0.0.1:8130/kg-api/Toyota/7585234352835102562",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/Toyota\/7585234352835102562",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12599",
+							"uri": "http://127.0.0.1:8130/kg-api/api/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "126",
+							"uri": "http://127.0.0.1:8130/kg-api/api/8256256952805654880",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/8256256952805654880",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1179",
+							"uri": "http://127.0.0.1:8130/kg-api/api/activity",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/activity",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12602",
+							"uri": "http://127.0.0.1:8130/kg-api/api/activity/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/activity\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "127",
+							"uri": "http://127.0.0.1:8130/kg-api/api/activity/2790130390585198936",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/activity\/2790130390585198936",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1182",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12603",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "128",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/7755944071789394171",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/7755944071789394171",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1183",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/activity",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/activity",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12552",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/activity/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/activity\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "73",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/activity/?limit=200&user_id=1&company_id=1&category=x",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/activity\/ (category,company_id,limit,user_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "129",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/activity/3721702394257857690",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/activity\/3721702394257857690",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1184",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/analytics",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/analytics",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12550",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/analytics/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/analytics\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "74",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/analytics/?range=30&company_id=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/analytics\/ (company_id,range)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "130",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/analytics/1791139587037933006",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/analytics\/1791139587037933006",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1185",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/audit",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/audit",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12551",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/audit/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/audit\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "72",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/audit/?action=x&actor=x&outcome=x&company_id=1&target_id=x&before_id=1&limit=50",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/audit\/ (action,actor,before_id,company_id,limit,outcome,target_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "131",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/audit/4092814159246768919",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/audit\/4092814159246768919",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1187",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/cars",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/cars",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "47",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/cars/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/cars\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "132",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/cars/5940838172258457681",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/cars\/5940838172258457681",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1189",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/chat-logs",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/chat-logs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12545",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/chat-logs/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/chat-logs\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "22",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/chat-logs/?q=oil&user_id=1&page=1&company_id=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/chat-logs\/ (company_id,page,q,user_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "133",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/chat-logs/269035048552851610",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/chat-logs\/269035048552851610",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1190",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "48",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "1192",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "50",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "135",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/7704842582213587710",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/7704842582213587710",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1194",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/access",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/access",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12619",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/access/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/access\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "136",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/access/1537224195062539338",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/access\/1537224195062539338",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1196",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "56",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "137",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles/8531677577777936936",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles\/8531677577777936936",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1197",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles/delete",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles\/delete",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12623",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles/delete/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles\/delete\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "138",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles/delete/4619111743675805954",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles\/delete\/4619111743675805954",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "134",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/7449015906233873614",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/7449015906233873614",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1198",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12544",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "14",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests/?status=pending&company_id=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests\/ (company_id,status)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "1199",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests/1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests\/1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12626",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests\/1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "140",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests/1/6037783370631344929",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests\/1\/6037783370631344929",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "139",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests/8330510556597058643",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests\/8330510556597058643",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1201",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/dashboard",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/dashboard",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "11",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/dashboard/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/dashboard\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "141",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/dashboard/6775353955792244906",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/dashboard\/6775353955792244906",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1202",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/data-quality",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/data-quality",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "2",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/data-quality/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/data-quality\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "142",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/data-quality/3503514861357816901",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/data-quality\/3503514861357816901",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1203",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "17",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "143",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/1195206103677287099",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/1195206103677287099",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1205",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/x",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/x",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12635",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/x/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/x\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "144",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/x/6315827514960366068",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/x\/6315827514960366068",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1206",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/x/results",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/x\/results",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12539",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/x/results/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/x\/results\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "19",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/x/results/?days=30&exclude_companies=1,2",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/x\/results\/ (days,exclude_companies)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "145",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/x/results/7752600957802517995",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/x\/results\/7752600957802517995",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1207",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/grafana-ticket",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/grafana-ticket",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12638",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/grafana-ticket/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/grafana-ticket\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "146",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/grafana-ticket/6950724297407874256",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/grafana-ticket\/6950724297407874256",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1209",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12640",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "147",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/5341561222178041147",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/5341561222178041147",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1210",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/ai-cost",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/ai-cost",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12540",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/ai-cost/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/ai-cost\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "71",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/ai-cost/?days=30",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/ai-cost\/ (days)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "148",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/ai-cost/764346690133056573",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/ai-cost\/764346690133056573",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1212",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/assistant",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/assistant",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12538",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/assistant/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/assistant\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "20",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/assistant/?session=x&log=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/assistant\/ (log,session)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "149",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/assistant/9056037463288833731",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/assistant\/9056037463288833731",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1213",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/funnel",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/funnel",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "70",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/funnel/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/funnel\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "150",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/funnel/5108193459025377433",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/funnel\/5108193459025377433",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1215",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/search",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/search",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12535",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/search/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/search\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "68",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/search/?car=Corolla%20Cross%20Hybrid%20S&company_id=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/search\/ (car,company_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "151",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/search/3121518366305017249",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/search\/3121518366305017249",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1217",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/login",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/login",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12651",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/login\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "152",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/login/4164431993060203260",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/login\/4164431993060203260",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1218",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/org",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/org",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12653",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/org/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/org\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "153",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/org/5689853336747361613",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/org\/5689853336747361613",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1220",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/org/reassign-root",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/org\/reassign-root",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12654",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/org/reassign-root/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/org\/reassign-root\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "154",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/org/reassign-root/6721700967786033425",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/org\/reassign-root\/6721700967786033425",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1221",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/overview",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/overview",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "40",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/overview/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/overview\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "155",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/overview/2013409928328214177",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/overview\/2013409928328214177",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1222",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/packages",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/packages",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "41",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/packages/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/packages\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "156",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/packages/801860964271730417",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/packages\/801860964271730417",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1224",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/parts",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/parts",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "94",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/parts/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/parts\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "157",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/parts/7808580184054621870",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/parts\/7808580184054621870",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1225",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/pipeline",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/pipeline",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "7",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/pipeline/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/pipeline\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "158",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/pipeline/167971428608896612",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/pipeline\/167971428608896612",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1227",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/processing-snapshot",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/processing-snapshot",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "10",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/processing-snapshot/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/processing-snapshot\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "159",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/processing-snapshot/303598392346460667",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/processing-snapshot\/303598392346460667",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1229",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "42",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "1230",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12668",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "161",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/8354782502716711855",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/8354782502716711855",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1231",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/delete",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/delete",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12670",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/delete/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/delete\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "162",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/delete/5595028341047071515",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/delete\/5595028341047071515",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1232",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/status",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/status",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12673",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/status/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/status\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "163",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/status/7844767461247387985",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/status\/7844767461247387985",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "160",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/139410381610010070",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/139410381610010070",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1234",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/system",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/system",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/system/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/system\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "164",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/system/5393413758471321058",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/system\/5393413758471321058",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1236",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/traffic",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/traffic",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12528",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/traffic/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/traffic\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "6",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/traffic/?range=7",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/traffic\/ (range)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "165",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/traffic/8044928946737472936",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/traffic\/8044928946737472936",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1238",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12526",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "60",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/?company_id=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/ (company_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "1239",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "62",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "167",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1/3014822181149845536",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1\/3014822181149845536",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1241",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1/access",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1\/access",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12682",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1/access/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1\/access\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "168",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1/access/4334215801722891960",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1\/access\/4334215801722891960",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "166",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/4439047032462330374",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/4439047032462330374",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1243",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/vehicle-specs",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/vehicle-specs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12522",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/vehicle-specs/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/vehicle-specs\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "9",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/vehicle-specs/?car_id=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/vehicle-specs\/ (car_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "169",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/vehicle-specs/8076546114018290982",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/vehicle-specs\/8076546114018290982",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1244",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/verify-otp",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/verify-otp",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12689",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/verify-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/verify-otp\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "170",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/verify-otp/2002066175568286332",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/verify-otp\/2002066175568286332",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1246",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12523",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "14437",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/?=&brand=Toyota&model=Corolla+Cross+Hybrid+S&car=Corolla+Cross+Hybrid+S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/ (brand,car,model)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "1329",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/?q=engine+oil+capacity&brand=Toyota&model=www.google.com%2Fsearch%3Fq%3DZAP&car=Corolla+Cross+Hybrid+S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/ (brand,car,model,q)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "171",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/5556684072322471411",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/5556684072322471411",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1247",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/feedback",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/feedback",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12690",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/feedback/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/feedback\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "172",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/feedback/4354652107777562185",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/feedback\/4354652107777562185",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1248",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12692",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "173",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/5281008577366376258",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/5281008577366376258",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1249",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/ai-usage",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/ai-usage",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12524",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/ai-usage/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/ai-usage\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "174",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/ai-usage/4395544368171912053",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/ai-usage\/4395544368171912053",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1250",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-feedback",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-feedback",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12695",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-feedback/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-feedback\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "175",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-feedback/7069439758342903968",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-feedback\/7069439758342903968",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1251",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-log",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-log",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12698",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-log/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-log\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "176",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-log/6792387943212284967",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-log\/6792387943212284967",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1252",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/flags",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/flags",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "177",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/flags/3207246844377151956",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/flags\/3207246844377151956",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1253",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/fleet",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/fleet",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "178",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/fleet/5608627760278718533",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/fleet\/5608627760278718533",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1254",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/login",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/login",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12705",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/login\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "179",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/login/8463407926295773508",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/login\/8463407926295773508",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1255",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/me",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/me",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "180",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/me/1836979544600427222",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/me\/1836979544600427222",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1256",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/me/prefs",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/me\/prefs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12708",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/me/prefs/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/me\/prefs\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "181",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/me/prefs/7680952022902994220",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/me\/prefs\/7680952022902994220",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1257",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12706",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "182",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/6333705769974997335",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/6333705769974997335",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1258",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/reset",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/reset",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12710",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/reset/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/reset\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "183",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/reset/3992356402284167414",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/reset\/3992356402284167414",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1259",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/start",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/start",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12718",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/start/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/start\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "184",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/start/3684951206475115567",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/start\/3684951206475115567",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1260",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/resend-otp",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/resend-otp",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12717",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/resend-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/resend-otp\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "185",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/resend-otp/2319993378339125564",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/resend-otp\/2319993378339125564",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1261",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/verify-otp",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/verify-otp",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12716",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/verify-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/verify-otp\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "186",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/verify-otp/4141308065472735469",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/verify-otp\/4141308065472735469",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1262",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12715",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "187",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/7907799445832332006",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/7907799445832332006",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1263",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/requests",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/requests",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1264",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/requests/1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/requests\/1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/requests/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/requests\/1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "189",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/requests/1/3846435467517513241",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/requests\/1\/3846435467517513241",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "188",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/requests/8619034457475416423",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/requests\/8619034457475416423",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1265",
+							"uri": "http://127.0.0.1:8130/kg-api/api/diagnose",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/diagnose",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12519",
+							"uri": "http://127.0.0.1:8130/kg-api/api/diagnose/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/diagnose\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "1324",
+							"uri": "http://127.0.0.1:8130/kg-api/api/diagnose/?q=engine+oil+capacity&brand=Toyota&model=Corolla+Cross+Hybrid+S&car=www.google.com%2F",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/diagnose\/ (brand,car,model,q)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "190",
+							"uri": "http://127.0.0.1:8130/kg-api/api/diagnose/3509264373759853359",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/diagnose\/3509264373759853359",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1266",
+							"uri": "http://127.0.0.1:8130/kg-api/api/eval",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/eval",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12723",
+							"uri": "http://127.0.0.1:8130/kg-api/api/eval/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/eval\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "191",
+							"uri": "http://127.0.0.1:8130/kg-api/api/eval/7073469352755518513",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/eval\/7073469352755518513",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1267",
+							"uri": "http://127.0.0.1:8130/kg-api/api/eval/report",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/eval\/report",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "89",
+							"uri": "http://127.0.0.1:8130/kg-api/api/eval/report/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/eval\/report\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "192",
+							"uri": "http://127.0.0.1:8130/kg-api/api/eval/report/4727729351213656267",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/eval\/report\/4727729351213656267",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1268",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12730",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "193",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events/6124539308406219651",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events\/6124539308406219651",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1269",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events/recent",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events\/recent",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "194",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events/recent/120408114347824793",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events\/recent\/120408114347824793",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1271",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12733",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "195",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/163942528610570927",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/163942528610570927",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1272",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/pin",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/pin",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12735",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/pin/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/pin\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "196",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/pin/2681074981104820664",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/pin\/2681074981104820664",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1274",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/rate",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/rate",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12737",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/rate/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/rate\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "197",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/rate/989989021655211938",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/rate\/989989021655211938",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1275",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/recent",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/recent",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12517",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/recent/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/recent\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "88",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/recent/?limit=50",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/recent\/ (limit)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "198",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/recent/728714143037646692",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/recent\/728714143037646692",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1276",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12740",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "199",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/820200560009868238",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/820200560009868238",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "1277",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/x",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/x",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "8678",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/x",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/x",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12520",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/x/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/x\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "102",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/x/?part=lts",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/x\/ (part)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "8907",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/x/?part=%22%27",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/x\/ (part)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "200",
+							"uri": "http://127.0.0.1:8130/kg-api/api/frm/x/4773473723671437051",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/frm\/x\/4773473723671437051",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "1278",
+							"uri": "http://127.0.0.1:8130/kg-api/api/grafana-auth",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/grafana-auth",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "98",
+							"uri": "http://127.0.0.1:8130/kg-api/api/grafana-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/grafana-auth\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "201",
+							"uri": "http://127.0.0.1:8130/kg-api/api/grafana-auth/2309216886796556918",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/grafana-auth\/2309216886796556918",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1279",
+							"uri": "http://127.0.0.1:8130/kg-api/api/health",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/health",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "202",
+							"uri": "http://127.0.0.1:8130/kg-api/api/health/3951291564778103694",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/health\/3951291564778103694",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1280",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12748",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "203",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/8996670380232395205",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/8996670380232395205",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1281",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/x",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/x",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "35",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/x/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/x\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "204",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/x/8370964059106554821",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/x\/8370964059106554821",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1282",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12752",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "205",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/7029749419274002764",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/7029749419274002764",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1283",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "8691",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12755",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1284",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "8703",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12756",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "207",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025/651159102258049246",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025\/651159102258049246",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1285",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025/Corolla%20Cross%20Hybrid%20S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025\/Corolla Cross Hybrid S",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "8710",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025/Corolla%20Cross%20Hybrid%20S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025\/Corolla Cross Hybrid S",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12514",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025/Corolla%20Cross%20Hybrid%20S/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025\/Corolla Cross Hybrid S\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "208",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2025/Corolla%20Cross%20Hybrid%20S/3668515541914741164",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2025\/Corolla Cross Hybrid S\/3668515541914741164",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "206",
+							"uri": "http://127.0.0.1:8130/kg-api/api/labor-times/Toyota/2741990169984659914",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/labor-times\/Toyota\/2741990169984659914",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1286",
+							"uri": "http://127.0.0.1:8130/kg-api/api/media-auth",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/media-auth",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "209",
+							"uri": "http://127.0.0.1:8130/kg-api/api/media-auth/3679146329641565895",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/media-auth\/3679146329641565895",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1287",
+							"uri": "http://127.0.0.1:8130/kg-api/api/metrics",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/metrics",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "0",
+							"uri": "http://127.0.0.1:8130/kg-api/api/metrics/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/metrics\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "210",
+							"uri": "http://127.0.0.1:8130/kg-api/api/metrics/4303974274653293699",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/metrics\/4303974274653293699",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1288",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12764",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "211",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/3537605283857845131",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/3537605283857845131",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1289",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/graph",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/graph",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "212",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/graph/6600495761627898035",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/graph\/6600495761627898035",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1290",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12770",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1291",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12776",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "214",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/1546434732713294729",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/1546434732713294729",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1292",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/create-user",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/create-user",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12773",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/create-user/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/create-user\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "215",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/create-user/6509760011051663751",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/create-user\/6509760011051663751",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1293",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/permission",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/permission",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12778",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/permission/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/permission\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "216",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/permission/3309935921210966635",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/permission\/3309935921210966635",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "213",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/2454310009592552239",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/2454310009592552239",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1294",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12777",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "217",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/2329503190944194661",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/2329503190944194661",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "1295",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "8731",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12775",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1296",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "8735",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12780",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "219",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/4016272362223944809",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/4016272362223944809",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "1297",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/Corolla%20Cross%20Hybrid%20S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/Corolla Cross Hybrid S",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "8736",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/Corolla%20Cross%20Hybrid%20S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/Corolla Cross Hybrid S",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "12513",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/Corolla%20Cross%20Hybrid%20S/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/Corolla Cross Hybrid S\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "93",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/Corolla%20Cross%20Hybrid%20S/?cfg=x&seg=%5B%22x%22%5D",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/Corolla Cross Hybrid S\/ (cfg,seg)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "8906",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/Corolla%20Cross%20Hybrid%20S/?cfg=%22%27&seg=%5B%22x%22%5D",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/Corolla Cross Hybrid S\/ (cfg,seg)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "220",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/2025/Corolla%20Cross%20Hybrid%20S/8722048669007255217",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/2025\/Corolla Cross Hybrid S\/8722048669007255217",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "218",
+							"uri": "http://127.0.0.1:8130/kg-api/api/parts/Toyota/7161939899158904008",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/parts\/Toyota\/7161939899158904008",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "1298",
+							"uri": "http://127.0.0.1:8130/kg-api/api/purchase-request",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/purchase-request",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12784",
+							"uri": "http://127.0.0.1:8130/kg-api/api/purchase-request/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/purchase-request\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "221",
+							"uri": "http://127.0.0.1:8130/kg-api/api/purchase-request/2592486354400088701",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/purchase-request\/2592486354400088701",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1299",
+							"uri": "http://127.0.0.1:8130/kg-api/api/recommendations",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/recommendations",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "222",
+							"uri": "http://127.0.0.1:8130/kg-api/api/recommendations/1153894163212069832",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/recommendations\/1153894163212069832",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1300",
+							"uri": "http://127.0.0.1:8130/kg-api/api/search",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/search",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12507",
+							"uri": "http://127.0.0.1:8130/kg-api/api/search/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/search\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "90",
+							"uri": "http://127.0.0.1:8130/kg-api/api/search/?q=engine%20oil&brand=Toyota&model=Corolla%20Cross%20Hybrid%20S&car=Corolla%20Cross%20Hybrid%20S&limit=30",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/search\/ (brand,car,limit,model,q)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "223",
+							"uri": "http://127.0.0.1:8130/kg-api/api/search/7716472241905371432",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/search\/7716472241905371432",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "1301",
+							"uri": "http://127.0.0.1:8130/kg-api/api/shield",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/shield",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12788",
+							"uri": "http://127.0.0.1:8130/kg-api/api/shield/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/shield\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "224",
+							"uri": "http://127.0.0.1:8130/kg-api/api/shield/2141810138937154912",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/shield\/2141810138937154912",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1302",
+							"uri": "http://127.0.0.1:8130/kg-api/api/shield/key",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/shield\/key",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "91",
+							"uri": "http://127.0.0.1:8130/kg-api/api/shield/key/?e=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/shield\/key\/ (e)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "225",
+							"uri": "http://127.0.0.1:8130/kg-api/api/shield/key/8207283458114955661",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/shield\/key\/8207283458114955661",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1303",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12792",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "226",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/4732356118006703828",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/4732356118006703828",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1304",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12793",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1305",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/2025",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/2025",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12796",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/2025/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/2025\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "228",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/2025/8856423694952780938",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/2025\/8856423694952780938",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1306",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/2025/Corolla%20Cross%20Hybrid%20S",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/2025\/Corolla Cross Hybrid S",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "229",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/2025/Corolla%20Cross%20Hybrid%20S/2536932632595967558",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/2025\/Corolla Cross Hybrid S\/2536932632595967558",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "227",
+							"uri": "http://127.0.0.1:8130/kg-api/api/sst/Toyota/6851450999037505604",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/sst\/Toyota\/6851450999037505604",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1307",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "12799",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "230",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/4238500648860799541",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/4238500648860799541",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1308",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/analytics",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/analytics",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "27",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/analytics/?range=30&member_id=1&category=x",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/analytics\/ (category,member_id,range)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "231",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/analytics/5060789676433834744",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/analytics\/5060789676433834744",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1309",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/chat-logs",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/chat-logs",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "21",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/chat-logs/?q=oil&user_id=1&page=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/chat-logs\/ (page,q,user_id)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "232",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/chat-logs/4740477094747493483",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/chat-logs\/4740477094747493483",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1310",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/insights",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/insights",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "233",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/insights/3399577491428248984",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/insights\/3399577491428248984",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1311",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/report",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/report",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "28",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/report/?range=30",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/report\/ (range)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "234",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/report/6089596327068063807",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/report\/6089596327068063807",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1312",
+							"uri": "http://127.0.0.1:8130/kg-api/api/vnc-auth",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/vnc-auth",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "96",
+							"uri": "http://127.0.0.1:8130/kg-api/api/vnc-auth/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/vnc-auth\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "235",
+							"uri": "http://127.0.0.1:8130/kg-api/api/vnc-auth/255530565669168171",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/vnc-auth\/255530565669168171",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "14641",
+							"uri": "http://127.0.0.1:8130/kg-api/api/vnc-auth/actuator/health",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/vnc-auth\/actuator\/health",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "9457",
+							"uri": "http://127.0.0.1:8130/metadata/instance",
+							"nodeName": "http:\/\/127.0.0.1:8130\/metadata\/instance",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "9460",
+							"uri": "http://127.0.0.1:8130/metadata/v1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/metadata\/v1",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "31",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/ ()({label,parent_id})",
+							"method": "PATCH",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "49",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/ ()({})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "54",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/ ()({})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "55",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/access/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/access\/ ()({accesses:[]})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "57",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles\/ ()({})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "59",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/companies/1/roles/delete/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/companies\/1\/roles\/delete\/ ()({})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "15",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/company-requests/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/company-requests\/1\/ ()({status,admin_note})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "3",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/data-quality/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/data-quality\/ ()({refresh,fix})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "18",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/flags/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/flags\/ ()({key,enabled,rollout_pct})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "100",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/grafana-ticket/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/grafana-ticket\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "38",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/login\/ ()({username,password})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "721",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/login\/ ()({username,password})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "34",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/org/reassign-root/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/org\/reassign-root\/ ()({company_id,username})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "8",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/pipeline/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/pipeline\/ ()({action})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "46",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/delete/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/delete\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "43",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/requests/1/status/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/requests\/1\/status\/ ()({status})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "5",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/system/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/system\/ ()({action})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "61",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/ ()({})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "63",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1\/ ()({})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "67",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/users/1/access/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/users\/1\/access\/ ()({})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "39",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/verify-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/verify-otp\/ ()({otp_session,code})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "778",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/verify-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/verify-otp\/ ()({otp_session,code})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1879",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/ ()({query,brand,model})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "4739",
+							"uri": "http://127.0.0.1:8130/kg-api/api/assist/feedback/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/assist\/feedback\/ ()({query,blob_id,app_url})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "11861",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/ai-usage/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/ai-usage\/ ()({detail,car})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "813",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-feedback/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-feedback\/ ()({key,kind,verdict})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "796",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-feedback/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-feedback\/ ()({key,kind,verdict})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "14454",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/chat-log/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/chat-log\/ ()({question,answer,client_key})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "16",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/login\/ ()({username,password,turnstile_token})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "849",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/login\/ ()({username,password,turnstile_token})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "872",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/me/prefs/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/me\/prefs\/ ()({browse_mode})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "26",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/reset/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/reset\/ ()({otp_session,code,new_password})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "897",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/reset/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/reset\/ ()({otp_session,code,new_password})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "25",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/start/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/start\/ ()({identifier,turnstile_token})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "931",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/recover/start/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/recover\/start\/ ()({identifier,turnstile_token})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "24",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/resend-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/resend-otp\/ ()({otp_session})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "919",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/resend-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/resend-otp\/ ()({otp_session})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "23",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/verify-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/verify-otp\/ ()({otp_session,code})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "981",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/verify-otp/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/verify-otp\/ ()({otp_session,code})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "954",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/requests/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/requests\/ ()({kind,subject,body,priority})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "13",
+							"uri": "http://127.0.0.1:8130/kg-api/api/company/requests/1/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/company\/requests\/1\/ ()({cancel})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1317",
+							"uri": "http://127.0.0.1:8130/kg-api/api/diagnose/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/diagnose\/ ()({query,brand,model})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "87",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/pin/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/pin\/ ()({pattern_query,app_url})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "1028",
+							"uri": "http://127.0.0.1:8130/kg-api/api/feedback/rate/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/feedback\/rate\/ ()({query,verdict})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "36",
+							"uri": "http://127.0.0.1:8130/kg-api/api/invite/x/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/invite\/x\/ ()({password})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "29",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/ ()({label,parent_id,x,y})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "33",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/create-user/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/create-user\/ ()({display_name,phone})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "32",
+							"uri": "http://127.0.0.1:8130/kg-api/api/org/nodes/1/permission/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/org\/nodes\/1\/permission\/ ()({car_access:[{car_id,documents:[]}],ai_eligible,admin_panels:[]})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "92",
+							"uri": "http://127.0.0.1:8130/kg-api/api/purchase-request/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/purchase-request\/ ()({brand,model,year,documents:[],company,mobile})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "1120",
+							"uri": "http://127.0.0.1:8130/kg-api/api/purchase-request/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/purchase-request\/ ()({brand,model,year,documents:[],company,mobile})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						}
+					],
+					"count": "411",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "388",
+					"wascid": "20",
+					"sourceid": "98"
+				},
+				{
+					"pluginid": "10111",
+					"alertRef": "10111",
+					"alert": "Authentication Request Identified",
+					"name": "Authentication Request Identified",
+					"riskcode": "0",
+					"confidence": "3",
+					"riskdesc": "Informational (High)",
+					"desc": "<p>The given request has been identified as an authentication request. The 'Other Info' field contains a set of key=value lines which identify any relevant fields. If the request is in a context which has an Authentication Method set to \"Auto-Detect\" then this rule will change the authentication to match the request identified.</p>",
+					"instances":[ 
+						{
+							"id": "83",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/login\/ ()({username,password})",
+							"method": "POST",
+							"param": "username",
+							"attack": "",
+							"evidence": "password",
+							"otherinfo": "userParam=username\nuserValue=x\npasswordParam=password"
+						},
+						{
+							"id": "79",
+							"uri": "http://127.0.0.1:8130/kg-api/api/auth/login/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/auth\/login\/ ()({username,password,turnstile_token})",
+							"method": "POST",
+							"param": "username",
+							"attack": "",
+							"evidence": "password",
+							"otherinfo": "userParam=username\nuserValue=x\npasswordParam=password"
+						}
+					],
+					"count": "2",
+					"systemic": false,
+					"solution": "<p>This is an informational alert rather than a vulnerability and so there is nothing to fix.</p>",
+					"otherinfo": "<p>userParam=username</p><p>userValue=x</p><p>passwordParam=password</p>",
+					"reference": "<p>https://www.zaproxy.org/docs/desktop/addons/authentication-helper/auth-req-id/</p>",
+					"cweid": "-1",
+					"wascid": "-1",
+					"sourceid": "112"
+				},
+				{
+					"pluginid": "10024",
+					"alertRef": "10024",
+					"alert": "Information Disclosure - Sensitive Information in URL",
+					"name": "Information Disclosure - Sensitive Information in URL",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>The request appeared to contain sensitive information leaked in the URL. This can violate PCI and most organizational compliance policies. You can configure the list of strings for this check to add or remove values specific to your environment.</p>",
+					"instances":[ 
+						{
+							"id": "86",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/activity/?limit=200&user_id=1&company_id=1&category=x",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/activity\/ (category,company_id,limit,user_id)",
+							"method": "GET",
+							"param": "user_id",
+							"attack": "",
+							"evidence": "user_id",
+							"otherinfo": "The URL contains potentially sensitive information. The following string was found via the pattern: user\nuser_id"
+						},
+						{
+							"id": "82",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/chat-logs/?q=oil&user_id=1&page=1&company_id=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/chat-logs\/ (company_id,page,q,user_id)",
+							"method": "GET",
+							"param": "user_id",
+							"attack": "",
+							"evidence": "user_id",
+							"otherinfo": "The URL contains potentially sensitive information. The following string was found via the pattern: user\nuser_id"
+						},
+						{
+							"id": "81",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/insights/assistant/?session=x&log=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/insights\/assistant\/ (log,session)",
+							"method": "GET",
+							"param": "session",
+							"attack": "",
+							"evidence": "session",
+							"otherinfo": "The URL contains potentially sensitive information. The following string was found via the pattern: session\nsession"
+						},
+						{
+							"id": "80",
+							"uri": "http://127.0.0.1:8130/kg-api/api/team/chat-logs/?q=oil&user_id=1&page=1",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/team\/chat-logs\/ (page,q,user_id)",
+							"method": "GET",
+							"param": "user_id",
+							"attack": "",
+							"evidence": "user_id",
+							"otherinfo": "The URL contains potentially sensitive information. The following string was found via the pattern: user\nuser_id"
+						}
+					],
+					"count": "4",
+					"systemic": false,
+					"solution": "<p>Do not pass sensitive information in URIs.</p>",
+					"otherinfo": "<p>The URL contains potentially sensitive information. The following string was found via the pattern: user</p><p>user_id</p>",
+					"reference": "",
+					"cweid": "598",
+					"wascid": "13",
+					"sourceid": "158"
+				},
+				{
+					"pluginid": "10049",
+					"alertRef": "10049-1",
+					"alert": "Non-Storable Content",
+					"name": "Non-Storable Content",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>The response contents are not storable by caching components such as proxy servers. If the response does not contain sensitive, personal or user-specific information, it may benefit from being stored and cached, to improve performance.</p>",
+					"instances":[ 
+						{
+							"id": "52",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/data-quality/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/data-quality\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "64",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/system/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/system\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "58",
+							"uri": "http://127.0.0.1:8130/kg-api/api/metrics/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/metrics\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "403",
+							"otherinfo": ""
+						},
+						{
+							"id": "53",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/data-quality/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/data-quality\/ ()({refresh,fix})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						},
+						{
+							"id": "65",
+							"uri": "http://127.0.0.1:8130/kg-api/api/admin/system/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/admin\/system\/ ()({action})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "401",
+							"otherinfo": ""
+						}
+					],
+					"count": "5",
+					"systemic": true,
+					"solution": "<p>The content may be marked as storable by ensuring that the following conditions are satisfied:</p><p>The request method must be understood by the cache and defined as being cacheable (\"GET\", \"HEAD\", and \"POST\" are currently defined as cacheable)</p><p>The response status code must be understood by the cache (one of the 1XX, 2XX, 3XX, 4XX, or 5XX response classes are generally understood)</p><p>The \"no-store\" cache directive must not appear in the request or response header fields</p><p>For caching by \"shared\" caches such as \"proxy\" caches, the \"private\" response directive must not appear in the response</p><p>For caching by \"shared\" caches such as \"proxy\" caches, the \"Authorization\" header field must not appear in the request, unless the response explicitly allows it (using one of the \"must-revalidate\", \"public\", or \"s-maxage\" Cache-Control response directives)</p><p>In addition to the conditions above, at least one of the following conditions must also be satisfied by the response:</p><p>It must contain an \"Expires\" header field</p><p>It must contain a \"max-age\" response directive</p><p>For \"shared\" caches such as \"proxy\" caches, it must contain a \"s-maxage\" response directive</p><p>It must contain a \"Cache Control Extension\" that allows it to be cached</p><p>It must have a status code that is defined as cacheable by default (200, 203, 204, 206, 300, 301, 404, 405, 410, 414, 501).</p>",
+					"otherinfo": "",
+					"reference": "<p>https://datatracker.ietf.org/doc/html/rfc7234</p><p>https://datatracker.ietf.org/doc/html/rfc7231</p><p>https://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html</p>",
+					"cweid": "524",
+					"wascid": "13",
+					"sourceid": "8"
+				},
+				{
+					"pluginid": "10049",
+					"alertRef": "10049-3",
+					"alert": "Storable and Cacheable Content",
+					"name": "Storable and Cacheable Content",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>The response contents are storable by caching components such as proxy servers, and may be retrieved directly from the cache, rather than from the origin server by the caching servers, in response to similar requests from other users. If the response data is sensitive, personal or user-specific, this may result in sensitive information being leaked. In some cases, this may even result in a user gaining complete control of the session of another user, depending on the configuration of the caching components in use in their environment. This is primarily an issue where \"shared\" caching servers such as \"proxy\" caches are configured on the local network. This configuration is typically found in corporate or educational environments, for instance.</p>",
+					"instances":[ 
+						{
+							"id": "78",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events/recent/?after=0&limit=100",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events\/recent\/ (after,limit)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "",
+							"otherinfo": "In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234."
+						},
+						{
+							"id": "51",
+							"uri": "http://127.0.0.1:8130/kg-api/api/health/",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/health\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "",
+							"otherinfo": "In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234."
+						}
+					],
+					"count": "2",
+					"systemic": false,
+					"solution": "<p>Validate that the response does not contain sensitive, personal or user-specific information. If it does, consider the use of the following HTTP response headers, to limit, or prevent the content being stored and retrieved from the cache by another user:</p><p>Cache-Control: no-cache, no-store, must-revalidate, private</p><p>Pragma: no-cache</p><p>Expires: 0</p><p>This configuration directs both HTTP 1.0 and HTTP 1.1 compliant caching servers to not store the response, and to not retrieve the response (without validation) from the cache, in response to a similar request.</p>",
+					"otherinfo": "<p>In the absence of an explicitly specified caching lifetime directive in the response, a liberal lifetime heuristic of 1 year was assumed. This is permitted by rfc7234.</p>",
+					"reference": "<p>https://datatracker.ietf.org/doc/html/rfc7234</p><p>https://datatracker.ietf.org/doc/html/rfc7231</p><p>https://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html</p>",
+					"cweid": "524",
+					"wascid": "13",
+					"sourceid": "25"
+				},
+				{
+					"pluginid": "10049",
+					"alertRef": "10049-2",
+					"alert": "Storable but Non-Cacheable Content",
+					"name": "Storable but Non-Cacheable Content",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>The response contents are storable by caching components such as proxy servers, but will not be retrieved directly from the cache, without validating the request upstream, in response to similar requests from other users.</p>",
+					"instances":[ 
+						{
+							"id": "77",
+							"uri": "http://127.0.0.1:8130/kg-api/api/events/stream/?after=0",
+							"nodeName": "http:\/\/127.0.0.1:8130\/kg-api\/api\/events\/stream\/ (after)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "no-cache",
+							"otherinfo": ""
+						}
+					],
+					"count": "1",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "<p>https://datatracker.ietf.org/doc/html/rfc7234</p><p>https://datatracker.ietf.org/doc/html/rfc7231</p><p>https://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html</p>",
+					"cweid": "524",
+					"wascid": "13",
+					"sourceid": "22"
+				}
+			]
+		}
+	],
+	"sequences":[
+	]
+
+}
