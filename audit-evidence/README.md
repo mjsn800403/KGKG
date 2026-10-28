@@ -24,7 +24,7 @@ Start here:
 | `11-operations-and-support` | Ticketing, defect and incident process |
 | `12-knowledge-management` | Knowledge stores, update process, internal vs third-party knowledge |
 | `13-team-and-domain-evidence` | Domain evidence from code; templates for team records (pending) |
-| `14-risk-and-corrective-actions` | Defect register (29), open actions, unresolved observation |
+| `14-risk-and-corrective-actions` | Defect register (30), open actions, unresolved observation |
 
 Test code itself lives with the product: `KG_backend/api/test_*.py`,
 `kg_frontend/src/lib/__tests__/`, `qa/` (QA stack, E2E, load, DAST,

@@ -9,7 +9,7 @@ rest is stated as open.
 
 **1. Can an independent engineer run every critical suite?** Yes for the
 backend, frontend and security gates: `09-ci-cd/REPRODUCE.md` lists exact
-commands, and GitHub Actions runs them on a clean runner (run 40600862764,
+commands, and GitHub Actions runs them on a clean runner (run 40609938821,
 green). E2E, load, DAST and the retrieval evaluation need the server's data
 (237 vehicle manuals, ~11 GB index) and Docker; the scripts are in `qa/`,
 but an engineer without access to that host cannot reproduce those four.
@@ -18,7 +18,7 @@ but an engineer without access to that host cannot reproduce those four.
 **2. Do tests verify behaviour or just execute code?** Spot-checked: the
 new suites assert outcomes (status codes, which documents a seat holds, which
 link survives, which bytes are served). The strongest evidence that they are
-behavioural is that they found 29 real defects, including two critical ones.
+behavioural is that they found 30 real defects, including two critical ones.
 *Weakness:* no mutation testing, so assertion strength is not measured.
 
 **3. Are integration tests connected to representative components?** The
@@ -57,7 +57,7 @@ target is not met overall.
 **8. Do the CI workflows actually execute?** Yes, and this review found that
 on `work` they had been failing for 14 of the last 19 runs while releases
 continued via the server gate (D-19). All three causes were fixed; run
-40600862764 is the first fully green run.
+40600862764 is the first fully green run; 40609938821 is green on the final code.
 
 **9. Are documentation and diagrams consistent with the code?** Not before
 this work: the API reference listed 8 removed endpoints and missed 41
@@ -93,8 +93,9 @@ attribution in the assistant (46/60 on the gold set).
 
 ## Weaknesses that remain (ranked)
 
-1. **Production is still exposed** to D-06, D-07 and D-17 until promotion and
-   nginx installation. This is the most important item in the package.
+1. **Production is still exposed** to D-03, D-06, D-07, D-17 and D-30 until
+   promotion and nginx installation. This is the most important item in the
+   package.
 2. Criteria 12 and 13 cannot be assessed from the repository.
 3. No independent penetration test; no expert review of AI answers.
 4. Coverage below the stated ambition outside critical modules.

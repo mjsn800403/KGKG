@@ -8,7 +8,7 @@
 | In-product guidance | User-facing help articles in `kg_frontend/src/guidance/content.js`, each linked by `docRef` to the doc section it summarizes | Ships with the frontend |
 | Code comments | Non-obvious decisions are explained at the point of use (e.g. why the media gate normalizes paths, why staging gets its own feedback DB) | Reviewable in any file |
 | Commit history | 163 commits before this remediation; messages explain the *why* for most recent work | `git log` |
-| Test suites | Executable specification of business rules: 843 backend tests, 178 frontend unit tests, 41 E2E journeys | `KG_backend/api/test_*.py`, `kg_frontend/src/lib/__tests__/`, `qa/e2e/` |
+| Test suites | Executable specification of business rules: 850 backend tests, 178 frontend unit tests, 42 E2E journeys | `KG_backend/api/test_*.py`, `kg_frontend/src/lib/__tests__/`, `qa/e2e/` |
 | `audit-evidence/` | This package: baseline, strategy, results, defects, decisions | New |
 
 There is no separate wiki (Confluence/Notion). The team keeps documentation

@@ -4,7 +4,7 @@
 |---|---|
 | Product | KGTechVault (KGKG) — automotive technical documentation platform with retrieval assistant |
 | Version | 1.0.0 (first SemVer version; becomes a release when promoted) |
-| Code under test | branch `qa-audit` (based on production-candidate `abdef81`); CI-verified at `1a0eba8`; later commits add only a CSS fix, a JSON-LD escape and documents |
+| Code under test | branch `qa-audit` (based on production-candidate `abdef81`); CI-verified at `2f65a1d` (final code) |
 | Period | 2026-10-27 – 2026-10-28 |
 | Environments | GitHub Actions (ubuntu-24.04); production host's isolated QA stack (`qa/stack.sh`, sanitized DB copy, capped resources); production host QA venv |
 | Prepared by | Development team, with AI-assisted engineering (Claude). Not an independent audit |
@@ -16,10 +16,10 @@ file is named next to it.
 
 | Suite | Level | Executed | Passed | Failed | Skipped | Evidence |
 |---|---|---|---|---|---|---|
-| Backend (Django) | Unit + integration | 843 | 842 | 0 | 1 (needs a local crawl dataset) | CI run 40600862764 (`09-ci-cd/`); JUnit + coverage artifact retained to 2027-01-25 |
-| Frontend (`node:test`) | Unit | 178 | 177 | 0 | 1 (pricing — business decision D-28) | CI run 40600862764 |
-| Operations (deploy gate roles, watchdog, sanitizer) | Unit | 32 | 32 | 0 | 0 | CI run 40600862764 |
-| E2E (Playwright: Chromium, Firefox, Pixel 7) | System | 41 | 41 | 0 | 0 | `05-e2e-testing/results/` (commit `1a0eba8`) |
+| Backend (Django) | Unit + integration | 850 | 849 | 0 | 1 (needs a local crawl dataset) | CI run 40609938821 (`09-ci-cd/`); JUnit + coverage artifact retained to 2027-01-26 |
+| Frontend (`node:test`) | Unit | 178 | 177 | 0 | 1 (pricing — business decision D-28) | CI run 40609938821 |
+| Operations (deploy gate roles, watchdog, sanitizer) | Unit | 32 | 32 | 0 | 0 | CI run 40609938821 |
+| E2E (Playwright: Chromium, Firefox, Pixel 7) | System | 42 | 42 | 0 | 0 | `05-e2e-testing/results/` (commit `2f65a1d`) |
 | Load — baseline / load / stress / soak | Performance | 4 profiles, 39,521 requests | thresholds met in baseline, load, soak | stress 0.64 % errors (D-20) | — | `06-performance-and-load/run1-recycle-2000/` |
 | Stress re-test after D-20 fix | Performance | 10,866 requests | 0.00 % errors | 0 | — | `06-performance-and-load/` (run 2) |
 | Retrieval evaluation (offline, gold sets) | AI quality | 5 sets, hybrid pipeline | — (metrics, not pass/fail) | — | — | `04-integration-testing/rag-eval-2026-10-27/` |
@@ -41,12 +41,12 @@ branch. Frontend tested modules 87–100 % branch. Details and exceptions:
 
 ## 3. Defects
 
-29 recorded (`14-risk-and-corrective-actions/CORRECTIVE_ACTIONS.md`), plus one unresolved observation (O-1):
+30 recorded (`14-risk-and-corrective-actions/CORRECTIVE_ACTIONS.md`), plus one unresolved observation (O-1):
 
 | Severity | Found | Fixed in code | Open |
 |---|---|---|---|
 | Critical | 2 (D-03 entitlement leak, D-06 cross-company paid media) | 2 | 0 in code — **both still live in production until promotion** |
-| High | 7 | 7 | 0 in code (D-07 also needs the nginx files installed, A-02) |
+| High | 8 | 8 | 0 in code (D-07 also needs the nginx files installed, A-02) |
 | Medium | 11 | 11 | 0 |
 | Low | 9 | 8 | 1 (D-28, business decision) |
 
@@ -71,7 +71,7 @@ A-06).
 No open Critical or High finding in the code. Open: CSP `style-src
 'unsafe-inline'` (Medium, accepted with reason), CSRF defence relies on
 SameSite=Lax (Medium, recommendation), COEP not set (Low, intentional).
-Production exposure remains for D-06, D-07, D-17 until release + A-02.
+Production exposure remains for D-03, D-06, D-07, D-17 and D-30 until release + A-02.
 
 ## 6. Limitations and unverified areas
 

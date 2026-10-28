@@ -9,13 +9,13 @@ an independent penetration test** — see §6.
 
 | Control | Tool / method | Where it runs | Latest result |
 |---|---|---|---|
-| SAST | bandit 1.9.4, medium+ severity, triaged baseline | CI `security` job, every push | No new issues (CI run 40600862764). 46 baseline findings: 6 fixed, 40 triaged false positives with written reasons (`ops/security/README.md#bandit`) |
+| SAST | bandit 1.9.4, medium+ severity, triaged baseline | CI `security` job, every push | No new issues (CI run 40609938821). 46 baseline findings: 6 fixed, 40 triaged false positives with written reasons (`ops/security/README.md#bandit`) |
 | Dependency audit (Python) | pip-audit 2.9 on the image lockfile | CI | Pass; 3 reviewed, dated exceptions (`ops/security/pip-audit-ignore.txt`) |
 | Dependency audit (Node) | npm audit gate | CI | Pass |
 | Secret detection | gitleaks 8.21 (filesystem scan, report asserted to exist) | CI | 0 findings |
 | Container scanning | Trivy 0.58, HIGH/CRITICAL fixable | CI `images` job | Backend 0 / 0. Frontend was **5 CRITICAL + 33 HIGH** → fixed (OS upgrade in runtime stage, package managers removed) → **0 / 0** |
 | Dockerfile / shell lint | hadolint, shellcheck | CI | Pass |
-| Security regression tests | Django + node:test suites (authz, auth, rate limits, media gate, XSS, prompt fences) | CI and server gate | All pass (843 backend, 177 frontend) |
+| Security regression tests | Django + node:test suites (authz, auth, rate limits, media gate, XSS, prompt fences) | CI and server gate | All pass (850 backend, 177 frontend) |
 | DAST | OWASP ZAP: passive baseline; authenticated active full scan; authenticated **API scan from `docs/openapi.yaml`** | QA stack only (`qa/dast/run_zap.sh`), before releases | See §3 |
 | Edge | ModSecurity 3 + OWASP CRS 3.3.5, `limit_req`, Cloudflare | Production nginx | Configuration reviewed; not re-tested (QA proxy deliberately has no WAF) |
 
@@ -23,7 +23,7 @@ an independent penetration test** — see §6.
 
 | Threat | Finding | Evidence |
 |---|---|---|
-| Broken access control / IDOR (A01, API1) | **Confirmed and fixed:** cross-company paid-media download (D-06/D-07, *critical*), seats keeping unpurchased layers and AI (D-03/D-04), root widening admin exceptions (D-05), unauthenticated evaluation report (D-17). Cross-company isolation of requests, org graph, users, manuals verified by tests | `../14-risk-and-corrective-actions/CORRECTIVE_ACTIONS.md`; `media-gate/` |
+| Broken access control / IDOR (A01, API1) | **Confirmed and fixed:** cross-company paid-media download (D-06/D-07, *critical*), seats keeping unpurchased layers and AI (D-03/D-04), root widening admin exceptions (D-05), unauthenticated evaluation report (D-17), cross-vehicle diagnostics via a mismatched brand (D-30). Cross-company isolation of requests, org graph, users, manuals verified by tests | `../14-risk-and-corrective-actions/CORRECTIVE_ACTIONS.md`; `media-gate/` |
 | Broken authentication (A07, API2) | Enumeration equalised; OTP 5-try and daily caps; single session; Turnstile fails closed; HttpOnly+Secure+SameSite=Lax session cookie. Non-string JSON caused 500s (D-14), fixed | `KG_backend/api/test_qa_auth.py` |
 | Injection (A03) | All SQL values bound; LIKE wildcards in user input now escaped (D-11, not injection). No `shell=True`, subprocess argument lists fixed | bandit triage; `test_qa_catalog.py` |
 | XSS | Manual HTML and model output sanitised client-side; **bypass with `java\tscript:` found and fixed**; React escaping elsewhere; per-request CSP nonce, `frame-ancestors 'none'` | `kg_frontend/src/lib/__tests__/sanitizeHtml.test.mjs`; E2E `public.spec.js` |
@@ -32,32 +32,40 @@ an independent penetration test** — see §6.
 | Path traversal / unsafe files | Media gate fixed (D-06); `?page=..` 500 fixed (D-12); manual pages restricted to regular files inside the car folder | `test_qa_catalog.py`, `test_qa_mediaauth_paths.py` |
 | Sensitive data exposure | Staging/QA strip phones, e-mails, hashes, tokens; staging had been writing to production's query log (D-02); eval report was public (D-17) | `ops/deploy/sanitize_staging_db.py`; `rag/test_feedback_isolation.py` |
 | Rate limiting / scraping | Per-endpoint limits shared across workers; content shield seals manual content per session; content guard per-user ceilings | `test_qa_ratelimit.py`; E2E content-shield test |
-| Vulnerable components (A06) | Gated in CI (above); frontend image cleaned | CI run 40600862764 |
+| Vulnerable components (A06) | Gated in CI (above); frontend image cleaned | CI run 40609938821 |
 | Security misconfiguration (A05) | Two nginx files existed only on the server (D-08), now versioned; COOP/CORP added; COEP intentionally off (Turnstile iframe) | `ops/nginx/` |
 | Logging & monitoring (A09) | Structured logs to Loki, GlitchTip, alert rules with SMS paging and an independent watchdog; auth events in the audit log | `docs/11-operations-deployment.md` |
 
 ## 3. DAST results
 
-| Scan | Target / auth | Result |
-|---|---|---|
-| Baseline (passive), 2026-10-27 | QA proxy, throttles off | 63 rules pass, 0 fail, 5 warnings: CSP `style-src 'unsafe-inline'` (Medium), missing COOP/CORP/COEP (Low), informational cache/content-type notes |
-| Full (active, spider), 2026-10-27 | Signed in (manager) | 141 rules pass, 0 fail, 2 warnings. **Limitation:** the classic spider reached only ~6 URLs of this JS-driven app, so this scan says little about the API |
-| Baseline (passive), final code `1a0eba8` | Production-like throttles on | `dast-final/zap-baseline.*` |
-| Full (active, classic + AJAX spider), final code | Signed in | **141 rules pass, 0 fail**, 2 warnings on our origin: CSP `style-src 'unsafe-inline'` (Medium, accepted), COEP absent (Low, intentional). The AJAX spider also loaded third-party pages (Cloudflare Turnstile, Google), whose own header findings are out of our control and listed separately in the report. `dast-final/zap-full.*` |
-| API (active, every operation of `docs/openapi.yaml`), final code | Signed in | see `dast-final/` (added when complete) |
+All scans: OWASP ZAP (`ghcr.io/zaproxy/zaproxy:stable`, image id in each
+`env-*.txt`), against the QA stack only, signed in as the seeded manager.
+Final reports: `dast-final/` (commit `2f65a1d`).
 
-Scan-scope incident, recorded for transparency: during the final full scan
-the spider extracted the frontend bundle's server-side fallback URL
-`http://127.0.0.1:8000` (the production backend's loopback port) from
+| Scan | Final result (`2f65a1d`) | History |
+|---|---|---|
+| Baseline (passive spider) | 63 rules pass, **0 fail**; warnings: CSP `style-src 'unsafe-inline'` (Medium), COEP absent (Low), cache/content-type notes (Info) | Same on every run |
+| **API scan** (active; all 209 operations of `docs/openapi.yaml`, logout removed) | 118 rules pass, **0 fail, 0 server errors**; warnings: CSP `script-src 'unsafe-inline'` on non-page responses (nginx fallback policy), unexpected content type (Info), COEP (Low) | First runs provoked HTTP 500s on `/api/org/nodes/*` (→ D-29) and `/api/diagnose/` (→ investigation found D-30, a cross-vehicle entitlement bypass); a "SQL injection" heuristic on `events/recent?limit=102-2` was a false positive (invalid integers fall back to the default limit) |
+| Full (active, classic + AJAX spider) | `dast-final/zap-full.*` | Earlier runs: 141 rules pass, 0 fail. The classic spider alone reaches only ~6 URLs of this SPA, which is why the API scan exists |
+
+Accepted: CSP `style-src 'unsafe-inline'` (React and manual content use
+inline styles; scripts on pages are nonce-restricted). Recommendation: the
+nginx fallback CSP (applied to API/static responses) still allows
+`script-src 'unsafe-inline'`; JSON responses do not execute, but the
+fallback can be tightened to `script-src 'none'` for `/kg-api/`.
+
+Scan-scope incident, recorded for transparency: during one full scan the
+spider extracted the frontend bundle's server-side fallback URL
+`http://127.0.0.1:8000` (production backend's loopback port) from
 JavaScript and sent **one passive `GET /`** to it. Production's traffic table
 for that hour shows exactly that single request to the public brand list and
 no errors; no attack payload reached production (out-of-scope hosts receive
 no active rules). The scanner now excludes production and staging ports and
-the public domain outright (`qa/dast/run_zap.sh`).
+the public domain outright.
 
-Accepted warning: CSP `style-src 'unsafe-inline'` — React and the manual
-content use inline styles; scripts are nonce-restricted, which is what
-matters for XSS. Revisit if inline styles are refactored out.
+Unresolved observation O-1 (`../14-risk-and-corrective-actions/`): in one
+session where two scans ran concurrently, one QA backend worker was wedged by
+SQLite `disk I/O error`s until restart; not reproduced since.
 
 ## 4. AI-specific trust boundaries
 
@@ -75,9 +83,10 @@ API), jailbreak resistance of the model itself.
 
 ## 5. Residual risks (prioritised)
 
-1. **Production still runs the vulnerable media gate and public eval
-   report** until this release is promoted and the nginx files are installed
-   (A-02). Severity Critical for the media gate.
+1. **Production still runs the vulnerable media gate, entitlement logic,
+   diagnose gate and public eval report** until this release is promoted and
+   the nginx files are installed (A-02). Severity Critical for the media gate
+   and the entitlement leak.
 2. Wrong-vehicle attribution in the assistant (domain-trust risk, see
    `../04-integration-testing/`).
 3. CSRF relies on `SameSite=Lax` only.

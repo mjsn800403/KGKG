@@ -3,6 +3,27 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## 2026-10-28 — v1.0.0: test architecture, security fixes, audit evidence (branch `qa-audit`)
+- **Security fixes found by the new tests** (each with a regression test; details in
+  `audit-evidence/14-risk-and-corrective-actions/`): cross-company paid-media download through
+  dot-segment paths and the nginx auth cache key (D-06/D-07, *needs `ops/nginx/kgkg.conf` and
+  `kgkg-mediaauth.conf` installed with the release*); seats holding layers their company never
+  bought (D-03/D-04); root widening admin exceptions (D-05); public `/api/eval/report/` (D-17);
+  cross-vehicle diagnostics via a mismatched brand (D-30); `java\tscript:` XSS bypass in the
+  sanitizer and unchecked model-written links (D-22/D-23); prompt fences forgeable (D-24).
+- **Staging no longer writes into production's RAG feedback store** (`RAG_FEEDBACK_DB`, D-02).
+- **Robustness:** 500s on hostile input fixed in auth, catalog, admin inbox and org graph;
+  gunicorn recycles every 20,000 requests (was 2,000; recycling caused every load-test error).
+- **Tests:** backend 427 → 850; first frontend unit suite (178, `node:test`); Playwright E2E (42,
+  `qa/e2e/`); k6 load model (`qa/perf/`); ZAP baseline/full/API scans (`qa/dast/`); offline
+  retrieval evaluation runner (`qa/eval/`); isolated QA stack (`qa/stack.sh`).
+- **CI:** honest branch coverage (test files no longer counted; floor 50 → 52), JUnit/coverage
+  artifacts, frontend tests, bandit SAST gate, frontend image hardened (Trivy 0 HIGH/CRITICAL).
+  CI on this branch is green; `work` had been red for 14 of 19 runs.
+- **Docs:** `docs/openapi.yaml` (all 90 routes, enforced by `test_openapi_routes`); API reference,
+  security risks and operations docs corrected; `VERSION` + SemVer in deploy tags; defect and
+  support issue templates; `audit-evidence/` package for the knowledge-based-company evaluation.
+
 ## 2026-10-27 — delivery, monitoring and supply-chain maturity
 - **CI stages every push to `work`; only a person promotes.** `.github/workflows/deploy.yml`
   would have promoted to production on green CI (held back only by a GitHub environment
