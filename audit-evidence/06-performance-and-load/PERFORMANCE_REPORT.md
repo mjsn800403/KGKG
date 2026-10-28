@@ -67,16 +67,26 @@ recycling, so the threshold was raised to 20,000 (commit "perf(backend):
 recycle gunicorn workers every 20,000 requests"). Re-test: run 2 below.
 
 **P-03 No production impact.** Across 518 production health samples taken
-during the four profiles, production answered 200 every time with a maximum
-latency of 9.0 ms.
+during the four profiles of run 1, and 89 more during run 2, production
+answered 200 every time (607 of 607) with a maximum latency of 9.0 ms.
 
 **P-04 Memory.** No upward trend over 20 minutes at sustained load. Worker
 recycling resets worker memory, so a slow leak could be masked; run 2 with
 less frequent recycling is the better leak indicator.
 
-## Results — run 2 (after the P-02 change)
+## Results — run 2 (revision `f7d3856`, gunicorn `--max-requests 20000`)
 
-See `run2-recycle-20000/` — filled in below once executed.
+Same stress profile, same caps, immediately after rebuilding with the P-02
+change (raw output: `run2-recycle-20000/`):
+
+| Profile | Requests | Throughput | Errors | Landing p95 | API p95 | Assistant p50 / p95 / p99 | Worker recycles |
+|---|---|---|---|---|---|---|---|
+| stress (before, run 1) | 10,145 | 28.1 req/s | 0.64 % | 27.7 ms | 1,750 ms | 3,556 / 11,516 / 13,799 ms | 6 in 18 s at peak |
+| **stress (after, run 2)** | **10,866** | **30.2 req/s** | **0.00 %** | 28.3 ms | 1,898 ms | 3,068 / 11,764 / 13,433 ms | **0** |
+
+P-02 is closed: with no recycling during the run there were no resets and
+no errors. P-01 (latency under saturation) is unchanged, as expected — it is
+a capacity property, not an error source.
 
 ## Limitations
 
@@ -87,4 +97,4 @@ See `run2-recycle-20000/` — filled in below once executed.
   (cost, third-party rate limits); measured latency is our own pipeline.
 * Single client IP and few accounts: per-IP/per-user throttling behaviour
   under load is tested at integration level, not here.
-* Results apply to revision `c43998c` (run 1); re-run on each minor release.
+* Run 1 applies to revision `c43998c`, run 2 to `f7d3856`; re-run on each minor release.

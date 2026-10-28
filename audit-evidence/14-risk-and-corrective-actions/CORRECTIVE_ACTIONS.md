@@ -1,6 +1,6 @@
 # Corrective action register
 
-Defects found by the testing introduced on 2026-10-27. Each row traces
+Defects found by the testing introduced on 2026-10-27 and 2026-10-28. Each row traces
 detection → root cause → change → regression test → verification. Commit ids
 are on branch `qa-audit` (merged into `work` for release). "Verified" means
 the regression test failed before the change and passes after it, and the
@@ -27,6 +27,20 @@ Severity: Critical (cross-tenant data or money), High, Medium, Low.
 | D-15 | Low | `test_qa_ratelimit` | `KG_RL_<NAME>="0/0"` documented as "off" but kept the default limit | Parser rejected zero | Accept `0/0` as off (`ebd9487`) | `test_qa_ratelimit` | Fixed |
 | D-16 | Low | bandit | Invisible bidi control characters in source (Trojan-Source pattern); SHA-1 fingerprints not marked non-security | — | Escapes; `usedforsecurity=False` (this release) | bandit gate in CI | Fixed |
 
+| D-17 | High | OpenAPI spec work (reading every view) | `/api/eval/report/` documented admin-only but had no check; reachable on production without credentials (currently returns no runs; runs include logged user queries) | Missing decorator | `@require_admin_token` (commit "admin-gate the eval report") | `api/test_qa_eval_report.py` (3, red before / green after) | Fixed in code; production exposed until promotion |
+| D-18 | High | Trivy in CI (`images` job, red on `work` before this work) | Frontend image: 5 CRITICAL + 33 HIGH fixable vulnerabilities | Runtime stage never upgraded OS packages; npm/yarn shipped with their bundled deps | `apt-get upgrade` + package managers removed from runtime image | Trivy in CI | Fixed: 0 HIGH / 0 CRITICAL (CI run 40600862764) |
+| D-19 | Medium | CI history | CI on `work` failed 14 of the last 19 runs; failures were visible but releases continued through the server-side gate | (a) `test_partsouq_build` crashed on an unreadable `/root` on runners; (b) CI's hand-picked deps lacked `cryptography`, so the shield failed open and its test failed; (c) D-18 | Test guard; `cryptography` in CI deps; D-18 | CI itself | Fixed: first fully green run 40600862764 |
+| D-20 | Medium | Load tests (P-02) | Every error in every load profile: nginx 502 when gunicorn recycled a worker (`--max-requests 2000`); 64 failed requests in 18 s under stress | gthread worker resets queued connections on recycle | `--max-requests 20000` (soak showed no memory growth) | Stress re-run | Fixed: stress 0.64 % → 0.00 % errors, 0 recycles |
+| D-21 | Medium | API spec drift check | `docs/05-api-reference.md` listed 8 removed endpoints, omitted 41 routed ones, and had wrong auth/method/limit rows | Docs not updated with the 2026-09-07 org-graph refactor | `docs/openapi.yaml` (90/90 routes, validated) + corrected doc | `api/test_openapi_routes.py` fails CI on any route/spec divergence | Fixed and guarded |
+| D-22 | High | Frontend unit tests | `sanitizeHtml` let `java\tscript:`-style links through (XSS on click) | Scheme checked before browser URL normalisation | Check the URL as the browser parses it (`359776f`) | `sanitizeHtml.test.mjs` regression | Fixed |
+| D-23 | Medium | Frontend unit tests | Model-written plain links and `//host` hrefs bypassed the link allow-list | Only `[BUTTON]` tokens validated; renderer accepted any href starting `/` | Allow-list for all links; renderer refuses `//` and `/\` (`359776f`) | `chatPrompt.test.mjs` | Fixed |
+| D-24 | Medium | Frontend unit tests | User text, history or crawled text could forge/close the prompt's context fences | Unescaped interpolation | Fence runs and guillemets flattened (`359776f`) | `chatPrompt.test.mjs` (2) | Fixed |
+| D-25 | Low | Frontend unit tests | Any 4–5 letter English word was taken as a DTC code, so follow-ups like "how long?" were never recognised | Over-broad regex | DTC requires a digit (`359776f`) | `contextualize.test.mjs` | Fixed |
+| D-26 | Medium | E2E accessibility scan | `/login` recovery link distinguishable by colour only (WCAG 1.4.1, serious) | CSS `text-decoration:none` | Underlined; gate now fails on serious (`0a2e00a`) | `a11y.spec.js` | Fixed in code; re-verified in closing E2E run |
+| D-27 | Low | Code review for the security report | JSON-LD `<script>` content not escaped (name embeds the URL brand) | `JSON.stringify` does not escape `<` | Escape `<` as `\u003c` (`abe25e3`) | Manual check (node) | Fixed |
+| D-28 | Low (business) | Frontend unit tests | Per-seat price rises from 29 to 30 seats (30-seat list price above the formula) | Pricing table entry | — | `pricing.test.mjs` (skipped, documents it) | **Open — needs a business decision** |
+
+| D-29 | Medium | ZAP API scan (OpenAPI-driven) | `POST /api/org/nodes/` and `PATCH /api/org/nodes/<id>/` returned 500 on non-numeric ids or coordinates | Unvalidated JSON values passed to the ORM / `float()` | Typed validation before any change (`cf458c0`) | `api/test_qa_orggraph_input.py` (4, red → green) | Fixed |
 ## Open actions
 
 | ID | Action | Owner | Needs |
@@ -34,3 +48,12 @@ Severity: Critical (cross-tenant data or money), High, Medium, Low.
 | A-01 | Delete the 39 staging rows from production `feedback.db` (query: `query='engine oil capacity' AND model='Corolla Cross'`, 2026-10-15..27) | Product owner | Approval to change production data |
 | A-02 | Install `ops/nginx/kgkg.conf` and `ops/nginx/kgkg-mediaauth.conf` on production in the same window as the release that contains `eb32510`; `nginx -t` then reload | Operations | Maintenance window; the app-side fix alone leaves the 60 s cache leak (D-07) |
 | A-03 | Decide whether `deploy.sh` should install nginx files from the release (removes D-08 class of drift) | Engineering lead | Design decision |
+| A-04 | Decide the 30-seat price (D-28) | Product owner | Business decision |
+| A-05 | Reduce wrong-vehicle attribution in the assistant (46/60 in the 2026-10-27 eval) | Retrieval owner | Design work |
+| A-06 | Bound concurrent embeddings or separate the assistant's worker pool (P-01) | Engineering lead | Design work |
+
+## Observations not resolved
+
+| ID | Observation | What is known | Status |
+|---|---|---|---|
+| O-1 | During one DAST session, one gunicorn worker of the QA backend began failing every database connection with `sqlite3.OperationalError: disk I/O error` (4,470 errors, all pid 9) until the container was restarted | It started while two scanner instances ran concurrently and each re-seeded the QA database through `docker exec`. Disk space was ample (51 GB free). A single re-seed during traffic (40/40 requests OK) and a full single-instance API scan on a fresh backend (0 such errors) did not reproduce it. SQLite runs in WAL mode with a 128 MB `mmap_size` per connection | **Not reproduced, root cause unknown.** Not seen in production (0 occurrences in production's backend error logs, current file plus ~30 days of rotated files, checked 2026-10-28). Production has no concurrent seeding process, but a second writer process (management commands, the pipeline worker) is possible there. Watch for `disk I/O error` in GlitchTip/Loki; if it appears, restart the backend and capture `lsof` on `db.sqlite3*` first |

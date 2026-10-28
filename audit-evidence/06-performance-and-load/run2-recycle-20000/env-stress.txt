@@ -1,0 +1,8 @@
+profile=stress
+started=2026-10-27T20:42:07Z
+QA_SHA=f7d38562ccb74be6fb7545c76a701e82aae1b8fa
+host=16 vCPU, 31 GiB RAM
+/kgkg-qa-backend cpus=6000000000 mem=10737418240
+/kgkg-qa-frontend cpus=2000000000 mem=3221225472
+/kgkg-qa-proxy cpus=1000000000 mem=0
+finished=2026-10-27T20:48:08Z exit=0

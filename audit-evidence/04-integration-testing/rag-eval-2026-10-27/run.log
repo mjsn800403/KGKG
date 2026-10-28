@@ -1,0 +1,53 @@
+
+== known_item_en
+[2026-10-27 21:12:15,052] INFO sentence_transformers.base.model: Loading SentenceTransformer model from BAAI/bge-m3.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 25773.58it/s]
+    known_item_en: 25/100
+    known_item_en: 50/100
+    known_item_en: 75/100
+    known_item_en: 100/100
+   done in 680.0s
+
+== known_item_fa
+    known_item_fa: 25/100
+    known_item_fa: 50/100
+    known_item_fa: 75/100
+    known_item_fa: 100/100
+   done in 663.7s
+
+== out_of_scope
+   done in 332.8s
+
+== wrong_vehicle
+   done in 391.4s
+
+== diagnosis
+    diagnosis: 25/100
+    diagnosis: 50/100
+    diagnosis: 75/100
+    diagnosis: 100/100
+   done in 346.9s
+
+### known_item_en  (n=100)
+  system        nDCG@5    Hit@1     R@10      MRR   p50ms
+  hybrid         0.409    0.660    0.403    0.757    1312
+
+### known_item_fa  (n=100)
+  system        nDCG@5    Hit@1     R@10      MRR   p50ms
+  hybrid         0.185    0.230    0.229    0.322    1108
+
+### out_of_scope  (n=-)
+  non_automotive         correct-refusal 1.0 [0.8668, 1.0] n=25
+  nonsense               correct-refusal 1.0 [0.7961, 1.0] n=15
+  automotive_absent      correct-refusal 0.5 [0.2538, 0.7462] n=12
+
+### wrong_vehicle  (n=-)
+  wrong_vehicle          correct-refusal 0.2333 [0.1444, 0.3544] n=60
+  attribution: {'n': 60, 'claimed_scoped_vehicle': 46, 'attributed_other_vehicle': 0, 'refused': 14}
+
+### diagnosis  (n=100)
+  dtc_name     Hit@1=0.5854 Hit@3=0.9512 MRR=0.7663 n=41
+  dtc_code     Hit@1=1.0 Hit@3=1.0 MRR=1.0 n=40
+  symptom      Hit@1=1.0 Hit@3=1.0 MRR=1.0 n=19
+
+-> /out/results.json

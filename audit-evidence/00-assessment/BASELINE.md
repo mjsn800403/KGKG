@@ -65,8 +65,7 @@ string-built SQL, 10 B310 urlopen, 1 B108 temp path. Triage in
 
 ## 4. Source history available
 
-163 commits on `work` from 2026-06-19 to 2026-10-27 (172 including this
-remediation's first commits at the time of counting), 7 author identities
+163 commits on `work` from 2026-06-19 to 2026-10-27, 7 author identities
 (2 people plus CI/deploy bots), 25 `deploy-*` tags. Roughly a third of
 subjects follow Conventional Commits. **No history exists before
 2026-06-19** — earlier development of the crawler, parser and catalog is not
