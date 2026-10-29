@@ -1,5 +1,6 @@
 import json
 import os
+from unittest import mock
 
 from django.test import Client, TestCase
 
@@ -48,7 +49,9 @@ class FlagMathTests(TestCase):
 
 class FlagApiTests(TestCase):
     def setUp(self):
-        os.environ['KG_ADMIN_TOKEN'] = 'test-admin-token'
+        env = mock.patch.dict(os.environ, {'KG_ADMIN_TOKEN': 'test-admin-token'})
+        env.start()
+        self.addCleanup(env.stop)
         self.company = Company.objects.create(name='Flag Co', ai_assistant_enabled=True, plan='annual')
         self.user = PortalUser.objects.create(company=self.company, username='flaguser',
                                               password_hash='x', role='tech', ai_assistant_enabled=True)
