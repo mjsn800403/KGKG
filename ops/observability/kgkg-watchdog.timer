@@ -1,0 +1,19 @@
+# Every 5 minutes, offset from kgkg-alerts.timer so the two never contend and
+# so a check never reads a sweep that is still in flight.
+#
+# Persistent=true: after a reboot the first run happens immediately rather
+# than waiting out the interval, because a reboot is exactly when the alerting
+# path is most likely to have come back wrong.
+[Unit]
+Description=Run the KGKG alerting watchdog every 5 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=20s
+Persistent=true
+Unit=kgkg-watchdog.service
+
+[Install]
+WantedBy=timers.target

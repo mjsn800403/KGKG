@@ -1,0 +1,20 @@
+# hadolint configuration — Dockerfile lint in CI.
+#
+# DL3008 (pin every apt package version) is ignored deliberately. The images
+# build from a pinned base image, and pinning individual apt versions on top of
+# a rolling Debian base breaks the build each time the distribution moves a
+# point release — it trades a real, frequent breakage for a theoretical one.
+# Reproducibility comes from the pinned base image plus
+# ops/docker/backend-requirements.lock, which is fully pinned.
+#
+# DL3025 (use JSON notation for CMD) is ignored deliberately too. Both images
+# expand runtime environment variables in their CMD — the backend picks its
+# bind address, port, health port and worker counts from the environment that
+# ops/docker/containers.sh passes at `docker run`, which is what makes the
+# zero-gap SO_REUSEPORT swap possible. JSON notation does not expand variables,
+# so switching would mean hard-coding the very values the deploy varies.
+ignored:
+  - DL3008
+  - DL3025
+
+failure-threshold: warning

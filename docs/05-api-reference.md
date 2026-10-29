@@ -4,6 +4,10 @@ All backend endpoints are served by Django on `:8000` and reached publicly under
 `/kg-api/` nginx prefix (e.g. `POST http://103.75.197.155/kg-api/api/auth/login/`).
 Routing: `api/urls.py`. All bodies are JSON; all responses are JSON unless noted.
 
+> **Complete list:** `docs/openapi.yaml` (OpenAPI 3.0.3) documents every routed endpoint with
+> methods, auth and parameters, and is test-enforced (`api/test_openapi_routes.py` fails when a
+> route is added or removed without updating it). The tables below are a curated overview.
+
 **Auth kinds**
 
 | Kind | How |
@@ -15,7 +19,7 @@ Routing: `api/urls.py`. All bodies are JSON; all responses are JSON unless noted
 | *admin* | `X-Admin-Token`/Bearer = `KG_ADMIN_TOKEN` env value **or** an `AdminAuthToken` session token (`@require_admin_token`) |
 
 **Rate limits** (fixed window, per IP, per worker process): login 15/60s,
-admin_login 20/60s, activity 120/60s, assist 60/60s, diagnose 60/60s, search 60/60s,
+admin_login 20/60s, activity 120/60s, assist 60/60s, diagnose 60/60s, search 90/60s,
 click 120/60s, purchase ~5/60s. 429 body: `{error}`.
 
 **Common errors:** 401 `{error:'unauthorized'}`; 403 `{error:'forbidden', detail}` (Persian
@@ -46,7 +50,7 @@ detail for content gates); 400 validation `{error:<fa message>}`; 405 `{error:'P
 | `/<brand>/` | GET | public* | Years for brand (catalog level only) |
 | `/<brand>/<year>/` | GET | public* | Models for year. Junk year → `[]` (tolerant) |
 | `/<brand>/<year>/<model>/` | GET | **portal + car grant** | Root nodes; walk deeper with repeated `?seg=<title>` params (in order). Returns node list or `{nodes, content}` for leaf pages; image URLs pre-rewritten |
-| `/api/search/` | GET/POST | portal + car gate | `q, brand, model, car?, limit?` — semantic cross-lingual per-car search; falls back to SQL LIKE if index missing |
+| `/api/search/` | GET | portal + car gate | `q, brand, model, car?, limit?` — semantic cross-lingual per-car search; falls back to SQL LIKE if index missing |
 | `/api/assist/` | GET/POST | portal + car gate | `{query, brand?, model?, car?}` → grounded excerpts with real in-app URLs + graph-related + cross-vehicle context (allow-list scoped) |
 | `/api/diagnose/` | GET/POST | portal + car gate | `{query, brand?, model?, car?}` → deterministic DTC/symptom result: candidates, steps, repair + labor, cross-vehicle matches |
 
@@ -59,22 +63,17 @@ detail for content gates); 400 validation `{error:<fa message>}`; 405 `{error:'P
 |---|---|---|---|
 | `/api/assist/feedback/` | POST | portal | Click log `{query, blob_id, app_url}` (relevance signal), always `{ok}` |
 | `/api/feedback/rate/` | POST | portal | 👍/👎 verdict on an answer (+reason/comment) |
-| `/api/feedback/pin/` | POST | portal | Expert pin: query-pattern → known-good target |
+| `/api/feedback/pin/` | POST | admin | Expert pin: query-pattern → known-good target |
 | `/api/feedback/recent/` | GET | admin | Review feed (drives `/admin-review`) |
-| `/api/eval/report/` | GET | admin | Latest offline eval run (read-only) |
+| `/api/eval/report/` | GET | admin (enforced since 2026-10-28; was reachable without credentials) | Latest offline eval run (read-only) |
 
 ## 5.5 Team management (manager)
 
+The old `/api/team/members|org|roles` endpoints were removed on 2026-09-07 (commit `5aefebf`)
+and replaced by the org-graph API `/api/org/*` (see `docs/openapi.yaml`).
+
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
-| `/api/team/members/` | GET | manager | `{items:[user…], meta:{cars (grantable w/ layer ceilings), roles, me, seats…}}` — scoped by rank/manage_scope |
-| `/api/team/members/` | POST | manager | Create employee. `provision:'invite'` (default w/ email → `{invite_url}`) or `'credentials'` (→ `{credentials:{username,password}}` once). Accepts org_role_id, reports_to (validated: supervisor strictly outranks), capability flags, accesses[] (clamped via `apply_managed_access`); role template auto-applies |
-| `/api/team/members/<id>/` | PATCH/PUT | manager | Update fields/role/supervisor (invariant enforced; `adjustments:{caps_reseeded, reparented}` echoed); `action:'deactivate'|'resend_invite'` |
-| `/api/team/members/<id>/access/` | PUT | manager | Replace delegated car grants (clamped; out-of-purchase cars delivered as admin_granted) |
-| `/api/team/org/` | GET | manager | Org chart: `{nodes, edges, roles, me}` |
-| `/api/team/roles/` | GET/POST | manager | List/create positions (only ranks strictly below the actor are creatable/editable) |
-| `/api/team/roles/<id>/` | PATCH/DELETE | manager | Update; `action:'apply_defaults'` bulk-pushes caps+access template to members; DELETE takes `reassign_to`. Both trigger `enforce_org_consistency` |
-| `/api/team/roles/reorder/` | POST | manager | `{order:[role_id…]}` drag-re-rank (+consistency pass) |
 | `/api/invite/<token>/` | GET | public | Validate invite → `{user, company}` or 4xx |
 | `/api/invite/<token>/` | POST | public | `{password}` → accept + auto-login `{token, user}` |
 
@@ -92,9 +91,9 @@ detail for content gates); 400 validation `{error:<fa message>}`; 405 `{error:'P
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
 | `/api/company/requests/` | GET/POST | manager | List own company's; create `{kind, subject, body?, payload?, priority?}` (payload whitelisted per kind) |
-| `/api/company/requests/<id>/` | GET/PATCH | manager | Detail; cancel while pending |
+| `/api/company/requests/<id>/` | GET/POST | manager | Detail; cancel while pending |
 | `/api/admin/company-requests/` | GET | admin | Inbox (filter by status) |
-| `/api/admin/company-requests/<id>/` | PATCH | admin | `{status, admin_note?, priority?}` — transitions emit events to both sides |
+| `/api/admin/company-requests/<id>/` | POST | admin | `{status, admin_note?, priority?}` — transitions emit events to both sides |
 
 ## 5.8 Real-time
 
@@ -120,10 +119,10 @@ All *admin* auth. The admin panel (`/admin`) is the only consumer.
 | `/api/admin/cars/` | GET | Catalog + per-car DB readiness + health indicators (`health`: status, completeness %, missing/empty sections, RAG/diag/asset indexing, pending processes — from the last DataQualityRun) + `has_spec`/`spec_fields`; `audited_at` on the envelope. Drives the admin catalogue filter (doc 07 §7.7) |
 | `/api/admin/requests/` | GET | Purchase requests; `/<id>/status/` POST updates workflow status |
 | `/api/admin/companies/` | GET/POST | List/create (create seeds default org roles) |
-| `/api/admin/companies/<id>/` | GET/PATCH | Detail (deep: accesses+users) / update (field-length clamped) |
+| `/api/admin/companies/<id>/` | GET/POST | Detail (deep: accesses+users) / update (field-length clamped) |
 | `/api/admin/companies/<id>/access/` | PUT | Replace purchased scope; prunes now-out-of-scope user grants (admin_granted rows survive) |
 | `/api/admin/users/` | GET/POST | Cross-company user admin; create issues credentials |
-| `/api/admin/users/<id>/` | GET/PATCH | Update incl. role/company moves; runs org-consistency repair |
+| `/api/admin/users/<id>/` | GET/POST | Update incl. role/company moves; runs org-consistency repair |
 | `/api/admin/users/<id>/access/` | PUT | Replace grants via `apply_user_access(allow_admin_grants=True)` — may exceed purchase (admin_granted) |
 | `/api/admin/activity/` | GET | Filterable activity report (company/user/action/category/date) |
 | `/api/admin/analytics/` | GET | Cross-company usage analytics |

@@ -18,7 +18,14 @@ class ValidationTests(TestCase):
         self.assertIn('نام خودرو', pb.build_and_register(CRAWL.name, 'x')[1])
 
 
-@skipUnless((CRAWL / 'pages' / 'groups.html').is_file(), 'no partsouq crawl on this machine')
+def _crawl_present():
+    try:   # an unreadable /root (CI runners) means "not on this machine"
+        return (CRAWL / 'pages' / 'groups.html').is_file()
+    except OSError:
+        return False
+
+
+@skipUnless(_crawl_present(), 'no partsouq crawl on this machine')
 class RealCrawlBuildTests(TestCase):
     def test_builds_a_servable_db_into_a_scratch_backend(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(pb, 'load_fa_terms', return_value={}):

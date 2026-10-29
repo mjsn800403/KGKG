@@ -68,6 +68,9 @@ services:
     command: [--config.file=/etc/prometheus/prometheus.yml, --storage.tsdb.path=/prometheus, --storage.tsdb.retention.time=30d]
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Scrape credential for the application metrics endpoint, mounted rather
+      # than written into prometheus.yml so the config itself stays shareable.
+      - ./metrics_token:/etc/prometheus/metrics_token:ro
       - prometheus-data:/prometheus
     ports: ["127.0.0.1:9090:9090"]  # alert_rules._infra
     mem_limit: 1g
@@ -75,7 +78,11 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.9.0
-    command: [--path.rootfs=/host, --web.listen-address=172.19.0.1:9100]
+    # textfile collector: ops/observability/watchdog.py and the backup job
+    # drop .prom files there, which is how host-side jobs get metrics in
+    # without exposing a port of their own.
+    command: [--path.rootfs=/host, --web.listen-address=172.19.0.1:9100,
+              --collector.textfile.directory=/host/var/lib/node-exporter-textfile]
     network_mode: host
     pid: host
     volumes:

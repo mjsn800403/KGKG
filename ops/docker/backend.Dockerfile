@@ -9,7 +9,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 
 # WeasyPrint (PDF reports) needs pango + fonts; curl is for the healthcheck.
-RUN apt-get update -q && apt-get install -yq --no-install-recommends \
+# apt-get upgrade is deliberate: the pinned base image lags the distribution
+# security updates (e.g. CVE-2026-84782 in openssl), and the image must not
+# ship known-vulnerable system libraries. The base tag still pins the major
+# versions, so this only moves point releases forward.
+RUN apt-get update -q && apt-get upgrade -yq \
+    && apt-get install -yq --no-install-recommends \
       libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core \
       curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -30,7 +35,13 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=180s --retries=4 \
   CMD curl -fsS -o /dev/null http://127.0.0.1:${KG_HEALTH_PORT:-18999}/api/health/ || exit 1
 # --reuse-port lets the next release bind the same port while this one
 # drains, so a backend deploy has no gap.
+# --max-requests recycles a worker after that many requests. A gthread worker
+# that recycles resets the connections still queued on it (nginx: 502,
+# "Connection reset by peer"); in the 2026-10-27 load tests every error in
+# every profile was one of these. A 20-minute soak showed no memory growth
+# to justify recycling every 2,000 requests, so the threshold is 20,000:
+# a safety net against slow leaks, not a routine event.
 CMD exec gunicorn KG_backend.wsgi:application --bind ${KG_BIND:-127.0.0.1}:${KG_PORT:-8000} \
     --bind 127.0.0.1:${KG_HEALTH_PORT:-18999} --reuse-port \
     --workers ${KG_WORKERS:-3} --worker-class gthread --threads ${KG_THREADS:-8} --timeout 300 \
-    --max-requests 2000 --max-requests-jitter 200 --graceful-timeout 30
+    --max-requests 20000 --max-requests-jitter 2000 --graceful-timeout 30

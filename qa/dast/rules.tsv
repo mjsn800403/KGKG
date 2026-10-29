@@ -1,0 +1,2 @@
+# ZAP rule configuration: <rule id>\t<IGNORE|INFO|WARN|FAIL>\t<reason>
+# Default for every rule is WARN. Entries are added only with a triage reason.

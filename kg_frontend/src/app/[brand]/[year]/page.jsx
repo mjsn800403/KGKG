@@ -44,7 +44,9 @@ export default async function YearPage({ params }) {
       {jsonld && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonld) }}
+          // '<' escaped so a value containing </script> cannot end the tag
+          // (the name embeds the URL's brand segment).
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonld).replace(/</g, '\\u003c') }}
         />
       )}
       <div className="topbar">

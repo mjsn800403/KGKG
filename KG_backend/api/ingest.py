@@ -129,9 +129,44 @@ def disk_free_gb(path='/'):
     return shutil.disk_usage(path).free / (1024 ** 3)
 
 
+# Resolving the moment free space crosses the floor would flap the alert on
+# and off around the boundary, so recovery needs headroom.
+DISK_RECOVERY_MARGIN = float(os.environ.get('KG_PIPELINE_DISK_RECOVERY_MARGIN', '1.1'))
+
+
+def resolve_disk_guard_if_recovered():
+    """Close an open pipeline_disk_low once the disk is demonstrably healthy.
+
+    Returns the free space seen when it resolved something, else None.
+
+    This is the only way that alert gets closed, and it closes it by looking
+    at the disk — never because some other sweep happened not to raise it.
+    api/monitoring.py calls it on every cycle precisely because the pipeline
+    may not run for months, which is how one of these stayed critical from
+    July to October.
+    """
+    from django.utils import timezone
+
+    from .models import SystemAlert
+    alert = SystemAlert.objects.filter(key='pipeline_disk_low', is_open=True).first()
+    if alert is None:
+        return None
+    free = disk_free_gb()
+    if free < DISK_MIN_FREE_GB * DISK_RECOVERY_MARGIN:
+        return None
+    alert.is_open = False
+    alert.resolved_at = timezone.now()
+    alert.save(update_fields=['is_open', 'resolved_at'])
+    return free
+
+
 def check_disk_guard():
     """Raise (and alert) when free disk is below the safety floor — better a
-    paused, resumable job than a full disk taking the site down."""
+    paused, resumable job than a full disk taking the site down.
+
+    Above the floor it also clears any alert a previous run left open: the
+    pipeline is the subsystem that knows processing is possible again.
+    """
     free = disk_free_gb()
     if free < DISK_MIN_FREE_GB:
         try:
@@ -145,6 +180,11 @@ def check_disk_guard():
             pass
         raise RuntimeError(
             f'disk free {free:.1f}GB below the {DISK_MIN_FREE_GB:.0f}GB floor')
+    try:
+        resolve_disk_guard_if_recovered()
+    except Exception:
+        # Never let alert bookkeeping stop a pipeline run that is fine.
+        pass
     return free
 
 
@@ -371,10 +411,43 @@ def scan_inbox(normalize=False, dry_run=False, log=None):
 # Parse one queued ZIP into the warehouse
 # ---------------------------------------------------------------------------
 
+def ledger_path():
+    """The parser's per-zip ledger (`processing_status`). It is the parser's
+    own bookkeeping, written with raw sqlite3 by htmlparser_logical, so it
+    lives in its own file in the data dir rather than in the portal DB, which
+    may be PostgreSQL.
+
+    The first call after the move seeds it once from the table the ledger
+    used to keep inside db.sqlite3, so zips already parsed stay skipped."""
+    path = Path(settings.KG_DATA_DIR) / 'processing_ledger.sqlite3'
+    legacy = Path(settings.KG_DATA_DIR) / 'db.sqlite3'
+    if not path.exists() and legacy.exists():
+        try:
+            src = sqlite3.connect(f'file:{legacy}?mode=ro', uri=True)
+            try:
+                ddl = src.execute("SELECT sql FROM sqlite_master WHERE type='table' "
+                                  "AND name='processing_status'").fetchone()
+                rows = src.execute('SELECT * FROM processing_status').fetchall() if ddl else []
+            finally:
+                src.close()
+            if ddl:
+                tmp = path.with_suffix('.seeding')
+                dst = sqlite3.connect(tmp)
+                dst.execute(ddl[0])
+                if rows:
+                    dst.executemany(
+                        f"INSERT INTO processing_status VALUES ({','.join('?' * len(rows[0]))})", rows)
+                dst.commit()
+                dst.close()
+                tmp.replace(path)
+        except sqlite3.Error:
+            pass                      # the parser creates an empty ledger itself
+    return path
+
+
 def _ledger_row(zip_name):
     try:
-        con = sqlite3.connect(
-            f"file:{Path(settings.DATABASES['default']['NAME'])}?mode=ro", uri=True)
+        con = sqlite3.connect(f"file:{ledger_path()}?mode=ro", uri=True)
         try:
             return con.execute(
                 'SELECT status, pages_processed, error FROM processing_status '
@@ -432,7 +505,7 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
 
     parser = parser_module()
     backend_dir = Path(settings.BASE_DIR)
-    ledger = parser.ProcessingLedger(backend_dir / 'db.sqlite3')
+    ledger = parser.ProcessingLedger(ledger_path())
 
     pkg.status = 'parsing'
     pkg.save(update_fields=['status', 'updated_at'])

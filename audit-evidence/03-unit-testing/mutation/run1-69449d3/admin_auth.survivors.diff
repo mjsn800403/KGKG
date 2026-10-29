@@ -1,0 +1,84 @@
+### mutant 5
+--- api/admin_auth.py
++++ api/admin_auth.py
+@@ -13,7 +13,7 @@
+ 
+ 
+ def _presented_token(request):
+-    auth = request.META.get('HTTP_AUTHORIZATION', '')
++    auth = request.META.get('HTTP_AUTHORIZATION', 'XXXX')
+     if auth.lower().startswith('bearer '):
+         return auth[7:].strip()
+     return (request.META.get('HTTP_X_ADMIN_TOKEN', '') or '').strip()
+
+
+### mutant 10
+--- api/admin_auth.py
++++ api/admin_auth.py
+@@ -16,7 +16,7 @@
+     auth = request.META.get('HTTP_AUTHORIZATION', '')
+     if auth.lower().startswith('bearer '):
+         return auth[7:].strip()
+-    return (request.META.get('HTTP_X_ADMIN_TOKEN', '') or '').strip()
++    return (request.META.get('HTTP_X_ADMIN_TOKEN', 'XXXX') or '').strip()
+ 
+ 
+ _PROXY_HEADERS = ('HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP')
+
+
+### mutant 11
+--- api/admin_auth.py
++++ api/admin_auth.py
+@@ -16,7 +16,7 @@
+     auth = request.META.get('HTTP_AUTHORIZATION', '')
+     if auth.lower().startswith('bearer '):
+         return auth[7:].strip()
+-    return (request.META.get('HTTP_X_ADMIN_TOKEN', '') or '').strip()
++    return (request.META.get('HTTP_X_ADMIN_TOKEN', '') or 'XXXX').strip()
+ 
+ 
+ _PROXY_HEADERS = ('HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP')
+
+
+### mutant 38
+--- api/admin_auth.py
++++ api/admin_auth.py
+@@ -55,7 +55,7 @@
+         configured = _configured_token()
+         presented = _presented_token(request)
+ 
+-        if not configured and not getattr(settings, 'DEBUG', False):
++        if not configured and not getattr(settings, 'DEBUG', True):
+             return JsonResponse(
+                 {'error': 'admin_disabled',
+                  'detail': 'KG_ADMIN_TOKEN is not configured on the server.'},
+
+
+### mutant 42
+--- api/admin_auth.py
++++ api/admin_auth.py
+@@ -58,7 +58,7 @@
+         if not configured and not getattr(settings, 'DEBUG', False):
+             return JsonResponse(
+                 {'error': 'admin_disabled',
+-                 'detail': 'KG_ADMIN_TOKEN is not configured on the server.'},
++                 'XXdetailXX': 'KG_ADMIN_TOKEN is not configured on the server.'},
+                 status=503)
+ 
+         if (configured and presented and hmac.compare_digest(presented, configured)
+
+
+### mutant 43
+--- api/admin_auth.py
++++ api/admin_auth.py
+@@ -58,7 +58,7 @@
+         if not configured and not getattr(settings, 'DEBUG', False):
+             return JsonResponse(
+                 {'error': 'admin_disabled',
+-                 'detail': 'KG_ADMIN_TOKEN is not configured on the server.'},
++                 'detail': 'XXKG_ADMIN_TOKEN is not configured on the server.XX'},
+                 status=503)
+ 
+         if (configured and presented and hmac.compare_digest(presented, configured)
+
+

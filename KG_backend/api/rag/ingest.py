@@ -122,7 +122,7 @@ def classify(chain):
 
 
 def _hash(text):
-    return hashlib.sha1(text.encode('utf-8', 'replace')).hexdigest()
+    return hashlib.sha1(text.encode('utf-8', 'replace'), usedforsecurity=False).hexdigest()
 
 
 # --- main ingest pass -------------------------------------------------------

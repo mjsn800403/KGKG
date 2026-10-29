@@ -24,7 +24,7 @@ from django.conf import settings
 # ---------------------------------------------------------------------------
 # Filesystem layout
 # ---------------------------------------------------------------------------
-BASE_DIR = Path(settings.DATABASES['default']['NAME']).parent
+BASE_DIR = Path(settings.KG_DATA_DIR)
 WAREHOUSE_DIR = BASE_DIR / 'Database_warehouse'
 RAG_DIR = WAREHOUSE_DIR / '_rag'              # all output (deletable)
 # RAG_INDEX_DB lets an offline experiment point at an alternate index copy
@@ -152,16 +152,13 @@ def _catalog_meta(car_stem):
     if _CATALOG_CACHE is None:
         rows = {}
         try:
-            import sqlite3
-            con = sqlite3.connect(
-                f"file:{Path(settings.DATABASES['default']['NAME'])}?mode=ro",
-                uri=True)
-            try:
-                for name, brand, year in con.execute(
-                        'SELECT car_name, brand_name, year FROM main_db'):
+            # Through Django's connection, so it reads whichever engine the
+            # portal DB runs on (SQLite or PostgreSQL).
+            from django.db import connection
+            with connection.cursor() as cur:
+                cur.execute('SELECT car_name, brand_name, year FROM main_db')
+                for name, brand, year in cur.fetchall():
                     rows[name] = (brand, year)
-            finally:
-                con.close()
         except Exception:
             pass                      # catalog unavailable -> heuristic fallback
         _CATALOG_CACHE = rows
@@ -629,7 +626,10 @@ CACHE_TTL = float(os.environ.get('RAG_CACHE_TTL', '900'))      # seconds (15 min
 CACHE_MAX = int(os.environ.get('RAG_CACHE_MAX', '512'))        # max cached answers
 # Log every query to a sidecar feedback DB (for analytics + future tuning).
 LOG_QUERIES = os.environ.get('RAG_LOG_QUERIES', '1') != '0'
-FEEDBACK_DB = RAG_DIR / 'feedback.db'
+# RAG_FEEDBACK_DB moves the store off the shared warehouse. Staging and QA
+# stacks mount production's _rag/ and must set it, or their queries and
+# ratings land in production's store and re-rank live search results.
+FEEDBACK_DB = Path(os.environ.get('RAG_FEEDBACK_DB') or (RAG_DIR / 'feedback.db'))
 
 # Optional cross-encoder reranker: a big precision boost for the top results,
 # at the cost of loading a second model. OFF by default (heavier); turn on with

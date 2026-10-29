@@ -60,11 +60,12 @@ def _client_ip(request):
 
 
 def _parse_rule(raw, default):
-    """'30/60' -> (30 requests, 60 seconds). Falls back to `default` on garbage."""
+    """'30/60' -> (30 requests, 60 seconds); '0/0' -> (0, 0.0) = limit off.
+    Falls back to `default` on garbage."""
     try:
         n, win = raw.split('/')
         n, win = int(n), float(win)
-        if n > 0 and win > 0:
+        if (n > 0 and win > 0) or (n == 0 and win == 0):
             return n, win
     except (ValueError, AttributeError):
         pass

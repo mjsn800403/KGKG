@@ -1,0 +1,84 @@
+### mutant 3
+--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -27,7 +27,7 @@
+ def _folder(uri):
+     """Car folder of the file nginx will serve for ``uri``; '' for the media
+     root; None when the path is not under the media prefix once normalized."""
+-    path = unquote((uri or '').split('?', 1)[0])
++    path = unquote((uri or 'XXXX').split('?', 1)[0])
+     if '\x00' in path:
+         return None
+     path = posixpath.normpath('/' + path.lstrip('/'))
+
+
+### mutant 6
+--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -27,7 +27,7 @@
+ def _folder(uri):
+     """Car folder of the file nginx will serve for ``uri``; '' for the media
+     root; None when the path is not under the media prefix once normalized."""
+-    path = unquote((uri or '').split('?', 1)[0])
++    path = unquote((uri or '').split('?', 2)[0])
+     if '\x00' in path:
+         return None
+     path = posixpath.normpath('/' + path.lstrip('/'))
+
+
+### mutant 13
+--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -30,7 +30,7 @@
+     path = unquote((uri or '').split('?', 1)[0])
+     if '\x00' in path:
+         return None
+-    path = posixpath.normpath('/' + path.lstrip('/'))
++    path = posixpath.normpath('/' + path.lstrip('XX/XX'))
+     if path + '/' == PREFIX:
+         return ''
+     if not path.startswith(PREFIX):
+
+
+### mutant 21
+--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -35,7 +35,7 @@
+         return ''
+     if not path.startswith(PREFIX):
+         return None
+-    return path[len(PREFIX):].split('/', 1)[0]
++    return path[len(PREFIX):].split('/', 2)[0]
+ 
+ 
+ def media_auth_view(request):
+
+
+### mutant 31
+--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -51,7 +51,7 @@
+         # No media path to judge (header missing, or it normalizes outside the
+         # media root): refuse rather than guess.
+         return HttpResponse(status=403)
+-    if not folder or folder.startswith('_'):
++    if not folder or folder.startswith('XX_XX'):
+         return HttpResponse(status=204)
+     cars = list(Car.objects.filter(car_name=folder))
+     if not cars:
+
+
+### mutant 32
+--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -51,7 +51,7 @@
+         # No media path to judge (header missing, or it normalizes outside the
+         # media root): refuse rather than guess.
+         return HttpResponse(status=403)
+-    if not folder or folder.startswith('_'):
++    if not folder and folder.startswith('_'):
+         return HttpResponse(status=204)
+     cars = list(Car.objects.filter(car_name=folder))
+     if not cars:
+
+

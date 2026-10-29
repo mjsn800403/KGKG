@@ -108,10 +108,19 @@ def role_can_manage(actor_role, target_role):
 
 
 def effective_documents(access_row, company_scope=None):
-    """Resolved package list for one car grant."""
+    """Resolved package list for one car grant.
+
+    An empty list means "everything available": all packages, or with
+    ``company_scope`` everything the company bought for that car. An explicit
+    list is always clamped to ``company_scope`` when one is given, so a seat can
+    never hold a layer its company did not buy (or no longer has after an
+    admin narrowed the company's grant)."""
     docs = access_row.documents or []
     if docs:
-        return [d for d in docs if d in VALID_PACKAGES]
+        docs = [d for d in docs if d in VALID_PACKAGES]
+        if company_scope is not None:
+            docs = [d for d in docs if d in company_scope]
+        return docs
     if company_scope is not None:
         return [d for d in company_scope if d in VALID_PACKAGES]
     return list(VALID_PACKAGES)
@@ -270,7 +279,7 @@ def car_db_path(car):
     """Absolute path to a car's content database on this server."""
     from django.conf import settings
     from pathlib import Path
-    main_dir = Path(settings.DATABASES['default']['NAME']).parent
+    main_dir = Path(settings.KG_DATA_DIR)
     return main_dir / (car.db_address or '').replace('\\', '/')
 
 
@@ -496,7 +505,7 @@ def apply_user_access(user, accesses, override_purchase=False, allow_admin_grant
         a.car_id: (set(a.documents) if a.documents else set(VALID_DOCS))
         for a in user.company.car_accesses.all()
     }
-    # One row per car: dedupe by car_id (last write wins) so a duplicated car_id
+    # One row per car: dedupe by car_id (the first entry wins) so a duplicated car_id
     # in the payload can't hit the (user, car) unique constraint mid-loop and
     # leave the grants half-rewritten. The whole replace is atomic for the same
     # reason — any failure rolls back to the pre-request grants.

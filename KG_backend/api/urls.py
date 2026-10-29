@@ -3,7 +3,7 @@ from .behavior import admin_assistant_view
 from .insights import admin_ai_cost_view, admin_funnel_view, admin_search_view
 from django.http import JsonResponse
 from django.urls import path, re_path
-from . import adminops, events, recommend, requests_api, views, portal, team
+from . import adminops, events, metrics_exposition, portal, recommend, requests_api, team, views
 from . import orggraph_api, parts, labortimes, sst, quota, frm
 from . import mediaauth
 from . import vncauth
@@ -19,6 +19,8 @@ def _api_not_found(request, rest=None):
 urlpatterns = [
     # Liveness probe (public, cheap, no secrets) + operational admin API.
     path('api/health/', adminops.health_view, name='health'),
+    # Prometheus scrape (KG_METRICS_TOKEN); nginx keeps it off the internet.
+    path('api/metrics/', metrics_exposition.metrics_view, name='metrics'),
     path('api/admin/data-quality/', adminops.admin_data_quality_view, name='admin_data_quality'),
     path('api/admin/system/', adminops.admin_system_view, name='admin_system'),
     path('api/admin/traffic/', adminops.admin_traffic_view, name='admin_traffic'),

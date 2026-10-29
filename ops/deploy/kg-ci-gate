@@ -1,0 +1,11 @@
+#!/bin/bash
+# Forced command for the CI deploy key.
+#
+# The only difference from kg-deploy-gate is the role, and the role is the
+# security boundary: role `ci` has no `deploy` verb, so this key cannot promote
+# to production no matter what it sends. The privilege lives in which wrapper
+# the key is pinned to in authorized_keys, never in anything the client says.
+#
+#   command="/usr/local/bin/kg-ci-gate",restrict ssh-ed25519 AAAA... kgkg-github-ci
+set -uo pipefail
+exec env KG_GATE_ROLE=ci /usr/local/bin/kg-deploy-gate "$@"

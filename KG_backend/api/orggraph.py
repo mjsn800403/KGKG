@@ -68,8 +68,17 @@ def sync_node_to_user(node):
     for a in accesses:
         cid = a.get('car_id')
         if cid in held_admin:
-            rows.append({'car_id': cid, 'admin_granted': True,
-                         'documents': [d for d in (a.get('documents') or []) if d in held_admin[cid]]})
+            held = held_admin[cid]
+            posted = a.get('documents') or []
+            if not held:            # the admin granted everything: any subset narrows it
+                docs = posted
+            elif not posted:        # "all I'm allowed" = exactly what the admin granted
+                docs = sorted(held)
+            else:
+                docs = [d for d in posted if d in held]
+                if not docs:        # narrowed to nothing: drop the grant. Storing []
+                    continue        # would read back as "all packages" and widen it.
+            rows.append({'car_id': cid, 'admin_granted': True, 'documents': docs})
         else:
             rows.append({'car_id': cid, 'documents': a.get('documents') or []})
 

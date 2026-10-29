@@ -1,0 +1,8 @@
+profile=stress  requests=10866  throughput=30.17 req/s  iterations=2551  max_vus=50
+error_rate=0.00%  http_req_failed=0.00%
+latency (ms)          avg      p50      p90      p95      p99      max
+page (landing)       16.3     14.7     23.6     28.3     35.9     43.4
+api (me/fleet/..)    226.3     14.7    307.9   1898.4   3846.6   6514.6
+assist (RAG)       4256.4   3067.7  10081.1  11763.5  13432.9  16108.2
+all http            422.5     15.7   1184.5   2819.7   7973.9  16108.2
+thresholds: 

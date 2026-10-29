@@ -1,0 +1,11 @@
+backend	Full test suite (with coverage)	Ran 850 tests in 111.612s
+backend	Full test suite (with coverage)	OK (skipped=1)
+backend	Coverage ratchet (ops/deploy/coverage_min)	coverage floor: 52%
+images	Scan both images for vulnerabilities	Total: 0 (HIGH: 0, CRITICAL: 0)
+images	Scan both images for vulnerabilities	Total: 0 (HIGH: 0, CRITICAL: 0)
+frontend	Unit tests (node:test, with coverage)	# tests 178
+frontend	Unit tests (node:test, with coverage)	# pass 177
+frontend	Unit tests (node:test, with coverage)	# fail 0
+security	Operations tests (deploy gate, watchdog, staging sanitizer)	Ran 32 tests in 0.005s
+security	Secret scan	secret scan: 0 finding(s)
+security	Static application security testing (bandit)		No issues identified.

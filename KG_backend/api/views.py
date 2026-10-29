@@ -74,6 +74,13 @@ def _guard_car_content(request, stem, brand=None, year=None):
     car = _resolve_car(stem, brand=brand, year=year)
     if car is not None and not user_can_open_car(user, car):
         return None, None, _forbidden_car()
+    if car is None and stem:
+        # brand/year only narrow the lookup; they must not switch the check off.
+        # A name that matches catalog cars is checked against all of them, or a
+        # mismatched brand would let the name select a car nobody verified.
+        named = list(Car.objects.filter(car_name__iexact=stem))
+        if named and not any(user_can_open_car(user, c) for c in named):
+            return None, None, _forbidden_car()
     return user, _user_allowed_stems(user), None
 
 def brands_list_view(request):
@@ -438,8 +445,10 @@ def feedback_recent_view(request):
     return JsonResponse({'count': len(rows), 'items': rows})
 
 
+@require_admin_token
 def eval_report_view(request):
-    """GET /api/eval/report/  -> the latest offline evaluation run (+ trend)."""
+    """GET /api/eval/report/  -> the latest offline evaluation run (+ trend).
+    Admin only: runs include logged real user queries."""
     try:
         from .rag import evalreport
         return JsonResponse(evalreport.latest_report())
@@ -502,12 +511,12 @@ def _search_like_fallback(brand, model, car, q, limit):
         return JsonResponse([], safe=False)
     conn = get_car_db(car_obj.db_address)
     cur = conn.cursor()
-    like = f'%{q}%'
+    like = f'%{cardb.like_escape(q)}%'
     cur.execute(f"""
         SELECT {NODE_COLUMNS},
-               CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
+               CASE WHEN title LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END AS rank
         FROM nodes
-        WHERE (title LIKE ? OR content LIKE ?)
+        WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')
               AND (href IS NULL OR href != '404.html')
         ORDER BY rank, depth, sort_order
         LIMIT ?
@@ -526,7 +535,7 @@ def get_car_db(db_address):
     """Pooled, read-only connection to a car-specific database.
 
     Callers must NOT close it — the pool owns the connection (see cardb)."""
-    main_dir = Path(settings.DATABASES['default']['NAME']).parent
+    main_dir = Path(settings.KG_DATA_DIR)
     # db_address may carry Windows separators (rows seeded on Windows); normalize
     # so it resolves on POSIX/macOS too.
     abs_path = main_dir / db_address.replace('\\', '/')
@@ -687,7 +696,8 @@ def read_page_content(cur, car_name, filename):
     if base is None:
         return None
     candidates = [base / 'pages' / filename, base / filename]
-    fp = next((c for c in candidates if c.exists()), None)
+    # Regular files only: '..' or '.' would otherwise resolve to a directory.
+    fp = next((c for c in candidates if c.is_file()), None)
     if fp is None:
         return None
     html = fp.read_text(encoding='utf-8', errors='replace')
@@ -773,6 +783,15 @@ def car_view(request, brand_name=None, year=None, model_name=None):
             # otherwise unambiguous /brand/.../car_name link — car_name is the
             # real identifier. Exact (brand, year, name) first; any year
             # mismatch falls back to (brand, name).
+            # A specific vehicle's manual is paid content: require a logged-in
+            # portal user who has this car in their effective grants — checked
+            # BEFORE anything else (even the Car lookup) so readiness/existence
+            # isn't revealed to anonymous callers. (The brand and year listings
+            # above stay public for the sales catalog; opening a vehicle does not.)
+            _content_user = portal_user(request)
+            if not _content_user:
+                return _unauthorized()
+
             base_qs = Car.objects.filter(
                 brand_name__iexact=brand_name, car_name__iexact=model_name)
             try:
@@ -782,14 +801,6 @@ def car_view(request, brand_name=None, year=None, model_name=None):
             if car is None:
                 raise Car.DoesNotExist
 
-            # A specific vehicle's manual is paid content: require a logged-in
-            # portal user who has this car in their effective grants — checked
-            # BEFORE anything else so readiness/existence isn't revealed to
-            # anonymous callers. (The brand and year listings above stay public
-            # for the sales catalog; opening a vehicle does not.)
-            _content_user = portal_user(request)
-            if not _content_user:
-                return _unauthorized()
             if not user_can_open_car(_content_user, car):
                 return _forbidden_car()
 
@@ -837,12 +848,12 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 except (TypeError, ValueError):
                     limit = 30
                 limit = max(1, min(limit, 50))
-                like = f'%{q}%'
+                like = f'%{cardb.like_escape(q)}%'
                 cur.execute(f"""
                     SELECT {NODE_COLUMNS},
-                           CASE WHEN title LIKE ? THEN 0 ELSE 1 END AS rank
+                           CASE WHEN title LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END AS rank
                     FROM nodes
-                    WHERE (title LIKE ? OR content LIKE ?)
+                    WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')
                           AND (href IS NULL OR href != '404.html')
                     ORDER BY rank, depth, sort_order
                     LIMIT ?
@@ -890,8 +901,8 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                 # guessing.
                 filename = href_lookup.rstrip('/').split('/')[-1]
                 cur.execute(f"""
-                    SELECT {NODE_COLUMNS} FROM nodes WHERE href LIKE ? LIMIT 1
-                """, ('%/' + filename,))
+                    SELECT {NODE_COLUMNS} FROM nodes WHERE href LIKE ? ESCAPE '\\' LIMIT 1
+                """, ('%/' + cardb.like_escape(filename),))
                 node = cur.fetchone()
 
                 if not node:

@@ -80,7 +80,7 @@ def nfkc(text):
 
 
 def sha1(text):
-    return hashlib.sha1(text.encode('utf-8')).hexdigest()
+    return hashlib.sha1(text.encode('utf-8'), usedforsecurity=False).hexdigest()
 
 
 # ---------------------------------------------------------------------------

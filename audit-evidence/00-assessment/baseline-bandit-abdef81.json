@@ -1,0 +1,408 @@
+{
+ "generated_at": "2026-10-27T18:19:21Z",
+ "totals": {
+  "CONFIDENCE.HIGH": 91,
+  "CONFIDENCE.LOW": 0,
+  "CONFIDENCE.MEDIUM": 34,
+  "CONFIDENCE.UNDEFINED": 0,
+  "SEVERITY.HIGH": 6,
+  "SEVERITY.LOW": 79,
+  "SEVERITY.MEDIUM": 40,
+  "SEVERITY.UNDEFINED": 0,
+  "loc": 23190,
+  "nosec": 0,
+  "skipped_tests": 0
+ },
+ "by_severity_confidence": {
+  "LOW/HIGH": 78,
+  "LOW/MEDIUM": 1,
+  "MEDIUM/HIGH": 10,
+  "HIGH/MEDIUM": 3,
+  "HIGH/HIGH": 3,
+  "MEDIUM/MEDIUM": 30
+ },
+ "by_test": {
+  "B110 try_except_pass": 53,
+  "B105 hardcoded_password_string": 1,
+  "B310 blacklist": 10,
+  "B613 trojansource": 3,
+  "B324 hashlib": 3,
+  "B608 hardcoded_sql_expressions": 29,
+  "B311 blacklist": 8,
+  "B404 blacklist": 3,
+  "B607 start_process_with_partial_path": 5,
+  "B603 subprocess_without_shell_equals_true": 8,
+  "B108 hardcoded_tmp_directory": 1,
+  "B112 try_except_continue": 1
+ },
+ "medium_high": [
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/alert_rules.py",
+   "line_number": 185,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/alert_rules.py",
+   "line_number": 196,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B613",
+   "issue_severity": "HIGH",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/assist_lookup.py",
+   "line_number": 12,
+   "issue_text": "A Python source file contains bidirectional control characters ('\\u200f')."
+  },
+  {
+   "test_id": "B324",
+   "issue_severity": "HIGH",
+   "issue_confidence": "HIGH",
+   "filename": "api/dataquality.py",
+   "line_number": 198,
+   "issue_text": "Use of weak SHA1 hash for security. Consider usedforsecurity=False"
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/evalsuite/answer_eval.py",
+   "line_number": 65,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/evalsuite/answer_eval.py",
+   "line_number": 140,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/evalsuite/goldset.py",
+   "line_number": 239,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/management/commands/build_terms.py",
+   "line_number": 90,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/management/commands/expert_sheet.py",
+   "line_number": 116,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/management/commands/translate_terms.py",
+   "line_number": 85,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/management/commands/translate_terms.py",
+   "line_number": 230,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/parts.py",
+   "line_number": 135,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/parts.py",
+   "line_number": 281,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/parts.py",
+   "line_number": 333,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/parts.py",
+   "line_number": 339,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/parts.py",
+   "line_number": 345,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/parts.py",
+   "line_number": 356,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B324",
+   "issue_severity": "HIGH",
+   "issue_confidence": "HIGH",
+   "filename": "api/partsingest.py",
+   "line_number": 83,
+   "issue_text": "Use of weak SHA1 hash for security. Consider usedforsecurity=False"
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/portal.py",
+   "line_number": 103,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/portal.py",
+   "line_number": 468,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/diag_build.py",
+   "line_number": 244,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/diag_build.py",
+   "line_number": 460,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/diag_build.py",
+   "line_number": 501,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/diag_build.py",
+   "line_number": 504,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B613",
+   "issue_severity": "HIGH",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/glossary.py",
+   "line_number": 174,
+   "issue_text": "A Python source file contains bidirectional control characters ('\\u200f')."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/graph.py",
+   "line_number": 145,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/graph.py",
+   "line_number": 149,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/graph.py",
+   "line_number": 287,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B324",
+   "issue_severity": "HIGH",
+   "issue_confidence": "HIGH",
+   "filename": "api/rag/ingest.py",
+   "line_number": 125,
+   "issue_text": "Use of weak SHA1 hash for security. Consider usedforsecurity=False"
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/retrieve.py",
+   "line_number": 116,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/retrieve.py",
+   "line_number": 219,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/retrieve.py",
+   "line_number": 339,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/store.py",
+   "line_number": 212,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B613",
+   "issue_severity": "HIGH",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/rag/terms.py",
+   "line_number": 43,
+   "issue_text": "A Python source file contains bidirectional control characters ('\\u200f')."
+  },
+  {
+   "test_id": "B108",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/ratelimit.py",
+   "line_number": 93,
+   "issue_text": "Probable insecure usage of temp file/directory."
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/tis_crawler.py",
+   "line_number": 95,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/tis_crawler.py",
+   "line_number": 129,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/tis_crawler.py",
+   "line_number": 134,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B310",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "HIGH",
+   "filename": "api/tis_crawler.py",
+   "line_number": 137,
+   "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/views.py",
+   "line_number": 506,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/views.py",
+   "line_number": 841,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/views.py",
+   "line_number": 892,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/views.py",
+   "line_number": 912,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/views.py",
+   "line_number": 945,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/views.py",
+   "line_number": 963,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  },
+  {
+   "test_id": "B608",
+   "issue_severity": "MEDIUM",
+   "issue_confidence": "MEDIUM",
+   "filename": "api/views.py",
+   "line_number": 1009,
+   "issue_text": "Possible SQL injection vector through string-based query construction."
+  }
+ ]
+}

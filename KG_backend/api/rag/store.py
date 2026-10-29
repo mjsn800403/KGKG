@@ -6,6 +6,7 @@ Two kinds of connections:
   * a read/write connection to our own unified index DB under _rag/.
 """
 import sqlite3
+from pathlib import Path
 import struct
 import threading
 import numpy as np
@@ -41,9 +42,15 @@ def open_car_ro(db_path):
 
 # --- unified index DB: our own read/write store -----------------------------
 def open_index(path=None, vec=True, write=True, check_same_thread=True):
-    """Open (creating if needed) the unified index DB with sqlite-vec loaded."""
-    path = path or config.INDEX_DB
-    config.RAG_DIR.mkdir(parents=True, exist_ok=True)
+    """Open the unified index DB with sqlite-vec loaded. A write open creates it
+    if needed. A read-only open of a missing index raises FileNotFoundError:
+    sqlite3.connect() would create an empty file, which every later read takes
+    for a broken index (500 "no such table") instead of a missing one (503)."""
+    path = Path(path or config.INDEX_DB)
+    if write:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    elif not path.exists():
+        raise FileNotFoundError(str(path))
     conn = sqlite3.connect(str(path), check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     if vec:

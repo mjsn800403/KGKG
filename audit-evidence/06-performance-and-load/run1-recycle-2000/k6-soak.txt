@@ -1,0 +1,8 @@
+profile=soak  requests=21483  throughput=17.88 req/s  iterations=5054  max_vus=8
+error_rate=0.04%  http_req_failed=0.04%
+latency (ms)          avg      p50      p90      p95      p99      max
+page (landing)       13.3     12.3     17.2     19.9     27.0    116.0
+api (me/fleet/..)     22.9      9.7     31.3     36.8    174.6   4031.7
+assist (RAG)       1279.5   1052.7   1853.9   2278.1   7818.1  12922.6
+all http             94.8     11.5     35.5    936.3   1586.3  12922.6
+thresholds: kg_api_ms p(95)<500 PASS; kg_assist_ms p(95)<4000 PASS; kg_errors rate<0.01 PASS; kg_page_ms p(95)<1500 PASS

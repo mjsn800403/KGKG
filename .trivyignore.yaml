@@ -1,0 +1,25 @@
+# Trivy exceptions for the production images.
+#
+# The CI images job scans both images for fixable HIGH/CRITICAL vulnerabilities
+# and fails on anything not listed here. Every entry carries an expiry date
+# that trivy enforces itself: once it passes, the finding blocks CI again, so
+# an exception cannot quietly become permanent.
+#
+# Policy and what an entry must justify: ops/security/README.md.
+
+vulnerabilities:
+  - id: PYSEC-2025-194
+    paths:
+      - "usr/local/lib/python3.12/site-packages/torch-*.dist-info/METADATA"
+    statement: >-
+      torch 2.12.1 -> 2.13.0. Deferred: the embedding model behind the RAG
+      index runs on this torch, and an unverified bump risks drift against a
+      57k-blob index that a full re-embed would be needed to repair. Needs a
+      planned window with an embedding-equivalence check. Model files are
+      local, loaded with HF_HUB_OFFLINE=1; no request data reaches torch.load.
+    expiredAt: 2027-01-31
+
+# Nothing else is listed. As of 2026-10-27 both images scan clean of fixable
+# HIGH/CRITICAL findings, and the torch entry above is pre-registered because
+# pip-audit already reports it while trivy's database has not caught up — it is
+# the one advisory this project knowingly carries.

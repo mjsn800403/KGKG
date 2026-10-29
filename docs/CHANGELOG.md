@@ -3,6 +3,90 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## Unreleased
+- **Fix (D-41):** a read of a missing RAG index created an empty `index.rag.db`, after which the
+  assistant answered 500 ("no such table") instead of 503 until the file was removed by hand; one
+  recommendations-panel view was enough. Read-only opens now raise `FileNotFoundError` and create
+  nothing (`api/rag/store.py`, test `api/rag/test_store_ro.py`).
+- **Fix (D-42):** malformed ids (`"abc"`) gave HTTP 500 on six admin inputs (pipeline job/ZIP
+  actions, vehicle-specs `car_id`, admin user create `company_id`); now 404/400.
+- **Tests:** backend 850 → 930. New suites for team analytics/invites and the PDF report
+  (`test_team.py`), the admin operations API (`test_adminops.py`), shield keys and alerts, and the
+  serving layer's search/diagnose filters (`rag/test_service_paths.py`). team 24→90 %, reporting
+  0→98 %, adminops 37→77 %, shield 69→95 %, rag/service 61→90 %; total 53→56 %, CI floor 52→55.
+- **Mutation testing** of the authorization modules (`qa/mutation/run.sh`, on-demand
+  `mutation` workflow): 14 surviving mutants were real blind spots (same-rank peer management on
+  the legacy path, purchase bypass by default flag, one bad grant entry dropping the rest, a
+  query-string media-gate case, the nginx `X-Real-IP` admin-token check) and are now killed by
+  tests (`test_access_rules.py` and others). Evidence: `audit-evidence/03-unit-testing/mutation/`.
+- **Docs:** `docs/00-srs.md` (FR/NFR with verifying tests) and `docs/adr/` (six decisions).
+  Tests 930 → 960 (incl. CSV exports); coverage floor 55 → 56.
+- **Release gate:** `kgkg-promote` requires a passing full E2E run for the commit
+  (`qa/run_e2e.sh` → `/opt/KGKG_release/e2e/<sha>.env`); overrides are typed and logged.
+
+## 2026-10-28 — v1.0.0: test architecture, security fixes, audit evidence (branch `qa-audit`)
+- **Security fixes found by the new tests** (each with a regression test; details in
+  `audit-evidence/14-risk-and-corrective-actions/`): cross-company paid-media download through
+  dot-segment paths and the nginx auth cache key (D-06/D-07, *needs `ops/nginx/kgkg.conf` and
+  `kgkg-mediaauth.conf` installed with the release*); seats holding layers their company never
+  bought (D-03/D-04); root widening admin exceptions (D-05); public `/api/eval/report/` (D-17);
+  cross-vehicle diagnostics via a mismatched brand (D-30); `java\tscript:` XSS bypass in the
+  sanitizer and unchecked model-written links (D-22/D-23); prompt fences forgeable (D-24).
+- **Staging no longer writes into production's RAG feedback store** (`RAG_FEEDBACK_DB`, D-02).
+- **Robustness:** 500s on hostile input fixed in auth, catalog, admin inbox and org graph;
+  gunicorn recycles every 20,000 requests (was 2,000; recycling caused every load-test error).
+- **Tests:** backend 427 → 850; first frontend unit suite (178, `node:test`); Playwright E2E (42,
+  `qa/e2e/`); k6 load model (`qa/perf/`); ZAP baseline/full/API scans (`qa/dast/`); offline
+  retrieval evaluation runner (`qa/eval/`); isolated QA stack (`qa/stack.sh`).
+- **CI:** honest branch coverage (test files no longer counted; floor 50 → 52), JUnit/coverage
+  artifacts, frontend tests, bandit SAST gate, frontend image hardened (Trivy 0 HIGH/CRITICAL).
+  CI on this branch is green; `work` had been red for 14 of 19 runs.
+- **Docs:** `docs/openapi.yaml` (all 90 routes, enforced by `test_openapi_routes`); API reference,
+  security risks and operations docs corrected; `VERSION` + SemVer in deploy tags; defect and
+  support issue templates; `audit-evidence/` package for the knowledge-based-company evaluation.
+
+## 2026-10-27 — delivery, monitoring and supply-chain maturity
+- **CI stages every push to `work`; only a person promotes.** `.github/workflows/deploy.yml`
+  would have promoted to production on green CI (held back only by a GitHub environment
+  setting) — deleted. Deploy keys are now pinned to role-scoped forced commands: the CI key
+  can `stage` and `status`, and has no `deploy` verb, so it cannot reach production by
+  construction. Promotion is `kgkg-promote <sha>`, which refuses an unstaged or stale-staged
+  commit and requires a typed confirmation. 18 access-control tests. (doc 11 §11.3)
+- **Staging data sanitized.** The staging copy of the production database had live session
+  tokens, phone numbers, e-mails and password hashes. `ops/deploy/sanitize_staging_db.py`
+  empties credential tables, neutralises hashes, replaces identifiers and masks audit IPs
+  while keeping row counts and relationships. (doc 11 §11.3, doc 12 §12.1)
+- **Application metrics in Prometheus.** `GET /api/metrics/` exposes requests, 4xx/5xx and
+  latency per route group, open alerts, index and DB size, pipeline jobs and the live release
+  sha — read from the shared tables rather than per-worker counters, because a scrape lands on
+  one gunicorn worker. Own credential (`KG_METRICS_TOKEN`), denied on the public path, scraped
+  over a loopback-plus-bridge listener on :8081. (doc 11 §11.2, §11.5)
+- **The alerting is now watched.** Nothing checked that `check_alerts` still ran; a stalled
+  timer looked exactly like a healthy system. `ops/observability/watchdog.py` (5-minute timer,
+  standard library only, independent of Django) pages by SMS when the paging path is broken and
+  stays quiet otherwise. 24 tests. (doc 11 §11.5)
+- **Security gates in CI, failing closed:** shellcheck, hadolint, gitleaks, pip-audit, npm
+  audit and trivy on both images, with dated exceptions in `ops/security/`. Their first run
+  found the installed Next.js inside the vulnerable range for several advisories including
+  unauthenticated RCE (16.2.9 → 16.4.3) and WeasyPrint arbitrary code execution on the PDF
+  path (69.0 → 70.0); Django, pillow, urllib3, sqlparse, soupsieve, certifi, anyio, brotli,
+  fsspec, filelock and setuptools were also bumped, and the backend image now applies
+  distribution security updates. Both images scan clean of fixable HIGH/CRITICAL.
+  (ops/security/README.md)
+- **Smoke covers the reverse proxy:** proxied landing and health, the public metrics path
+  refused, the scrape listener serving only metrics, security headers, and no stray files in
+  `sites-enabled` (one broke an nginx reload today). Coverage ratcheted at 50%.
+- **Verified:** 402 backend tests in the upgraded image, 14 new metrics tests, 24 watchdog
+  tests, 18 gate-role tests, the sanitizer against a real database copy, and 24 smoke checks
+  against live production. A full staging run through the CI path was exercised end to end.
+- **Correction (same day):** this entry first said no off-host backup existed, repeating a
+  stale claim in doc 11 without checking. It was wrong — an hourly off-host snapshot
+  already existed (internal server pulls `/root/backup_snapshot`, built with the SQLite
+  online backup API). Verified by a restore test: integrity ok, business tables matching
+  live exactly. Doc 11 §11.6 and doc 12 §12.2 now describe it. What remains open is
+  retention on the far side, which is a question for that server, not a missing system.
+- **Still open:** the torch upgrade, deferred pending a re-embed window.
+
 ## 2026-08-05 — security hardening: secrets, rate limiting, WAF, error monitoring
 - **Secrets**: `.env.prod` / `.env.production` / `db.sqlite3` and ~24 stray backup copies were
   world-readable (0644) — now 0600 root-only. Both production secrets rotated. (doc 18 §1)

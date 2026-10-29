@@ -41,11 +41,18 @@ _SOURCE_VIA = {'symptom_table': 'diagnostic', 'direct': 'semantic',
 
 
 # --- car resolution --------------------------------------------------------
-def _resolve_stem(brand, model, car_stem):
+def _resolve_stem(brand, model, car_stem, allowed_cars=None):
     """The frontend passes the car_name (== on-disk DB stem) as `model` and/or
-    `car`. Pick the first that has a built sidecar."""
+    `car`. Pick the first that has a built sidecar and that the caller may open
+    (``allowed_cars``, when given). Names are user input: anything path-like or
+    too long for a filename is not a car."""
     for cand in (car_stem, model):
-        if cand and config.diag_db_path(cand).exists():
+        if not cand or len(cand) > 200 or any(ch in cand for ch in ('/', '\\', '\x00')) \
+                or cand in ('.', '..'):
+            continue
+        if allowed_cars is not None and cand not in allowed_cars:
+            continue
+        if config.diag_db_path(cand).exists():
             return cand
     return None
 
@@ -212,7 +219,7 @@ def _fts_match(query):
 # --- main entry ------------------------------------------------------------
 def diagnose(query, brand=None, model=None, car_stem=None, k=None,
              allowed_cars=None):
-    stem = _resolve_stem(brand, model, car_stem)
+    stem = _resolve_stem(brand, model, car_stem, allowed_cars)
     if stem is None:
         return {'query': query, 'intent': 'unknown', 'error': 'no_diag_index',
                 'available_cars': available_cars(), 'candidates': [], 'symptoms': []}
@@ -285,16 +292,22 @@ def normalize_code_text(text):
 
 
 def _detect_code(query, diag):
-    """Return (code, known). `known` is True if the code exists in this car."""
+    """Return (code, known). `known` is True if the code exists in this car.
+
+    Every code in the query is checked before giving up: a known code anywhere
+    wins over an unknown one typed earlier ("P0420 P0171"). An unknown code,
+    with or without its sub-code ("P0300-27"), is still reported as a code that
+    is not in this car rather than falling through to symptom search."""
+    unknown = None
     for m in config.DTC_CODE_RE.finditer(normalize_code_text(query)):
         key = norm_code(m.group(1))
         row = diag.execute("SELECT code FROM dtc WHERE code=? OR code LIKE ? LIMIT 1",
                            (key, key + '-%')).fetchone()
         if row:
             return row['code'], True
-        if re.match(r'^[A-Z]\d{4}$', key):     # code-shaped but not in this car
-            return key, False
-    return None, False
+        if unknown is None and re.match(r'^[A-Z]\d{4}(-[0-9A-F]{2,3})?$', key):
+            unknown = key                          # code-shaped but not in this car
+    return (unknown, False) if unknown else (None, False)
 
 
 def _diagnose_by_code(diag, index, stem, query, code, known, allowed_cars=None):
@@ -332,10 +345,12 @@ def _diagnose_by_symptom(diag, index, stem, query, k, allowed_cars=None):
     sym_score = {}
 
     def bump(d, key, rank, w, sim=None):
-        s = d.setdefault(key, {'rrf': 0.0, 'sim': 0.0})
+        s = d.setdefault(key, {'rrf': 0.0, 'sim': 0.0, 'kw': False})
         s['rrf'] += w / (config.RRF_K + rank + 1)
         if sim is not None and sim > s['sim']:
             s['sim'] = sim
+        if sim is None:
+            s['kw'] = True                         # a keyword (FTS) hit
 
     for rank, r in enumerate(diag.execute(
             "SELECT rowid AS sid, distance AS dist FROM sym_vec "
@@ -372,11 +387,18 @@ def _diagnose_by_symptom(diag, index, stem, query, k, allowed_cars=None):
     procs = {}    # app_url -> {'title', 'matched_symptom', 'score'}
     top_symptoms = sorted(sym_score.items(), key=lambda kv: kv[1]['rrf'], reverse=True)
     sym_rows = {}
-    best_sid = top_symptoms[0][0] if top_symptoms else None
 
     def _c(code):
         return cand.setdefault(code, {'table': 0.0, 'direct': 0.0, 'inh': 0.0,
                                       'matched_symptom': None, 'source': None})
+
+    # The KNN always returns its K nearest symptoms, however unrelated. A symptom
+    # is evidence only if it actually matches the query (cosine at the same floor
+    # assist grounds on, or a keyword hit); otherwise its table links would turn
+    # gibberish into "manufacturer-table, 0.9 confidence, grounded".
+    top_symptoms = [(sid, s) for sid, s in top_symptoms
+                    if s['kw'] or s['sim'] >= config.GROUND_SIM_FLOOR]
+    best_sid = top_symptoms[0][0] if top_symptoms else None
 
     for sid, s in top_symptoms[:config.DIAG_SYMPTOM_K]:
         row = diag.execute("SELECT * FROM symptom WHERE symptom_id=?", (sid,)).fetchone()

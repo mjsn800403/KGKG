@@ -55,6 +55,7 @@ _PREFIX_GROUPS = (
     ('/api/purchase-request/', 'purchase'),
     ('/api/eval/', 'eval'),
     ('/api/health/', 'health'),
+    ('/api/metrics/', 'metrics'),
     ('/media/', 'media'),
     ('/admin/', 'django-admin'),
 )
@@ -245,10 +246,17 @@ def system_snapshot(deep=False):
         'size_mb': round(config.INDEX_DB.stat().st_size / 1e6, 1)
         if config.INDEX_DB.exists() else 0,
     }
+    snap['main_db_engine'] = getattr(settings, 'DB_ENGINE', 'sqlite')
     try:
-        main_db = settings.DATABASES['default']['NAME']
-        snap['main_db_mb'] = round(os.path.getsize(main_db) / 1e6, 1)
-    except OSError:
+        if snap['main_db_engine'] == 'postgres':
+            from django.db import connection
+            with connection.cursor() as cur:
+                cur.execute('SELECT pg_database_size(current_database())')
+                snap['main_db_mb'] = round(cur.fetchone()[0] / 1e6, 1)
+        else:
+            main_db = settings.DATABASES['default']['NAME']
+            snap['main_db_mb'] = round(os.path.getsize(main_db) / 1e6, 1)
+    except Exception:
         snap['main_db_mb'] = None
 
     latest = DataQualityRun.objects.filter(status='done').first()
@@ -389,6 +397,18 @@ def evaluate_alerts():
             alert.resolved_at = timezone.now()
             alert.save(update_fields=['is_open', 'resolved_at'])
             resolved.append(alert.key)
+
+    # pipeline_disk_low stays owned by the pipeline (above), but ownership must
+    # not mean "open for ever": the pipeline may not run for months, and one of
+    # these read critical from July to October 2026 with 75GB free. Ask the
+    # pipeline to re-check the real condition — this never closes the alert
+    # merely because this sweep did not raise it.
+    try:
+        from . import ingest
+        if ingest.resolve_disk_guard_if_recovered() is not None:
+            resolved.append('pipeline_disk_low')
+    except Exception:
+        pass
 
     if resolved:
         try:

@@ -57,16 +57,75 @@ s.backup(d); d.close(); s.close()
 os.replace(tmp, dst)
 PY
 }
+# Portal DB engine, from the live .env.prod (KG_DB_ENGINE). PostgreSQL is
+# reached from the host as the `root` role over the local socket (peer auth).
+env_val() { sed -n "s/^$1=//p" "${KG_BE_DIR:-$PROD/KG_backend}/.env.prod" 2>/dev/null | tail -1 | tr -d "\"' "; }
+DB_ENGINE=$(env_val KG_DB_ENGINE | tr '[:upper:]' '[:lower:]')
+[[ $DB_ENGINE == postgresql ]] && DB_ENGINE=postgres
+PG_NAME=$(env_val KG_PG_NAME); PG_NAME=${PG_NAME:-kgkg}
+PG_USER=$(env_val KG_PG_USER); PG_USER=${PG_USER:-kgkg}
+PG_STAGING=${PG_NAME}_staging
+is_pg() { [[ $DB_ENGINE == postgres ]]; }
+pg_backup() {  # dst   (pg_dump runs in one snapshot: consistent while prod writes)
+  pg_dump -Fc -f "$1.tmp" "$PG_NAME" && mv "$1.tmp" "$1"
+}
+pg_clone_staging() {  # fresh copy of the prod DB as $PG_STAGING, owned by the app role
+  dropdb --if-exists --force "$PG_STAGING"
+  createdb -O "$PG_USER" "$PG_STAGING"
+  pg_dump -Fc "$PG_NAME" | pg_restore --no-owner --role="$PG_USER" --exit-on-error -d "$PG_STAGING"
+}
+# Release state, written by save_state below.
+# shellcheck source=/dev/null
 load_state() { CURRENT=; PREVIOUS=; [[ -f $STATE ]] && . "$STATE"; return 0; }
 save_state() { printf 'CURRENT=%s\nPREVIOUS=%s\nDEPLOYED_AT=%s\n' "$1" "$2" "$TS" > "$STATE"; }
+
+# Staging provenance: what was last proven against a copy of production data.
+# kgkg-promote refuses a release that has no passing record here, and the
+# textfile metrics below put the stage-to-promote gap on a dashboard.
+STAGING_STATE=$REL/staging.env
+save_staging_state() {  # sha, smoke-result
+  printf 'STAGED_SHA=%s\nSTAGED_AT=%s\nGATE=%s\nSMOKE=%s\n' \
+    "$1" "$(date -u +%FT%TZ)" pass "$2" > "$STAGING_STATE"
+}
+
+# node-exporter textfile collector (ops/observability): release state as
+# metrics, so "what is live" and "how long since it was staged" are answerable
+# from Grafana rather than only over SSH.
+TEXTFILE_DIR=${KG_TEXTFILE_DIR:-/var/lib/node-exporter-textfile}
+write_release_metrics() {
+  local f=$TEXTFILE_DIR/kgkg_release.prom t
+  mkdir -p "$TEXTFILE_DIR" 2>/dev/null || return 0
+  t=$(mktemp "$TEXTFILE_DIR/.kgkg_release.XXXXXX") || return 0
+  local cur='' prev='' staged='' staged_at='' smoke=''
+  [[ -f $STATE ]] && { cur=$(sed -n 's/^CURRENT=//p' "$STATE"); prev=$(sed -n 's/^PREVIOUS=//p' "$STATE"); }
+  if [[ -f $STAGING_STATE ]]; then
+    staged=$(sed -n 's/^STAGED_SHA=//p' "$STAGING_STATE")
+    staged_at=$(sed -n 's/^STAGED_AT=//p' "$STAGING_STATE")
+    smoke=$(sed -n 's/^SMOKE=//p' "$STAGING_STATE")
+  fi
+  local staged_epoch=0
+  [[ -n $staged_at ]] && staged_epoch=$(date -u -d "$staged_at" +%s 2>/dev/null || echo 0)
+  {
+    echo '# HELP kgkg_release_info Release currently live on this host, as labels.'
+    echo '# TYPE kgkg_release_info gauge'
+    echo "kgkg_release_info{current=\"${cur:0:9}\",previous=\"${prev:0:9}\"} 1"
+    echo '# HELP kgkg_staging_info Last release proven against a copy of production data.'
+    echo '# TYPE kgkg_staging_info gauge'
+    echo "kgkg_staging_info{staged=\"${staged:0:9}\",smoke=\"${smoke:-none}\"} 1"
+    echo '# HELP kgkg_staging_last_pass_timestamp_seconds Unix time of the last passing staging run.'
+    echo '# TYPE kgkg_staging_last_pass_timestamp_seconds gauge'
+    echo "kgkg_staging_last_pass_timestamp_seconds $staged_epoch"
+    echo '# HELP kgkg_release_staged_matches_live 1 when the live release is the one that was last staged.'
+    echo '# TYPE kgkg_release_staged_matches_live gauge'
+    if [[ -n $cur && "$cur" == "$staged" ]]; then echo 'kgkg_release_staged_matches_live 1'; else echo 'kgkg_release_staged_matches_live 0'; fi
+  } > "$t" && chmod 644 "$t" && mv "$t" "$f"
+}
 img_be() { echo "kgkg-backend:${1:0:9}"; }
 img_fe() { echo "kgkg-frontend:${1:0:9}"; }
 have_images() { docker image inspect "$(img_be "$1")" "$(img_fe "$1")" >/dev/null 2>&1; }
 
 trap 'say "DEPLOY FAILED at line $LINENO: $BASH_COMMAND"' ERR
 
-exec 9> "$REL/deploy.lock"
-flock -n 9 || die "another deploy is running ($REL/deploy.lock)"
 
 # Container helpers: from the commit being deployed once it is checked out,
 # until then from this script's own checkout.
@@ -75,7 +134,89 @@ source_containers() { . "${1:-$SELF_ROOT}/ops/docker/containers.sh"; }
 source_containers
 
 PROD_LABELS=(--label kgkg.env=prod)
-log_opts() { echo --log-driver=journald --log-opt "tag=$1"; }
+# Sets LOG_OPTS as an array; callers splice "${LOG_OPTS[@]}" rather than
+# relying on word splitting of a command substitution.
+LOG_OPTS=()
+log_opts() { LOG_OPTS=(--log-driver=journald --log-opt "tag=$1"); }
+
+# ---------------------------------------------------------------------------
+# nginx config lives in ops/nginx/ and is part of the release: the media-gate
+# fix needs the normalized cache key there as well as the normalized path check
+# in api/mediaauth.py, and neither half closes the hole alone.
+NGINX_SITE=${KG_NGINX_SITE:-/etc/nginx/sites-enabled/kgkg}
+NGINX_CONFD=${KG_NGINX_CONFD:-/etc/nginx/conf.d}
+NGINX_BACKUPS=${KG_NGINX_BACKUPS:-/etc/nginx/config-backups}
+
+nginx_config_differs() {  # 0 when the release config is not what is installed
+  local src=$PROD/ops/nginx
+  [[ -d $src ]] || return 1
+  ! cmp -s "$src/kgkg.conf" "$NGINX_SITE" && return 0
+  local f
+  for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+    [[ -f $f ]] || continue
+    ! cmp -s "$f" "$NGINX_CONFD/$(basename "$f")" && return 0
+  done
+  return 1
+}
+
+# Validate the release config against the running nginx without installing it:
+# a syntax error must stop the deploy while production is still untouched.
+nginx_config_check() {
+  local src=$PROD/ops/nginx t
+  t=$(mktemp -d)
+  mkdir -p "$t/conf.d" "$t/sites-enabled"
+  cp "$src/kgkg.conf" "$t/sites-enabled/kgkg"
+  local f
+  for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+    [[ -f $f ]] && cp "$f" "$t/conf.d/"
+  done
+  # Reuse the real nginx.conf, pointing its includes at the candidate copies.
+  sed -e "s#include /etc/nginx/conf.d/\*\.conf;#include $t/conf.d/*.conf;#" \
+      -e "s#include /etc/nginx/sites-enabled/\*;#include $t/sites-enabled/*;#" \
+      /etc/nginx/nginx.conf > "$t/nginx.conf"
+  local out
+  if out=$(nginx -t -c "$t/nginx.conf" 2>&1); then
+    rm -rf "$t"; return 0
+  fi
+  say "candidate nginx config is invalid:"; echo "$out" | tail -5
+  rm -rf "$t"; return 1
+}
+
+install_nginx_config() {
+  local src=$PROD/ops/nginx f dest changed=0
+  mkdir -p "$NGINX_BACKUPS"
+  local stamp; stamp=$(date -u +%Y%m%d-%H%M%S)
+
+  # Backups go outside sites-enabled and conf.d on purpose: nginx includes
+  # everything in those directories, and a backup left there breaks reloads.
+  if ! cmp -s "$src/kgkg.conf" "$NGINX_SITE"; then
+    cp "$NGINX_SITE" "$NGINX_BACKUPS/kgkg.bak-deploy-$stamp"
+    install -m 644 "$src/kgkg.conf" "$NGINX_SITE"; changed=1
+    say "installed $NGINX_SITE from the release"
+  fi
+  for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+    [[ -f $f ]] || continue
+    dest=$NGINX_CONFD/$(basename "$f")
+    if ! cmp -s "$f" "$dest"; then
+      [[ -f $dest ]] && cp "$dest" "$NGINX_BACKUPS/$(basename "$f").bak-deploy-$stamp"
+      install -m 644 "$f" "$dest"; changed=1
+      say "installed $dest from the release"
+    fi
+  done
+  (( changed )) || return 0
+
+  if ! nginx -t >/dev/null 2>&1; then
+    say "nginx rejected the installed config; restoring the previous files"
+    [[ -f $NGINX_BACKUPS/kgkg.bak-deploy-$stamp ]] && install -m 644 "$NGINX_BACKUPS/kgkg.bak-deploy-$stamp" "$NGINX_SITE"
+    for f in "$src"/kgkg-limits.conf "$src"/kgkg-mediaauth.conf; do
+      [[ -f $NGINX_BACKUPS/$(basename "$f").bak-deploy-$stamp ]] \
+        && install -m 644 "$NGINX_BACKUPS/$(basename "$f").bak-deploy-$stamp" "$NGINX_CONFD/$(basename "$f")"
+    done
+    nginx -t >/dev/null 2>&1 && systemctl reload nginx
+    return 1
+  fi
+  systemctl reload nginx && say "nginx reloaded with the release config"
+}
 
 # ---------------------------------------------------------------------------
 # Host job bridge (ops/hostjobs) must run before a backend container needs it.
@@ -100,8 +241,9 @@ swap_backend() {
     say "cutover: stopping the systemd kgkg-backend (one-time, short gap)"
     systemctl stop kgkg-backend; systemctl disable -q kgkg-backend
   fi
+  log_opts kgkg-backend
   run_backend "$name" "$(img_be "$sha")" 8000 "$KG_BE_DIR" /var/log/kgkg \
-    "${PROD_LABELS[@]}" $(log_opts kgkg-backend) --label "kgkg.sha=$sha"
+    "${PROD_LABELS[@]}" "${LOG_OPTS[@]}" --label "kgkg.sha=$sha"
   if ! wait_healthy "$name" 300; then
     docker logs --tail 40 "$name" || true
     docker rm -f "$name" >/dev/null 2>&1 || true
@@ -120,8 +262,9 @@ swap_frontend() {
     systemctl stop kgkg-frontend; systemctl disable -q kgkg-frontend
   fi
   local o; for o in $old; do docker stop -t 20 "$o" >/dev/null; docker rm "$o" >/dev/null; done
+  log_opts kgkg-frontend
   run_frontend "$name" "$(img_fe "$sha")" 3000 http://127.0.0.1:8000 \
-    "${PROD_LABELS[@]}" $(log_opts kgkg-frontend) --label "kgkg.sha=$sha"
+    "${PROD_LABELS[@]}" "${LOG_OPTS[@]}" --label "kgkg.sha=$sha"
   wait_healthy "$name" 120 || { docker logs --tail 40 "$name" || true; return 1; }
   say "frontend back after $(( ($(date +%s%N) - T0) / 1000000 )) ms"
 }
@@ -163,12 +306,25 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $MODE == status ]]; then status; exit 0; fi
+
+# The lock lives below --status on purpose: asking what is live is read-only,
+# and it is most wanted precisely while a deploy holds the lock.
+#
+# It waits rather than refuses. Two pushes a minute apart are a queue, not an
+# error, and a CI run that goes red because another run held the lock teaches
+# people to ignore red runs. KG_DEPLOY_LOCK_WAIT=0 restores fail-fast.
+LOCK_WAIT=${KG_DEPLOY_LOCK_WAIT:-1800}
+exec 9> "$REL/deploy.lock"
+if ! flock -n 9; then
+  say "another deploy is running; waiting up to ${LOCK_WAIT}s for the lock"
+  flock -w "$LOCK_WAIT" 9 || die "still locked after ${LOCK_WAIT}s ($REL/deploy.lock)"
+fi
 if [[ $MODE == reload ]]; then
   load_state
   [[ -n $CURRENT ]] && have_images "$CURRENT" || die "no live release image recorded in $STATE"
   say "reloading ${CURRENT:0:9} (new backend container beside the old one)"
   swap_backend "$CURRENT" || die "reloaded backend did not become healthy; the old one is still serving"
-  bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || die "smoke failed after reload"
+  KG_SMOKE_NGINX=${KG_SMOKE_NGINX:-http://127.0.0.1} bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || die "smoke failed after reload"
   say "RELOADED ${CURRENT:0:9}"
   exit 0
 fi
@@ -176,8 +332,9 @@ if [[ $MODE == rollback ]]; then
   load_state
   [[ -n $PREVIOUS ]] || die "no previous release recorded in $STATE"
   rollback_to "$PREVIOUS"
-  bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || say "WARNING: smoke failed after rollback"
+  KG_SMOKE_NGINX=${KG_SMOKE_NGINX:-http://127.0.0.1} bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || say "WARNING: smoke failed after rollback"
   save_state "$PREVIOUS" "$CURRENT"
+  write_release_metrics
   exit 0
 fi
 
@@ -197,6 +354,13 @@ for old in "$REL"/w-*; do [[ -d $old ]] && git -C "$PROD" worktree remove --forc
 W=$REL/w-$SHORT
 git -C "$PROD" worktree prune
 git -C "$PROD" worktree add -q --detach "$W" "$SHA"
+# A bad nginx config must stop the deploy here, with production untouched,
+# rather than after the containers have been swapped.
+if nginx_config_differs; then
+  say "nginx config in this release differs from what is installed; validating it"
+  nginx_config_check || die "the release nginx config does not validate; production untouched"
+fi
+
 say "1/5 GATE in $W"
 KG_GATE_LOGS=$REL/logs/gate-$TS bash "$W/ops/deploy/gate.sh" "$W" || die "gate failed; production untouched (logs: $REL/logs/gate-$TS)"
 source_containers "$W"
@@ -213,7 +377,26 @@ FE_PUBLIC=$(grep -E '^NEXT_PUBLIC_API_BASE=' "$PROD/kg_frontend/.env.production"
 # ---- 3. staging ------------------------------------------------------------
 say "3/5 STAGING (backend :$STG_BE, frontend :$STG_FE, DB = fresh copy of prod)"
 docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
-sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
+STG_DB_ENV=()
+if is_pg; then
+  pg_clone_staging || die "could not copy the prod database into $PG_STAGING"
+  STG_DB_ENV=(-e KG_PG_NAME="$PG_STAGING")
+else
+  sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
+fi
+# The backend finds the warehouses next to its database (/data/db). This link
+# used to exist only because someone made it by hand; recreate it every run.
+ln -sfn "$KG_BE_DIR/Database_warehouse" "$STG/db/Database_warehouse"
+# Staging runs real code against real data shapes, which means a copy of real
+# customers. Strip what identifies a person or opens a door before anything is
+# served from it: a session token lifted from staging would otherwise work
+# against production. Representative row counts and relationships are kept.
+if is_pg; then
+  "$VENV/python" -I "$W/ops/deploy/sanitize_staging_db.py" --pg "dbname=$PG_STAGING" --quiet
+else
+  python3 -I "$W/ops/deploy/sanitize_staging_db.py" "$STG/db/db.sqlite3" --quiet
+fi \
+  || die "could not sanitize the staging database copy; refusing to serve real credentials from staging"
 cat > "$STG/stagecfg/staging_settings.py" <<'PY'
 # Staging backend (ops/deploy/deploy.sh): prod settings on a COPY of the prod DB.
 from KG_backend.settings import *  # noqa
@@ -224,7 +407,9 @@ CSRF_COOKIE_SECURE = False
 SECURE_HSTS_SECONDS = 0
 PY
 NOSEC=(-e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET= -e KG_ALERT_PHONES=
-       -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro)
+       -e RAG_FEEDBACK_DB=/data/db/feedback.db
+       -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro
+       "${STG_DB_ENV[@]}")
 STG_SPOOL=/run/kgkg-hostjobs-staging   # nobody serves it: staging can never start host jobs
 KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" -- python manage.py migrate --noinput \
   > "$REL/logs/staging-migrate-$TS.log" 2>&1 \
@@ -241,13 +426,24 @@ STG_OK=0
 bash "$W/ops/deploy/smoke.sh" http://127.0.0.1:$STG_BE http://127.0.0.1:$STG_FE "$TOKEN" && STG_OK=1
 [[ ${KG_KEEP_STAGING:-0} == 1 ]] || docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
 (( STG_OK )) || die "staging smoke tests failed; production untouched"
-if [[ $MODE == staging ]]; then say "STAGING PASSED for $SHORT (production untouched)"; exit 0; fi
+save_staging_state "$SHA" pass
+write_release_metrics
+if [[ $MODE == staging ]]; then
+  say "STAGING PASSED for $SHORT (production untouched)"
+  say "promote it with: kgkg-promote $SHA"
+  exit 0
+fi
 
 # ---- 4. promote --------------------------------------------------------------
 say "4/5 PROMOTE ${PREV:0:9} -> $SHORT"
 prod_clean || die "live tree changed during the deploy; aborting before touching it"
-sqlite_copy "$KG_BE_DIR/db.sqlite3" "$REL/db-backups/db-$TS-${PREV:0:9}.sqlite3"
-{ ls -1t "$REL"/db-backups/db-*.sqlite3 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
+if is_pg; then
+  pg_backup "$REL/db-backups/db-$TS-${PREV:0:9}.pgdump" || die "pg_dump backup failed; production untouched"
+  { ls -1t "$REL"/db-backups/db-*.pgdump 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
+else
+  sqlite_copy "$KG_BE_DIR/db.sqlite3" "$REL/db-backups/db-$TS-${PREV:0:9}.sqlite3"
+  { ls -1t "$REL"/db-backups/db-*.sqlite3 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
+fi
 CHANGED=$(git -C "$PROD" diff --name-only "$PREV" "$SHA")
 git -C "$PROD" merge -q --ff-only "$SHA"
 undo_code() { git -C "$PROD" reset -q --hard "$PREV"; }
@@ -260,6 +456,43 @@ fi
 be_run "$(img_be "$SHA")" "$KG_BE_DIR" /var/log/kgkg -- python manage.py migrate --noinput > "$REL/logs/prod-migrate-$TS.log" 2>&1 \
   || { undo_code; die "prod migrate failed; code reset to ${PREV:0:9} (log: $REL/logs/prod-migrate-$TS.log, DB backup: $REL/db-backups/)"; }
 ensure_hostjobs
+
+# The forced-command gate, the CI wrapper and the promote wrapper live in
+# /usr/local/bin as copies of ops/deploy/*. Nothing re-installed them, so they
+# could drift from the release that defines them — and the gate is the file
+# that decides whether a key may promote. Refresh them from the tree that was
+# just promoted.
+for w in kg-deploy-gate kg-ci-gate kgkg-promote; do
+  if [[ -f $PROD/ops/deploy/$w ]] && ! cmp -s "$PROD/ops/deploy/$w" "/usr/local/bin/$w"; then
+    install -m 755 "$PROD/ops/deploy/$w" "/usr/local/bin/$w" && say "refreshed /usr/local/bin/$w"
+  fi
+done
+
+# The alerting watchdog runs from outside the git tree for the same reason its
+# unit says: an untracked file where the release wants to add one would make a
+# fast-forward refuse.
+if [[ -f $PROD/ops/observability/watchdog.py ]]; then
+  install -d /usr/local/lib/kgkg
+  if ! cmp -s "$PROD/ops/observability/watchdog.py" /usr/local/lib/kgkg/watchdog.py; then
+    install -m 755 "$PROD/ops/observability/watchdog.py" /usr/local/lib/kgkg/watchdog.py \
+      && say "refreshed /usr/local/lib/kgkg/watchdog.py"
+  fi
+fi
+
+# Its systemd units too: the sandbox in the unit file is part of the code (a
+# ProtectHome setting silently broke the backup check today), so it must not
+# be left behind by a deploy.
+_units_changed=0
+for u in kgkg-watchdog.service kgkg-watchdog.timer; do
+  if [[ -f $PROD/ops/observability/$u ]] && ! cmp -s "$PROD/ops/observability/$u" "/etc/systemd/system/$u"; then
+    install -m 644 "$PROD/ops/observability/$u" "/etc/systemd/system/$u" && _units_changed=1
+    say "refreshed /etc/systemd/system/$u"
+  fi
+done
+if (( _units_changed )); then
+  systemctl daemon-reload
+  systemctl enable -q --now kgkg-watchdog.timer || say "WARNING: could not re-enable kgkg-watchdog.timer"
+fi
 
 PREV_IMG_OK=0; have_images "$PREV" && PREV_IMG_OK=1
 fail_promote() {
@@ -274,14 +507,23 @@ fail_promote() {
 swap_backend "$SHA" || fail_promote "new backend container did not become healthy"
 swap_frontend "$SHA" || fail_promote "new frontend container did not become healthy"
 
+# nginx last, so the config pairs with the code that is now serving. The
+# media-gate fix needs both halves: the normalized path check in
+# api/mediaauth.py and the normalized cache key here. A failure rolls the
+# release back rather than leaving a half-applied pair, and the verify smoke
+# below then exercises the real end state.
+install_nginx_config || fail_promote "the release nginx config could not be installed"
+
 # ---- 5. verify -----------------------------------------------------------------
 say "5/5 VERIFY production"
-bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || fail_promote "production smoke failed"
+KG_SMOKE_NGINX=${KG_SMOKE_NGINX:-http://127.0.0.1} bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || fail_promote "production smoke failed"
 
 load_state
 save_state "$SHA" "$PREV"
+write_release_metrics
 TAG=deploy-$TS
-git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT" "$SHA"
+VERSION=$(git -C "$PROD" show "$SHA:VERSION" 2>/dev/null | head -1 || true)
+git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT${VERSION:+ version $VERSION}" "$SHA"
 timeout 60 git -C "$PROD" push -q origin "HEAD:$(git -C "$PROD" rev-parse --abbrev-ref HEAD)" "$TAG" \
   || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin HEAD $TAG"
 # Keep the live and rollback images plus the newest few others.
@@ -289,5 +531,15 @@ for repo in kgkg-backend kgkg-frontend; do
   docker images "$repo" --format '{{.Tag}}' | grep -xE '[0-9a-f]{9}' | grep -vxF -e "$SHORT" -e "${PREV:0:9}" \
     | tail -n +$KEEP_IMAGES | xargs -r -I{} docker image rm -f "$repo:{}" >/dev/null 2>&1 || true
 done
+
+# The builder leaves an untagged intermediate per build step, twice per run,
+# and nothing removed them: 102 had piled up by 2026-10-28, worth ~40GB of
+# disk. Dangling only — `prune -a` would delete tagged-but-unused images,
+# which is precisely the previous release that --rollback restores.
+reclaimed=$(docker image prune -f 2>/dev/null | sed -n 's/^Total reclaimed space: //p')
+# The `|| true` matters: a bare `[[ ]] && say` returns non-zero when nothing
+# was reclaimed, and with set -e plus the ERR trap that would make a perfectly
+# good deploy announce DEPLOY FAILED on its last line.
+if [[ -n ${reclaimed:-} && $reclaimed != 0B ]]; then say "pruned dangling build images ($reclaimed)"; fi
 git -C "$PROD" worktree remove --force "$W" 2>/dev/null || true
 say "DEPLOYED $SHORT as $TAG (previous ${PREV:0:9}; rollback: ops/deploy/deploy.sh --rollback)"

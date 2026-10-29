@@ -45,7 +45,7 @@ _AUTH_LOGIN = ('auth.login', 'auth.verify_otp', 'auth.recover_reset')
 
 def evaluate():
     firing = {}
-    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _ai_health, _infra):
+    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _ai_health, _infra, _qa):
         try:
             firing.update(rule())
         except Exception:
@@ -239,6 +239,32 @@ def _infra():
         if t in PROBE_NAMES and d < TLS_DAYS:
             out[f'infra:tls:{t}'] = ('critical' if d < 3 else 'warning',
                                      f'گواهی امنیتی {PROBE_NAMES[t]} {max(d, 0):.0f} روز دیگر منقضی می‌شود.', {'target': t, 'days': round(d, 1)})
+    return out
+
+
+QA_STALE_H = _env_num('KG_ALERT_QA_STALE_H', 36)
+
+_QA_SUITES = {'stack': 'راه‌اندازی محیط آزمون', 'e2e': 'آزمون‌های سرتاسری (E2E)',
+              'dast': 'اسکن امنیتی (DAST)', 'perf': 'آزمون کارایی'}
+
+
+def _qa():
+    """Nightly QA (qa/nightly.sh -> kgkg_qa_* textfile metrics). Silent until
+    the first run reports, so it cannot fire before the timer is installed."""
+    out = {}
+    last = _prom('kgkg_qa_last_run_timestamp_seconds')
+    if not last:
+        return out
+    import time
+    age_h = (time.time() - float(last[0]['value'][1])) / 3600
+    if age_h > QA_STALE_H:
+        out['infra:qa:stale'] = ('warning', f'آزمون‌های شبانه {age_h:.0f} ساعت است اجرا نشده‌اند.',
+                                 {'age_h': round(age_h)})
+    for r in _prom('kgkg_qa_suite_ok == 0'):
+        suite = r['metric'].get('suite', '?')
+        if float(r['value'][1]) == 0:
+            out[f'infra:qa:{suite}'] = ('warning', f'آزمون شبانه ناموفق: {_QA_SUITES.get(suite, suite)}.',
+                                        {'suite': suite})
     return out
 
 

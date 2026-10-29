@@ -40,7 +40,7 @@ def parts_warehouse_dir():
     override = getattr(settings, 'KG_PARTS_DIR', None) or os.environ.get('KG_PARTS_DIR')
     if override:
         return Path(override)
-    main_dir = Path(settings.DATABASES['default']['NAME']).parent
+    main_dir = Path(settings.KG_DATA_DIR)
     return main_dir / 'Database_warehouse' / PARTS_DIRNAME
 
 
@@ -257,7 +257,7 @@ def _search_parts(conn, cfg, q):
     """Part rows of one configuration matching a part number (dashes/spaces
     ignored) or an English / Persian name fragment."""
     pn = re.sub(r'[\s-]+', '', q).upper()
-    like = f'%{q}%'
+    like = f'%{cardb.like_escape(q)}%'
     rows = conn.execute("""
         SELECT p.callout, p.pn, p.pn_display, p.name_en, p.name_fa, p.qty_display,
                p.date_range, n.id AS node_id
@@ -266,10 +266,10 @@ def _search_parts(conn, cfg, q):
         JOIN groups g ON g.id = s.group_id
         JOIN nodes n ON n.id = g.node_id
         WHERE g.frame = ?
-          AND ((? != '' AND REPLACE(REPLACE(UPPER(p.pn), '-', ''), ' ', '') LIKE ?)
-               OR p.name_en LIKE ? OR p.name_fa LIKE ?)
+          AND ((? != '' AND REPLACE(REPLACE(UPPER(p.pn), '-', ''), ' ', '') LIKE ? ESCAPE '\\')
+               OR p.name_en LIKE ? ESCAPE '\\' OR p.name_fa LIKE ? ESCAPE '\\')
         ORDER BY p.pn, p.id
-        LIMIT ?""", (cfg, pn, pn + '%', like, like, SEARCH_LIMIT * 4)).fetchall()
+        LIMIT ?""", (cfg, pn, cardb.like_escape(pn) + '%', like, like, SEARCH_LIMIT * 4)).fetchall()
     hits, seen, chains = [], set(), {}
     for r in rows:
         key = (r['pn'], r['node_id'])

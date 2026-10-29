@@ -591,6 +591,33 @@ html:not([data-theme="light"]):has(.lp) .lp-brand-mark {
 .lp-footer-about p { margin-top: 6px; }
 .lp-footer .lp-footer-credit { margin-top: 12px; color: var(--lp-ink); font-weight: 600; }
 .lp-footer-credit span { display: block; font-weight: 400; font-size: 12.5px; color: var(--lp-faint); }
+/* Hand signature closing the credit line. The artwork is a mask, so one asset
+   takes the footer ink in both palettes; what fills it is a pressure gradient
+   rather than a flat colour — faint where the pen lands, full through the body
+   of the stroke, tapering into the tail — which is what keeps it reading as
+   ink instead of a glyph. Sized off the artwork's own ratio so the mask never
+   letterboxes inside the box. */
+.lp-footer-credit .lp-sign {
+  display: inline-block; height: 59px; aspect-ratio: 556 / 1908;
+  margin-inline-start: 12px; vertical-align: -23px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, currentColor 58%, transparent) 0%,
+    currentColor 42%,
+    color-mix(in srgb, currentColor 74%, transparent) 100%);
+  opacity: .44; transition: opacity .42s cubic-bezier(.22, 1, .36, 1);
+  -webkit-mask: url(/brand/signature.svg) center / contain no-repeat;
+  mask: url(/brand/signature.svg) center / contain no-repeat;
+}
+/* Reveal states, driven by useInkReveal in lp-shared.tsx. No attribute (SSR,
+   no JS, reduced motion) means fully inked — the animation is never load-bearing. */
+.lp-footer-credit .lp-sign[data-ink='wait'] { clip-path: inset(0 0 100% 0); opacity: 0; }
+.lp-footer-credit .lp-sign[data-ink='in'] {
+  clip-path: inset(0 0 0 0); opacity: .44;
+  transition: clip-path 1.15s cubic-bezier(.22, 1, .36, 1), opacity .8s ease .1s;
+}
+.lp-footer-about:hover .lp-sign { opacity: .78; }
+@media (prefers-reduced-motion: reduce) { .lp-footer-credit .lp-sign { transition: none; } }
 .lp-contact-v { font-weight: 600; color: var(--lp-ink); }
 .lp-contact-pad { width: 16px; flex: none; }
 

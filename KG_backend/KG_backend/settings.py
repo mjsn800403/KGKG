@@ -79,6 +79,8 @@ MIDDLEWARE = [
     # periodic batched flush — adds no per-request DB work (api/monitoring.py).
     'api.monitoring.RequestMetricsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    # NUL characters in request text: 400 here, not a 500 from PostgreSQL.
+    'api.nulguard.NulGuardMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -120,26 +122,60 @@ WSGI_APPLICATION = 'KG_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.environ.get('KG_DB_PATH') or BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {
-            # WAL lets readers proceed during writes (metrics flush, activity
-            # logging) — the classic "database is locked" fix for SQLite under
-            # concurrent gunicorn workers. IMMEDIATE transactions grab the
-            # write lock up front instead of failing mid-transaction.
-            'timeout': 20,
-            'transaction_mode': 'IMMEDIATE',
-            'init_command': (
-                'PRAGMA journal_mode=WAL;'
-                'PRAGMA synchronous=NORMAL;'
-                'PRAGMA mmap_size=134217728;'
-                'PRAGMA cache_size=-8192;'
-            ),
-        },
+# Directory holding the on-disk data next to the app DB: Database_warehouse,
+# feedback.db, the parser ledger. It used to be derived from the SQLite path
+# (`DATABASES['default']['NAME'].parent`); with PostgreSQL there is no path,
+# so it is a setting of its own. KG_DB_PATH keeps its old meaning for it.
+_db_path = os.environ.get('KG_DB_PATH')
+KG_DATA_DIR = Path(os.environ.get('KG_DATA_DIR') or (Path(_db_path).parent if _db_path else BASE_DIR))
+
+# KG_DB_ENGINE=postgres moves the portal data (accounts, companies, logs) to
+# PostgreSQL: real concurrent writers (MVCC, row locks) instead of SQLite's
+# single database-wide write lock. The RAG index and the per-car manual DBs
+# stay SQLite on purpose: they are built offline and only ever read.
+DB_ENGINE = os.environ.get('KG_DB_ENGINE', 'sqlite').strip().lower()
+
+if DB_ENGINE in ('postgres', 'postgresql'):
+    DB_ENGINE = 'postgres'
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('KG_PG_NAME', 'kgkg'),
+            'USER': os.environ.get('KG_PG_USER', 'kgkg'),
+            'PASSWORD': os.environ.get('KG_PG_PASSWORD', ''),
+            # empty host = the local unix socket (peer auth, used by the gate)
+            'HOST': os.environ.get('KG_PG_HOST', '127.0.0.1'),
+            'PORT': os.environ.get('KG_PG_PORT', '5432'),
+            # persistent connections per worker thread, health-checked before
+            # reuse so a PostgreSQL restart does not surface as a 500
+            'CONN_MAX_AGE': int(os.environ.get('KG_PG_CONN_MAX_AGE', '60')),
+            'CONN_HEALTH_CHECKS': True,
+            'OPTIONS': {'connect_timeout': 5},
+            'TEST': {'NAME': os.environ.get('KG_PG_TEST_NAME') or None},
+        }
     }
-}
+else:
+    DB_ENGINE = 'sqlite'
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': _db_path or BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                # WAL lets readers proceed during writes (metrics flush, activity
+                # logging) — the classic "database is locked" fix for SQLite under
+                # concurrent gunicorn workers. IMMEDIATE transactions grab the
+                # write lock up front instead of failing mid-transaction.
+                'timeout': 20,
+                'transaction_mode': 'IMMEDIATE',
+                'init_command': (
+                    'PRAGMA journal_mode=WAL;'
+                    'PRAGMA synchronous=NORMAL;'
+                    'PRAGMA mmap_size=134217728;'
+                    'PRAGMA cache_size=-8192;'
+                ),
+            },
+        }
+    }
 
 
 # Password validation

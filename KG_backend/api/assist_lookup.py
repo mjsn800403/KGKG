@@ -9,19 +9,20 @@ in the grounding context.
 """
 import re
 
-_ZW = re.compile(r'[‌‏‎]')
+_ZW = re.compile(r'[‌\u200f\u200e]')
 _WORD = re.compile(r'\w+')  # \w covers Persian letters, not ؟ ،
 
 PARTS_Q = re.compile(
     r'شماره\s*(فنی|قطعه|پارت)|پارت\s*نامبر|کد\s*قطعه|part\s*(no|number|#)|\bp/?n\b', re.I)
 TOOL_Q = re.compile(r'ابزار|\bSST\b|special\s+(service\s+)?tool', re.I)
 
-# Words that frame the question rather than name the part.
-_STOP = set('''
+# Words that frame the question rather than name the part. Built through
+# _norm below, like the query, so 'می‌خواهم' (ZWNJ -> space) still matches.
+_STOP_RAW = ('''
 شماره فنی قطعه پارت نامبر کد برای این خودرو ماشین چیست چیه چه چی است هست را و در از با
 یک کدام کدوم مخصوص ابزار لازم نیاز دارم میخواهم می‌خواهم بده بگو لطفا لطفاً مورد
 part number no pn the for of what is a which tool tools special service sst
-'''.split())
+''')
 
 # Persian job words -> English system words used in SST page paths.
 _SYS_HINTS = {
@@ -37,6 +38,9 @@ _SYS_HINTS = {
 def _norm(s):
     s = _ZW.sub(' ', s or '').replace('ي', 'ی').replace('ك', 'ک')
     return s.lower()
+
+
+_STOP = set(_norm(_STOP_RAW).split())
 
 
 def _terms(query):
@@ -65,7 +69,8 @@ def parts_rows(user, car, query, limit=8):
         like = f'%{terms[0]}%'
         for r in conn.execute(
                 "SELECT pn_display, name_en, name_fa, qty_display, date_range FROM part_rows "
-                "WHERE name_fa LIKE ? OR LOWER(name_en) LIKE ? LIMIT 400", (like, like)):
+                "WHERE REPLACE(REPLACE(name_fa, 'ك', 'ک'), 'ي', 'ی') LIKE ? "
+                "OR LOWER(name_en) LIKE ? LIMIT 400", (like, like)):
             name = _norm(f"{r['name_fa'] or ''} {r['name_en'] or ''}")
             if not all(t in name for t in terms):
                 continue
@@ -108,7 +113,8 @@ def sst_tools(car, query, hits, limit=12):
         # Tool names count too: shared tools sit under generic systems
         # ("Disc Brake Piston Spreader" is filed under General › Maintenance).
         hay = labels + [(t['name'] or '').lower()]
-        hint_hit = any(h in l for h in hints for l in hay)
+        # Whole words only: 'axle' must not match 'Transaxle'.
+        hint_hit = any(re.search(rf'\b{re.escape(h)}\b', l) for h in hints for l in hay)
         if system_hit or hint_hit:
             scored.append((0 if system_hit else 1, t))
     scored.sort(key=lambda x: x[0])
