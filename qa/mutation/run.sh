@@ -26,7 +26,7 @@ MODULES=("$@")
 declare -A TESTS=(
   [admin_auth]="api.test_admin_token_scope api.rag.test_ratelimit api.test_qa_auth api.test_adminops.GateTests api.test_security.AdminTokenTests"
   [mediaauth]="api.test_qa_mediaauth_paths api.test_qa_catalog api.tests"
-  [access]="api.test_qa_access api.test_qa_orggraph_authz api.test_orgreach api.test_orggraph api.test_team"
+  [access]="api.test_access_rules api.test_qa_access api.test_qa_orggraph_authz api.test_orgreach api.test_orggraph api.test_team"
 )
 
 command -v mutmut >/dev/null || { echo "mutmut not found (pip install mutmut==2.4.5)" >&2; exit 1; }
