@@ -12,6 +12,17 @@ job `security`), plus an image vulnerability scan in the `images` job:
 | Node dependencies | npm audit | `kg_frontend/package-lock.json`, production deps | any advisory not in `npm-audit-allow.json`, at `high` or above |
 | Image vulnerabilities | trivy | both production images | fixable `HIGH`/`CRITICAL` not in `.trivyignore.yaml` |
 
+**The server gate runs three of them too.** bandit, pip-audit and the npm audit gate run
+from one script, `ops/security/scan.sh`. CI calls it, and so does `ops/deploy/gate.sh`, as
+the first step of every staging and production deploy, with the same exception files.
+
+* On the server, the scanners come from a pinned venv at `/opt/KGKG_release/sectools`
+  (`KG_SECTOOLS`), created on first use.
+* The scans fail closed there too: a scanner that cannot reach its advisory database fails
+  the deploy.
+* Why: before 2026-10-29 only CI ran these, so a commit that was red on bandit in CI
+  (`8fa94dd`) still passed the server gate and shipped.
+
 The gates fail closed. An advisory with a fix available is a bug to fix, not a
 number to accept — the exception files exist for the cases where the fix is
 genuinely unavailable or carries more risk than the finding.
