@@ -39,3 +39,13 @@ class MediaFolderTest(SimpleTestCase):
 
     def test_query_string_cannot_smuggle_a_folder(self):
         self.assertEqual(_folder('/kg-api/media/_store/x.png?/../4Runner/'), '_store')
+        # Dot-segments after '?' belong to the query, which nginx never serves
+        # from: they must not re-target the folder (found by mutation testing:
+        # without the split this resolved to the car folder).
+        self.assertEqual(_folder(f'/kg-api/media/_parts_assets/x.png?/../../{CAR}/a.png'),
+                         '_parts_assets')
+
+    def test_only_paths_rooted_at_the_media_prefix_count(self):
+        for uri in (f'X/kg-api/media/{CAR}/a.png', f'XX/kg-api/media/{CAR}/a.png',
+                    f'/X/kg-api/media/{CAR}/a.png'):
+            self.assertIsNone(_folder(uri), uri)
