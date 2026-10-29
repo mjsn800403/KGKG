@@ -641,6 +641,11 @@ RERANK_CANDIDATES = 20
 # Car-scoped dense pass depth (retrieve.assist, pinned car only).
 CAR_VEC_K = int(os.environ.get('RAG_CAR_VEC_K', '40'))
 
+# Query-side adapter for the embedding model (train_query_adapter): a small
+# learned map applied to QUESTION vectors only, so page vectors need no rebuild.
+# Path to the adapter directory; empty = off.
+QUERY_ADAPTER = os.environ.get('RAG_QUERY_ADAPTER', '')
+
 # Dense KNN backend: 'sqlite' (sqlite-vec inside index.rag.db, default) or
 # 'pgvector' (PostgreSQL HNSW, see api/rag/pgvec.py; falls back to sqlite-vec).
 VEC_BACKEND = os.environ.get('RAG_VEC_BACKEND', 'sqlite')
