@@ -39,3 +39,9 @@ class MediaFolderTest(SimpleTestCase):
 
     def test_query_string_cannot_smuggle_a_folder(self):
         self.assertEqual(_folder('/kg-api/media/_store/x.png?/../4Runner/'), '_store')
+        # Two levels up from the file lands in a sibling car folder if the
+        # query were ever treated as path. (Mutation testing: with only one
+        # '..', dropping the query split still yielded '_store', so the case
+        # above alone did not guard the split.)
+        self.assertEqual(_folder('/kg-api/media/_store/x.png?/../../4Runner/a.png'), '_store')
+        self.assertEqual(_folder('/kg-api/media/_store/x.png?a=/../../4Runner/'), '_store')
