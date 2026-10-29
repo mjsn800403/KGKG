@@ -178,6 +178,84 @@ def sanitize(con: sqlite3.Connection, verbose: bool = True) -> dict[str, int]:
     return report
 
 
+def sanitize_pg(dsn: str, verbose: bool = True) -> tuple[dict[str, int], list[str]]:
+    """The same rules against a PostgreSQL staging copy (KG_DB_ENGINE=postgres).
+
+    Same tables, same columns, same deterministic fake phones as the SQLite
+    path, so staging looks the same whichever engine production runs on.
+    Returns (report, unknown-identifying-columns)."""
+    import psycopg
+
+    report: dict[str, int] = {}
+
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg)
+
+    with psycopg.connect(dsn) as con, con.cursor() as cur:
+        cur.execute("SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'public'")
+        schema: dict[str, set[str]] = {}
+        for t, c in cur.fetchall():
+            schema.setdefault(t, set()).add(c)
+
+        for table in PURGE_TABLES:
+            if table not in schema:
+                continue
+            cur.execute(f'DELETE FROM "{table}"')
+            report[f'purged:{table}'] = cur.rowcount
+            log(f'  purged {cur.rowcount:>7} rows from {table}')
+
+        for table, intents in MASK_COLUMNS.items():
+            cols = schema.get(table)
+            if not cols or 'id' not in cols:
+                continue
+            for intent, column in intents.items():
+                if column not in cols:
+                    continue
+                if intent == MASK_PHONE:
+                    cur.execute(f'SELECT id, "{column}" FROM "{table}" '
+                                f'WHERE "{column}" IS NOT NULL AND "{column}" <> %s', ('',))
+                    rows = cur.fetchall()
+                    # seeded by id: the SQLite path seeds by rowid, which is id there
+                    cur.executemany(f'UPDATE "{table}" SET "{column}" = %s WHERE id = %s',
+                                    [(fake_phone(f'{table}:{rid}', max(len(str(v)), 11)), rid)
+                                     for rid, v in rows])
+                    n = len(rows)
+                elif intent == MASK_EMAIL:
+                    cur.execute(f'UPDATE "{table}" SET "{column}" = %s::text || id::text || %s::text '
+                                f'WHERE "{column}" IS NOT NULL AND "{column}" <> %s',
+                                ('user', '@staging.invalid', ''))
+                    n = cur.rowcount
+                elif intent == KILL_HASH:
+                    cur.execute(f'UPDATE "{table}" SET "{column}" = %s '
+                                f'WHERE "{column}" IS NOT NULL AND "{column}" <> %s', (UNUSABLE_HASH, ''))
+                    n = cur.rowcount
+                elif intent == MASK_IP:
+                    # keep the /24, like the SQLite path; dotted quads only
+                    cur.execute(f'UPDATE "{table}" SET "{column}" = '
+                                f'regexp_replace("{column}", %s, %s) WHERE "{column}" ~ %s',
+                                (r'\.[0-9]+$', '.0', r'^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'))
+                    n = cur.rowcount
+                else:                              # pragma: no cover
+                    raise AssertionError(f'unknown intent {intent}')
+                report[f'{intent}:{table}.{column}'] = n
+                log(f'  {intent:14} {n:>7} rows in {table}.{column}')
+
+        known = set(MASK_COLUMNS) | set(PURGE_TABLES)
+        unknown = []
+        for table in sorted(schema):
+            if table in known:
+                continue
+            risky = {c for c in schema[table]
+                     if c in ('phone', 'email', 'password', 'password_hash', 'key_hash')
+                     or c.endswith('_phone') or c.endswith('_email')}
+            if risky:
+                unknown.append(f'{table}: {", ".join(sorted(risky))}')
+        con.commit()
+    return report, unknown
+
+
 def audit_unknown(con: sqlite3.Connection) -> list[str]:
     """Tables with an identifying column that this script does not handle.
 
@@ -201,6 +279,8 @@ def audit_unknown(con: sqlite3.Connection) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('db', nargs='?', help='path to the staging database copy')
+    ap.add_argument('--pg', metavar='DSN',
+                    help='sanitize a PostgreSQL staging copy instead (libpq DSN, e.g. "dbname=kgkg_staging")')
     ap.add_argument('--selftest', action='store_true')
     ap.add_argument('--quiet', action='store_true')
     ap.add_argument('--strict-audit', action='store_true',
@@ -209,17 +289,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.selftest:
         return selftest()
-    if not args.db:
-        ap.error('a database path is required')
-
-    con = sqlite3.connect(args.db)
-    try:
+    if args.pg:
         if not args.quiet:
-            print(f'sanitizing staging copy {args.db}')
-        sanitize(con, verbose=not args.quiet)
-        unknown = audit_unknown(con)
-    finally:
-        con.close()
+            print(f'sanitizing PostgreSQL staging copy {args.pg}')
+        _, unknown = sanitize_pg(args.pg, verbose=not args.quiet)
+    else:
+        if not args.db:
+            ap.error('a database path (or --pg DSN) is required')
+        con = sqlite3.connect(args.db)
+        try:
+            if not args.quiet:
+                print(f'sanitizing staging copy {args.db}')
+            sanitize(con, verbose=not args.quiet)
+            unknown = audit_unknown(con)
+        finally:
+            con.close()
 
     if unknown:
         print('\nWARNING: identifying columns this script does not handle:')

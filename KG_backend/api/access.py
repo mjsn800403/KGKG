@@ -279,7 +279,7 @@ def car_db_path(car):
     """Absolute path to a car's content database on this server."""
     from django.conf import settings
     from pathlib import Path
-    main_dir = Path(settings.DATABASES['default']['NAME']).parent
+    main_dir = Path(settings.KG_DATA_DIR)
     return main_dir / (car.db_address or '').replace('\\', '/')
 
 

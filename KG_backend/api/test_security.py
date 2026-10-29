@@ -61,7 +61,7 @@ class TokenHashingTests(TestCase):
 
     def test_issue_returns_a_usable_raw_key_once(self):
         token = AuthToken.issue(_user())
-        self.assertIs(AuthToken.resolve(token.key).pk, token.pk)
+        self.assertEqual(AuthToken.resolve(token.key).pk, token.pk)
 
     def test_resolve_rejects_an_unknown_token(self):
         AuthToken.issue(_user())

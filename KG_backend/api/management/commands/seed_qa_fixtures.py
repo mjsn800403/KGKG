@@ -34,7 +34,7 @@ MARKER = '.qa-stack'
 
 
 def db_dir():
-    return Path(settings.DATABASES['default']['NAME']).parent
+    return Path(settings.KG_DATA_DIR)
 
 
 def qa_guard():

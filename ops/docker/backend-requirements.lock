@@ -7,9 +7,10 @@ certifi==2026.10.19
 cffi==2.1.0
 charset-normalizer==3.4.9
 click==8.4.2
+cryptography==50.0.2
 cssselect2==0.9.0
-Django==5.2.17
 django-cors-headers==4.9.0
+Django==5.2.17
 filelock==4.2.1
 fonttools==4.63.0
 fsspec==2026.6.0
@@ -32,6 +33,8 @@ networkx==3.6.1
 numpy==1.26.4
 packaging==26.2
 pillow==13.0.0
+psycopg-binary==3.2.9
+psycopg==3.2.9
 pycparser==3.0
 pydyf==0.12.1
 Pygments==2.20.0
@@ -66,4 +69,3 @@ weasyprint==70.0
 webencodings==0.5.1
 wheel==0.47.0
 zopfli==0.4.3
-cryptography==50.0.2
