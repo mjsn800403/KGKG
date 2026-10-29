@@ -139,7 +139,10 @@ fingerprint=$(ssh-keygen -l -f "$KEY" | awk '{print $2}')
 
 line="command=\"$BIN/kg-ci-gate\",restrict $pub kgkg-github-ci"
 [[ -f $AK ]] || install -m 600 /dev/null "$AK"
-if grep -qxF "$line" "$AK"; then
+# Settled only when the restricted line is the ONLY line carrying this key:
+# sshd uses the first line that matches, so a second, unrestricted copy above
+# it would hand the key a root shell.
+if [[ $(grep -cF "$blob" "$AK") == 1 ]] && grep -qxF "$line" "$AK"; then
   say "authorized_keys already pins it to kg-ci-gate"
 else
   backup=$AK.bak-$(date -u +%Y%m%d%H%M%S)
@@ -166,10 +169,14 @@ rc=$?
 say "kg-ci-gate refuses deploy: ok"
 
 if command -v ssh >/dev/null; then
+  # Ask for the one thing only kg-ci-gate refuses with this answer. A shell
+  # would try to run `deploy`, the operator gate would accept the verb, and
+  # neither prints "role 'ci' may not 'deploy'". Nothing can be deployed:
+  # the sha is all zeros, which is on no branch.
   login() {  # address -> sets LOGIN_OUT, returns ssh's status
     LOGIN_OUT=$(ssh -n -F none -i "$KEY" -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes \
       -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null \
-      -o LogLevel=ERROR -o ConnectTimeout=10 "root@$1" status 2>&1)
+      -o LogLevel=ERROR -o ConnectTimeout=10 "root@$1" "deploy $ZERO_SHA" 2>&1)
   }
   login 127.0.0.1; rc=$?
   if (( rc == 255 )) && [[ $LOGIN_OUT == *refused* || $LOGIN_OUT == *"timed out"* ]]; then
@@ -181,12 +188,11 @@ if command -v ssh >/dev/null; then
       "sshd's log: journalctl -u ssh -n 30"
   elif (( rc == 255 )); then
     warn "could not log in over SSH from this machine to test it: $LOGIN_OUT"
-  elif [[ $LOGIN_OUT == *"key role: ci"* ]]; then
-    say "SSH login with the key reaches kg-ci-gate as role ci: ok"
-  elif [[ $LOGIN_OUT == *denied* || $LOGIN_OUT == *"key role:"* ]]; then
-    die "the key logs in but not as role ci: $LOGIN_OUT"
+  elif [[ $LOGIN_OUT == *"role 'ci' may not 'deploy'"* ]]; then
+    say "SSH login with the key lands in kg-ci-gate as role ci, which refuses deploy: ok"
   else
-    say "SSH login with the key works (status exit $rc)"
+    die "an SSH login with the key does not land in kg-ci-gate as role ci (exit $rc): $LOGIN_OUT" \
+      "Look for another line with this key in $AK or in any other AuthorizedKeysFile."
   fi
 else
   warn "no ssh client here, so the login itself was not tested"
