@@ -160,6 +160,39 @@ PROBE_DOWN_MIN = _env_num('KG_ALERT_PROBE_DOWN_MIN', 10)
 # (Nearly) every probe failing together = the server's own network dropped,
 # not the services; that only alerts once it lasts this long.
 NETWORK_DOWN_MIN = _env_num('KG_ALERT_NETWORK_DOWN_MIN', 30)
+# A scrape target that stops answering takes its rules down with it, so the
+# target itself is watched. Same blip suppression as the probes: a promote
+# swaps containers and a single missed scrape must not page.
+SCRAPE_DOWN_MIN = _env_num('KG_ALERT_SCRAPE_DOWN_MIN', 10)
+JOB_NAMES = {
+    'node': 'آمار سرور (node-exporter)',
+    'cadvisor': 'آمار کانتینرها (cAdvisor)',
+    'kgkg_app': 'آمار برنامه',
+    'probe': 'سامانهٔ بررسی دسترس‌پذیری',
+    'probe_ext': 'سامانهٔ بررسی سرویس‌های بیرونی',
+    'prometheus': 'پایش سرور (Prometheus)',
+}
+
+# Rules of the form `<metric> == 0` match nothing when the metric stops being
+# produced, so a dead exporter reads exactly like a healthy system. These are
+# the metrics other rules in this file depend on; absent() turns their absence
+# into a fact instead of a silence. blackbox dying would otherwise take every
+# availability alert with it.
+STARVED_METRICS = {
+    'probe_success': ('critical', 'سامانهٔ بررسی دسترس‌پذیری'),
+    'container_start_time_seconds': ('warning', 'آمار کانتینرها'),
+}
+
+# The watchdog (ops/observability/watchdog.py) watches this engine. Nothing
+# watched the watchdog, so if its timer stalls the engine's own death goes
+# unnoticed again. Its timer runs every 5 minutes; 30 is six missed runs.
+WATCHDOG_STALE_S = _env_num('KG_ALERT_WATCHDOG_STALE_S', 1800)
+
+# 5xx in the current hour, summed over the endpoint labels. Measured over the
+# 7 days to 2026-10-29 this metric's max was 0 and its mean was 0, against
+# 11-50 requests an hour, so 5 is far outside normal and still catches a storm.
+APP_5XX = _env_num('KG_ALERT_5XX', 5)
+
 # SMS bodies may not contain links, so probe targets get plain names.
 PROBE_NAMES = {
     'https://kgtechvault.com/': 'وب‌سایت',
@@ -204,8 +237,43 @@ def _infra():
     except Exception as e:
         return {'infra:prometheus': ('warning', 'پایش سرور (Prometheus) در دسترس نیست؛ هشدارهای دیسک/حافظه/دسترس‌پذیری کار نمی‌کنند.',
                                      {'error': str(e)[:200]})}
-    for r in _prom('up{job="node"} == 0'):
-        out['infra:node_exporter'] = ('warning', 'آمار سرور (node-exporter) دریافت نمی‌شود.', {})
+    # Every scrape target, not just node: when kgkg_app stopped answering for
+    # about 50 minutes in the week to 2026-10-29 nothing said so, and a dead
+    # blackbox or cadvisor silently disarms the probe and restart rules below.
+    for r in _prom(f'max_over_time(up[{SCRAPE_DOWN_MIN}m]) == 0'):
+        job = r['metric'].get('job', '?')
+        out[f'infra:scrape:{job}'] = (
+            'warning', f'{JOB_NAMES.get(job, job)} دریافت نمی‌شود.', {'job': job})
+    for metric, (severity, label) in STARVED_METRICS.items():
+        for _r in _prom(f'absent({metric})'):
+            out[f'infra:nodata:{metric}'] = (
+                severity,
+                f'{label} هیچ داده‌ای تولید نمی‌کند؛ هشدارهای وابسته به آن کار نمی‌کنند.',
+                {'metric': metric})
+    for _r in _prom('absent(kgkg_watchdog_last_run_timestamp_seconds)'):
+        out['infra:watchdog'] = (
+            'warning', 'دیده‌بان سامانهٔ هشدار گزارشی نمی‌دهد.', {})
+    for r in _prom('time() - kgkg_watchdog_last_run_timestamp_seconds'):
+        age = float(r['value'][1])
+        if age > WATCHDOG_STALE_S:
+            out['infra:watchdog'] = (
+                'warning',
+                f'دیده‌بان سامانهٔ هشدار {int(age // 60)} دقیقه است اجرا نشده.',
+                {'age_s': int(age)})
+    for r in _prom('min(kgkg_db_up)'):
+        if float(r['value'][1]) == 0:
+            out['infra:app_db'] = (
+                'critical', 'برنامه به پایگاه‌داده دسترسی ندارد.', {})
+    for r in _prom('min(kgkg_rag_index_present)'):
+        if float(r['value'][1]) == 0:
+            out['infra:rag_index'] = (
+                'warning', 'نمایهٔ دستیار هوشمند در دسترس نیست.', {})
+    for r in _prom('sum(kgkg_http_errors_5xx_current_hour)'):
+        n = float(r['value'][1])
+        if n >= APP_5XX:
+            out['infra:app_5xx'] = (
+                'critical', f'برنامه در ساعت جاری {int(n)} خطای ۵xx داده است.',
+                {'errors_5xx': int(n)})
     for r in _prom('100*(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})'):
         pct = float(r['value'][1])
         if pct >= DISK_PCT:

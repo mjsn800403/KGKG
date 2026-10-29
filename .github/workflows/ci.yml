@@ -170,6 +170,7 @@ jobs:
         run: |
           bash ops/deploy/test_gate_roles.sh
           bash ops/deploy/test_promote.sh
+          bash ops/deploy/ci_evidence.sh --selftest
           python3 qa/e2e_record.py --selftest
           python3 -m unittest discover -s ops/observability -t ops/observability -p 'test_*.py' -v
           python3 ops/deploy/sanitize_staging_db.py --selftest

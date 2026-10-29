@@ -8,7 +8,12 @@ cosine ranking == nearest-neighbour search. For each blob we write:
 Resumable: blobs already present in vec_blobs are skipped.
 """
 import time
+from pathlib import Path
+
 import numpy as np
+
+import logging
+log = logging.getLogger(__name__)
 
 from . import config, store
 
@@ -72,8 +77,32 @@ def encode(texts, batch_size=32, is_query=False, progress=False):
     vecs = model.encode(
         texts, batch_size=batch_size, normalize_embeddings=True,
         convert_to_numpy=True, show_progress_bar=progress,
-    )
-    return vecs.astype(np.float32)
+    ).astype(np.float32)
+    if is_query:
+        ad = _adapter()
+        if ad is not None:
+            U, V = ad
+            vecs = vecs + (vecs @ V.T) @ U.T
+            vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
+    return vecs
+
+
+_ADAPTER = {}
+
+
+def _adapter():
+    """(U, V) of the query adapter named by RAG_QUERY_ADAPTER, or None."""
+    path = config.QUERY_ADAPTER
+    if not path:
+        return None
+    if path not in _ADAPTER:
+        try:
+            z = np.load(Path(path) / 'adapter.npz')
+            _ADAPTER[path] = (z['U'].astype(np.float32), z['V'].astype(np.float32))
+        except Exception as e:
+            log.warning('query adapter %s unusable, serving without it: %s', path, e)
+            _ADAPTER[path] = None
+    return _ADAPTER[path]
 
 
 def _embed_text(comp_readable, text):
