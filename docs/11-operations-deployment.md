@@ -83,7 +83,8 @@ not by a setting in GitHub.
 3. **Staging, automatically.** On a push to `work` with everything green, the
    `stage` job asks this server to stage that exact commit. The server runs
    `ops/deploy/deploy.sh --staging <sha>`: gate in a throwaway worktree with a
-   scrubbed environment, build both images, run them on `:8110`/`:3107` against
+   scrubbed environment (security scans first — bandit, pip-audit, npm audit via
+   `ops/security/scan.sh`, the same as CI — then tests, lint, build), build both images, run them on `:8110`/`:3107` against
    a **sanitized copy** of the production database, migrate it, and smoke the
    signed-in paths with a QA token minted in the copy. Production is untouched.
    The result is recorded in `/opt/KGKG_release/staging.env`.

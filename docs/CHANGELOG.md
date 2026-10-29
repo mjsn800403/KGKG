@@ -4,6 +4,11 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **The server gate runs the security scans.** `ops/deploy/gate.sh` now runs bandit, pip-audit
+  and the npm audit gate first, through `ops/security/scan.sh`, which CI calls too, with the
+  same exception files. Scanners come from a pinned venv (`/opt/KGKG_release/sectools`), and a
+  scan that cannot run fails the deploy. Before this, `8fa94dd` was red on bandit in CI and
+  still passed the server gate. (ops/security/README.md)
 - **Fix (D-41):** a read of a missing RAG index created an empty `index.rag.db`, after which the
   assistant answered 500 ("no such table") instead of 503 until the file was removed by hand; one
   recommendations-panel view was enough. Read-only opens now raise `FileNotFoundError` and create

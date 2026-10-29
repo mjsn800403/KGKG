@@ -207,11 +207,10 @@ jobs:
         # Medium and high severity only. Every finding present when the gate
         # was introduced was triaged (ops/security/README.md#bandit) and is
         # recorded in bandit-baseline.json; any finding not in it fails.
+        # ops/security/scan.sh is shared with the server gate (ops/deploy/gate.sh).
         run: |
           pip install --quiet bandit==1.9.4
-          bandit -r KG_backend/api KG_backend/KG_backend \
-            -x '*/test_*,*/tests.py,*/tests_parts.py,*/migrations/*' \
-            -ll -b ops/security/bandit-baseline.json
+          bash ops/security/scan.sh bandit
 
       - name: QA suites parse (E2E, load)
         run: |
@@ -222,20 +221,14 @@ jobs:
       - name: Python dependency audit
         run: |
           pip install --quiet pip-audit==2.9.0
-          # The lock pins torch to a +cpu local version that exists only on
-          # PyTorch's index; strip the local label so the advisory database can
-          # be queried by base version.
-          sed 's/+cpu$//' ops/docker/backend-requirements.lock > /tmp/lock-audit.txt
-          mapfile -t ignores < <(grep -vE '^\s*(#|$)' ops/security/pip-audit-ignore.txt | sed 's/^/--ignore-vuln=/')
-          echo "ignoring ${#ignores[@]} reviewed advisory id(s)"
-          pip-audit --no-deps -r /tmp/lock-audit.txt "${ignores[@]}"
+          bash ops/security/scan.sh pip-audit
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Node dependency audit
-        run: node ops/security/npm_audit_gate.mjs
+        run: bash ops/security/scan.sh npm
 
   images:
     # The production images (ops/docker/) must build from every commit, boot,

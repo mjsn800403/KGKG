@@ -27,6 +27,28 @@ if grep -qiE '^KG_DB_ENGINE=["'"'"']?postgres' "${KG_PROD_ENV:-/opt/KGKG/KG_back
   echo "gate: tests run on PostgreSQL"
 fi
 
+# ---- security scans (same script and exception files as CI) ----------------
+# Before 2026-10-29 only CI ran these, so 8fa94dd, red on bandit in CI, passed
+# this gate and shipped. They run first: they take seconds, the suite minutes.
+# bandit and pip-audit come from a pinned tool venv beside the release state,
+# created on first use; a scanner that cannot run (no network for the advisory
+# databases) fails the gate rather than being skipped.
+SECTOOLS=${KG_SECTOOLS:-/opt/KGKG_release/sectools}
+SECTOOLS_PINS=(bandit==1.9.4 pip-audit==2.9.0)
+step "security: tools (${SECTOOLS_PINS[*]})"
+if ! "$SECTOOLS/bin/python" -m pip freeze 2>/dev/null | grep -qxF -e "${SECTOOLS_PINS[0]}" \
+   || ! "$SECTOOLS/bin/python" -m pip freeze 2>/dev/null | grep -qxF -e "${SECTOOLS_PINS[1]}"; then
+  { "$VENV/python" -m venv --clear "$SECTOOLS" \
+    && "$SECTOOLS/bin/python" -m pip install --quiet "${SECTOOLS_PINS[@]}"; } > "$LOGS/sectools.log" 2>&1 \
+    || fail "could not install the scanners into $SECTOOLS" "$LOGS/sectools.log"
+fi
+for scan in bandit pip-audit npm; do
+  step "security: $scan"
+  KG_SECTOOLS_BIN="$SECTOOLS/bin" bash "$W/ops/security/scan.sh" "$scan" > "$LOGS/sec-$scan.log" 2>&1 \
+    || fail "$scan (exceptions and policy: ops/security/README.md)" "$LOGS/sec-$scan.log"
+  tail -1 "$LOGS/sec-$scan.log"
+done
+
 # ---- backend ---------------------------------------------------------------
 cd "$W/KG_backend"
 step "backend: system check"
