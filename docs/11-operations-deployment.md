@@ -135,18 +135,29 @@ staging run. Both mutating verbs accept only a 40-hex commit already on
 transient systemd unit so a dropped SSH connection cannot kill a deploy
 half-way. The matrix is tested: `ops/deploy/test_gate_roles.sh`.
 
-**Connecting GitHub to this server** is one command, as root:
-`bash /opt/KGKG/ops/deploy/setup_ci_access.sh`. It creates the dedicated key
-`/root/.ssh/kgkg-github-ci`, pins it to `kg-ci-gate` with `restrict`, proves a
-real login reaches the gate as role `ci`, and sets `DEPLOY_HOST`,
-`DEPLOY_KNOWN_HOSTS` and `DEPLOY_SSH_KEY` with `gh` (or prints them to paste).
-Re-running it is safe; `--rotate` replaces the key. Before it is in the live
-release, run it from `origin/work` (`ops/deploy/README.md` has the three
-lines); it still takes the gates from `/opt/KGKG`. On the runner,
-`ops/deploy/ci_ssh.sh` validates the secrets and names the fix for each
-failure (wrong key, stale host key, firewall, fail2ban, a key that could
-promote); `ops/deploy/test_ci_ssh.sh` tests it. Until 2026-10-29 none of these
-secrets had ever been set, so the `stage` job had never reached the server.
+**How GitHub reaches this server:** through a Cloudflare Tunnel. The
+`cloudflared` connector here dials out to Cloudflare; the runner comes in with
+`cloudflared access ssh` and a Cloudflare Access service token (an Access
+application with a single *Service Auth* policy guards the hostname), lands on
+sshd at `localhost:22` and is pinned to `kg-ci-gate` as above. Port 22 does not
+have to be open to the internet. Three locks in a row: the Access token, the
+SSH key, the forced command.
+
+Setting it up is four steps in the Cloudflare dashboard and one command, as
+root: `bash /opt/KGKG/ops/deploy/setup_ci_access.sh --tunnel <hostname>`
+(`ops/deploy/README.md` has both, and the three lines that run it from
+`origin/work` before it is in the live release). It creates the dedicated key
+`/root/.ssh/kgkg-github-ci`, pins it to `kg-ci-gate` with `restrict`, installs
+the connector, then logs in through Cloudflare back to this machine exactly as
+CI will, with the host key pinned, and checks that Access refuses requests
+without the token. It sets the secrets with `gh` or prints them to paste.
+Re-running it is safe; `--rotate` replaces the key. Without `--tunnel` it sets
+up direct SSH to the public address instead (port 22 open, password logins off).
+On the runner, `ops/deploy/ci_ssh.sh` validates the secrets and names the fix
+for each failure (wrong or expired Access token, a policy that is not Service
+Auth, connector down, wrong key, stale host key, a key that could promote);
+`ops/deploy/test_ci_ssh.sh` tests it. Until 2026-10-29 none of these secrets had
+ever been set, so the `stage` job had never reached the server.
 
 `.github/workflows/deploy.yml` used to promote automatically on green CI, held
 back only by a GitHub environment having reviewers configured. It was deleted

@@ -24,16 +24,27 @@ KEY=$(<"$T/id")
 PUB=$(<"$T/id.pub")
 HOSTKEY=$(awk '{print $1" "$2}' "$T/host.pub")
 
-# Stub ssh: records its arguments, replays FAKE_OUT / FAKE_ERR, exits FAKE_RC.
+# Stub ssh: records its arguments and the Access token it would hand to a
+# ProxyCommand, replays FAKE_OUT / FAKE_ERR, exits FAKE_RC.
 mkdir -p "$T/bin"
 cat > "$T/bin/ssh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "$FAKE_ARGS"
+printf 'id=%s secret=%s\n' "${TUNNEL_SERVICE_TOKEN_ID:-}" "${TUNNEL_SERVICE_TOKEN_SECRET:-}" > "$FAKE_ARGS.env"
 [[ -n ${FAKE_OUT:-} ]] && printf '%s\n' "$FAKE_OUT"
 [[ -n ${FAKE_ERR:-} ]] && printf '%s\n' "$FAKE_ERR" >&2
 exit "${FAKE_RC:-0}"
 EOF
-chmod +x "$T/bin/ssh"
+# Stub curl: what Cloudflare would answer (FAKE_CURL_CODE); keeps its
+# arguments and the header file it was given.
+cat > "$T/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$FAKE_ARGS.curl"
+for a in "$@"; do [[ $a == @* ]] && cat "${a#@}" > "$FAKE_ARGS.curlhdr"; done
+printf '%s' "${FAKE_CURL_CODE:-000}"
+EOF
+printf '#!/bin/sh\nexit 0\n' > "$T/bin/cloudflared"
+chmod +x "$T/bin/ssh" "$T/bin/curl" "$T/bin/cloudflared"
 
 ci() {  # args... -> RC, OUT (stdout+stderr); secrets come from the caller's env
   rm -rf "${T:?}/home"
@@ -47,7 +58,8 @@ expect() {  # description, wanted rc, substring of the output
 }
 target() { grep "^$1=" "$T/home/kgkg-target" 2>/dev/null | cut -d= -f2-; }
 
-unset DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS DEPLOY_PORT
+unset DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS DEPLOY_PORT \
+      DEPLOY_CF_ACCESS_CLIENT_ID DEPLOY_CF_ACCESS_CLIENT_SECRET
 
 echo "missing secrets:"
 ci prepare
@@ -163,6 +175,53 @@ expect "a failed login fails preflight" 255 "The server refused DEPLOY_SSH_KEY"
 rm -rf "${T:?}/home"
 OUT=$(KG_CI_SSH_DIR="$T/home" bash "$CI_SSH" run status 2>&1); RC=$?
 expect "run before prepare is refused" 1 "run 'prepare' first"
+
+echo "through the Cloudflare tunnel:"
+TUN=ssh-ci.example.com
+CF_ID=0123abcd.access
+CF_SECRET=zzzzzzzzzzzzzzzzzzzzzzzz
+DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=$TUN DEPLOY_CF_ACCESS_CLIENT_ID=$CF_ID ci prepare
+expect "an ID without a secret is refused" 1 "Only one of DEPLOY_CF_ACCESS_CLIENT_ID and DEPLOY_CF_ACCESS_CLIENT_SECRET"
+DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 DEPLOY_CF_ACCESS_CLIENT_ID=$CF_ID DEPLOY_CF_ACCESS_CLIENT_SECRET=$CF_SECRET ci prepare
+expect "an IP address is refused as the tunnel host" 1 "must be the tunnel's hostname"
+DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=$TUN DEPLOY_PORT=2222 DEPLOY_KNOWN_HOSTS="$TUN $HOSTKEY" \
+  DEPLOY_CF_ACCESS_CLIENT_ID=" $CF_ID " DEPLOY_CF_ACCESS_CLIENT_SECRET=$CF_SECRET ci prepare
+expect "tunnel hostname, token and known_hosts are accepted" 0 "via:    Cloudflare Tunnel, Access service token $CF_ID"
+[[ $(target TRANSPORT) == cloudflare && $(target PORT) == 22 && $(target STRICT) == yes ]] \
+  && ok "transport recorded; the port is the route's business" || no "transport recorded; the port is the route's business"
+[[ $(stat -c %a "$T/home/kgkg-access") == 600 ]] && ok "token file is 0600" || no "token file is 0600"
+[[ $OUT != *"$CF_SECRET"* ]] && ok "the secret is never printed" || no "the secret is never printed"
+DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 KG_CI_SSH_DIR="$T/home" bash "$CI_SSH" prepare >/dev/null 2>&1
+[[ ! -e $T/home/kgkg-access && $(target TRANSPORT) == ssh ]] && ok "back to direct ssh drops the token file" || no "back to direct ssh drops the token file"
+
+export DEPLOY_HOST=$TUN DEPLOY_KNOWN_HOSTS="$TUN $HOSTKEY" DEPLOY_CF_ACCESS_CLIENT_ID=$CF_ID DEPLOY_CF_ACCESS_CLIENT_SECRET=$CF_SECRET
+remote 0 "" "" run stage 0123456789abcdef0123456789abcdef01234567
+args=$(<"$FAKE_ARGS")
+[[ $args == *$'-o\nProxyCommand=cloudflared access ssh --hostname %h\n'* && $args == *$'\nroot@'"$TUN"$'\nstage '* ]] \
+  && ok "ssh goes through cloudflared access ssh to the tunnel host" || no "ssh goes through cloudflared access ssh to the tunnel host ($args)"
+[[ $(<"$FAKE_ARGS.env") == "id=$CF_ID secret=$CF_SECRET" ]] && ok "the token reaches the ProxyCommand's environment" || no "the token reaches the ProxyCommand's environment ($(<"$FAKE_ARGS.env"))"
+[[ $args != *"$CF_SECRET"* ]] && ok "the secret is not on ssh's command line" || no "the secret is not on ssh's command line"
+
+BH="websocket: bad handshake"$'\n'"Connection closed by UNKNOWN port 65535"
+FAKE_CURL_CODE=403 remote 255 "$BH" "" run status
+expect "a refused service token is named" 255 "Cloudflare Access refused the service token"
+[[ $(<"$FAKE_ARGS.curl") != *"$CF_SECRET"* && $(<"$FAKE_ARGS.curlhdr") == *"CF-Access-Client-Secret: $CF_SECRET"* ]] \
+  && ok "the status probe sends the token from a file, not its command line" || no "the status probe sends the token from a file, not its command line"
+FAKE_CURL_CODE=302 remote 255 "$BH" "" run status
+expect "a policy that is not Service Auth is named" 255 "sent the runner to a login page"
+FAKE_CURL_CODE=530 remote 255 "$BH" "" run status
+expect "a stopped connector is named" 255 "reached no running tunnel"
+[[ $OUT != *fail2ban* ]] && ok "the tunnel's 'Connection closed' is not blamed on fail2ban" || no "the tunnel's 'Connection closed' is not blamed on fail2ban"
+FAKE_CURL_CODE=502 remote 255 "$BH" "" run status
+expect "anything else still points at the route and the policy" 255 "did not open an SSH session to $TUN (HTTP 502)"
+rm -f "$FAKE_ARGS.curl"
+remote 255 "dial tcp: lookup $TUN on 127.0.0.53:53: no such host"$'\n'"Connection closed by UNKNOWN port 65535" "" run status
+expect "a hostname with no route is named" 255 "The tunnel hostname $TUN does not resolve"
+[[ ! -e $FAKE_ARGS.curl ]] && ok "no status probe when the name does not resolve" || no "no status probe when the name does not resolve"
+remote 255 "root@$TUN: Permission denied (publickey)." "" run status
+expect "sshd's own refusal through the tunnel keeps its message" 255 "The server refused DEPLOY_SSH_KEY"
+remote 0 "" $'key role: ci\nlive: abc' preflight
+expect "preflight passes through the tunnel" 0 "connection OK"
 
 echo
 echo "passed $PASS, failed $FAIL"

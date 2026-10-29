@@ -16,6 +16,14 @@
 #
 # Reads DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (optional) and
 # DEPLOY_PORT (optional, default 22). KG_CI_SSH_DIR replaces ~/.ssh (tests).
+#
+# Transport. With DEPLOY_CF_ACCESS_CLIENT_ID and DEPLOY_CF_ACCESS_CLIENT_SECRET
+# set, ssh goes through a Cloudflare Tunnel instead of to a public port:
+# DEPLOY_HOST is the tunnel's hostname (a route to SSH localhost:22), and
+# `cloudflared access ssh` presents that Access service token, so port 22 can
+# stay closed to the internet. The token reaches cloudflared through its
+# environment (TUNNEL_SERVICE_TOKEN_ID/SECRET), never a command line.
+#
 # The server half, which creates the key and sets these secrets, is
 # ops/deploy/setup_ci_access.sh. Tests: ops/deploy/test_ci_ssh.sh.
 # ---------------------------------------------------------------------------
@@ -25,7 +33,9 @@ SSH_DIR=${KG_CI_SSH_DIR:-$HOME/.ssh}
 KEY_FILE=$SSH_DIR/deploy
 KH_FILE=$SSH_DIR/known_hosts
 TARGET_FILE=$SSH_DIR/kgkg-target
+ACCESS_FILE=$SSH_DIR/kgkg-access
 FIX="On the server, as root: bash /opt/KGKG/ops/deploy/setup_ci_access.sh (see ops/deploy/README.md)."
+FIX_TUNNEL="On the server, as root: bash /opt/KGKG/ops/deploy/setup_ci_access.sh --tunnel <hostname> (see ops/deploy/README.md)."
 
 # One ::error:: annotation (shown on the run page), then plain detail lines.
 report() { printf '::error::%s\n' "$1"; shift; (( $# )) && printf '  %s\n' "$@"; return 0; }
@@ -58,6 +68,21 @@ prepare() {
     || fail "DEPLOY_HOST must be a hostname or IPv4 address, got '$host'"
   [[ $port =~ ^[0-9]+$ ]] && (( port > 0 && port < 65536 )) \
     || fail "DEPLOY_PORT must be a TCP port number, got '$port'"
+
+  local cf_id cf_secret transport=ssh
+  cf_id=$(trim "${DEPLOY_CF_ACCESS_CLIENT_ID:-}")
+  cf_secret=$(trim "${DEPLOY_CF_ACCESS_CLIENT_SECRET:-}")
+  if [[ -n $cf_id || -n $cf_secret ]]; then
+    [[ -n $cf_id && -n $cf_secret ]] \
+      || fail "Only one of DEPLOY_CF_ACCESS_CLIENT_ID and DEPLOY_CF_ACCESS_CLIENT_SECRET is set; the tunnel needs both" \
+           "$FIX_TUNNEL"
+    [[ $host == *.* && ! $host =~ ^[0-9.]+$ ]] \
+      || fail "With the Cloudflare tunnel, DEPLOY_HOST must be the tunnel's hostname (like ssh-ci.example.com), not '$host'" \
+           "$FIX_TUNNEL"
+    # The port is the tunnel route's business (SSH localhost:22); ssh itself
+    # only uses it to pick the known_hosts entry, which is the bare hostname.
+    transport=cloudflare port=22
+  fi
 
   # The key as people paste it: CRLF from a Windows clipboard, one line with
   # literal \n from some editors, surrounding blank lines.
@@ -98,15 +123,72 @@ prepare() {
     strict=accept-new
   fi
 
-  printf 'HOST=%q\nPORT=%q\nSTRICT=%q\n' "$host" "$port" "$strict" > "$TARGET_FILE"
+  printf 'HOST=%q\nPORT=%q\nSTRICT=%q\nTRANSPORT=%q\n' "$host" "$port" "$strict" "$transport" > "$TARGET_FILE"
+  rm -f "$ACCESS_FILE"
+  if [[ $transport == cloudflare ]]; then
+    (umask 077; printf 'TUNNEL_SERVICE_TOKEN_ID=%q\nTUNNEL_SERVICE_TOKEN_SECRET=%q\n' "$cf_id" "$cf_secret" > "$ACCESS_FILE")
+    echo "via:    Cloudflare Tunnel, Access service token $cf_id"
+  fi
   echo "target: root@$host port $port"
   echo "key:    $(ssh-keygen -l -f "$KEY_FILE" | awk '{print $2}') (compare with what setup_ci_access.sh printed)"
   echo "host key check: $strict"
 }
 
+# Through the tunnel every Cloudflare-side failure reaches ssh as the same
+# "Connection closed by UNKNOWN port 65535", and cloudflared prints only
+# "websocket: bad handshake" whatever the cause, at any log level. The HTTP
+# status of one plain request with the same token tells the causes apart.
+access_status() {
+  local hdr code
+  hdr=$(mktemp) || return 0
+  chmod 600 "$hdr"
+  printf 'CF-Access-Client-Id: %s\nCF-Access-Client-Secret: %s\n' \
+    "${TUNNEL_SERVICE_TOKEN_ID:-}" "${TUNNEL_SERVICE_TOKEN_SECRET:-}" > "$hdr"
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H "@$hdr" "https://$HOST/" 2>/dev/null)
+  rm -f "$hdr"
+  printf '%s' "${code:-000}"
+}
+
+explain_tunnel() {  # ssh's stderr
+  local code
+  case $1 in
+    *"no such host"*|*"Bad Gateway"*|*"server misbehaving"*)
+      report "The tunnel hostname $HOST does not resolve" \
+        "In Cloudflare Zero Trust, the tunnel needs a public hostname $HOST -> SSH localhost:22." "$FIX_TUNNEL"
+      return ;;
+    *"cloudflared: command not found"*|*"cloudflared: not found"*)
+      report "cloudflared is not installed on the runner" "The workflow's install step must run before this one."
+      return ;;
+  esac
+  code=$(access_status)
+  case $code in
+    301|302|303|307)
+      report "Cloudflare Access sent the runner to a login page for $HOST (HTTP $code)" \
+        "The Access application's policy must have action 'Service Auth' and include this service token." ;;
+    401|403)
+      report "Cloudflare Access refused the service token for $HOST (HTTP $code)" \
+        "DEPLOY_CF_ACCESS_CLIENT_ID/SECRET are wrong, revoked or expired (service tokens have a duration)." \
+        "Create a new token, add it to the application's Service Auth policy, then: $FIX_TUNNEL" ;;
+    530)
+      report "Cloudflare reached no running tunnel for $HOST (HTTP 530)" \
+        "The connector on the server is down or was removed: systemctl status cloudflared" ;;
+    *)
+      report "Cloudflare did not open an SSH session to $HOST (HTTP $code)" \
+        "Check that $HOST routes to SSH localhost:22 on a running tunnel and that its Access policy" \
+        "is 'Service Auth' with this token. $FIX_TUNNEL It tests the whole path from the server." ;;
+  esac
+}
+
 # Map an ssh exit status and its stderr to what to do about it.
 explain() {  # rc, stderr
   local rc=$1 msg=$2
+  if [[ ${TRANSPORT:-ssh} == cloudflare && $rc == 255 ]]; then
+    case $msg in
+      # Verdicts from sshd itself, through the tunnel: the shared cases below.
+      *"Host key verification failed"*|*"IDENTIFICATION HAS CHANGED"*|*"Permission denied"*) ;;
+      *) explain_tunnel "$msg"; return 0 ;;
+    esac
+  fi
   case $rc:$msg in
     0:*) ;;
     255:*"Could not resolve hostname"*)
@@ -156,12 +238,22 @@ run_remote() {
   [[ -f $TARGET_FILE ]] || fail "ci_ssh.sh: run 'prepare' first"
   # shellcheck source=/dev/null
   . "$TARGET_FILE"
-  local err rc
+  local err rc via=()
+  if [[ ${TRANSPORT:-ssh} == cloudflare ]]; then
+    command -v cloudflared >/dev/null \
+      || fail "cloudflared is not installed on the runner" "The workflow's install step must run before this one."
+    # Exported to this process only, so ssh hands them to the ProxyCommand.
+    set -a
+    # shellcheck source=/dev/null
+    . "$ACCESS_FILE"
+    set +a
+    via=(-o "ProxyCommand=cloudflared access ssh --hostname %h")
+  fi
   err=$(mktemp)
   # -F none: no client config can change where this goes or with what key.
   # stdout goes straight through (fd 3); stderr is shown live and kept for
   # explain().
-  { ssh -n -F none -i "$KEY_FILE" -p "$PORT" \
+  { ssh -n -F none -i "$KEY_FILE" -p "$PORT" "${via[@]}" \
         -o BatchMode=yes -o IdentitiesOnly=yes \
         -o "StrictHostKeyChecking=$STRICT" -o "UserKnownHostsFile=$KH_FILE" -o GlobalKnownHostsFile=/dev/null \
         -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \

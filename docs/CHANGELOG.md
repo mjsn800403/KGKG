@@ -8,12 +8,17 @@ short and point at the doc section that was updated.
   `DEPLOY_KNOWN_HOSTS`) had never been set: the old `deploy.yml` dialled an empty host name from
   2026-10-17, and `stage` has stopped at "missing repository secret(s)" since it was added. Only
   the server can create the key.
-- **`ops/deploy/setup_ci_access.sh`** (run once on the server as root): dedicated CI key pinned to
-  `kg-ci-gate` with `restrict`, a real SSH login test, secrets set with `gh` or printed to paste.
+- **Through a Cloudflare Tunnel:** the runner reaches sshd with `cloudflared access ssh` and an
+  Access service token, so port 22 stays closed to the internet (direct SSH remains an option).
+- **`ops/deploy/setup_ci_access.sh --tunnel <host>`** (run once on the server as root): dedicated
+  CI key pinned to `kg-ci-gate` with `restrict`; installs the connector; logs in through
+  Cloudflare back to the server with the host key pinned; checks Access refuses token-less
+  requests; secrets set with `gh` or printed to paste.
 - **`ops/deploy/ci_ssh.sh`** runs the `stage` job's connection: validates the secrets (CRLF,
-  public-vs-private key, passphrase, `user@host:port`), then names the fix for each SSH failure;
-  refuses a CI key the server would let promote (`status` now prints `key role:`). 46 tests in
-  `ops/deploy/test_ci_ssh.sh`, run in CI.
+  public-vs-private key, passphrase, `user@host:port`), then names the fix for each failure,
+  including an expired Access token, a non-Service-Auth policy and a stopped connector (read from
+  the HTTP status, since `cloudflared` only says "bad handshake"); refuses a CI key the server
+  would let promote (`status` now prints `key role:`). 66 tests in `ops/deploy/test_ci_ssh.sh`.
 - **Docs:** `ops/deploy/README.md` rewritten for the stage/promote pipeline (it still described the
   deleted auto-deploy); doc 11 §11.3 corrected: the old `deploy.yml` still fires from `main`.
 

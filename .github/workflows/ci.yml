@@ -258,8 +258,11 @@ jobs:
     # Promotion is `kgkg-promote <sha>`, typed by a person on the host.
     #
     # The connection itself is ops/deploy/ci_ssh.sh: it checks the secrets
-    # before dialling and names the fix for each way SSH can fail. The secrets
-    # are created on the server by ops/deploy/setup_ci_access.sh.
+    # before dialling and names the fix for each way SSH can fail. With the
+    # DEPLOY_CF_ACCESS_CLIENT_* secrets set it goes through a Cloudflare Tunnel
+    # (an Access service token, no open port on the server) instead of to a
+    # public SSH port. The secrets are created on the server by
+    # ops/deploy/setup_ci_access.sh.
     if: github.event_name == 'push' && github.ref == 'refs/heads/work'
     needs: [backend, frontend, security, images]
     runs-on: ubuntu-latest
@@ -280,7 +283,22 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_CF_ACCESS_CLIENT_ID: ${{ secrets.DEPLOY_CF_ACCESS_CLIENT_ID }}
+          DEPLOY_CF_ACCESS_CLIENT_SECRET: ${{ secrets.DEPLOY_CF_ACCESS_CLIENT_SECRET }}
         run: bash ops/deploy/ci_ssh.sh prepare
+
+      - name: Install cloudflared (only when the server is reached through Cloudflare Tunnel)
+        # From Cloudflare's signed apt repository; only its list is refreshed.
+        run: |
+          grep -qx 'TRANSPORT=cloudflare' ~/.ssh/kgkg-target || { echo "direct SSH: not needed"; exit 0; }
+          sudo install -d -m 0755 /usr/share/keyrings
+          curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+          echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' \
+            | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+          sudo apt-get update -qq -o Dir::Etc::sourcelist=sources.list.d/cloudflared.list \
+            -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+          sudo apt-get install -y -qq cloudflared
+          cloudflared --version
 
       - name: Reach the server
         # Read-only `status`: proves the login and the forced command, and
