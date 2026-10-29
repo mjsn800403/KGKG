@@ -140,7 +140,28 @@ staging run. Both mutating verbs accept only a 40-hex commit already on
 transient systemd unit so a dropped SSH connection cannot kill a deploy
 half-way. The matrix is tested: `ops/deploy/test_gate_roles.sh`.
 
-**How GitHub reaches this server:** through a Cloudflare Tunnel. The
+**How GitHub reaches this server, today (checked 2026-10-29 18:30 UTC):**
+**direct SSH to the public port**, not the tunnel described below. On the host
+`systemctl is-active cloudflared` answers `inactive` and the binary is not
+installed; `ufw status` admits `22/tcp` from Anywhere; and the `stage` job of
+CI run 40907083135 printed `direct SSH: not needed`, which is the line
+`ci_ssh.sh` emits when `~/.ssh/kgkg-target` does not say `TRANSPORT=cloudflare`.
+This paragraph exists because the paragraphs after it described the tunnel in
+the present tense for two days while it was not running, and a document that is
+wrong about the thing an auditor can check in one command costs more
+credibility than the configuration gap itself.
+
+What protects the open port in the tunnel's absence: sshd accepts keys only
+(`passwordauthentication no`, `permitrootlogin without-password`, both read
+back from `sshd -T`), and `fail2ban` is active with an `sshd` jail among four.
+Roughly 430 failed authentication attempts arrive per day and none can succeed
+without a key. The exposure that was real — `3389/tcp` open to Anywhere with
+`xrdp` listening behind it, and no recorded human session ever using it — was
+closed on 2026-10-29 (`ufw delete allow 3389/tcp`; the rule files are backed up
+at `/root/ufw-user*.rules.bak-20261029-183306`). `xrdp` is still installed and
+enabled, so removing the service itself is still worth doing.
+
+**The intended design, not yet activated:** a Cloudflare Tunnel. The
 `cloudflared` connector here dials out to Cloudflare; the runner comes in with
 `cloudflared access ssh` and a Cloudflare Access service token (an Access
 application with a single *Service Auth* policy guards the hostname), lands on

@@ -14,7 +14,15 @@ CI can never promote. Its key is pinned on the server to `kg-ci-gate`, which onl
 `stage` and `status`.
 
 ## Connecting GitHub to the server (once)
-GitHub reaches the server's SSH through a **Cloudflare Tunnel**: the server dials out to
+
+> **Live configuration, 2026-10-29:** direct SSH on the public port 22, **not** the tunnel.
+> `cloudflared` is not installed on the server and the `stage` job logs `direct SSH: not needed`.
+> Key-only sshd and `fail2ban` are what stand in front of that port today. The tunnel below is
+> the intended design and the recommended next step; until it is run, read this section as a
+> plan, not as a description. `docs/11-operations-deployment.md` carries the same note with the
+> commands that establish it.
+
+The design: GitHub reaches the server's SSH through a **Cloudflare Tunnel** — the server dials out to
 Cloudflare, GitHub's runner comes in through `cloudflared` with a Cloudflare Access service token,
 and port 22 stays closed to the internet. The domain is already on Cloudflare, so nothing new to
 sign up for. (Direct SSH to a public port also works: see the end of this section.)
