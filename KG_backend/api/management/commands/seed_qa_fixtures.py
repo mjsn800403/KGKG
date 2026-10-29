@@ -15,15 +15,19 @@ still needs a Cloudflare Turnstile pass, which automation cannot (and must not)
 produce, so the command also prints one session token per account (and a spare
 for the logout journey); qa/stack.sh stores them mode 600 for the suites.
 
-Two independent guards keep it off production: KG_QA_STACK=1 must be set, and
-the database directory must hold the `.qa-stack` marker that only qa/stack.sh
-writes. Production's database directory never has it.
+Three independent guards keep it off production: KG_QA_STACK=1 must be set,
+the data directory must hold the `.qa-stack` marker that only qa/stack.sh
+writes, and on PostgreSQL the database itself must be a QA copy (its name ends
+in `_qa`). The last one matters because the QA backend reads production's
+.env.prod: a marker in the QA directory says nothing about which database the
+connection actually reaches.
 """
 import json
 import os
 from pathlib import Path
 
 from django.conf import settings
+from django.db import connection
 from django.core.management.base import BaseCommand, CommandError
 
 from api.access import VALID_DOCS
@@ -37,12 +41,21 @@ def db_dir():
     return Path(settings.KG_DATA_DIR)
 
 
+def db_target():
+    """(engine, database name) of the connection the command would write to."""
+    engine = 'postgres' if connection.vendor == 'postgresql' else connection.vendor
+    return engine, str(connection.settings_dict.get('NAME') or '')
+
+
 def qa_guard():
     db_dir_ = db_dir()
     if os.environ.get('KG_QA_STACK') != '1':
         raise CommandError('refusing: KG_QA_STACK=1 is not set (QA stack only)')
     if not (db_dir_ / MARKER).is_file():
         raise CommandError(f'refusing: {db_dir_}/{MARKER} is missing (not a QA stack database)')
+    engine, name = db_target()
+    if engine == 'postgres' and not name.endswith('_qa'):
+        raise CommandError(f'refusing: database {name!r} is not a QA copy (name must end in _qa)')
     password = os.environ.get('KG_QA_PASSWORD', '')
     if len(password) < 16:
         raise CommandError('KG_QA_PASSWORD must be set (16+ characters)')
