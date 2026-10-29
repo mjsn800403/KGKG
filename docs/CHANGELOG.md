@@ -50,7 +50,10 @@ short and point at the doc section that was updated.
   public-vs-private key, passphrase, `user@host:port`), then names the fix for each failure,
   including an expired Access token, a non-Service-Auth policy and a stopped connector (read from
   the HTTP status, since `cloudflared` only says "bad handshake"); refuses a CI key the server
-  would let promote (`status` now prints `key role:`). 66 tests in `ops/deploy/test_ci_ssh.sh`.
+  would let promote (`status` now prints `key role:`). 68 tests in `ops/deploy/test_ci_ssh.sh`.
+- **`DEPLOY_KNOWN_HOSTS` is required** (code-scanning finding on #7): without it the job used to warn
+  and connect with `accept-new`, which on a fresh runner verifies nothing; now it stops like the
+  other missing secrets.
 - **Docs:** `ops/deploy/README.md` rewritten for the stage/promote pipeline (it still described the
   deleted auto-deploy); doc 11 §11.3 corrected: the old `deploy.yml` still fires from `main`.
 

@@ -23,6 +23,10 @@ ssh-keygen -q -t ed25519 -N '' -C test -f "$T/host"
 KEY=$(<"$T/id")
 PUB=$(<"$T/id.pub")
 HOSTKEY=$(awk '{print $1" "$2}' "$T/host.pub")
+# Lines for every address the tests below dial; used whenever a test does
+# not set DEPLOY_KNOWN_HOSTS itself.
+KH_ALL=$(printf '%s\n' "1.2.3.4 $HOSTKEY" "[1.2.3.4]:2222 $HOSTKEY" "[1.2.3.4]:2200 $HOSTKEY" \
+                       "ssh-ci.example.com $HOSTKEY")
 
 # Stub ssh: records its arguments and the Access token it would hand to a
 # ProxyCommand, replays FAKE_OUT / FAKE_ERR, exits FAKE_RC.
@@ -48,7 +52,7 @@ chmod +x "$T/bin/ssh" "$T/bin/curl" "$T/bin/cloudflared"
 
 ci() {  # args... -> RC, OUT (stdout+stderr); secrets come from the caller's env
   rm -rf "${T:?}/home"
-  OUT=$(KG_CI_SSH_DIR="$T/home" bash "$CI_SSH" "$@" 2>&1)
+  OUT=$(DEPLOY_KNOWN_HOSTS=${DEPLOY_KNOWN_HOSTS-$KH_ALL} KG_CI_SSH_DIR="$T/home" bash "$CI_SSH" "$@" 2>&1)
   RC=$?
 }
 ok() { printf '  ok    %s\n' "$1"; PASS=$((PASS+1)); }
@@ -62,8 +66,8 @@ unset DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS DEPLOY_PORT \
       DEPLOY_CF_ACCESS_CLIENT_ID DEPLOY_CF_ACCESS_CLIENT_SECRET
 
 echo "missing secrets:"
-ci prepare
-expect "none set: names both" 1 "missing repository secret(s): DEPLOY_SSH_KEY DEPLOY_HOST"
+DEPLOY_KNOWN_HOSTS='' ci prepare
+expect "none set: names all three" 1 "missing repository secret(s): DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS"
 [[ $OUT == *setup_ci_access.sh* ]] && ok "points at the server-side setup" || no "points at the server-side setup"
 DEPLOY_SSH_KEY=$KEY DEPLOY_HOST="   " ci prepare
 expect "whitespace-only host counts as missing" 1 "secret(s): DEPLOY_HOST"
@@ -106,9 +110,11 @@ DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 DEPLOY_PORT=70000 ci prepare
 expect "an out-of-range port is refused" 1 "must be a TCP port number"
 
 echo "known_hosts:"
-DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 ci prepare
-[[ $OUT == *"::warning::DEPLOY_KNOWN_HOSTS is not set"* && $(target STRICT) == accept-new ]] \
-  && ok "unset: warns and falls back to accept-new" || no "unset: warns and falls back to accept-new"
+DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 DEPLOY_KNOWN_HOSTS='' ci prepare
+expect "unset is refused like the other secrets, never trust-on-first-use" 1 "missing repository secret(s): DEPLOY_KNOWN_HOSTS"
+[[ ! -e $T/home/kgkg-target ]] && ok "nothing to connect with is left behind" || no "nothing to connect with is left behind"
+DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 DEPLOY_KNOWN_HOSTS=$' \r\n ' ci prepare
+expect "whitespace-only counts as unset" 1 "missing repository secret(s): DEPLOY_KNOWN_HOSTS"
 DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 DEPLOY_KNOWN_HOSTS="1.2.3.4 $HOSTKEY" ci prepare
 [[ $RC == 0 && $(target STRICT) == yes ]] && ok "a matching line enables strict checking" || no "a matching line enables strict checking"
 DEPLOY_SSH_KEY=$KEY DEPLOY_HOST=1.2.3.4 DEPLOY_KNOWN_HOSTS="1.2.3.4 $HOSTKEY"$'\r' ci prepare
