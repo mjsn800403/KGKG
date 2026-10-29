@@ -7,6 +7,7 @@ through the HTTP layer with real grants. Run with the suite:
 """
 import json
 import os
+from unittest import mock
 import shutil
 import sqlite3
 import tempfile
@@ -463,13 +464,12 @@ class PartsServingTests(TestCase):
         self.assertEqual(r.status_code, 404)
 
     def test_admin_parts_summary(self):
-        os.environ['KG_ADMIN_TOKEN'] = 'test-admin-token'
-        try:
+        # patch.dict restores the runner's own token afterwards; popping it
+        # left every later admin-gated test facing "admin disabled" (503).
+        with mock.patch.dict(os.environ, {'KG_ADMIN_TOKEN': 'test-admin-token'}):
             r = self.c.get('/api/admin/parts/',
                            HTTP_X_ADMIN_TOKEN='test-admin-token')
-            self.assertEqual(r.status_code, 200)
-            data = r.json()
-            self.assertTrue(data['available'])
-            self.assertIn(PARTS_CAR, data['vehicles'])
-        finally:
-            os.environ.pop('KG_ADMIN_TOKEN', None)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertTrue(data['available'])
+        self.assertIn(PARTS_CAR, data['vehicles'])

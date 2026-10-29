@@ -1,0 +1,26 @@
+# Nightly QA run (qa/nightly.sh): browser E2E, passive DAST and a performance
+# baseline against the head of `work`, on the isolated QA stack (qa/stack.sh).
+# Outcome -> /var/lib/node-exporter-textfile/kgkg_qa.prom -> alert rule _qa.
+#
+# The scripts run from a fresh detached worktree of origin/work, i.e. the
+# version under test, never from the live tree in /opt/KGKG (an untracked file
+# there would block the next fast-forward promote).
+[Unit]
+Description=KGKG nightly QA (E2E, DAST baseline, performance baseline)
+Documentation=file:/opt/KGKG/audit-evidence/09-ci-cd/REPRODUCE.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Environment=TREE=/opt/KGKG_qa/tree
+ExecStartPre=/usr/bin/git -C /opt/KGKG_work fetch -q origin
+ExecStartPre=/bin/bash -c 'git -C /opt/KGKG_work worktree remove --force "$TREE" 2>/dev/null; rm -rf "$TREE"; git -C /opt/KGKG_work worktree prune; git -C /opt/KGKG_work worktree add -q --detach "$TREE" origin/work'
+ExecStart=/bin/bash -c 'exec "$TREE/qa/nightly.sh" origin/work'
+# A full run is ~15 minutes; the stack is torn down at the end either way.
+TimeoutStartSec=90min
+# Production shares the host: the QA containers carry their own CPU caps
+# (qa/stack.sh), and the orchestration itself yields to everything else.
+Nice=15
+IOSchedulingClass=idle

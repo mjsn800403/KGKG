@@ -114,13 +114,16 @@ def _latest_id():
 def _resolve_viewer(request):
     """Return a dict describing who is connecting, or None if unauthenticated.
 
-    Admin is checked first (admin token in Authorization/X-Admin-Token or the
-    KG_ADMIN_TOKEN env secret). Otherwise a portal user (Bearer or cookie)."""
-    from .admin_auth import _presented_token, _configured_token, _admin_session_valid
+    Admin is checked first (a platform-admin session, or the KG_ADMIN_TOKEN env
+    secret from the server itself only, as require_admin_token allows it).
+    Otherwise a portal user (Bearer or cookie)."""
+    from .admin_auth import (_presented_token, _configured_token, _admin_session_valid,
+                             _from_server_itself)
     import hmac
     presented = _presented_token(request)
     configured = _configured_token()
-    if presented and configured and hmac.compare_digest(presented, configured):
+    if (presented and configured and hmac.compare_digest(presented, configured)
+            and _from_server_itself(request)):
         return {'is_admin': True}
     if _admin_session_valid(presented):
         return {'is_admin': True}
@@ -323,8 +326,9 @@ def detect_and_emit():
     if prev == fp:
         return None
     SystemState.put('pending_fingerprint', fp)
-    if prev is None:
+    if not prev:
         # First run establishes the baseline without a noisy "changed" event.
+        # (SystemState.get returns {} for a missing key even with default=None.)
         return None
 
     # Decide the most informative event type from what moved.
