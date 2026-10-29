@@ -21,7 +21,7 @@ from urllib.parse import quote
 import logging
 from collections import OrderedDict
 
-from . import config, store, embed, glossary, scoring, feedback
+from . import config, store, embed, glossary, scoring, feedback, pgvec
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +232,27 @@ def _matched_via(kind, sim, bm25_norm, vehicle_boost, pinned=False):
     return 'keyword' if bm25_norm >= sim else 'semantic'
 
 
+
+def _knn(index, qlist, qblob, k, ids=None):
+    """Dense nearest neighbours as [(blob_id, cosine_distance)], nearest first.
+    pgvector when RAG_VEC_BACKEND=pgvector and reachable, else sqlite-vec."""
+    if config.VEC_BACKEND == 'pgvector':
+        hits = pgvec.knn(qlist, k, ids)
+        if hits is not None:
+            return hits
+    if ids:
+        idl = ','.join(str(int(b)) for b in ids)
+        rows = index.execute(
+            "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
+            "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
+            f"AND rowid IN ({idl}) ORDER BY distance", (qblob, k)).fetchall()
+    else:
+        rows = index.execute(
+            "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
+            "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
+            "ORDER BY distance", (qblob, k)).fetchall()
+    return [(r['bid'], float(r['dist'])) for r in rows]
+
 def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
            allowed_cars=None, expand=True, with_text=True, scope_fts=False):
     """Retrieve grounded manual excerpts for ``query``.
@@ -320,12 +341,9 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
         if bm25 is not None and (s['bm25'] is None or bm25 < s['bm25']):
             s['bm25'] = bm25     # FTS5 bm25(): more negative == better
 
-    vec = index.execute(
-        "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
-        "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
-        "ORDER BY distance", (qblob, vec_k)).fetchall()
-    for rank, r in enumerate(vec):
-        bump(r['bid'], rank, wv, sim=1.0 - float(r['dist']))
+    vec = _knn(index, qlist, qblob, vec_k)
+    for rank, (bid, dist) in enumerate(vec):
+        bump(bid, rank, wv, sim=1.0 - dist)
 
     # Car-scoped dense pass: the global KNN above ranks all ~301k blobs, so for
     # a descriptive (often Persian) question none of the pinned car's pages may
@@ -334,13 +352,9 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
     if car_stem:
         own = _car_blob_ids(index, car_stem)
         if own:
-            ids = ','.join(str(int(b)) for b in own)
-            for rank, r in enumerate(index.execute(
-                    "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
-                    "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
-                    f"AND rowid IN ({ids}) ORDER BY distance",
-                    (qblob, config.CAR_VEC_K)).fetchall()):
-                bump(r['bid'], rank, wv, sim=1.0 - float(r['dist']))
+            for rank, (bid, dist) in enumerate(
+                    _knn(index, qlist, qblob, config.CAR_VEC_K, own)):
+                bump(bid, rank, wv, sim=1.0 - dist)
 
     if fts_query:
         try:
