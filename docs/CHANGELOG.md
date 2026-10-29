@@ -4,6 +4,12 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Dependabot cleanup** (nothing in the production images was exposed). `KG_backend/requirements.txt`
+  minimums raised to the lock's versions (Django 5.2.17, cryptography 50.0, sentence-transformers
+  5.6, sentry-sdk 2.8, torch 2.12). Frontend dev/build dependencies `npm audit fix`ed (postcss,
+  browserslist, js-yaml, brace-expansion, zod). Playwright 1.52 → 1.64.1, package and runner
+  image together. Two junk "requirements" files deleted. One alert remains on purpose: torch
+  2.13 (GHSA-rrmf-rvhw-rf47), deferred in `ops/security/pip-audit-ignore.txt`.
 - **The server gate runs the security scans.** `ops/deploy/gate.sh` now runs bandit, pip-audit
   and the npm audit gate first, through `ops/security/scan.sh`, which CI calls too, with the
   same exception files. Scanners come from a pinned venv (`/opt/KGKG_release/sectools`), and a

@@ -1,4 +1,7 @@
-Django>=4.2,<6
+# Minimums are the oldest versions with no known advisory; production installs
+# the exact pins in ops/docker/backend-requirements.lock. Raise these when the
+# lock moves past a security fix, so a fresh `pip install -r` is never older.
+Django>=5.2.17,<6
 django-cors-headers>=4.0
 beautifulsoup4>=4.12
 html5lib>=1.1
@@ -7,8 +10,8 @@ html5lib>=1.1
 # Built/served with bge-m3 on Apple-Silicon (MPS, fp16). Vectors live in
 # sqlite-vec inside Database_warehouse/_rag/index.rag.db (no external service).
 numpy>=1.26
-torch>=2.2
-sentence-transformers>=2.7
+torch>=2.12  # 2.13 fixes GHSA-rrmf-rvhw-rf47; deferred on purpose, see ops/security/pip-audit-ignore.txt
+sentence-transformers>=5.6
 sqlite-vec>=0.1.6
 
 # --- Code graph analysis ---
@@ -16,8 +19,8 @@ graphify>=0.8
 
 # --- Error monitoring (self-hosted GlitchTip, Sentry wire protocol) ---
 # Inert unless SENTRY_DSN is set, so dev and CI never phone home.
-sentry-sdk>=2.0,<3
+sentry-sdk>=2.8,<3
 
 # --- Content shield (api/shield.py: AES-GCM sealed answers) ---
-cryptography>=42
+cryptography>=50.0
 psycopg[binary]>=3.2
