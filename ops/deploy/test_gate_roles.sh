@@ -56,6 +56,10 @@ expect_denied ci       "shell"                       "an unknown verb is refused
 expect_denied ci       "STAGE $SHA"                  "verbs are case-sensitive"
 expect_denied nonsense "status"                      "an unknown role is refused"
 
+echo "status names the key's role (CI's preflight checks it):"
+run ci "status";       if [[ $OUT == *"key role: ci"* ]];       then ok "ci key reports role ci";             else no "ci key reports role ci"; fi
+run operator "status"; if [[ $OUT == *"key role: operator"* ]]; then ok "operator key reports role operator"; else no "operator key reports role operator"; fi
+
 echo "injection attempts cannot smuggle a verb:"
 expect_denied ci "stage $SHA deploy $SHA"            "a second verb is refused"
 expect_denied ci "deploy $SHA stage $SHA"            "deploy is still refused for ci"

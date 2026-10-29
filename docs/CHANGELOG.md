@@ -4,6 +4,17 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Dependabot cleanup** (nothing in the production images was exposed). `KG_backend/requirements.txt`
+  minimums raised to the lock's versions (Django 5.2.17, cryptography 50.0, sentence-transformers
+  5.6, sentry-sdk 2.8, torch 2.12). Frontend dev/build dependencies `npm audit fix`ed (postcss,
+  browserslist, js-yaml, brace-expansion, zod). Playwright 1.52 → 1.64.1, package and runner
+  image together. Two junk "requirements" files deleted. One alert remains on purpose: torch
+  2.13 (GHSA-rrmf-rvhw-rf47), deferred in `ops/security/pip-audit-ignore.txt`.
+- **The server gate runs the security scans.** `ops/deploy/gate.sh` now runs bandit, pip-audit
+  and the npm audit gate first, through `ops/security/scan.sh`, which CI calls too, with the
+  same exception files. Scanners come from a pinned venv (`/opt/KGKG_release/sectools`), and a
+  scan that cannot run fails the deploy. Before this, `8fa94dd` was red on bandit in CI and
+  still passed the server gate. (ops/security/README.md)
 - **Fix (D-41):** a read of a missing RAG index created an empty `index.rag.db`, after which the
   assistant answered 500 ("no such table") instead of 503 until the file was removed by hand; one
   recommendations-panel view was enough. Read-only opens now raise `FileNotFoundError` and create
@@ -23,6 +34,29 @@ short and point at the doc section that was updated.
   Tests 930 → 960 (incl. CSV exports); coverage floor 55 → 56.
 - **Release gate:** `kgkg-promote` requires a passing full E2E run for the commit
   (`qa/run_e2e.sh` → `/opt/KGKG_release/e2e/<sha>.env`); overrides are typed and logged.
+
+### CI can reach the server (2026-10-29)
+- **Why `work` was red:** the `stage` job's secrets (`DEPLOY_HOST`, `DEPLOY_SSH_KEY`,
+  `DEPLOY_KNOWN_HOSTS`) had never been set: the old `deploy.yml` dialled an empty host name from
+  2026-10-17, and `stage` has stopped at "missing repository secret(s)" since it was added. Only
+  the server can create the key.
+- **Through a Cloudflare Tunnel:** the runner reaches sshd with `cloudflared access ssh` and an
+  Access service token, so port 22 stays closed to the internet (direct SSH remains an option).
+- **`ops/deploy/setup_ci_access.sh --tunnel <host>`** (run once on the server as root): dedicated
+  CI key pinned to `kg-ci-gate` with `restrict`; installs the connector; logs in through
+  Cloudflare back to the server with the host key pinned; checks Access refuses token-less
+  requests; secrets set with `gh` or printed to paste.
+- **`ops/deploy/ci_ssh.sh`** runs the `stage` job's connection: validates the secrets (CRLF,
+  public-vs-private key, passphrase, `user@host:port`), then names the fix for each failure,
+  including an expired Access token, a non-Service-Auth policy and a stopped connector (read from
+  the HTTP status, since `cloudflared` only says "bad handshake"); refuses a CI key the server
+  would let promote (`status` now prints `key role:`). 68 tests in `ops/deploy/test_ci_ssh.sh`.
+- **`DEPLOY_KNOWN_HOSTS` is required** (code-scanning finding on #7): without it the job used to warn
+  and connect with `accept-new`, which on a fresh runner verifies nothing; now it stops like the
+  other missing secrets.
+- **Docs:** `ops/deploy/README.md` rewritten for the stage/promote pipeline (it still described the
+  deleted auto-deploy); doc 11 §11.3 corrected: the old `deploy.yml` still fires from `main`.
+
 
 ## 2026-10-28 — v1.0.0: test architecture, security fixes, audit evidence (branch `qa-audit`)
 - **Security fixes found by the new tests** (each with a regression test; details in

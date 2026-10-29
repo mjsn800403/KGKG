@@ -174,6 +174,7 @@ jobs:
           python3 -m unittest discover -s ops/observability -t ops/observability -p 'test_*.py' -v
           python3 ops/deploy/sanitize_staging_db.py --selftest
           python3 ops/observability/watchdog.py --selftest
+          bash ops/deploy/test_ci_ssh.sh
 
       - name: Dockerfile lint
         run: |
@@ -207,11 +208,10 @@ jobs:
         # Medium and high severity only. Every finding present when the gate
         # was introduced was triaged (ops/security/README.md#bandit) and is
         # recorded in bandit-baseline.json; any finding not in it fails.
+        # ops/security/scan.sh is shared with the server gate (ops/deploy/gate.sh).
         run: |
           pip install --quiet bandit==1.9.4
-          bandit -r KG_backend/api KG_backend/KG_backend \
-            -x '*/test_*,*/tests.py,*/tests_parts.py,*/migrations/*' \
-            -ll -b ops/security/bandit-baseline.json
+          bash ops/security/scan.sh bandit
 
       - name: QA suites parse (E2E, load)
         run: |
@@ -222,20 +222,14 @@ jobs:
       - name: Python dependency audit
         run: |
           pip install --quiet pip-audit==2.9.0
-          # The lock pins torch to a +cpu local version that exists only on
-          # PyTorch's index; strip the local label so the advisory database can
-          # be queried by base version.
-          sed 's/+cpu$//' ops/docker/backend-requirements.lock > /tmp/lock-audit.txt
-          mapfile -t ignores < <(grep -vE '^\s*(#|$)' ops/security/pip-audit-ignore.txt | sed 's/^/--ignore-vuln=/')
-          echo "ignoring ${#ignores[@]} reviewed advisory id(s)"
-          pip-audit --no-deps -r /tmp/lock-audit.txt "${ignores[@]}"
+          bash ops/security/scan.sh pip-audit
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Node dependency audit
-        run: node ops/security/npm_audit_gate.mjs
+        run: bash ops/security/scan.sh npm
 
   images:
     # The production images (ops/docker/) must build from every commit, boot,
@@ -278,6 +272,13 @@ jobs:
     # verb (ops/deploy/kg-deploy-gate, matrix tested by
     # ops/deploy/test_gate_roles.sh). A leaked secret buys a staging run.
     # Promotion is `kgkg-promote <sha>`, typed by a person on the host.
+    #
+    # The connection itself is ops/deploy/ci_ssh.sh: it checks the secrets
+    # before dialling and names the fix for each way SSH can fail. With the
+    # DEPLOY_CF_ACCESS_CLIENT_* secrets set it goes through a Cloudflare Tunnel
+    # (an Access service token, no open port on the server) instead of to a
+    # public SSH port. The secrets are created on the server by
+    # ops/deploy/setup_ci_access.sh.
     if: github.event_name == 'push' && github.ref == 'refs/heads/work'
     needs: [backend, frontend, security, images]
     runs-on: ubuntu-latest
@@ -286,50 +287,47 @@ jobs:
       group: kgkg-staging
       cancel-in-progress: false
     steps:
-      - name: Check the staging credential is configured
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ops/deploy
+
+      - name: Check the staging credential
+        # The only step that sees the secrets; it writes the key, known_hosts
+        # and target under ~/.ssh for the steps below.
         env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_CF_ACCESS_CLIENT_ID: ${{ secrets.DEPLOY_CF_ACCESS_CLIENT_ID }}
+          DEPLOY_CF_ACCESS_CLIENT_SECRET: ${{ secrets.DEPLOY_CF_ACCESS_CLIENT_SECRET }}
+        run: bash ops/deploy/ci_ssh.sh prepare
+
+      - name: Install cloudflared (only when the server is reached through Cloudflare Tunnel)
+        # From Cloudflare's signed apt repository; only its list is refreshed.
         run: |
-          missing=
-          [ -n "$KEY" ]  || missing="$missing DEPLOY_SSH_KEY"
-          [ -n "$HOST" ] || missing="$missing DEPLOY_HOST"
-          if [ -n "$missing" ]; then
-            echo "::error::Staging cannot run: missing repository secret(s):$missing"
-            echo "Add them under Settings -> Secrets and variables -> Actions."
-            echo "The key must be the one pinned to kg-ci-gate in the server's authorized_keys."
-            exit 1
-          fi
+          grep -qx 'TRANSPORT=cloudflare' ~/.ssh/kgkg-target || { echo "direct SSH: not needed"; exit 0; }
+          sudo install -d -m 0755 /usr/share/keyrings
+          curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+          echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' \
+            | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+          sudo apt-get update -qq -o Dir::Etc::sourcelist=sources.list.d/cloudflared.list \
+            -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+          sudo apt-get install -y -qq cloudflared
+          cloudflared --version
+
+      - name: Reach the server
+        # Read-only `status`: proves the login and the forced command, and
+        # refuses a CI key that the server would let promote.
+        run: bash ops/deploy/ci_ssh.sh preflight
 
       - name: Stage ${{ github.sha }}
-        env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          SHA: ${{ github.sha }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
-          if [ -n "$KNOWN_HOSTS" ]; then
-            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-            strict=yes
-          else
-            # Without a pinned host key the connection is not authenticated in
-            # the server's direction, so say so loudly rather than pretend.
-            echo "::warning::DEPLOY_KNOWN_HOSTS is not set; the server's host key is not verified."
-            strict=accept-new
-          fi
-          ssh -i ~/.ssh/deploy -o "StrictHostKeyChecking=$strict" \
-              -o ServerAliveInterval=30 -o ConnectTimeout=20 \
-              "root@$HOST" "stage $SHA"
+        run: bash ops/deploy/ci_ssh.sh run stage "$GITHUB_SHA"
 
       - name: What the server reports
         if: always()
-        env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          [ -n "$KEY" ] || exit 0
-          ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new \
-              -o ConnectTimeout=20 "root@$HOST" "status" >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          [ -f ~/.ssh/kgkg-target ] || exit 0
+          { echo '### Server status'; echo '```'
+            bash ops/deploy/ci_ssh.sh run status 2>&1
+            echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
