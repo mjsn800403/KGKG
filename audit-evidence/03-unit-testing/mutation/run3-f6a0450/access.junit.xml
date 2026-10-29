@@ -1,0 +1,2542 @@
+<?xml version="1.0" ?>
+<testsuites disabled="0" errors="2" failures="99" tests="440" time="0.0">
+	<testsuite disabled="0" errors="2" failures="99" name="mutmut" skipped="0" tests="440" time="0">
+		<testcase name="Mutant #1" file="api/access.py" line="6">
+			<system-out>    ('after_sales_manager', 'مدیر خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #2" file="api/access.py" line="6">
+			<system-out>    ('after_sales_manager', 'مدیر خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #3" file="api/access.py" line="7">
+			<system-out>    ('after_sales_head', 'رئیس خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #4" file="api/access.py" line="7">
+			<system-out>    ('after_sales_head', 'رئیس خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #5" file="api/access.py" line="8">
+			<system-out>    ('after_sales_supervisor', 'سرپرست خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #6" file="api/access.py" line="8">
+			<system-out>    ('after_sales_supervisor', 'سرپرست خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #7" file="api/access.py" line="9">
+			<system-out>    ('after_sales_specialist', 'کارشناس خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #8" file="api/access.py" line="9">
+			<system-out>    ('after_sales_specialist', 'کارشناس خدمات پس از فروش'),</system-out>
+		</testcase>
+		<testcase name="Mutant #9" file="api/access.py" line="10">
+			<system-out>]</system-out>
+		</testcase>
+		<testcase name="Mutant #10" file="api/access.py" line="13">
+			<system-out>    'after_sales_manager': 1,</system-out>
+		</testcase>
+		<testcase name="Mutant #11" file="api/access.py" line="13">
+			<system-out>    'after_sales_manager': 1,</system-out>
+		</testcase>
+		<testcase name="Mutant #12" file="api/access.py" line="14">
+			<system-out>    'after_sales_head': 2,</system-out>
+		</testcase>
+		<testcase name="Mutant #13" file="api/access.py" line="14">
+			<system-out>    'after_sales_head': 2,</system-out>
+		</testcase>
+		<testcase name="Mutant #14" file="api/access.py" line="15">
+			<system-out>    'after_sales_supervisor': 3,</system-out>
+		</testcase>
+		<testcase name="Mutant #15" file="api/access.py" line="15">
+			<system-out>    'after_sales_supervisor': 3,</system-out>
+		</testcase>
+		<testcase name="Mutant #16" file="api/access.py" line="16">
+			<system-out>    'after_sales_specialist': 4,</system-out>
+		</testcase>
+		<testcase name="Mutant #17" file="api/access.py" line="16">
+			<system-out>    'after_sales_specialist': 4,</system-out>
+		</testcase>
+		<testcase name="Mutant #18" file="api/access.py" line="17">
+			<system-out>}</system-out>
+		</testcase>
+		<testcase name="Mutant #19" file="api/access.py" line="21">
+			<system-out>    'technical_expert': 'after_sales_specialist',</system-out>
+		</testcase>
+		<testcase name="Mutant #20" file="api/access.py" line="21">
+			<system-out>    'technical_expert': 'after_sales_specialist',</system-out>
+		</testcase>
+		<testcase name="Mutant #21" file="api/access.py" line="22">
+			<system-out>    'technical_staff': 'after_sales_specialist',</system-out>
+		</testcase>
+		<testcase name="Mutant #22" file="api/access.py" line="22">
+			<system-out>    'technical_staff': 'after_sales_specialist',</system-out>
+		</testcase>
+		<testcase name="Mutant #23" file="api/access.py" line="23">
+			<system-out>}</system-out>
+		</testcase>
+		<testcase name="Mutant #24" file="api/access.py" line="27">
+			<system-out>    ('manual', 'راهنمای تعمیرات'),</system-out>
+		</testcase>
+		<testcase name="Mutant #25" file="api/access.py" line="27">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -24,7 +24,7 @@
+ 
+ # Subscription packages (modular — add new ids here and in DOC_TYPE_CHOICES).
+ PACKAGE_CHOICES = [
+-    ('manual', 'راهنمای تعمیرات'),
++    ('manual', 'XXراهنمای تعمیراتXX'),
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+</failure>
+			<system-out>    ('manual', 'راهنمای تعمیرات'),</system-out>
+		</testcase>
+		<testcase name="Mutant #26" file="api/access.py" line="28">
+			<system-out>    ('special_tools', 'ابزارهای مخصوص'),</system-out>
+		</testcase>
+		<testcase name="Mutant #27" file="api/access.py" line="28">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -25,7 +25,7 @@
+ # Subscription packages (modular — add new ids here and in DOC_TYPE_CHOICES).
+ PACKAGE_CHOICES = [
+     ('manual', 'راهنمای تعمیرات'),
+-    ('special_tools', 'ابزارهای مخصوص'),
++    ('special_tools', 'XXابزارهای مخصوصXX'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+     ('full_spec', 'مشخصات کامل خودرو'),
+</failure>
+			<system-out>    ('special_tools', 'ابزارهای مخصوص'),</system-out>
+		</testcase>
+		<testcase name="Mutant #28" file="api/access.py" line="29">
+			<system-out>    ('parts', 'کاتالوگ قطعات یدکی'),</system-out>
+		</testcase>
+		<testcase name="Mutant #29" file="api/access.py" line="29">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -26,7 +26,7 @@
+ PACKAGE_CHOICES = [
+     ('manual', 'راهنمای تعمیرات'),
+     ('special_tools', 'ابزارهای مخصوص'),
+-    ('parts', 'کاتالوگ قطعات یدکی'),
++    ('parts', 'XXکاتالوگ قطعات یدکیXX'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+     ('full_spec', 'مشخصات کامل خودرو'),
+ ]
+</failure>
+			<system-out>    ('parts', 'کاتالوگ قطعات یدکی'),</system-out>
+		</testcase>
+		<testcase name="Mutant #30" file="api/access.py" line="30">
+			<system-out>    ('standard_time', 'زمان استاندارد تعمیرات'),</system-out>
+		</testcase>
+		<testcase name="Mutant #31" file="api/access.py" line="30">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -27,7 +27,7 @@
+     ('manual', 'راهنمای تعمیرات'),
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+-    ('standard_time', 'زمان استاندارد تعمیرات'),
++    ('standard_time', 'XXزمان استاندارد تعمیراتXX'),
+     ('full_spec', 'مشخصات کامل خودرو'),
+ ]
+ 
+</failure>
+			<system-out>    ('standard_time', 'زمان استاندارد تعمیرات'),</system-out>
+		</testcase>
+		<testcase name="Mutant #32" file="api/access.py" line="31">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -28,7 +28,7 @@
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+-    ('full_spec', 'مشخصات کامل خودرو'),
++    ('XXfull_specXX', 'مشخصات کامل خودرو'),
+ ]
+ 
+ DOC_TYPE_CHOICES = PACKAGE_CHOICES  # same ids, used in car/doc grants
+</failure>
+			<system-out>    ('full_spec', 'مشخصات کامل خودرو'),</system-out>
+		</testcase>
+		<testcase name="Mutant #33" file="api/access.py" line="31">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -28,7 +28,7 @@
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+-    ('full_spec', 'مشخصات کامل خودرو'),
++    ('full_spec', 'XXمشخصات کامل خودروXX'),
+ ]
+ 
+ DOC_TYPE_CHOICES = PACKAGE_CHOICES  # same ids, used in car/doc grants
+</failure>
+			<system-out>    ('full_spec', 'مشخصات کامل خودرو'),</system-out>
+		</testcase>
+		<testcase name="Mutant #34" file="api/access.py" line="32">
+			<system-out>]</system-out>
+		</testcase>
+		<testcase name="Mutant #35" file="api/access.py" line="34">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -31,7 +31,7 @@
+     ('full_spec', 'مشخصات کامل خودرو'),
+ ]
+ 
+-DOC_TYPE_CHOICES = PACKAGE_CHOICES  # same ids, used in car/doc grants
++DOC_TYPE_CHOICES = None  # same ids, used in car/doc grants
+ 
+ VALID_PACKAGES = {p for p, _ in PACKAGE_CHOICES}
+ VALID_DOCS = VALID_PACKAGES
+</failure>
+			<system-out>DOC_TYPE_CHOICES = PACKAGE_CHOICES  # same ids, used in car/doc grants</system-out>
+		</testcase>
+		<testcase name="Mutant #36" file="api/access.py" line="36">
+			<system-out>VALID_PACKAGES = {p for p, _ in PACKAGE_CHOICES}</system-out>
+		</testcase>
+		<testcase name="Mutant #37" file="api/access.py" line="37">
+			<system-out>VALID_DOCS = VALID_PACKAGES</system-out>
+		</testcase>
+		<testcase name="Mutant #38" file="api/access.py" line="38">
+			<system-out>VALID_ROLES = {r for r, _ in ROLE_CHOICES}</system-out>
+		</testcase>
+		<testcase name="Mutant #39" file="api/access.py" line="40">
+			<system-out>AI_REQUIRED_PACKAGE = 'manual'</system-out>
+		</testcase>
+		<testcase name="Mutant #40" file="api/access.py" line="40">
+			<system-out>AI_REQUIRED_PACKAGE = 'manual'</system-out>
+		</testcase>
+		<testcase name="Mutant #41" file="api/access.py" line="47">
+			<system-out>def role_label(role, department_label=''):</system-out>
+		</testcase>
+		<testcase name="Mutant #42" file="api/access.py" line="48">
+			<system-out>    rid = normalize_role(role)</system-out>
+		</testcase>
+		<testcase name="Mutant #43" file="api/access.py" line="49">
+			<system-out>    base = dict(ROLE_CHOICES).get(rid, rid)</system-out>
+		</testcase>
+		<testcase name="Mutant #44" file="api/access.py" line="50">
+			<system-out>    if department_label and department_label != 'خدمات پس از فروش':</system-out>
+		</testcase>
+		<testcase name="Mutant #45" file="api/access.py" line="50">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -47,7 +47,7 @@
+ def role_label(role, department_label=''):
+     rid = normalize_role(role)
+     base = dict(ROLE_CHOICES).get(rid, rid)
+-    if department_label and department_label != 'خدمات پس از فروش':
++    if department_label and department_label != 'XXخدمات پس از فروشXX':
+         return base.replace('خدمات پس از فروش', department_label)
+     return base
+ 
+</failure>
+			<system-out>    if department_label and department_label != 'خدمات پس از فروش':</system-out>
+		</testcase>
+		<testcase name="Mutant #46" file="api/access.py" line="50">
+			<system-out>    if department_label and department_label != 'خدمات پس از فروش':</system-out>
+		</testcase>
+		<testcase name="Mutant #47" file="api/access.py" line="51">
+			<system-out>        return base.replace('خدمات پس از فروش', department_label)</system-out>
+		</testcase>
+		<testcase name="Mutant #48" file="api/access.py" line="61">
+			<system-out>            company=company, value=key, defaults={'is_builtin': True})</system-out>
+		</testcase>
+		<testcase name="Mutant #49" file="api/access.py" line="61">
+			<system-out>            company=company, value=key, defaults={'is_builtin': True})</system-out>
+		</testcase>
+		<testcase name="Mutant #50" file="api/access.py" line="68">
+			<system-out>    value = (value or '').strip()</system-out>
+		</testcase>
+		<testcase name="Mutant #51" file="api/access.py" line="68">
+			<system-out>    value = (value or '').strip()</system-out>
+		</testcase>
+		<testcase name="Mutant #52" file="api/access.py" line="68">
+			<system-out>    value = (value or '').strip()</system-out>
+		</testcase>
+		<testcase name="Mutant #53" file="api/access.py" line="69">
+			<system-out>    if not value:</system-out>
+		</testcase>
+		<testcase name="Mutant #54" file="api/access.py" line="73">
+			<system-out>        defaults={'is_builtin': value in VALID_ROLES})</system-out>
+		</testcase>
+		<testcase name="Mutant #55" file="api/access.py" line="73">
+			<system-out>        defaults={'is_builtin': value in VALID_ROLES})</system-out>
+		</testcase>
+		<testcase name="Mutant #56" file="api/access.py" line="84">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -81,7 +81,7 @@
+     hides a role someone actually has.
+     &quot;&quot;&quot;
+     from .models import CompanyRole, PortalUser  # lazy
+-    rows = list(CompanyRole.objects.filter(company=company))
++    rows = None
+     if not rows:
+         seed_company_roles(company)
+         rows = list(CompanyRole.objects.filter(company=company))
+</failure>
+			<system-out>    rows = list(CompanyRole.objects.filter(company=company))</system-out>
+		</testcase>
+		<testcase name="Mutant #57" file="api/access.py" line="85">
+			<system-out>    if not rows:</system-out>
+		</testcase>
+		<testcase name="Mutant #58" file="api/access.py" line="86">
+			<system-out>        seed_company_roles(company)</system-out>
+		</testcase>
+		<testcase name="Mutant #59" file="api/access.py" line="87">
+			<system-out>        rows = list(CompanyRole.objects.filter(company=company))</system-out>
+		</testcase>
+		<testcase name="Mutant #60" file="api/access.py" line="89">
+			<system-out>            .values_list('role', flat=True) if r}</system-out>
+		</testcase>
+		<testcase name="Mutant #61" file="api/access.py" line="89">
+			<system-out>            .values_list('role', flat=True) if r}</system-out>
+		</testcase>
+		<testcase name="Mutant #62" file="api/access.py" line="89">
+			<system-out>            .values_list('role', flat=True) if r}</system-out>
+		</testcase>
+		<testcase name="Mutant #63" file="api/access.py" line="90">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -87,7 +87,7 @@
+         rows = list(CompanyRole.objects.filter(company=company))
+     used = {r for r in PortalUser.objects.filter(company=company)
+             .values_list('role', flat=True) if r}
+-    dept = company.department_label
++    dept = None
+     known = set()
+     opts = []
+     for r in rows:
+</failure>
+			<system-out>    dept = company.department_label</system-out>
+		</testcase>
+		<testcase name="Mutant #64" file="api/access.py" line="91">
+			<system-out>    known = set()</system-out>
+		</testcase>
+		<testcase name="Mutant #65" file="api/access.py" line="92">
+			<system-out>    opts = []</system-out>
+		</testcase>
+		<testcase name="Mutant #66" file="api/access.py" line="95">
+			<system-out>        opts.append({'value': r.value, 'label': role_label(r.value, dept),</system-out>
+		</testcase>
+		<testcase name="Mutant #67" file="api/access.py" line="95">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -92,7 +92,7 @@
+     opts = []
+     for r in rows:
+         known.add(r.value)
+-        opts.append({'value': r.value, 'label': role_label(r.value, dept),
++        opts.append({'value': r.value, 'XXlabelXX': role_label(r.value, dept),
+                      'builtin': r.is_builtin, 'in_use': r.value in used})
+     for v in sorted(used - known):
+         opts.append({'value': v, 'label': role_label(v, dept),
+</failure>
+			<system-out>        opts.append({'value': r.value, 'label': role_label(r.value, dept),</system-out>
+		</testcase>
+		<testcase name="Mutant #68" file="api/access.py" line="96">
+			<system-out>                     'builtin': r.is_builtin, 'in_use': r.value in used})</system-out>
+		</testcase>
+		<testcase name="Mutant #69" file="api/access.py" line="96">
+			<system-out>                     'builtin': r.is_builtin, 'in_use': r.value in used})</system-out>
+		</testcase>
+		<testcase name="Mutant #70" file="api/access.py" line="96">
+			<system-out>                     'builtin': r.is_builtin, 'in_use': r.value in used})</system-out>
+		</testcase>
+		<testcase name="Mutant #71" file="api/access.py" line="97">
+			<system-out>    for v in sorted(used - known):</system-out>
+		</testcase>
+		<testcase name="Mutant #72" file="api/access.py" line="98">
+			<system-out>        opts.append({'value': v, 'label': role_label(v, dept),</system-out>
+		</testcase>
+		<testcase name="Mutant #73" file="api/access.py" line="98">
+			<system-out>        opts.append({'value': v, 'label': role_label(v, dept),</system-out>
+		</testcase>
+		<testcase name="Mutant #74" file="api/access.py" line="99">
+			<system-out>                     'builtin': False, 'in_use': True})</system-out>
+		</testcase>
+		<testcase name="Mutant #75" file="api/access.py" line="99">
+			<system-out>                     'builtin': False, 'in_use': True})</system-out>
+		</testcase>
+		<testcase name="Mutant #76" file="api/access.py" line="99">
+			<system-out>                     'builtin': False, 'in_use': True})</system-out>
+		</testcase>
+		<testcase name="Mutant #77" file="api/access.py" line="99">
+			<system-out>                     'builtin': False, 'in_use': True})</system-out>
+		</testcase>
+		<testcase name="Mutant #78" file="api/access.py" line="105">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -102,7 +102,7 @@
+ 
+ def role_can_manage(actor_role, target_role):
+     &quot;&quot;&quot;Higher-level roles inherit authority over lower-level roles.&quot;&quot;&quot;
+-    a = ROLE_LEVEL.get(normalize_role(actor_role), 99)
++    a = ROLE_LEVEL.get(normalize_role(actor_role), 100)
+     t = ROLE_LEVEL.get(normalize_role(target_role), 99)
+     return a &lt; t
+ 
+</failure>
+			<system-out>    a = ROLE_LEVEL.get(normalize_role(actor_role), 99)</system-out>
+		</testcase>
+		<testcase name="Mutant #79" file="api/access.py" line="105">
+			<system-out>    a = ROLE_LEVEL.get(normalize_role(actor_role), 99)</system-out>
+		</testcase>
+		<testcase name="Mutant #80" file="api/access.py" line="106">
+			<system-out>    t = ROLE_LEVEL.get(normalize_role(target_role), 99)</system-out>
+		</testcase>
+		<testcase name="Mutant #81" file="api/access.py" line="106">
+			<system-out>    t = ROLE_LEVEL.get(normalize_role(target_role), 99)</system-out>
+		</testcase>
+		<testcase name="Mutant #82" file="api/access.py" line="107">
+			<system-out>    return a &lt; t</system-out>
+		</testcase>
+		<testcase name="Mutant #83" file="api/access.py" line="118">
+			<system-out>    docs = access_row.documents or []</system-out>
+		</testcase>
+		<testcase name="Mutant #84" file="api/access.py" line="118">
+			<system-out>    docs = access_row.documents or []</system-out>
+		</testcase>
+		<testcase name="Mutant #85" file="api/access.py" line="120">
+			<system-out>        docs = [d for d in docs if d in VALID_PACKAGES]</system-out>
+		</testcase>
+		<testcase name="Mutant #86" file="api/access.py" line="120">
+			<system-out>        docs = [d for d in docs if d in VALID_PACKAGES]</system-out>
+		</testcase>
+		<testcase name="Mutant #87" file="api/access.py" line="121">
+			<system-out>        if company_scope is not None:</system-out>
+		</testcase>
+		<testcase name="Mutant #88" file="api/access.py" line="122">
+			<system-out>            docs = [d for d in docs if d in company_scope]</system-out>
+		</testcase>
+		<testcase name="Mutant #89" file="api/access.py" line="122">
+			<system-out>            docs = [d for d in docs if d in company_scope]</system-out>
+		</testcase>
+		<testcase name="Mutant #90" file="api/access.py" line="124">
+			<system-out>    if company_scope is not None:</system-out>
+		</testcase>
+		<testcase name="Mutant #91" file="api/access.py" line="125">
+			<system-out>        return [d for d in company_scope if d in VALID_PACKAGES]</system-out>
+		</testcase>
+		<testcase name="Mutant #92" file="api/access.py" line="131">
+			<system-out>    pkgs = set()</system-out>
+		</testcase>
+		<testcase name="Mutant #93" file="api/access.py" line="133">
+			<system-out>        a.car_id: (a.documents or list(VALID_PACKAGES))</system-out>
+		</testcase>
+		<testcase name="Mutant #94" file="api/access.py" line="135">
+			<system-out>    }</system-out>
+		</testcase>
+		<testcase name="Mutant #95" file="api/access.py" line="136">
+			<system-out>    for a in user.car_accesses.select_related('car'):</system-out>
+		</testcase>
+		<testcase name="Mutant #96" file="api/access.py" line="139">
+			<system-out>        elif a.car_id in company_scope:</system-out>
+		</testcase>
+		<testcase name="Mutant #97" file="api/access.py" line="140">
+			<system-out>            scope = company_scope[a.car_id] or list(VALID_PACKAGES)</system-out>
+		</testcase>
+		<testcase name="Mutant #98" file="api/access.py" line="140">
+			<system-out>            scope = company_scope[a.car_id] or list(VALID_PACKAGES)</system-out>
+		</testcase>
+		<testcase name="Mutant #99" file="api/access.py" line="150">
+			<system-out>    if not isinstance(raw, list) or not raw:</system-out>
+		</testcase>
+		<testcase name="Mutant #100" file="api/access.py" line="150">
+			<system-out>    if not isinstance(raw, list) or not raw:</system-out>
+		</testcase>
+		<testcase name="Mutant #101" file="api/access.py" line="150">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -147,7 +147,7 @@
+ 
+     Returns (rows, total_seats) on success or (None, error_message) on failure.
+     &quot;&quot;&quot;
+-    if not isinstance(raw, list) or not raw:
++    if not isinstance(raw, list) and not raw:
+         return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'
+     rows = []
+     total = 0
+</failure>
+			<system-out>    if not isinstance(raw, list) or not raw:</system-out>
+		</testcase>
+		<testcase name="Mutant #102" file="api/access.py" line="151">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -148,7 +148,7 @@
+     Returns (rows, total_seats) on success or (None, error_message) on failure.
+     &quot;&quot;&quot;
+     if not isinstance(raw, list) or not raw:
+-        return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'
++        return None, 'XXحداقل یک نقش/واحد سازمانی را مشخص کنید.XX'
+     rows = []
+     total = 0
+     for item in raw[:50]:
+</failure>
+			<system-out>        return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'</system-out>
+		</testcase>
+		<testcase name="Mutant #103" file="api/access.py" line="152">
+			<system-out>    rows = []</system-out>
+		</testcase>
+		<testcase name="Mutant #104" file="api/access.py" line="153">
+			<system-out>    total = 0</system-out>
+		</testcase>
+		<testcase name="Mutant #105" file="api/access.py" line="153">
+			<system-out>    total = 0</system-out>
+		</testcase>
+		<testcase name="Mutant #106" file="api/access.py" line="154">
+			<system-out>    for item in raw[:50]:</system-out>
+		</testcase>
+		<testcase name="Mutant #107" file="api/access.py" line="155">
+			<system-out>        if not isinstance(item, dict):</system-out>
+		</testcase>
+		<testcase name="Mutant #108" file="api/access.py" line="156">
+			<system-out>            continue</system-out>
+		</testcase>
+		<testcase name="Mutant #109" file="api/access.py" line="157">
+			<system-out>        role = normalize_role(str(item.get('role') or '').strip())</system-out>
+		</testcase>
+		<testcase name="Mutant #110" file="api/access.py" line="157">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -154,7 +154,7 @@
+     for item in raw[:50]:
+         if not isinstance(item, dict):
+             continue
+-        role = normalize_role(str(item.get('role') or '').strip())
++        role = normalize_role(str(item.get('role') or 'XXXX').strip())
+         if role not in VALID_ROLES:
+             return None, 'نقش سازمانی نامعتبر است.'
+         department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]
+</failure>
+			<system-out>        role = normalize_role(str(item.get('role') or '').strip())</system-out>
+		</testcase>
+		<testcase name="Mutant #111" file="api/access.py" line="157">
+			<system-out>        role = normalize_role(str(item.get('role') or '').strip())</system-out>
+		</testcase>
+		<testcase name="Mutant #112" file="api/access.py" line="157">
+			<system-out>        role = normalize_role(str(item.get('role') or '').strip())</system-out>
+		</testcase>
+		<testcase name="Mutant #113" file="api/access.py" line="158">
+			<system-out>        if role not in VALID_ROLES:</system-out>
+		</testcase>
+		<testcase name="Mutant #114" file="api/access.py" line="159">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -156,7 +156,7 @@
+             continue
+         role = normalize_role(str(item.get('role') or '').strip())
+         if role not in VALID_ROLES:
+-            return None, 'نقش سازمانی نامعتبر است.'
++            return None, 'XXنقش سازمانی نامعتبر است.XX'
+         department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]
+         try:
+             count = int(item.get('count'))
+</failure>
+			<system-out>            return None, 'نقش سازمانی نامعتبر است.'</system-out>
+		</testcase>
+		<testcase name="Mutant #115" file="api/access.py" line="160">
+			<system-out>        department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]</system-out>
+		</testcase>
+		<testcase name="Mutant #116" file="api/access.py" line="160">
+			<system-out>        department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]</system-out>
+		</testcase>
+		<testcase name="Mutant #117" file="api/access.py" line="160">
+			<system-out>        department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]</system-out>
+		</testcase>
+		<testcase name="Mutant #118" file="api/access.py" line="160">
+			<system-out>        department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]</system-out>
+		</testcase>
+		<testcase name="Mutant #119" file="api/access.py" line="160">
+			<system-out>        department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]</system-out>
+		</testcase>
+		<testcase name="Mutant #120" file="api/access.py" line="162">
+			<system-out>            count = int(item.get('count'))</system-out>
+		</testcase>
+		<testcase name="Mutant #121" file="api/access.py" line="162">
+			<system-out>            count = int(item.get('count'))</system-out>
+		</testcase>
+		<testcase name="Mutant #122" file="api/access.py" line="163">
+			<system-out>            if count &lt; 1 or count &gt; 1000:</system-out>
+		</testcase>
+		<testcase name="Mutant #123" file="api/access.py" line="163">
+			<system-out>            if count &lt; 1 or count &gt; 1000:</system-out>
+		</testcase>
+		<testcase name="Mutant #124" file="api/access.py" line="163">
+			<system-out>            if count &lt; 1 or count &gt; 1000:</system-out>
+		</testcase>
+		<testcase name="Mutant #125" file="api/access.py" line="163">
+			<system-out>            if count &lt; 1 or count &gt; 1000:</system-out>
+		</testcase>
+		<testcase name="Mutant #126" file="api/access.py" line="163">
+			<system-out>            if count &lt; 1 or count &gt; 1000:</system-out>
+		</testcase>
+		<testcase name="Mutant #127" file="api/access.py" line="164">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -161,7 +161,7 @@
+         try:
+             count = int(item.get('count'))
+             if count &lt; 1 or count &gt; 1000:
+-                return None, 'تعداد کاربر هر نقش باید بین ۱ تا ۱۰۰۰ باشد.'
++                return None, 'XXتعداد کاربر هر نقش باید بین ۱ تا ۱۰۰۰ باشد.XX'
+         except (TypeError, ValueError):
+             return None, 'تعداد کاربر هر نقش الزامی است.'
+         note = (str(item.get('note') or '')).strip()[:500]
+</failure>
+			<system-out>                return None, 'تعداد کاربر هر نقش باید بین ۱ تا ۱۰۰۰ باشد.'</system-out>
+		</testcase>
+		<testcase name="Mutant #128" file="api/access.py" line="166">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -163,7 +163,7 @@
+             if count &lt; 1 or count &gt; 1000:
+                 return None, 'تعداد کاربر هر نقش باید بین ۱ تا ۱۰۰۰ باشد.'
+         except (TypeError, ValueError):
+-            return None, 'تعداد کاربر هر نقش الزامی است.'
++            return None, 'XXتعداد کاربر هر نقش الزامی است.XX'
+         note = (str(item.get('note') or '')).strip()[:500]
+         rows.append({'role': role, 'department': department, 'count': count, 'note': note})
+         total += count
+</failure>
+			<system-out>            return None, 'تعداد کاربر هر نقش الزامی است.'</system-out>
+		</testcase>
+		<testcase name="Mutant #129" file="api/access.py" line="167">
+			<system-out>        note = (str(item.get('note') or '')).strip()[:500]</system-out>
+		</testcase>
+		<testcase name="Mutant #130" file="api/access.py" line="167">
+			<system-out>        note = (str(item.get('note') or '')).strip()[:500]</system-out>
+		</testcase>
+		<testcase name="Mutant #131" file="api/access.py" line="167">
+			<system-out>        note = (str(item.get('note') or '')).strip()[:500]</system-out>
+		</testcase>
+		<testcase name="Mutant #132" file="api/access.py" line="167">
+			<system-out>        note = (str(item.get('note') or '')).strip()[:500]</system-out>
+		</testcase>
+		<testcase name="Mutant #133" file="api/access.py" line="167">
+			<system-out>        note = (str(item.get('note') or '')).strip()[:500]</system-out>
+		</testcase>
+		<testcase name="Mutant #134" file="api/access.py" line="168">
+			<system-out>        rows.append({'role': role, 'department': department, 'count': count, 'note': note})</system-out>
+		</testcase>
+		<testcase name="Mutant #135" file="api/access.py" line="168">
+			<system-out>        rows.append({'role': role, 'department': department, 'count': count, 'note': note})</system-out>
+		</testcase>
+		<testcase name="Mutant #136" file="api/access.py" line="168">
+			<system-out>        rows.append({'role': role, 'department': department, 'count': count, 'note': note})</system-out>
+		</testcase>
+		<testcase name="Mutant #137" file="api/access.py" line="168">
+			<system-out>        rows.append({'role': role, 'department': department, 'count': count, 'note': note})</system-out>
+		</testcase>
+		<testcase name="Mutant #138" file="api/access.py" line="169">
+			<system-out>        total += count</system-out>
+		</testcase>
+		<testcase name="Mutant #139" file="api/access.py" line="169">
+			<system-out>        total += count</system-out>
+		</testcase>
+		<testcase name="Mutant #140" file="api/access.py" line="170">
+			<system-out>    if not rows:</system-out>
+		</testcase>
+		<testcase name="Mutant #141" file="api/access.py" line="171">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -168,7 +168,7 @@
+         rows.append({'role': role, 'department': department, 'count': count, 'note': note})
+         total += count
+     if not rows:
+-        return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'
++        return None, 'XXحداقل یک نقش/واحد سازمانی را مشخص کنید.XX'
+     return rows, total
+ 
+ 
+</failure>
+			<system-out>        return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'</system-out>
+		</testcase>
+		<testcase name="Mutant #142" file="api/access.py" line="177">
+			<system-out>    if not user.ai_assistant_enabled:</system-out>
+		</testcase>
+		<testcase name="Mutant #143" file="api/access.py" line="178">
+			<system-out>        return False</system-out>
+		</testcase>
+		<testcase name="Mutant #144" file="api/access.py" line="179">
+			<system-out>    if not user.company.ai_assistant_enabled:</system-out>
+		</testcase>
+		<testcase name="Mutant #145" file="api/access.py" line="180">
+			<system-out>        return False</system-out>
+		</testcase>
+		<testcase name="Mutant #146" file="api/access.py" line="181">
+			<system-out>    return AI_REQUIRED_PACKAGE in user_package_set(user)</system-out>
+		</testcase>
+		<testcase name="Mutant #147" file="api/access.py" line="193">
+			<system-out>    ua = user.car_accesses.filter(car_id=car.id).first()</system-out>
+		</testcase>
+		<testcase name="Mutant #148" file="api/access.py" line="194">
+			<system-out>    if ua is None:</system-out>
+		</testcase>
+		<testcase name="Mutant #149" file="api/access.py" line="198">
+			<system-out>    cca = user.company.car_accesses.filter(car_id=car.id).first()</system-out>
+		</testcase>
+		<testcase name="Mutant #150" file="api/access.py" line="199">
+			<system-out>    if cca is None:</system-out>
+		</testcase>
+		<testcase name="Mutant #151" file="api/access.py" line="201">
+			<system-out>    scope = cca.documents or list(VALID_PACKAGES)</system-out>
+		</testcase>
+		<testcase name="Mutant #152" file="api/access.py" line="201">
+			<system-out>    scope = cca.documents or list(VALID_PACKAGES)</system-out>
+		</testcase>
+		<testcase name="Mutant #153" file="api/access.py" line="207">
+			<system-out>    return user_car_documents(user, car) is not None</system-out>
+		</testcase>
+		<testcase name="Mutant #154" file="api/access.py" line="223">
+			<system-out>    }</system-out>
+		</testcase>
+		<testcase name="Mutant #155" file="api/access.py" line="224">
+			<system-out>    out = {cid: set(docs) for cid, docs in company_scope.items()}</system-out>
+		</testcase>
+		<testcase name="Mutant #156" file="api/access.py" line="226">
+			<system-out>        if a.admin_granted and a.car_id not in company_scope:</system-out>
+		</testcase>
+		<testcase name="Mutant #157" file="api/access.py" line="226">
+			<system-out>        if a.admin_granted and a.car_id not in company_scope:</system-out>
+		</testcase>
+		<testcase name="Mutant #158" file="api/access.py" line="227">
+			<system-out>            out[a.car_id] = set(effective_documents(a))</system-out>
+		</testcase>
+		<testcase name="Mutant #159" file="api/access.py" line="245">
+			<system-out>    if not isinstance(accesses, list):</system-out>
+		</testcase>
+		<testcase name="Mutant #160" file="api/access.py" line="246">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -243,7 +243,7 @@
+     from django.db import transaction
+     from .models import UserCarAccess  # lazy
+     if not isinstance(accesses, list):
+-        raise ValueError('accesses must be a list')
++        raise ValueError('XXaccesses must be a listXX')
+     grantable = manager_grantable_cars(manager)
+     company_car_ids = set(employee.company.car_accesses.values_list('car_id', flat=True))
+     seen = set()
+</failure>
+			<system-out>        raise ValueError('accesses must be a list')</system-out>
+		</testcase>
+		<testcase name="Mutant #161" file="api/access.py" line="247">
+			<system-out>    grantable = manager_grantable_cars(manager)</system-out>
+		</testcase>
+		<testcase name="Mutant #162" file="api/access.py" line="248">
+			<system-out>    company_car_ids = set(employee.company.car_accesses.values_list('car_id', flat=True))</system-out>
+		</testcase>
+		<testcase name="Mutant #163" file="api/access.py" line="248">
+			<system-out>    company_car_ids = set(employee.company.car_accesses.values_list('car_id', flat=True))</system-out>
+		</testcase>
+		<testcase name="Mutant #164" file="api/access.py" line="248">
+			<system-out>    company_car_ids = set(employee.company.car_accesses.values_list('car_id', flat=True))</system-out>
+		</testcase>
+		<testcase name="Mutant #165" file="api/access.py" line="249">
+			<system-out>    seen = set()</system-out>
+		</testcase>
+		<testcase name="Mutant #166" file="api/access.py" line="254">
+			<system-out>            car_id = a.get('car_id')</system-out>
+		</testcase>
+		<testcase name="Mutant #167" file="api/access.py" line="254">
+			<system-out>            car_id = a.get('car_id')</system-out>
+		</testcase>
+		<testcase name="Mutant #168" file="api/access.py" line="255">
+			<system-out>            if car_id in seen or car_id not in grantable:</system-out>
+		</testcase>
+		<testcase name="Mutant #169" file="api/access.py" line="255">
+			<system-out>            if car_id in seen or car_id not in grantable:</system-out>
+		</testcase>
+		<testcase name="Mutant #170" file="api/access.py" line="255">
+			<system-out>            if car_id in seen or car_id not in grantable:</system-out>
+		</testcase>
+		<testcase name="Mutant #171" file="api/access.py" line="256">
+			<system-out>                continue</system-out>
+		</testcase>
+		<testcase name="Mutant #172" file="api/access.py" line="257">
+			<system-out>            allowed = grantable[car_id]</system-out>
+		</testcase>
+		<testcase name="Mutant #173" file="api/access.py" line="258">
+			<system-out>            requested = a.get('documents')</system-out>
+		</testcase>
+		<testcase name="Mutant #174" file="api/access.py" line="258">
+			<system-out>            requested = a.get('documents')</system-out>
+		</testcase>
+		<testcase name="Mutant #175" file="api/access.py" line="264">
+			<system-out>                docs = [d for d in requested if d in allowed]</system-out>
+		</testcase>
+		<testcase name="Mutant #176" file="api/access.py" line="264">
+			<system-out>                docs = [d for d in requested if d in allowed]</system-out>
+		</testcase>
+		<testcase name="Mutant #177" file="api/access.py" line="265">
+			<system-out>                if not docs:</system-out>
+		</testcase>
+		<testcase name="Mutant #178" file="api/access.py" line="266">
+			<system-out>                    continue</system-out>
+		</testcase>
+		<testcase name="Mutant #179" file="api/access.py" line="271">
+			<system-out>                docs = sorted(allowed)</system-out>
+		</testcase>
+		<testcase name="Mutant #180" file="api/access.py" line="274">
+			<system-out>                admin_granted=(car_id not in company_car_ids))</system-out>
+		</testcase>
+		<testcase name="Mutant #181" file="api/access.py" line="282">
+			<system-out>    main_dir = Path(settings.DATABASES['default']['NAME']).parent</system-out>
+		</testcase>
+		<testcase name="Mutant #182" file="api/access.py" line="282">
+			<system-out>    main_dir = Path(settings.DATABASES['default']['NAME']).parent</system-out>
+		</testcase>
+		<testcase name="Mutant #183" file="api/access.py" line="282">
+			<system-out>    main_dir = Path(settings.DATABASES['default']['NAME']).parent</system-out>
+		</testcase>
+		<testcase name="Mutant #184" file="api/access.py" line="283">
+			<system-out>    return main_dir / (car.db_address or '').replace('\\', '/')</system-out>
+		</testcase>
+		<testcase name="Mutant #185" file="api/access.py" line="283">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -280,7 +280,7 @@
+     from django.conf import settings
+     from pathlib import Path
+     main_dir = Path(settings.DATABASES['default']['NAME']).parent
+-    return main_dir / (car.db_address or '').replace('\\', '/')
++    return main_dir / (car.db_address or 'XXXX').replace('\\', '/')
+ 
+ 
+ def car_db_ready(car):
+</failure>
+			<system-out>    return main_dir / (car.db_address or '').replace('\\', '/')</system-out>
+		</testcase>
+		<testcase name="Mutant #186" file="api/access.py" line="283">
+			<system-out>    return main_dir / (car.db_address or '').replace('\\', '/')</system-out>
+		</testcase>
+		<testcase name="Mutant #187" file="api/access.py" line="283">
+			<system-out>    return main_dir / (car.db_address or '').replace('\\', '/')</system-out>
+		</testcase>
+		<testcase name="Mutant #188" file="api/access.py" line="283">
+			<system-out>    return main_dir / (car.db_address or '').replace('\\', '/')</system-out>
+		</testcase>
+		<testcase name="Mutant #189" file="api/access.py" line="292">
+			<system-out>    return bool(car.db_address) and ready_path(car_db_path(car))</system-out>
+		</testcase>
+		<testcase name="Mutant #190" file="api/access.py" line="304">
+			<system-out>    if rank &lt;= 1:</system-out>
+		</testcase>
+		<testcase name="Mutant #191" file="api/access.py" line="304">
+			<system-out>    if rank &lt;= 1:</system-out>
+		</testcase>
+		<testcase name="Mutant #192" file="api/access.py" line="305">
+			<system-out>        return 'after_sales_manager'</system-out>
+		</testcase>
+		<testcase name="Mutant #193" file="api/access.py" line="306">
+			<system-out>    if rank == 2:</system-out>
+		</testcase>
+		<testcase name="Mutant #194" file="api/access.py" line="306">
+			<system-out>    if rank == 2:</system-out>
+		</testcase>
+		<testcase name="Mutant #195" file="api/access.py" line="307">
+			<system-out>        return 'after_sales_head'</system-out>
+		</testcase>
+		<testcase name="Mutant #196" file="api/access.py" line="308">
+			<system-out>    if rank == 3:</system-out>
+		</testcase>
+		<testcase name="Mutant #197" file="api/access.py" line="308">
+			<system-out>    if rank == 3:</system-out>
+		</testcase>
+		<testcase name="Mutant #198" file="api/access.py" line="309">
+			<system-out>        return 'after_sales_supervisor'</system-out>
+		</testcase>
+		<testcase name="Mutant #199" file="api/access.py" line="310">
+			<system-out>    return 'after_sales_specialist'</system-out>
+		</testcase>
+		<testcase name="Mutant #200" file="api/access.py" line="320">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -317,7 +317,7 @@
+     default; everyone gets the AI assistant on (still gated by package + the
+     company toggle in user_ai_eligible). Fully overridable by the creator.
+     &quot;&quot;&quot;
+-    level = ROLE_LEVEL.get(normalize_role(role), 99)
++    level = ROLE_LEVEL.get(normalize_role(role), 100)
+     return {
+         'can_manage_team': level &lt;= 2,
+         'can_view_analytics': level &lt;= 3,
+</failure>
+			<system-out>    level = ROLE_LEVEL.get(normalize_role(role), 99)</system-out>
+		</testcase>
+		<testcase name="Mutant #201" file="api/access.py" line="320">
+			<system-out>    level = ROLE_LEVEL.get(normalize_role(role), 99)</system-out>
+		</testcase>
+		<testcase name="Mutant #202" file="api/access.py" line="322">
+			<system-out>        'can_manage_team': level &lt;= 2,</system-out>
+		</testcase>
+		<testcase name="Mutant #203" file="api/access.py" line="322">
+			<system-out>        'can_manage_team': level &lt;= 2,</system-out>
+		</testcase>
+		<testcase name="Mutant #204" file="api/access.py" line="322">
+			<system-out>        'can_manage_team': level &lt;= 2,</system-out>
+		</testcase>
+		<testcase name="Mutant #205" file="api/access.py" line="323">
+			<system-out>        'can_view_analytics': level &lt;= 3,</system-out>
+		</testcase>
+		<testcase name="Mutant #206" file="api/access.py" line="323">
+			<system-out>        'can_view_analytics': level &lt;= 3,</system-out>
+		</testcase>
+		<testcase name="Mutant #207" file="api/access.py" line="323">
+			<system-out>        'can_view_analytics': level &lt;= 3,</system-out>
+		</testcase>
+		<testcase name="Mutant #208" file="api/access.py" line="324">
+			<system-out>        'ai_assistant_enabled': True,</system-out>
+		</testcase>
+		<testcase name="Mutant #209" file="api/access.py" line="324">
+			<system-out>        'ai_assistant_enabled': True,</system-out>
+		</testcase>
+		<testcase name="Mutant #210" file="api/access.py" line="333">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -330,7 +330,7 @@
+ 
+     Retained only for analytics ordering; the live structure is the org graph.
+     &quot;&quot;&quot;
+-    return ROLE_LEVEL.get(normalize_role(u.role), 99)
++    return ROLE_LEVEL.get(normalize_role(u.role), 100)
+ 
+ 
+ def user_manage_scope(u):
+</failure>
+			<system-out>    return ROLE_LEVEL.get(normalize_role(u.role), 99)</system-out>
+		</testcase>
+		<testcase name="Mutant #211" file="api/access.py" line="339">
+			<system-out>    return 'subtree'</system-out>
+		</testcase>
+		<testcase name="Mutant #212" file="api/access.py" line="344">
+			<system-out>    if department_label is None:</system-out>
+		</testcase>
+		<testcase name="Mutant #213" file="api/access.py" line="345">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -342,7 +342,7 @@
+ def display_role_label(u, department_label=None):
+     &quot;&quot;&quot;Human label of ``u``'s legacy role.&quot;&quot;&quot;
+     if department_label is None:
+-        department_label = u.company.department_label if u.company_id else ''
++        department_label = u.company.department_label if u.company_id else 'XXXX'
+     return role_label(u.role, department_label)
+ 
+ 
+</failure>
+			<system-out>        department_label = u.company.department_label if u.company_id else ''</system-out>
+		</testcase>
+		<testcase name="Mutant #214" file="api/access.py" line="345">
+			<system-out>        department_label = u.company.department_label if u.company_id else ''</system-out>
+		</testcase>
+		<testcase name="Mutant #215" file="api/access.py" line="349">
+			<system-out>def manageable_user_ids(actor, include_self=False):</system-out>
+		</testcase>
+		<testcase name="Mutant #216" file="api/access.py" line="365">
+			<system-out>    graph_ids = graph_subtree_user_ids(actor, include_self=include_self)</system-out>
+		</testcase>
+		<testcase name="Mutant #217" file="api/access.py" line="366">
+			<system-out>    if graph_ids is not None:</system-out>
+		</testcase>
+		<testcase name="Mutant #218" file="api/access.py" line="368">
+			<system-out>    scope = user_manage_scope(actor)</system-out>
+		</testcase>
+		<testcase name="Mutant #219" file="api/access.py" line="369">
+			<system-out>    if scope == 'none':</system-out>
+		</testcase>
+		<testcase name="Mutant #220" file="api/access.py" line="369">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -366,7 +366,7 @@
+     if graph_ids is not None:
+         return graph_ids
+     scope = user_manage_scope(actor)
+-    if scope == 'none':
++    if scope == 'XXnoneXX':
+         ids = set()
+     elif scope == 'subtree':
+         ids = subtree_user_ids(actor)
+</failure>
+			<system-out>    if scope == 'none':</system-out>
+		</testcase>
+		<testcase name="Mutant #221" file="api/access.py" line="370">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -367,7 +367,7 @@
+         return graph_ids
+     scope = user_manage_scope(actor)
+     if scope == 'none':
+-        ids = set()
++        ids = None
+     elif scope == 'subtree':
+         ids = subtree_user_ids(actor)
+     else:
+</failure>
+			<system-out>        ids = set()</system-out>
+		</testcase>
+		<testcase name="Mutant #222" file="api/access.py" line="371">
+			<system-out>    elif scope == 'subtree':</system-out>
+		</testcase>
+		<testcase name="Mutant #223" file="api/access.py" line="371">
+			<system-out>    elif scope == 'subtree':</system-out>
+		</testcase>
+		<testcase name="Mutant #224" file="api/access.py" line="372">
+			<system-out>        ids = subtree_user_ids(actor)</system-out>
+		</testcase>
+		<testcase name="Mutant #225" file="api/access.py" line="374">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -371,7 +371,7 @@
+     elif scope == 'subtree':
+         ids = subtree_user_ids(actor)
+     else:
+-        my_rank = user_rank(actor)
++        my_rank = None
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+</failure>
+			<system-out>        my_rank = user_rank(actor)</system-out>
+		</testcase>
+		<testcase name="Mutant #226" file="api/access.py" line="378">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -375,7 +375,7 @@
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) &gt; my_rank
++            if u.id == actor.id and user_rank(u) &gt; my_rank
+         }
+     if include_self:
+         ids.add(actor.id)
+</failure>
+			<system-out>            if u.id != actor.id and user_rank(u) &gt; my_rank</system-out>
+		</testcase>
+		<testcase name="Mutant #227" file="api/access.py" line="378">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -375,7 +375,7 @@
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) &gt; my_rank
++            if u.id != actor.id and user_rank(u) &gt;= my_rank
+         }
+     if include_self:
+         ids.add(actor.id)
+</failure>
+			<system-out>            if u.id != actor.id and user_rank(u) &gt; my_rank</system-out>
+		</testcase>
+		<testcase name="Mutant #228" file="api/access.py" line="378">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -375,7 +375,7 @@
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) &gt; my_rank
++            if u.id != actor.id or user_rank(u) &gt; my_rank
+         }
+     if include_self:
+         ids.add(actor.id)
+</failure>
+			<system-out>            if u.id != actor.id and user_rank(u) &gt; my_rank</system-out>
+		</testcase>
+		<testcase name="Mutant #229" file="api/access.py" line="379">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -372,11 +372,7 @@
+         ids = subtree_user_ids(actor)
+     else:
+         my_rank = user_rank(actor)
+-        ids = {
+-            u.id for u in (PortalUser.objects
+-                           .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) &gt; my_rank
+-        }
++        ids = None
+     if include_self:
+         ids.add(actor.id)
+     return ids
+</failure>
+			<system-out>        }</system-out>
+		</testcase>
+		<testcase name="Mutant #230" file="api/access.py" line="385">
+			<system-out>def subtree_user_ids(manager, include_self=False):</system-out>
+		</testcase>
+		<testcase name="Mutant #231" file="api/access.py" line="392">
+			<system-out>    ids = set()</system-out>
+		</testcase>
+		<testcase name="Mutant #232" file="api/access.py" line="393">
+			<system-out>    frontier = [manager.id]</system-out>
+		</testcase>
+		<testcase name="Mutant #233" file="api/access.py" line="396">
+			<system-out>        .values_list('id', 'reports_to_id')</system-out>
+		</testcase>
+		<testcase name="Mutant #234" file="api/access.py" line="396">
+			<system-out>        .values_list('id', 'reports_to_id')</system-out>
+		</testcase>
+		<testcase name="Mutant #235" file="api/access.py" line="397">
+			<system-out>    )</system-out>
+		</testcase>
+		<testcase name="Mutant #236" file="api/access.py" line="398">
+			<system-out>    children = {}</system-out>
+		</testcase>
+		<testcase name="Mutant #237" file="api/access.py" line="402">
+			<error type="timeout" message="bad_timeout">--- api/access.py
++++ api/access.py
+@@ -399,7 +399,7 @@
+     for uid, parent in company_reports:
+         children.setdefault(parent, []).append(uid)
+     while frontier:
+-        cur = frontier.pop()
++        cur = None
+         for child in children.get(cur, []):
+             if child not in ids:
+                 ids.add(child)
+</error>
+			<system-out>        cur = frontier.pop()</system-out>
+		</testcase>
+		<testcase name="Mutant #238" file="api/access.py" line="404">
+			<system-out>            if child not in ids:</system-out>
+		</testcase>
+		<testcase name="Mutant #239" file="api/access.py" line="419">
+			<system-out>    seen = set()</system-out>
+		</testcase>
+		<testcase name="Mutant #240" file="api/access.py" line="420">
+			<system-out>    cur = start</system-out>
+		</testcase>
+		<testcase name="Mutant #241" file="api/access.py" line="421">
+			<system-out>    while cur is not None and cur.id not in seen:</system-out>
+		</testcase>
+		<testcase name="Mutant #242" file="api/access.py" line="421">
+			<system-out>    while cur is not None and cur.id not in seen:</system-out>
+		</testcase>
+		<testcase name="Mutant #243" file="api/access.py" line="421">
+			<error type="timeout" message="bad_timeout">--- api/access.py
++++ api/access.py
+@@ -418,7 +418,7 @@
+     &quot;&quot;&quot;
+     seen = set()
+     cur = start
+-    while cur is not None and cur.id not in seen:
++    while cur is not None or cur.id not in seen:
+         seen.add(cur.id)
+         if (cur.company_id == company_id and cur.id not in exclude_ids
+                 and cur.active and user_rank(cur) &lt; child_rank):
+</error>
+			<system-out>    while cur is not None and cur.id not in seen:</system-out>
+		</testcase>
+		<testcase name="Mutant #244" file="api/access.py" line="423">
+			<system-out>        if (cur.company_id == company_id and cur.id not in exclude_ids</system-out>
+		</testcase>
+		<testcase name="Mutant #245" file="api/access.py" line="423">
+			<system-out>        if (cur.company_id == company_id and cur.id not in exclude_ids</system-out>
+		</testcase>
+		<testcase name="Mutant #246" file="api/access.py" line="424">
+			<system-out>                and cur.active and user_rank(cur) &lt; child_rank):</system-out>
+		</testcase>
+		<testcase name="Mutant #247" file="api/access.py" line="424">
+			<system-out>                and cur.active and user_rank(cur) &lt; child_rank):</system-out>
+		</testcase>
+		<testcase name="Mutant #248" file="api/access.py" line="426">
+			<system-out>        cur = cur.reports_to</system-out>
+		</testcase>
+		<testcase name="Mutant #249" file="api/access.py" line="442">
+			<system-out>                 .select_related('reports_to'))</system-out>
+		</testcase>
+		<testcase name="Mutant #250" file="api/access.py" line="442">
+			<system-out>                 .select_related('reports_to'))</system-out>
+		</testcase>
+		<testcase name="Mutant #251" file="api/access.py" line="443">
+			<system-out>    by_id = {u.id: u for u in users}</system-out>
+		</testcase>
+		<testcase name="Mutant #252" file="api/access.py" line="444">
+			<system-out>    top = min((u for u in users if u.active), key=user_rank, default=None)</system-out>
+		</testcase>
+		<testcase name="Mutant #253" file="api/access.py" line="445">
+			<system-out>    fixed = 0</system-out>
+		</testcase>
+		<testcase name="Mutant #254" file="api/access.py" line="445">
+			<system-out>    fixed = 0</system-out>
+		</testcase>
+		<testcase name="Mutant #255" file="api/access.py" line="447">
+			<system-out>        parent = by_id.get(u.reports_to_id)</system-out>
+		</testcase>
+		<testcase name="Mutant #256" file="api/access.py" line="448">
+			<system-out>        if parent is None:</system-out>
+		</testcase>
+		<testcase name="Mutant #257" file="api/access.py" line="449">
+			<system-out>            continue</system-out>
+		</testcase>
+		<testcase name="Mutant #258" file="api/access.py" line="450">
+			<system-out>        my_rank = user_rank(u)</system-out>
+		</testcase>
+		<testcase name="Mutant #259" file="api/access.py" line="451">
+			<system-out>        if user_rank(parent) &lt; my_rank and parent.id != u.id:</system-out>
+		</testcase>
+		<testcase name="Mutant #260" file="api/access.py" line="451">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -448,7 +448,7 @@
+         if parent is None:
+             continue
+         my_rank = user_rank(u)
+-        if user_rank(parent) &lt; my_rank and parent.id != u.id:
++        if user_rank(parent) &lt; my_rank and parent.id == u.id:
+             continue
+         new_parent = find_valid_supervisor(
+             parent, my_rank, company_id, exclude_ids={u.id})
+</failure>
+			<system-out>        if user_rank(parent) &lt; my_rank and parent.id != u.id:</system-out>
+		</testcase>
+		<testcase name="Mutant #261" file="api/access.py" line="451">
+			<system-out>        if user_rank(parent) &lt; my_rank and parent.id != u.id:</system-out>
+		</testcase>
+		<testcase name="Mutant #262" file="api/access.py" line="452">
+			<system-out>            continue</system-out>
+		</testcase>
+		<testcase name="Mutant #263" file="api/access.py" line="454">
+			<system-out>            parent, my_rank, company_id, exclude_ids={u.id})</system-out>
+		</testcase>
+		<testcase name="Mutant #264" file="api/access.py" line="455">
+			<system-out>        if new_parent is None and top is not None and top.id != u.id \</system-out>
+		</testcase>
+		<testcase name="Mutant #265" file="api/access.py" line="455">
+			<system-out>        if new_parent is None and top is not None and top.id != u.id \</system-out>
+		</testcase>
+		<testcase name="Mutant #266" file="api/access.py" line="455">
+			<system-out>        if new_parent is None and top is not None and top.id != u.id \</system-out>
+		</testcase>
+		<testcase name="Mutant #267" file="api/access.py" line="456">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -453,7 +453,7 @@
+         new_parent = find_valid_supervisor(
+             parent, my_rank, company_id, exclude_ids={u.id})
+         if new_parent is None and top is not None and top.id != u.id \
+-                and user_rank(top) &lt; my_rank:
++                and user_rank(top) &lt;= my_rank:
+             new_parent = top
+         if new_parent is not None and new_parent.id == u.reports_to_id:
+             continue
+</failure>
+			<system-out>                and user_rank(top) &lt; my_rank:</system-out>
+		</testcase>
+		<testcase name="Mutant #268" file="api/access.py" line="456">
+			<system-out>                and user_rank(top) &lt; my_rank:</system-out>
+		</testcase>
+		<testcase name="Mutant #269" file="api/access.py" line="457">
+			<system-out>            new_parent = top</system-out>
+		</testcase>
+		<testcase name="Mutant #270" file="api/access.py" line="458">
+			<system-out>        if new_parent is not None and new_parent.id == u.reports_to_id:</system-out>
+		</testcase>
+		<testcase name="Mutant #271" file="api/access.py" line="458">
+			<system-out>        if new_parent is not None and new_parent.id == u.reports_to_id:</system-out>
+		</testcase>
+		<testcase name="Mutant #272" file="api/access.py" line="458">
+			<system-out>        if new_parent is not None and new_parent.id == u.reports_to_id:</system-out>
+		</testcase>
+		<testcase name="Mutant #273" file="api/access.py" line="459">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -456,7 +456,7 @@
+                 and user_rank(top) &lt; my_rank:
+             new_parent = top
+         if new_parent is not None and new_parent.id == u.reports_to_id:
+-            continue
++            break
+         u.reports_to = new_parent
+         u.save(update_fields=['reports_to'])
+         fixed += 1
+</failure>
+			<system-out>            continue</system-out>
+		</testcase>
+		<testcase name="Mutant #274" file="api/access.py" line="460">
+			<system-out>        u.reports_to = new_parent</system-out>
+		</testcase>
+		<testcase name="Mutant #275" file="api/access.py" line="461">
+			<system-out>        u.save(update_fields=['reports_to'])</system-out>
+		</testcase>
+		<testcase name="Mutant #276" file="api/access.py" line="462">
+			<system-out>        fixed += 1</system-out>
+		</testcase>
+		<testcase name="Mutant #277" file="api/access.py" line="462">
+			<system-out>        fixed += 1</system-out>
+		</testcase>
+		<testcase name="Mutant #278" file="api/access.py" line="462">
+			<system-out>        fixed += 1</system-out>
+		</testcase>
+		<testcase name="Mutant #279" file="api/access.py" line="476">
+			<system-out>    if not actor or not target or not getattr(actor, 'can_manage_team', False):</system-out>
+		</testcase>
+		<testcase name="Mutant #280" file="api/access.py" line="476">
+			<system-out>    if not actor or not target or not getattr(actor, 'can_manage_team', False):</system-out>
+		</testcase>
+		<testcase name="Mutant #281" file="api/access.py" line="476">
+			<system-out>    if not actor or not target or not getattr(actor, 'can_manage_team', False):</system-out>
+		</testcase>
+		<testcase name="Mutant #282" file="api/access.py" line="476">
+			<system-out>    if not actor or not target or not getattr(actor, 'can_manage_team', False):</system-out>
+		</testcase>
+		<testcase name="Mutant #283" file="api/access.py" line="476">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -473,7 +473,7 @@
+     unmanageable). The rank check survives only on the legacy path, for an
+     actor with no seat. This is the authorization spine for every team write.
+     &quot;&quot;&quot;
+-    if not actor or not target or not getattr(actor, 'can_manage_team', False):
++    if not actor or not target or not getattr(actor, 'can_manage_team', True):
+         return False
+     if actor.id == target.id:
+         return False
+</failure>
+			<system-out>    if not actor or not target or not getattr(actor, 'can_manage_team', False):</system-out>
+		</testcase>
+		<testcase name="Mutant #284" file="api/access.py" line="476">
+			<system-out>    if not actor or not target or not getattr(actor, 'can_manage_team', False):</system-out>
+		</testcase>
+		<testcase name="Mutant #285" file="api/access.py" line="477">
+			<system-out>        return False</system-out>
+		</testcase>
+		<testcase name="Mutant #286" file="api/access.py" line="478">
+			<system-out>    if actor.id == target.id:</system-out>
+		</testcase>
+		<testcase name="Mutant #287" file="api/access.py" line="479">
+			<system-out>        return False</system-out>
+		</testcase>
+		<testcase name="Mutant #288" file="api/access.py" line="480">
+			<system-out>    if actor.company_id != target.company_id:</system-out>
+		</testcase>
+		<testcase name="Mutant #289" file="api/access.py" line="481">
+			<system-out>        return False</system-out>
+		</testcase>
+		<testcase name="Mutant #290" file="api/access.py" line="483">
+			<system-out>    graph_ids = graph_subtree_user_ids(actor)</system-out>
+		</testcase>
+		<testcase name="Mutant #291" file="api/access.py" line="484">
+			<system-out>    if graph_ids is not None:</system-out>
+		</testcase>
+		<testcase name="Mutant #292" file="api/access.py" line="485">
+			<system-out>        return target.id in graph_ids</system-out>
+		</testcase>
+		<testcase name="Mutant #293" file="api/access.py" line="486">
+			<system-out>    if user_rank(actor) &gt;= user_rank(target):</system-out>
+		</testcase>
+		<testcase name="Mutant #294" file="api/access.py" line="487">
+			<system-out>        return False</system-out>
+		</testcase>
+		<testcase name="Mutant #295" file="api/access.py" line="488">
+			<system-out>    return target.id in manageable_user_ids(actor)</system-out>
+		</testcase>
+		<testcase name="Mutant #296" file="api/access.py" line="491">
+			<system-out>def apply_user_access(user, accesses, override_purchase=False, allow_admin_grants=False):</system-out>
+		</testcase>
+		<testcase name="Mutant #297" file="api/access.py" line="491">
+			<system-out>def apply_user_access(user, accesses, override_purchase=False, allow_admin_grants=False):</system-out>
+		</testcase>
+		<testcase name="Mutant #298" file="api/access.py" line="502">
+			<system-out>    if not isinstance(accesses, list):</system-out>
+		</testcase>
+		<testcase name="Mutant #299" file="api/access.py" line="503">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -500,7 +500,7 @@
+     from django.db import transaction
+     from .models import Car, UserCarAccess  # lazy
+     if not isinstance(accesses, list):
+-        raise ValueError('accesses must be a list')
++        raise ValueError('XXaccesses must be a listXX')
+     company_scope = {
+         a.car_id: (set(a.documents) if a.documents else set(VALID_DOCS))
+         for a in user.company.car_accesses.all()
+</failure>
+			<system-out>        raise ValueError('accesses must be a list')</system-out>
+		</testcase>
+		<testcase name="Mutant #300" file="api/access.py" line="507">
+			<system-out>    }</system-out>
+		</testcase>
+		<testcase name="Mutant #301" file="api/access.py" line="512">
+			<system-out>    seen = set()</system-out>
+		</testcase>
+		<testcase name="Mutant #302" file="api/access.py" line="516">
+			<system-out>            car_id = a.get('car_id')</system-out>
+		</testcase>
+		<testcase name="Mutant #303" file="api/access.py" line="516">
+			<system-out>            car_id = a.get('car_id')</system-out>
+		</testcase>
+		<testcase name="Mutant #304" file="api/access.py" line="517">
+			<system-out>            if car_id in seen:</system-out>
+		</testcase>
+		<testcase name="Mutant #305" file="api/access.py" line="518">
+			<system-out>                continue</system-out>
+		</testcase>
+		<testcase name="Mutant #306" file="api/access.py" line="519">
+			<system-out>            if not Car.objects.filter(id=car_id).exists():</system-out>
+		</testcase>
+		<testcase name="Mutant #307" file="api/access.py" line="520">
+			<system-out>                continue</system-out>
+		</testcase>
+		<testcase name="Mutant #308" file="api/access.py" line="521">
+			<system-out>            wants_admin = allow_admin_grants and (bool(a.get('admin_granted')) or override_purchase)</system-out>
+		</testcase>
+		<testcase name="Mutant #309" file="api/access.py" line="521">
+			<system-out>            wants_admin = allow_admin_grants and (bool(a.get('admin_granted')) or override_purchase)</system-out>
+		</testcase>
+		<testcase name="Mutant #310" file="api/access.py" line="521">
+			<system-out>            wants_admin = allow_admin_grants and (bool(a.get('admin_granted')) or override_purchase)</system-out>
+		</testcase>
+		<testcase name="Mutant #311" file="api/access.py" line="521">
+			<system-out>            wants_admin = allow_admin_grants and (bool(a.get('admin_granted')) or override_purchase)</system-out>
+		</testcase>
+		<testcase name="Mutant #312" file="api/access.py" line="523">
+			<system-out>                docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]</system-out>
+		</testcase>
+		<testcase name="Mutant #313" file="api/access.py" line="523">
+			<system-out>                docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]</system-out>
+		</testcase>
+		<testcase name="Mutant #314" file="api/access.py" line="523">
+			<system-out>                docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]</system-out>
+		</testcase>
+		<testcase name="Mutant #315" file="api/access.py" line="523">
+			<system-out>                docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]</system-out>
+		</testcase>
+		<testcase name="Mutant #316" file="api/access.py" line="524">
+			<system-out>                UserCarAccess.objects.create(user=user, car_id=car_id, documents=docs, admin_granted=True)</system-out>
+		</testcase>
+		<testcase name="Mutant #317" file="api/access.py" line="526">
+			<system-out>                continue</system-out>
+		</testcase>
+		<testcase name="Mutant #318" file="api/access.py" line="527">
+			<system-out>            if car_id not in company_scope:</system-out>
+		</testcase>
+		<testcase name="Mutant #319" file="api/access.py" line="528">
+			<system-out>                continue</system-out>
+		</testcase>
+		<testcase name="Mutant #320" file="api/access.py" line="529">
+			<system-out>            docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]</system-out>
+		</testcase>
+		<testcase name="Mutant #321" file="api/access.py" line="529">
+			<system-out>            docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]</system-out>
+		</testcase>
+		<testcase name="Mutant #322" file="api/access.py" line="529">
+			<system-out>            docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]</system-out>
+		</testcase>
+		<testcase name="Mutant #323" file="api/access.py" line="529">
+			<system-out>            docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]</system-out>
+		</testcase>
+		<testcase name="Mutant #324" file="api/access.py" line="543">
+			<system-out>    ('engine',      {'fa': 'موتور',                 'en': 'Engine',</system-out>
+		</testcase>
+		<testcase name="Mutant #325" file="api/access.py" line="543">
+			<system-out>    ('engine',      {'fa': 'موتور',                 'en': 'Engine',</system-out>
+		</testcase>
+		<testcase name="Mutant #326" file="api/access.py" line="543">
+			<system-out>    ('engine',      {'fa': 'موتور',                 'en': 'Engine',</system-out>
+		</testcase>
+		<testcase name="Mutant #327" file="api/access.py" line="543">
+			<system-out>    ('engine',      {'fa': 'موتور',                 'en': 'Engine',</system-out>
+		</testcase>
+		<testcase name="Mutant #328" file="api/access.py" line="543">
+			<system-out>    ('engine',      {'fa': 'موتور',                 'en': 'Engine',</system-out>
+		</testcase>
+		<testcase name="Mutant #329" file="api/access.py" line="544">
+			<system-out>                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #330" file="api/access.py" line="544">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -541,7 +541,7 @@
+ 
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+-                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),
++                     'aliases': ['XXengine mechanicalXX', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+</failure>
+			<system-out>                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #331" file="api/access.py" line="544">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -541,7 +541,7 @@
+ 
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+-                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),
++                     'aliases': ['engine mechanical', 'XXengine performanceXX', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+</failure>
+			<system-out>                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #332" file="api/access.py" line="544">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -541,7 +541,7 @@
+ 
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+-                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),
++                     'aliases': ['engine mechanical', 'engine performance', 'XXengineXX']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+</failure>
+			<system-out>                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #333" file="api/access.py" line="545">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -542,7 +542,7 @@
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+-    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
++    ('XXtransmissionXX', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+</failure>
+			<system-out>    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',</system-out>
+		</testcase>
+		<testcase name="Mutant #334" file="api/access.py" line="545">
+			<system-out>    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',</system-out>
+		</testcase>
+		<testcase name="Mutant #335" file="api/access.py" line="545">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -542,7 +542,7 @@
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+-    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
++    ('transmission', {'fa': 'XXگیربکس و انتقال قدرتXX', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+</failure>
+			<system-out>    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',</system-out>
+		</testcase>
+		<testcase name="Mutant #336" file="api/access.py" line="545">
+			<system-out>    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',</system-out>
+		</testcase>
+		<testcase name="Mutant #337" file="api/access.py" line="545">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -542,7 +542,7 @@
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+-    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
++    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'XXTransmission &amp; DrivelineXX',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+</failure>
+			<system-out>    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',</system-out>
+		</testcase>
+		<testcase name="Mutant #338" file="api/access.py" line="546">
+			<system-out>                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #339" file="api/access.py" line="546">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+-                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['XXtransmissionXX', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+</failure>
+			<system-out>                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #340" file="api/access.py" line="546">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+-                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['transmission', 'XXdrivelines &amp; axlesXX', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+</failure>
+			<system-out>                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #341" file="api/access.py" line="546">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+-                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['transmission', 'drivelines &amp; axles', 'XXdrivelines and axlesXX', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+</failure>
+			<system-out>                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #342" file="api/access.py" line="546">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+-                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'XXdrivelineXX']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+</failure>
+			<system-out>                     'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #343" file="api/access.py" line="547">
+			<system-out>    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',</system-out>
+		</testcase>
+		<testcase name="Mutant #344" file="api/access.py" line="547">
+			<system-out>    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',</system-out>
+		</testcase>
+		<testcase name="Mutant #345" file="api/access.py" line="547">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -544,7 +544,7 @@
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+-    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
++    ('brakes',      {'fa': 'XXترمزXX',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+</failure>
+			<system-out>    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',</system-out>
+		</testcase>
+		<testcase name="Mutant #346" file="api/access.py" line="547">
+			<system-out>    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',</system-out>
+		</testcase>
+		<testcase name="Mutant #347" file="api/access.py" line="547">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -544,7 +544,7 @@
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+-    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
++    ('brakes',      {'fa': 'ترمز',                  'en': 'XXBrakesXX',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+</failure>
+			<system-out>    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',</system-out>
+		</testcase>
+		<testcase name="Mutant #348" file="api/access.py" line="548">
+			<system-out>                     'aliases': ['brakes', 'brake']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #349" file="api/access.py" line="548">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -545,7 +545,7 @@
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+-                     'aliases': ['brakes', 'brake']}),
++                     'aliases': ['XXbrakesXX', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+</failure>
+			<system-out>                     'aliases': ['brakes', 'brake']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #350" file="api/access.py" line="548">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -545,7 +545,7 @@
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission &amp; Driveline',
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+-                     'aliases': ['brakes', 'brake']}),
++                     'aliases': ['brakes', 'XXbrakeXX']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+</failure>
+			<system-out>                     'aliases': ['brakes', 'brake']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #351" file="api/access.py" line="549">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -546,7 +546,7 @@
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+-    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
++    ('XXsteeringXX',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+</failure>
+			<system-out>    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',</system-out>
+		</testcase>
+		<testcase name="Mutant #352" file="api/access.py" line="549">
+			<system-out>    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',</system-out>
+		</testcase>
+		<testcase name="Mutant #353" file="api/access.py" line="549">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -546,7 +546,7 @@
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+-    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
++    ('steering',    {'fa': 'XXفرمانXX',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+</failure>
+			<system-out>    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',</system-out>
+		</testcase>
+		<testcase name="Mutant #354" file="api/access.py" line="549">
+			<system-out>    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',</system-out>
+		</testcase>
+		<testcase name="Mutant #355" file="api/access.py" line="549">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -546,7 +546,7 @@
+                      'aliases': ['transmission', 'drivelines &amp; axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+-    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
++    ('steering',    {'fa': 'فرمان',                 'en': 'XXSteeringXX',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+</failure>
+			<system-out>    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',</system-out>
+		</testcase>
+		<testcase name="Mutant #356" file="api/access.py" line="550">
+			<system-out>                     'aliases': ['steering']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #357" file="api/access.py" line="550">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -547,7 +547,7 @@
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+-                     'aliases': ['steering']}),
++                     'aliases': ['XXsteeringXX']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+</failure>
+			<system-out>                     'aliases': ['steering']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #358" file="api/access.py" line="551">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -548,7 +548,7 @@
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+-    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
++    ('XXsuspensionXX',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+</failure>
+			<system-out>    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',</system-out>
+		</testcase>
+		<testcase name="Mutant #359" file="api/access.py" line="551">
+			<system-out>    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',</system-out>
+		</testcase>
+		<testcase name="Mutant #360" file="api/access.py" line="551">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -548,7 +548,7 @@
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+-    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
++    ('suspension',  {'fa': 'XXسیستم تعلیقXX',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+</failure>
+			<system-out>    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',</system-out>
+		</testcase>
+		<testcase name="Mutant #361" file="api/access.py" line="551">
+			<system-out>    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',</system-out>
+		</testcase>
+		<testcase name="Mutant #362" file="api/access.py" line="551">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -548,7 +548,7 @@
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+-    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
++    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'XXSuspensionXX',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+</failure>
+			<system-out>    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',</system-out>
+		</testcase>
+		<testcase name="Mutant #363" file="api/access.py" line="552">
+			<system-out>                     'aliases': ['suspension']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #364" file="api/access.py" line="552">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -549,7 +549,7 @@
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+-                     'aliases': ['suspension']}),
++                     'aliases': ['XXsuspensionXX']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+</failure>
+			<system-out>                     'aliases': ['suspension']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #365" file="api/access.py" line="553">
+			<system-out>    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',</system-out>
+		</testcase>
+		<testcase name="Mutant #366" file="api/access.py" line="553">
+			<system-out>    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',</system-out>
+		</testcase>
+		<testcase name="Mutant #367" file="api/access.py" line="553">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -550,7 +550,7 @@
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+-    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
++    ('electrical',  {'fa': 'XXبرق و الکترونیکXX',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+</failure>
+			<system-out>    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',</system-out>
+		</testcase>
+		<testcase name="Mutant #368" file="api/access.py" line="553">
+			<system-out>    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',</system-out>
+		</testcase>
+		<testcase name="Mutant #369" file="api/access.py" line="553">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -550,7 +550,7 @@
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+-    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
++    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'XXElectricalXX',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+</failure>
+			<system-out>    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',</system-out>
+		</testcase>
+		<testcase name="Mutant #370" file="api/access.py" line="554">
+			<system-out>                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #371" file="api/access.py" line="554">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -551,7 +551,7 @@
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+-                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
++                     'aliases': ['XXelectricalXX', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+</failure>
+			<system-out>                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #372" file="api/access.py" line="554">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -551,7 +551,7 @@
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+-                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
++                     'aliases': ['electrical', 'XXwiring diagramsXX', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+</failure>
+			<system-out>                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #373" file="api/access.py" line="554">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -551,7 +551,7 @@
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+-                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
++                     'aliases': ['electrical', 'wiring diagrams', 'XXwiringXX']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+</failure>
+			<system-out>                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #374" file="api/access.py" line="555">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -552,7 +552,7 @@
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+-    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
++    ('XXhvacXX',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+</failure>
+			<system-out>    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',</system-out>
+		</testcase>
+		<testcase name="Mutant #375" file="api/access.py" line="555">
+			<system-out>    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',</system-out>
+		</testcase>
+		<testcase name="Mutant #376" file="api/access.py" line="555">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -552,7 +552,7 @@
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+-    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
++    ('hvac',        {'fa': 'XXتهویه و کولر (HVAC)XX',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+</failure>
+			<system-out>    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',</system-out>
+		</testcase>
+		<testcase name="Mutant #377" file="api/access.py" line="555">
+			<system-out>    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',</system-out>
+		</testcase>
+		<testcase name="Mutant #378" file="api/access.py" line="555">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -552,7 +552,7 @@
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+-    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
++    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'XXHVACXX',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+</failure>
+			<system-out>    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',</system-out>
+		</testcase>
+		<testcase name="Mutant #379" file="api/access.py" line="556">
+			<system-out>                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',</system-out>
+		</testcase>
+		<testcase name="Mutant #380" file="api/access.py" line="556">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -553,7 +553,7 @@
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+-                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
++                     'aliases': ['XXheating, ventilation &amp; a/c (hvac)XX', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+</failure>
+			<system-out>                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',</system-out>
+		</testcase>
+		<testcase name="Mutant #381" file="api/access.py" line="556">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -553,7 +553,7 @@
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+-                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
++                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'XXhvacXX', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+</failure>
+			<system-out>                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',</system-out>
+		</testcase>
+		<testcase name="Mutant #382" file="api/access.py" line="556">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -553,7 +553,7 @@
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+-                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
++                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'XXheatingXX',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+</failure>
+			<system-out>                     'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',</system-out>
+		</testcase>
+		<testcase name="Mutant #383" file="api/access.py" line="557">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -554,7 +554,7 @@
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+-                                 'heating, ventilation &amp; a/c', 'air conditioning']}),
++                                 'XXheating, ventilation &amp; a/cXX', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+</failure>
+			<system-out>                                 'heating, ventilation &amp; a/c', 'air conditioning']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #384" file="api/access.py" line="557">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -554,7 +554,7 @@
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+-                                 'heating, ventilation &amp; a/c', 'air conditioning']}),
++                                 'heating, ventilation &amp; a/c', 'XXair conditioningXX']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+</failure>
+			<system-out>                                 'heating, ventilation &amp; a/c', 'air conditioning']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #385" file="api/access.py" line="558">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -555,7 +555,7 @@
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+-    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
++    ('XXbodyXX',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+</failure>
+			<system-out>    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',</system-out>
+		</testcase>
+		<testcase name="Mutant #386" file="api/access.py" line="558">
+			<system-out>    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',</system-out>
+		</testcase>
+		<testcase name="Mutant #387" file="api/access.py" line="558">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -555,7 +555,7 @@
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+-    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
++    ('body',        {'fa': 'XXبدنه و شاسیXX',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+</failure>
+			<system-out>    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',</system-out>
+		</testcase>
+		<testcase name="Mutant #388" file="api/access.py" line="558">
+			<system-out>    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',</system-out>
+		</testcase>
+		<testcase name="Mutant #389" file="api/access.py" line="558">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -555,7 +555,7 @@
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+-    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
++    ('body',        {'fa': 'بدنه و شاسی',           'en': 'XXBody &amp; FrameXX',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+</failure>
+			<system-out>    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',</system-out>
+		</testcase>
+		<testcase name="Mutant #390" file="api/access.py" line="559">
+			<system-out>                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #391" file="api/access.py" line="559">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+-                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['XXbody &amp; frameXX', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+</failure>
+			<system-out>                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #392" file="api/access.py" line="559">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+-                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['body &amp; frame', 'XXbody and frameXX', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+</failure>
+			<system-out>                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #393" file="api/access.py" line="559">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+-                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['body &amp; frame', 'body and frame', 'XXbodyXX', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+</failure>
+			<system-out>                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #394" file="api/access.py" line="559">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation &amp; a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+-                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'XXrestraintsXX']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+</failure>
+			<system-out>                     'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #395" file="api/access.py" line="560">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -557,7 +557,7 @@
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+-    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
++    ('XXaccessoriesXX', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+</failure>
+			<system-out>    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',</system-out>
+		</testcase>
+		<testcase name="Mutant #396" file="api/access.py" line="560">
+			<system-out>    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',</system-out>
+		</testcase>
+		<testcase name="Mutant #397" file="api/access.py" line="560">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -557,7 +557,7 @@
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+-    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
++    ('accessories', {'fa': 'XXتجهیزات و آپشنXX',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+</failure>
+			<system-out>    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',</system-out>
+		</testcase>
+		<testcase name="Mutant #398" file="api/access.py" line="560">
+			<system-out>    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',</system-out>
+		</testcase>
+		<testcase name="Mutant #399" file="api/access.py" line="560">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -557,7 +557,7 @@
+                                  'heating, ventilation &amp; a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+-    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
++    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'XXAccessories &amp; EquipmentXX',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+</failure>
+			<system-out>    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',</system-out>
+		</testcase>
+		<testcase name="Mutant #400" file="api/access.py" line="561">
+			<system-out>                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #401" file="api/access.py" line="561">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -558,7 +558,7 @@
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+-                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
++                     'aliases': ['XXaccessories &amp; equipmentXX', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+</failure>
+			<system-out>                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #402" file="api/access.py" line="561">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -558,7 +558,7 @@
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+-                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
++                     'aliases': ['accessories &amp; equipment', 'XXaccessories and equipmentXX', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+</failure>
+			<system-out>                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #403" file="api/access.py" line="561">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -558,7 +558,7 @@
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body &amp; Frame',
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+-                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
++                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'XXaccessoriesXX']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+</failure>
+			<system-out>                     'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #404" file="api/access.py" line="562">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -559,7 +559,7 @@
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+-    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
++    ('XXmaintenanceXX', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+</failure>
+			<system-out>    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',</system-out>
+		</testcase>
+		<testcase name="Mutant #405" file="api/access.py" line="562">
+			<system-out>    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',</system-out>
+		</testcase>
+		<testcase name="Mutant #406" file="api/access.py" line="562">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -559,7 +559,7 @@
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+-    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
++    ('maintenance', {'fa': 'XXسرویس و نگهداریXX',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+</failure>
+			<system-out>    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',</system-out>
+		</testcase>
+		<testcase name="Mutant #407" file="api/access.py" line="562">
+			<system-out>    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',</system-out>
+		</testcase>
+		<testcase name="Mutant #408" file="api/access.py" line="562">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -559,7 +559,7 @@
+                      'aliases': ['body &amp; frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+-    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
++    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'XXMaintenanceXX',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+</failure>
+			<system-out>    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',</system-out>
+		</testcase>
+		<testcase name="Mutant #409" file="api/access.py" line="563">
+			<system-out>                     'aliases': ['maintenance', 'quick lookups', 'general information']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #410" file="api/access.py" line="563">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -560,7 +560,7 @@
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+-                     'aliases': ['maintenance', 'quick lookups', 'general information']}),
++                     'aliases': ['XXmaintenanceXX', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+</failure>
+			<system-out>                     'aliases': ['maintenance', 'quick lookups', 'general information']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #411" file="api/access.py" line="563">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -560,7 +560,7 @@
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+-                     'aliases': ['maintenance', 'quick lookups', 'general information']}),
++                     'aliases': ['maintenance', 'XXquick lookupsXX', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+</failure>
+			<system-out>                     'aliases': ['maintenance', 'quick lookups', 'general information']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #412" file="api/access.py" line="563">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -560,7 +560,7 @@
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories &amp; Equipment',
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+-                     'aliases': ['maintenance', 'quick lookups', 'general information']}),
++                     'aliases': ['maintenance', 'quick lookups', 'XXgeneral informationXX']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+</failure>
+			<system-out>                     'aliases': ['maintenance', 'quick lookups', 'general information']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #413" file="api/access.py" line="564">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -561,7 +561,7 @@
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+-    ('other',       {'fa': 'سایر',                  'en': 'Other',
++    ('XXotherXX',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+ 
+</failure>
+			<system-out>    ('other',       {'fa': 'سایر',                  'en': 'Other',</system-out>
+		</testcase>
+		<testcase name="Mutant #414" file="api/access.py" line="564">
+			<system-out>    ('other',       {'fa': 'سایر',                  'en': 'Other',</system-out>
+		</testcase>
+		<testcase name="Mutant #415" file="api/access.py" line="564">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -561,7 +561,7 @@
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+-    ('other',       {'fa': 'سایر',                  'en': 'Other',
++    ('other',       {'fa': 'XXسایرXX',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+ 
+</failure>
+			<system-out>    ('other',       {'fa': 'سایر',                  'en': 'Other',</system-out>
+		</testcase>
+		<testcase name="Mutant #416" file="api/access.py" line="564">
+			<system-out>    ('other',       {'fa': 'سایر',                  'en': 'Other',</system-out>
+		</testcase>
+		<testcase name="Mutant #417" file="api/access.py" line="564">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -561,7 +561,7 @@
+                      'aliases': ['accessories &amp; equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+-    ('other',       {'fa': 'سایر',                  'en': 'Other',
++    ('other',       {'fa': 'سایر',                  'en': 'XXOtherXX',
+                      'aliases': ['external pages']}),
+ ]
+ 
+</failure>
+			<system-out>    ('other',       {'fa': 'سایر',                  'en': 'Other',</system-out>
+		</testcase>
+		<testcase name="Mutant #418" file="api/access.py" line="565">
+			<system-out>                     'aliases': ['external pages']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #419" file="api/access.py" line="565">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -562,7 +562,7 @@
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+-                     'aliases': ['external pages']}),
++                     'aliases': ['XXexternal pagesXX']}),
+ ]
+ 
+ CATEGORY_MAP = dict(CONTENT_CATEGORIES)
+</failure>
+			<system-out>                     'aliases': ['external pages']}),</system-out>
+		</testcase>
+		<testcase name="Mutant #420" file="api/access.py" line="566">
+			<system-out>]</system-out>
+		</testcase>
+		<testcase name="Mutant #421" file="api/access.py" line="568">
+			<system-out>CATEGORY_MAP = dict(CONTENT_CATEGORIES)</system-out>
+		</testcase>
+		<testcase name="Mutant #422" file="api/access.py" line="569">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -566,7 +566,7 @@
+ ]
+ 
+ CATEGORY_MAP = dict(CONTENT_CATEGORIES)
+-VALID_CATEGORIES = {c for c, _ in CONTENT_CATEGORIES}
++VALID_CATEGORIES = None
+ 
+ # Reverse lookup: normalized raw title -&gt; canonical id.
+ _CATEGORY_ALIAS = {}
+</failure>
+			<system-out>VALID_CATEGORIES = {c for c, _ in CONTENT_CATEGORIES}</system-out>
+		</testcase>
+		<testcase name="Mutant #423" file="api/access.py" line="572">
+			<system-out>_CATEGORY_ALIAS = {}</system-out>
+		</testcase>
+		<testcase name="Mutant #424" file="api/access.py" line="574">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -571,7 +571,7 @@
+ # Reverse lookup: normalized raw title -&gt; canonical id.
+ _CATEGORY_ALIAS = {}
+ for _cid, _meta in CONTENT_CATEGORIES:
+-    _CATEGORY_ALIAS[_cid] = _cid
++    _CATEGORY_ALIAS[_cid] = None
+     for _al in _meta['aliases']:
+         _CATEGORY_ALIAS[_al] = _cid
+ 
+</failure>
+			<system-out>    _CATEGORY_ALIAS[_cid] = _cid</system-out>
+		</testcase>
+		<testcase name="Mutant #425" file="api/access.py" line="575">
+			<system-out>    for _al in _meta['aliases']:</system-out>
+		</testcase>
+		<testcase name="Mutant #426" file="api/access.py" line="576">
+			<system-out>        _CATEGORY_ALIAS[_al] = _cid</system-out>
+		</testcase>
+		<testcase name="Mutant #427" file="api/access.py" line="579">
+			<system-out>def category_label(cid, lang='fa'):</system-out>
+		</testcase>
+		<testcase name="Mutant #428" file="api/access.py" line="580">
+			<system-out>    meta = CATEGORY_MAP.get(cid)</system-out>
+		</testcase>
+		<testcase name="Mutant #429" file="api/access.py" line="585">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -582,7 +582,7 @@
+ 
+ 
+ def _normalize_title(s):
+-    return (str(s or '')).strip().lower()
++    return (str(s or 'XXXX')).strip().lower()
+ 
+ 
+ def resolve_category(segments_or_path):
+</failure>
+			<system-out>    return (str(s or '')).strip().lower()</system-out>
+		</testcase>
+		<testcase name="Mutant #430" file="api/access.py" line="585">
+			<system-out>    return (str(s or '')).strip().lower()</system-out>
+		</testcase>
+		<testcase name="Mutant #431" file="api/access.py" line="597">
+			<system-out>    if not segments_or_path:</system-out>
+		</testcase>
+		<testcase name="Mutant #432" file="api/access.py" line="598">
+			<system-out>        return ''</system-out>
+		</testcase>
+		<testcase name="Mutant #433" file="api/access.py" line="600">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -597,7 +597,7 @@
+     if not segments_or_path:
+         return ''
+     if isinstance(segments_or_path, str):
+-        segments = [s for s in segments_or_path.split('/') if s]
++        segments = [s for s in segments_or_path.split('XX/XX') if s]
+     else:
+         segments = [s for s in segments_or_path if s]
+     for seg in segments:
+</failure>
+			<system-out>        segments = [s for s in segments_or_path.split('/') if s]</system-out>
+		</testcase>
+		<testcase name="Mutant #434" file="api/access.py" line="600">
+			<system-out>        segments = [s for s in segments_or_path.split('/') if s]</system-out>
+		</testcase>
+		<testcase name="Mutant #435" file="api/access.py" line="602">
+			<system-out>        segments = [s for s in segments_or_path if s]</system-out>
+		</testcase>
+		<testcase name="Mutant #436" file="api/access.py" line="604">
+			<failure type="failure" message="bad_survived">--- api/access.py
++++ api/access.py
+@@ -601,7 +601,7 @@
+     else:
+         segments = [s for s in segments_or_path if s]
+     for seg in segments:
+-        cid = _CATEGORY_ALIAS.get(_normalize_title(seg))
++        cid = None
+         if cid:
+             return cid
+     # Substring fallback (titles like &quot;Engine Mechanical &gt; ...&quot;).
+</failure>
+			<system-out>        cid = _CATEGORY_ALIAS.get(_normalize_title(seg))</system-out>
+		</testcase>
+		<testcase name="Mutant #437" file="api/access.py" line="609">
+			<system-out>        norm = _normalize_title(seg)</system-out>
+		</testcase>
+		<testcase name="Mutant #438" file="api/access.py" line="611">
+			<system-out>            if alias and alias in norm:</system-out>
+		</testcase>
+		<testcase name="Mutant #439" file="api/access.py" line="611">
+			<system-out>            if alias and alias in norm:</system-out>
+		</testcase>
+		<testcase name="Mutant #440" file="api/access.py" line="613">
+			<system-out>    return 'other'</system-out>
+		</testcase>
+	</testsuite>
+</testsuites>
+

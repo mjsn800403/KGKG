@@ -29,3 +29,16 @@ integration, E2E, performance/load, security/penetration)": see
 `DEFICIENCY_CLOSURE.md`. Short form: unit, integration, E2E,
 performance/load and automated security testing are now implemented,
 executed and evidenced; independent penetration testing is **not** done.
+
+## Update 2026-10-29 (branch `claude/testing-cicd-assessment-review-1u9yhl`, based on `work` 174654d)
+
+The 2026-10-28 rows above are kept as written. This update changes the following rows; every
+claim below is backed by a commit and a test on that branch, and CI was green on each push.
+
+| # | Status now | What changed | Evidence | Still open |
+|---|---|---|---|---|
+| 1 | **Partially Verified** (narrower gap) | Formal SRS: 20 FR + 14 NFR, ISO/IEC/IEEE 29148 / ISO 25010, each naming its verifying tests. Six ADRs for standing decisions, with their real dates | `docs/00-srs.md`, `docs/adr/` | No backlog-tool export |
+| 5 | **Verified** | The corrective action is implemented: `kgkg-promote` requires a passing, full, ≤72 h E2E record for the exact commit (written by `qa/run_e2e.sh`); an override is a typed phrase and is logged | `ops/deploy/kgkg-promote`, `ops/deploy/test_promote.sh` (22 checks; 15 fail on the previous script), CI "Operations tests" | Not yet exercised on the server; the `stage` job needs `DEPLOY_SSH_KEY` / `DEPLOY_HOST` secrets on GitHub |
+| 6 | **Partially Verified** | Release step 3 (E2E on the same commit) is now enforced by tooling | `RELEASE_POLICY.md`, ADR-0004 | 1.0.0 not promoted; release record and load/DAST steps are still procedure |
+| 7 | **Verified** | Mutation testing of the authorization modules; 14 surviving mutants were real blind spots and are now killed. Two new defects found and fixed (D-31, D-32) | `03-unit-testing/mutation/`, `api/test_access_rules.py`, `CORRECTIVE_ACTIONS.md` | Equivalent and cosmetic survivors listed with reasons |
+| 9 | **Verified (measured), target partially met** | Backend 850 → 960 tests; lines 55.0 → 59.2 %, branches 46.9 → 51.3 %, combined 52.9 → 57.2 %. CI floor 52 → 56. team 24→90 %, reporting 0→98 %, adminops 37→77 %, shield 69→95 %, rag/service 61→90 %, labortimes/sst → 91 % | CI runs on the branch; `api/test_team.py`, `test_adminops.py`, `test_exports.py`, `rag/test_service_paths.py` | 80 % overall ambition not met; `portal.py` 64 % is next |

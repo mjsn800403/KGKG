@@ -95,3 +95,26 @@ without delay** (D-06 is exploitable in production today), install the two
 nginx files in the same window (A-02), and re-run E2E on the promoted
 commit. This is a recommendation; the promotion decision and approval belong
 to the release owner.
+
+## 8. Addendum — 2026-10-29
+
+Further work on branch `claude/testing-cicd-assessment-review-1u9yhl` (based on `work`
+`174654d`). Sections 1–7 above describe the 2026-10-28 state and are unchanged.
+
+| Item | 2026-10-28 | 2026-10-29 | Evidence |
+|---|---|---|---|
+| Backend tests | 850 | **960** (0 failed, 1 skipped) | CI on the branch |
+| Operations tests | 32 | 32 + **22** promote-evidence checks + E2E-record selftest | `ops/deploy/test_promote.sh`, `qa/e2e_record.py` |
+| Coverage, lines / branches / combined | 55.0 / 46.9 / 52.9 % | **59.2 / 51.3 / 57.2 %**; CI floor 56 | `coverage` with the CI command |
+| Mutation score: admin_auth / mediaauth / access | not performed | **87.5 / 85.4 / 77.0 %** (access 74.3 % before the new tests) | `03-unit-testing/mutation/` |
+| Defects | 30 | **32** (D-31 Medium, D-32 Low; both fixed with red-then-green tests) | `CORRECTIVE_ACTIONS.md` |
+
+* **D-31.** A read of a missing RAG index created an empty file, after which the assistant
+  answered 500 until it was deleted by hand. The suite only passed in CI because of test
+  order.
+* **D-32.** Malformed ids caused HTTP 500 on six admin inputs.
+
+Neither changes the release recommendation in §7. Both should ship with the same promotion.
+
+The limitation "Mutation testing not performed" in §6 no longer applies. The other
+limitations stand.

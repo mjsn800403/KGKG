@@ -1,0 +1,201 @@
+<?xml version="1.0" ?>
+<testsuites disabled="0" errors="0" failures="6" tests="41" time="0.0">
+	<testsuite disabled="0" errors="0" failures="6" name="mutmut" skipped="0" tests="41" time="0">
+		<testcase name="Mutant #1" file="api/mediaauth.py" line="24">
+			<system-out>PREFIX = '/kg-api/media/'</system-out>
+		</testcase>
+		<testcase name="Mutant #2" file="api/mediaauth.py" line="24">
+			<system-out>PREFIX = '/kg-api/media/'</system-out>
+		</testcase>
+		<testcase name="Mutant #3" file="api/mediaauth.py" line="30">
+			<failure type="failure" message="bad_survived">--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -27,7 +27,7 @@
+ def _folder(uri):
+     &quot;&quot;&quot;Car folder of the file nginx will serve for ``uri``; '' for the media
+     root; None when the path is not under the media prefix once normalized.&quot;&quot;&quot;
+-    path = unquote((uri or '').split('?', 1)[0])
++    path = unquote((uri or 'XXXX').split('?', 1)[0])
+     if '\x00' in path:
+         return None
+     path = posixpath.normpath('/' + path.lstrip('/'))
+</failure>
+			<system-out>    path = unquote((uri or '').split('?', 1)[0])</system-out>
+		</testcase>
+		<testcase name="Mutant #4" file="api/mediaauth.py" line="30">
+			<system-out>    path = unquote((uri or '').split('?', 1)[0])</system-out>
+		</testcase>
+		<testcase name="Mutant #5" file="api/mediaauth.py" line="30">
+			<system-out>    path = unquote((uri or '').split('?', 1)[0])</system-out>
+		</testcase>
+		<testcase name="Mutant #6" file="api/mediaauth.py" line="30">
+			<failure type="failure" message="bad_survived">--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -27,7 +27,7 @@
+ def _folder(uri):
+     &quot;&quot;&quot;Car folder of the file nginx will serve for ``uri``; '' for the media
+     root; None when the path is not under the media prefix once normalized.&quot;&quot;&quot;
+-    path = unquote((uri or '').split('?', 1)[0])
++    path = unquote((uri or '').split('?', 2)[0])
+     if '\x00' in path:
+         return None
+     path = posixpath.normpath('/' + path.lstrip('/'))
+</failure>
+			<system-out>    path = unquote((uri or '').split('?', 1)[0])</system-out>
+		</testcase>
+		<testcase name="Mutant #7" file="api/mediaauth.py" line="30">
+			<system-out>    path = unquote((uri or '').split('?', 1)[0])</system-out>
+		</testcase>
+		<testcase name="Mutant #8" file="api/mediaauth.py" line="30">
+			<system-out>    path = unquote((uri or '').split('?', 1)[0])</system-out>
+		</testcase>
+		<testcase name="Mutant #9" file="api/mediaauth.py" line="31">
+			<system-out>    if '\x00' in path:</system-out>
+		</testcase>
+		<testcase name="Mutant #10" file="api/mediaauth.py" line="31">
+			<system-out>    if '\x00' in path:</system-out>
+		</testcase>
+		<testcase name="Mutant #11" file="api/mediaauth.py" line="33">
+			<system-out>    path = posixpath.normpath('/' + path.lstrip('/'))</system-out>
+		</testcase>
+		<testcase name="Mutant #12" file="api/mediaauth.py" line="33">
+			<system-out>    path = posixpath.normpath('/' + path.lstrip('/'))</system-out>
+		</testcase>
+		<testcase name="Mutant #13" file="api/mediaauth.py" line="33">
+			<failure type="failure" message="bad_survived">--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -30,7 +30,7 @@
+     path = unquote((uri or '').split('?', 1)[0])
+     if '\x00' in path:
+         return None
+-    path = posixpath.normpath('/' + path.lstrip('/'))
++    path = posixpath.normpath('/' + path.lstrip('XX/XX'))
+     if path + '/' == PREFIX:
+         return ''
+     if not path.startswith(PREFIX):
+</failure>
+			<system-out>    path = posixpath.normpath('/' + path.lstrip('/'))</system-out>
+		</testcase>
+		<testcase name="Mutant #14" file="api/mediaauth.py" line="33">
+			<system-out>    path = posixpath.normpath('/' + path.lstrip('/'))</system-out>
+		</testcase>
+		<testcase name="Mutant #15" file="api/mediaauth.py" line="34">
+			<system-out>    if path + '/' == PREFIX:</system-out>
+		</testcase>
+		<testcase name="Mutant #16" file="api/mediaauth.py" line="34">
+			<system-out>    if path + '/' == PREFIX:</system-out>
+		</testcase>
+		<testcase name="Mutant #17" file="api/mediaauth.py" line="34">
+			<system-out>    if path + '/' == PREFIX:</system-out>
+		</testcase>
+		<testcase name="Mutant #18" file="api/mediaauth.py" line="35">
+			<system-out>        return ''</system-out>
+		</testcase>
+		<testcase name="Mutant #19" file="api/mediaauth.py" line="36">
+			<system-out>    if not path.startswith(PREFIX):</system-out>
+		</testcase>
+		<testcase name="Mutant #20" file="api/mediaauth.py" line="38">
+			<system-out>    return path[len(PREFIX):].split('/', 1)[0]</system-out>
+		</testcase>
+		<testcase name="Mutant #21" file="api/mediaauth.py" line="38">
+			<failure type="failure" message="bad_survived">--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -35,7 +35,7 @@
+         return ''
+     if not path.startswith(PREFIX):
+         return None
+-    return path[len(PREFIX):].split('/', 1)[0]
++    return path[len(PREFIX):].split('/', 2)[0]
+ 
+ 
+ def media_auth_view(request):
+</failure>
+			<system-out>    return path[len(PREFIX):].split('/', 1)[0]</system-out>
+		</testcase>
+		<testcase name="Mutant #22" file="api/mediaauth.py" line="38">
+			<system-out>    return path[len(PREFIX):].split('/', 1)[0]</system-out>
+		</testcase>
+		<testcase name="Mutant #23" file="api/mediaauth.py" line="46">
+			<system-out>    user = portal_user(request)</system-out>
+		</testcase>
+		<testcase name="Mutant #24" file="api/mediaauth.py" line="47">
+			<system-out>    if not user:</system-out>
+		</testcase>
+		<testcase name="Mutant #25" file="api/mediaauth.py" line="48">
+			<system-out>        return HttpResponse(status=401)</system-out>
+		</testcase>
+		<testcase name="Mutant #26" file="api/mediaauth.py" line="49">
+			<system-out>    folder = _folder(request.META.get('HTTP_X_ORIGINAL_URI'))</system-out>
+		</testcase>
+		<testcase name="Mutant #27" file="api/mediaauth.py" line="49">
+			<system-out>    folder = _folder(request.META.get('HTTP_X_ORIGINAL_URI'))</system-out>
+		</testcase>
+		<testcase name="Mutant #28" file="api/mediaauth.py" line="50">
+			<system-out>    if folder is None:</system-out>
+		</testcase>
+		<testcase name="Mutant #29" file="api/mediaauth.py" line="53">
+			<system-out>        return HttpResponse(status=403)</system-out>
+		</testcase>
+		<testcase name="Mutant #30" file="api/mediaauth.py" line="54">
+			<system-out>    if not folder or folder.startswith('_'):</system-out>
+		</testcase>
+		<testcase name="Mutant #31" file="api/mediaauth.py" line="54">
+			<failure type="failure" message="bad_survived">--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -51,7 +51,7 @@
+         # No media path to judge (header missing, or it normalizes outside the
+         # media root): refuse rather than guess.
+         return HttpResponse(status=403)
+-    if not folder or folder.startswith('_'):
++    if not folder or folder.startswith('XX_XX'):
+         return HttpResponse(status=204)
+     cars = list(Car.objects.filter(car_name=folder))
+     if not cars:
+</failure>
+			<system-out>    if not folder or folder.startswith('_'):</system-out>
+		</testcase>
+		<testcase name="Mutant #32" file="api/mediaauth.py" line="54">
+			<failure type="failure" message="bad_survived">--- api/mediaauth.py
++++ api/mediaauth.py
+@@ -51,7 +51,7 @@
+         # No media path to judge (header missing, or it normalizes outside the
+         # media root): refuse rather than guess.
+         return HttpResponse(status=403)
+-    if not folder or folder.startswith('_'):
++    if not folder and folder.startswith('_'):
+         return HttpResponse(status=204)
+     cars = list(Car.objects.filter(car_name=folder))
+     if not cars:
+</failure>
+			<system-out>    if not folder or folder.startswith('_'):</system-out>
+		</testcase>
+		<testcase name="Mutant #33" file="api/mediaauth.py" line="55">
+			<system-out>        return HttpResponse(status=204)</system-out>
+		</testcase>
+		<testcase name="Mutant #34" file="api/mediaauth.py" line="56">
+			<system-out>    cars = list(Car.objects.filter(car_name=folder))</system-out>
+		</testcase>
+		<testcase name="Mutant #35" file="api/mediaauth.py" line="57">
+			<system-out>    if not cars:</system-out>
+		</testcase>
+		<testcase name="Mutant #36" file="api/mediaauth.py" line="59">
+			<system-out>                if PurePosixPath(c.db_address).stem == folder]</system-out>
+		</testcase>
+		<testcase name="Mutant #37" file="api/mediaauth.py" line="59">
+			<system-out>                if PurePosixPath(c.db_address).stem == folder]</system-out>
+		</testcase>
+		<testcase name="Mutant #38" file="api/mediaauth.py" line="60">
+			<system-out>    if not cars:</system-out>
+		</testcase>
+		<testcase name="Mutant #39" file="api/mediaauth.py" line="62">
+			<system-out>        return HttpResponse(status=204)</system-out>
+		</testcase>
+		<testcase name="Mutant #40" file="api/mediaauth.py" line="64">
+			<system-out>        return HttpResponse(status=204)</system-out>
+		</testcase>
+		<testcase name="Mutant #41" file="api/mediaauth.py" line="65">
+			<system-out>    return HttpResponse(status=403)</system-out>
+		</testcase>
+	</testsuite>
+</testsuites>
+

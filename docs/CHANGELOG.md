@@ -14,6 +14,13 @@ short and point at the doc section that was updated.
   (`test_team.py`), the admin operations API (`test_adminops.py`), shield keys and alerts, and the
   serving layer's search/diagnose filters (`rag/test_service_paths.py`). team 24→90 %, reporting
   0→98 %, adminops 37→77 %, shield 69→95 %, rag/service 61→90 %; total 53→56 %, CI floor 52→55.
+- **Mutation testing** of the authorization modules (`qa/mutation/run.sh`, on-demand
+  `mutation` workflow): 14 surviving mutants were real blind spots (same-rank peer management on
+  the legacy path, purchase bypass by default flag, one bad grant entry dropping the rest, a
+  query-string media-gate case, the nginx `X-Real-IP` admin-token check) and are now killed by
+  tests (`test_access_rules.py` and others). Evidence: `audit-evidence/03-unit-testing/mutation/`.
+- **Docs:** `docs/00-srs.md` (FR/NFR with verifying tests) and `docs/adr/` (six decisions).
+  Tests 930 → 960 (incl. CSV exports); coverage floor 55 → 56.
 - **Release gate:** `kgkg-promote` requires a passing full E2E run for the commit
   (`qa/run_e2e.sh` → `/opt/KGKG_release/e2e/<sha>.env`); overrides are typed and logged.
 
