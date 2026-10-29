@@ -47,6 +47,11 @@ Severity: Critical (cross-tenant data or money), High, Medium, Low.
 | D-33 | Medium | Same suite | "P0420 P0171" answered "P0420 not found" though P0171 exists for the car | Code detection stopped at the first unknown code | Scan all codes; a known one wins (`0c587a3`) | `test_known_code_not_masked_by_earlier_unknown_code` | Fixed |
 | D-34 | Low | Same suite | Unknown sub-code ("P0300-27") fell into symptom search instead of "code not in this car" | Code-shape check accepted only `^[A-Z]\d{4}$` | Sub-codes accepted (`0c587a3`) | `test_unknown_subcode_is_reported_not_found` | Fixed |
 | D-35 | Low | Mutation testing (`mutmut`, `api/mediaauth.py`) | Two behaviours of the media gate had no failing test if broken (query string not cut before normalising; non-rooted URI accepted) | Missing assertions | Two assertions added (`e52cef6`) | Both mutants now killed | Fixed |
+| D-36 | High | New suite `test_qa_events_scope.py` | The realtime event stream accepted the static `KG_ADMIN_TOKEN` from any client (admin audience reachable through the public edge with a leaked token), unlike `require_admin_token` | Separate, older auth check in `events._resolve_viewer` | Same server-only rule as `require_admin_token` (`418ee61`) | Regression test in the suite | Fixed |
+| D-37 | Low | Same suite | A fresh database emitted a spurious "changed" event on its first tick | `SystemState.get` returns `{}` for a missing key, so the baseline branch never ran | Empty state = no baseline (`418ee61`) | Regression test | Fixed |
+| D-38 | Medium | New suite `test_qa_assist_lookup.py` | Persian part-number questions phrased "… را می‌خواهم" ("I want …") returned no parts | Stop word written with ZWNJ never matched the ZWNJ→space-normalised query | Stop words normalised like the query (`3c019af`) | Regression tests | Fixed |
+| D-39 | Low | Same suite | Catalog names stored with Arabic ك/ي were never found | SQL pre-filter compared normalised term with raw stored text | Normalise in SQL (`3c019af`) | Regression test | Fixed |
+| D-40 | Low | Same suite | "ابزار مخصوص چرخ" (wheel tools) returned gearbox tools | Hint 'axle' substring-matched 'Transaxle' | Whole-word hint matching (`3c019af`) | Regression test | Fixed |
 ## Open actions
 
 | ID | Action | Owner | Needs |
