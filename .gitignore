@@ -16,9 +16,19 @@
 /.claude
 /.vscode
 
-# Ignore compiled Python files and markdown
+# Ignore compiled Python files
 *.pyc
-*.md
+
+# Markdown: only stray notes at the repository root, which is where scratch
+# files collect. A blanket `*.md` lived here until 2026-10-29 and silently
+# ignored every new documentation file — docs/00-srs.md, the ADRs and the
+# audit-evidence reports are tracked only because someone reached for
+# `git add -f`. That is the exact opposite of the protocol in docs/README.md
+# and of ADR-0006 (docs as code): the next doc nobody thought to force-add
+# would simply never have been committed. 61 .md files are tracked and none
+# of them is at the root, so narrowing this rule changes nothing that exists.
+/*.md
+!/README.md
 .DS_Store
 /.venv
 /Cars_database
