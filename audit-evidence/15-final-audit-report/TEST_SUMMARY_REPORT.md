@@ -98,23 +98,51 @@ to the release owner.
 
 ## 8. Addendum — 2026-10-29
 
-Further work on branch `claude/testing-cicd-assessment-review-1u9yhl` (based on `work`
-`174654d`). Sections 1–7 above describe the 2026-10-28 state and are unchanged.
+Further work on branch `claude/testing-cicd-assessment-review-1u9yhl`, merged with `work`
+`1ce029a` (PostgreSQL cutover, order-independent suite, D-31..D-40). Sections 1–7 above
+describe the 2026-10-28 state and are unchanged.
 
-| Item | 2026-10-28 | 2026-10-29 | Evidence |
+| Item | 2026-10-28 | 2026-10-29 (merged branch) | Evidence |
 |---|---|---|---|
-| Backend tests | 850 | **960** (0 failed, 1 skipped) | CI on the branch |
-| Operations tests | 32 | 32 + **22** promote-evidence checks + E2E-record selftest | `ops/deploy/test_promote.sh`, `qa/e2e_record.py` |
-| Coverage, lines / branches / combined | 55.0 / 46.9 / 52.9 % | **59.2 / 51.3 / 57.2 %**; CI floor 56 | `coverage` with the CI command |
+| Backend tests | 850 | **1141** on PostgreSQL 16, random order (seeds 1368567119 and 42), 0 failed, 1 skipped | local run with CI's settings; CI on the branch |
+| Operations tests | 32 | adds **22** promote-evidence checks and the E2E-record selftest | `ops/deploy/test_promote.sh`, `qa/e2e_record.py` |
+| Coverage (combined) | 52.9 % | **60 %** (CI floor 56) | `coverage` with the CI command |
 | Mutation score: admin_auth / mediaauth / access | not performed | **87.5 / 85.4 / 77.0 %** (access 74.3 % before the new tests) | `03-unit-testing/mutation/` |
-| Defects | 30 | **32** (D-31 Medium, D-32 Low; both fixed with red-then-green tests) | `CORRECTIVE_ACTIONS.md` |
+| Defects | 30 | **42**. D-31..D-40 were added on `work`. This branch adds D-41 (Medium) and D-42 (Low), both fixed with red-then-green tests | `CORRECTIVE_ACTIONS.md` |
 
-* **D-31.** A read of a missing RAG index created an empty file, after which the assistant
-  answered 500 until it was deleted by hand. The suite only passed in CI because of test
-  order.
-* **D-32.** Malformed ids caused HTTP 500 on six admin inputs.
-
-Neither changes the release recommendation in §7. Both should ship with the same promotion.
+* **D-41.** A read of a missing RAG index created an empty file, after which the assistant
+  answered 500 until it was deleted by hand. It surfaced only in some test orders.
+* **D-42.** Malformed ids caused HTTP 500 on six admin inputs.
 
 The limitation "Mutation testing not performed" in §6 no longer applies. The other
 limitations stand.
+
+### Production and pipeline state observed on 2026-10-29
+
+These were read from GitHub (CI logs, tags) and not from the server directly. This
+session has no access to the host.
+
+* **1.0.0 is live.** Tag `deploy-20261029-084649` deployed `8fa94dd`, which includes the
+  PostgreSQL cutover, so production now runs PostgreSQL for portal data.
+* The code fixes for the exposures listed in §5 are part of that commit (D-03/D-04/D-05
+  `b76c47a`, D-06/D-07 `eb32510`, D-17 `9109258`, D-30 `2f65a1d`).
+* The nginx half of D-07 is installed by `deploy.sh` since `77e34c0`, which is also part of
+  that commit. Whether the live nginx files match was not checked from here.
+* **⚠ That commit's CI was red.** Run 40845883545 failed the bandit SAST gate on a new
+  B608 finding. The server gate (`ops/deploy/gate.sh`) does not run bandit or the
+  dependency audits, so the commit was promoted anyway. The finding was reviewed and
+  baselined afterwards (`1ce029a`).
+  * **Recommendation:** run bandit, pip-audit and the npm audit gate in `gate.sh` too, or
+    make `kgkg-promote` refuse a commit whose CI is not green.
+* **The first fully green staging run** was on `1ce029a` (run 40891553053):
+  * gate: 1031 backend tests, 178 frontend tests, lint, build;
+  * images built, staging on a fresh copy of production;
+  * smoke 23/23.
+
+  That commit is staged and not yet promoted.
+* **The retired `deploy.yml` still runs from `main`**, because `workflow_run` workflows
+  execute from the default branch.
+  * It tried `deploy 1ce029a` with the CI key, and the forced-command gate refused it
+    ("role 'ci' may not 'deploy'"). This is direct evidence that CI cannot reach
+    production.
+  * Merging `work` into `main` (PR #3) removes the workflow.

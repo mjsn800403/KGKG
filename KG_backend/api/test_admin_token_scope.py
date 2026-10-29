@@ -1,3 +1,6 @@
+import os
+from unittest import mock
+
 from django.http import JsonResponse
 from django.test import RequestFactory, TestCase, override_settings
 
@@ -15,10 +18,9 @@ class StaticAdminTokenScopeTests(TestCase):
         self.rf = RequestFactory()
 
     def _call(self, **meta):
-        import os
-        os.environ['KG_ADMIN_TOKEN'] = 'scope-test-token'
         req = self.rf.get('/api/admin/x/', HTTP_AUTHORIZATION='Bearer scope-test-token', **meta)
-        return _view(req).status_code
+        with mock.patch.dict(os.environ, {'KG_ADMIN_TOKEN': 'scope-test-token'}):
+            return _view(req).status_code
 
     def test_loopback_direct_call_is_allowed(self):
         self.assertEqual(self._call(REMOTE_ADDR='127.0.0.1'), 200)

@@ -44,34 +44,30 @@ TORQUE_TITLE = 'O\'Brien "Torque" Spec'
 SLASH_TITLE = 'Service Data [11/2022 - ]'
 N_BOLTS = 60
 
-_ENV_KEYS = ('KG_RL_DISABLE',)
-_saved_env = {}
-TMP = None
-_CG_PATCH = mock.patch.dict(contentguard._LIMITS,
-                            {'page': (10 ** 9, 10 ** 9), 'media': (10 ** 9, 10 ** 9)})
+class QAEnvMixin:
+    """Per-class isolation: rate limiting off (it has its own tests; here it
+    would only add order coupling), the per-user scrape guard's ceiling lifted
+    (its counter store is shared across runs), and a private temp directory.
+    Everything is restored in tearDownClass, so classes can run in any order,
+    shuffled or in parallel, without sharing state."""
 
+    @classmethod
+    def setUpClass(cls):
+        cls._env = mock.patch.dict(os.environ, {'KG_RL_DISABLE': '1'})
+        cls._cg = mock.patch.dict(contentguard._LIMITS,
+                                  {'page': (10 ** 9, 10 ** 9), 'media': (10 ** 9, 10 ** 9)})
+        cls._env.start()
+        cls._cg.start()
+        cls.tmp = Path(tempfile.mkdtemp(prefix=f'kg_qa_{cls.__name__}_'))
+        super().setUpClass()
 
-def setUpModule():
-    global TMP
-    # Rate limiting has its own tests; here it would only add order coupling.
-    for k in _ENV_KEYS:
-        _saved_env[k] = os.environ.get(k)
-    os.environ['KG_RL_DISABLE'] = '1'
-    # The per-user hourly scrape guard counts in a store shared across runs;
-    # lift its ceiling so repeated runs within an hour stay deterministic.
-    _CG_PATCH.start()
-    TMP = Path(tempfile.mkdtemp(prefix='kg_qa_catalog_'))
-
-
-def tearDownModule():
-    _CG_PATCH.stop()
-    for k, v in _saved_env.items():
-        if v is None:
-            os.environ.pop(k, None)
-        else:
-            os.environ[k] = v
-    cardb.invalidate_ready_cache()
-    shutil.rmtree(TMP, ignore_errors=True)
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls._cg.stop()
+        cls._env.stop()
+        cardb.invalidate_ready_cache()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -232,13 +228,13 @@ def build_parts_db(db_path, *, labels=True, meta='{"groups": 2, "parts": 4}',
     con.close()
 
 
-class QAUsersMixin:
+class QAUsersMixin(QAEnvMixin):
     """Shared world: a ready car (Camry), a second ready car (Supra), a car whose
     DB is missing (Ghost), three companies and users with distinct grants."""
 
     @classmethod
     def make_world(cls):
-        root = TMP / cls.__name__
+        root = cls.tmp / 'world'
         root.mkdir(parents=True, exist_ok=True)
         cls.src = root / 'crawl' / 'camry'
         (cls.src / 'pages').mkdir(parents=True, exist_ok=True)
@@ -266,7 +262,7 @@ class QAUsersMixin:
         self.supra = Car.objects.create(brand_name='Toyota', car_name=SUPRA, year=2020,
                                         db_address=str(self.supra_db))
         self.ghost = Car.objects.create(brand_name='Lexus', car_name=GHOST, year=2022,
-                                        db_address=str(TMP / 'does-not-exist.db'))
+                                        db_address=str(self.tmp / 'does-not-exist.db'))
         self.co_a = Company.objects.create(name='QA Garage A')
         self.co_b = Company.objects.create(name='QA Garage B')
         for car in (self.camry, self.ghost):
@@ -331,7 +327,7 @@ class PublicCatalogTests(QAUsersMixin, TestCase):
         self.assertEqual([x['car_name'] for x in rows], [CAMRY, SUPRA])
         for row in rows:
             self.assertEqual(set(row), {'brand_name', 'car_name', 'display_name', 'year'})
-            self.assertNotIn(str(TMP), json.dumps(row))
+            self.assertNotIn(str(self.tmp), json.dumps(row))
 
     def test_brand_listing_excludes_unbuilt_vehicle(self):
         self.assertEqual(self.c.get('/Lexus/').json(), [])
@@ -848,7 +844,7 @@ class SearchAndAssistGuardTests(QAUsersMixin, TestCase):
 # /api/purchase-request/ input validation (public, unauthenticated endpoint)
 # ---------------------------------------------------------------------------
 
-class PurchaseRequestValidationTests(TestCase):
+class PurchaseRequestValidationTests(QAEnvMixin, TestCase):
     URL = '/api/purchase-request/'
     PLAN = [{'role': 'after_sales_manager', 'department': 'گارانتی', 'count': 2}]
 
@@ -980,7 +976,7 @@ class PartsCatalogTests(QAUsersMixin, TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.make_world()
-        cls.parts_dir = TMP / 'parts_wh'
+        cls.parts_dir = cls.tmp / 'parts_wh'
         cls.parts_dir.mkdir(exist_ok=True)
         build_parts_db(cls.parts_dir / f'{CAMRY_PARTS}.db')
         build_parts_db(cls.parts_dir / 'Supra GR (Parts 2020).db', labels=False,

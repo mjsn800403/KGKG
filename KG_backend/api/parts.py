@@ -40,7 +40,7 @@ def parts_warehouse_dir():
     override = getattr(settings, 'KG_PARTS_DIR', None) or os.environ.get('KG_PARTS_DIR')
     if override:
         return Path(override)
-    main_dir = Path(settings.DATABASES['default']['NAME']).parent
+    main_dir = Path(settings.KG_DATA_DIR)
     return main_dir / 'Database_warehouse' / PARTS_DIRNAME
 
 

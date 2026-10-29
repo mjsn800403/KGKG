@@ -44,7 +44,7 @@ reported in that commit's message.
 |---|---|---|---|
 | admin_auth | `HTTP_X_REAL_IP` removed from the proxy-header list | That list is what keeps the static, no-2FA admin token to direct loopback calls; a request relayed by nginx also arrives from 127.0.0.1 | `test_admin_token_scope.py::test_via_nginx_real_ip_header_is_rejected` |
 | admin_auth | error bodies, `@wraps` | the frontend reads the bodies | `AdminGateResponseTests` |
-| mediaauth | query string no longer stripped before normalising | `x.png?/../../<car>/` would be judged as another car's folder while nginx serves the first | `test_query_string_cannot_smuggle_a_folder` (two-level case) |
+| mediaauth | query string no longer stripped before normalising (found independently on `work` as D-35, whose test was kept on merge) | `x.png?/../../<car>/` would be judged as another car's folder while nginx serves the first | `test_query_string_cannot_smuggle_a_folder` (two-level case) |
 | access | `manager_can_target`: `>=` → `>` (legacy path) | a manager could manage a same-rank peer | `test_access_rules.py::LegacyRankTests` |
 | access | `apply_user_access(override_purchase=True)` default | an admin call without the flag would bypass the company purchase | `test_admin_call_without_explicit_flag_stays_inside_the_purchase` |
 | access | `continue` → `break` at 8 sites (4 in `apply_user_access`, 2 in `apply_managed_access`, 2 in `enforce_org_consistency`) | one bad, unpurchased, duplicate or already-valid entry would silently drop every grant or repair after it | `test_bad_entries_do_not_drop_the_good_ones_after_them` (×2), `OrgConsistencyTests` |

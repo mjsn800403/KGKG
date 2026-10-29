@@ -25,7 +25,7 @@ The expected load is tens of concurrent users; the measured peak on 2026-10-27 w
   unexplained.
 * **Moving to PostgreSQL is a settings change for app data.** It is not for the per-vehicle
   files, which are content, not state.
-* **A missing or moved file must fail loudly, not be silently created.** D-31: a read-only
+* **A missing or moved file must fail loudly, not be silently created.** D-41: a read-only
   open created an empty index.
 
 ## Evidence

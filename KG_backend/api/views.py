@@ -535,7 +535,7 @@ def get_car_db(db_address):
     """Pooled, read-only connection to a car-specific database.
 
     Callers must NOT close it — the pool owns the connection (see cardb)."""
-    main_dir = Path(settings.DATABASES['default']['NAME']).parent
+    main_dir = Path(settings.KG_DATA_DIR)
     # db_address may carry Windows separators (rows seeded on Windows); normalize
     # so it resolves on POSIX/macOS too.
     abs_path = main_dir / db_address.replace('\\', '/')

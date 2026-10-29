@@ -246,10 +246,17 @@ def system_snapshot(deep=False):
         'size_mb': round(config.INDEX_DB.stat().st_size / 1e6, 1)
         if config.INDEX_DB.exists() else 0,
     }
+    snap['main_db_engine'] = getattr(settings, 'DB_ENGINE', 'sqlite')
     try:
-        main_db = settings.DATABASES['default']['NAME']
-        snap['main_db_mb'] = round(os.path.getsize(main_db) / 1e6, 1)
-    except OSError:
+        if snap['main_db_engine'] == 'postgres':
+            from django.db import connection
+            with connection.cursor() as cur:
+                cur.execute('SELECT pg_database_size(current_database())')
+                snap['main_db_mb'] = round(cur.fetchone()[0] / 1e6, 1)
+        else:
+            main_db = settings.DATABASES['default']['NAME']
+            snap['main_db_mb'] = round(os.path.getsize(main_db) / 1e6, 1)
+    except Exception:
         snap['main_db_mb'] = None
 
     latest = DataQualityRun.objects.filter(status='done').first()

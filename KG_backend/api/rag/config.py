@@ -24,7 +24,7 @@ from django.conf import settings
 # ---------------------------------------------------------------------------
 # Filesystem layout
 # ---------------------------------------------------------------------------
-BASE_DIR = Path(settings.DATABASES['default']['NAME']).parent
+BASE_DIR = Path(settings.KG_DATA_DIR)
 WAREHOUSE_DIR = BASE_DIR / 'Database_warehouse'
 RAG_DIR = WAREHOUSE_DIR / '_rag'              # all output (deletable)
 # RAG_INDEX_DB lets an offline experiment point at an alternate index copy
@@ -152,16 +152,13 @@ def _catalog_meta(car_stem):
     if _CATALOG_CACHE is None:
         rows = {}
         try:
-            import sqlite3
-            con = sqlite3.connect(
-                f"file:{Path(settings.DATABASES['default']['NAME'])}?mode=ro",
-                uri=True)
-            try:
-                for name, brand, year in con.execute(
-                        'SELECT car_name, brand_name, year FROM main_db'):
+            # Through Django's connection, so it reads whichever engine the
+            # portal DB runs on (SQLite or PostgreSQL).
+            from django.db import connection
+            with connection.cursor() as cur:
+                cur.execute('SELECT car_name, brand_name, year FROM main_db')
+                for name, brand, year in cur.fetchall():
                     rows[name] = (brand, year)
-            finally:
-                con.close()
         except Exception:
             pass                      # catalog unavailable -> heuristic fallback
         _CATALOG_CACHE = rows

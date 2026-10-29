@@ -192,7 +192,7 @@ class PipelineTests(AdminCase):
             self.assertEqual(sj.call_args.kwargs, {'trigger': 'manual'})
 
     def test_unknown_or_malformed_ids_are_404_not_500(self):
-        # 'abc' used to raise ValueError inside the ORM lookup -> HTTP 500 (D-32).
+        # 'abc' used to raise ValueError inside the ORM lookup -> HTTP 500 (D-42).
         for action, key in (('resume', 'job_id'), ('cancel', 'job_id'),
                             ('skip_zip', 'zip_id'), ('requeue_zip', 'zip_id')):
             for bad in (999999, 'abc', None, [1], {'id': 1}, '1; DROP TABLE x'):
@@ -255,7 +255,7 @@ class VehicleSpecsTests(AdminCase):
         self.assertEqual(d['spec']['data']['fuelType'], 'Gasoline')
         self.assertIsNone(self.get(self.URL, car_id=self.supra.id).json()['spec'])
         self.assertEqual(self.get(self.URL, car_id=999999).status_code, 404)
-        self.assertEqual(self.get(self.URL, car_id='abc').status_code, 404)   # was a 500 (D-32)
+        self.assertEqual(self.get(self.URL, car_id='abc').status_code, 404)   # was a 500 (D-42)
 
 
 class DashboardTests(AdminCase):
@@ -271,7 +271,7 @@ class DashboardTests(AdminCase):
 
 
 class AdminUsersInputTests(AdminCase):
-    """Same defect class in portal.admin_users_view (D-32)."""
+    """Same defect class in portal.admin_users_view (D-42)."""
 
     def test_malformed_company_id_is_400_not_500(self):
         for bad in ('abc', None, [1], {'id': 1}, True):

@@ -20,3 +20,4 @@ sentry-sdk>=2.0,<3
 
 # --- Content shield (api/shield.py: AES-GCM sealed answers) ---
 cryptography>=42
+psycopg[binary]>=3.2

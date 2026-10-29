@@ -4,11 +4,11 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
-- **Fix (D-31):** a read of a missing RAG index created an empty `index.rag.db`, after which the
+- **Fix (D-41):** a read of a missing RAG index created an empty `index.rag.db`, after which the
   assistant answered 500 ("no such table") instead of 503 until the file was removed by hand; one
   recommendations-panel view was enough. Read-only opens now raise `FileNotFoundError` and create
   nothing (`api/rag/store.py`, test `api/rag/test_store_ro.py`).
-- **Fix (D-32):** malformed ids (`"abc"`) gave HTTP 500 on six admin inputs (pipeline job/ZIP
+- **Fix (D-42):** malformed ids (`"abc"`) gave HTTP 500 on six admin inputs (pipeline job/ZIP
   actions, vehicle-specs `car_id`, admin user create `company_id`); now 404/400.
 - **Tests:** backend 850 → 930. New suites for team analytics/invites and the PDF report
   (`test_team.py`), the admin operations API (`test_adminops.py`), shield keys and alerts, and the
