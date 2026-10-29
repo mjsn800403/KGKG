@@ -57,9 +57,13 @@ jobs:
         # (test_*.py, tests.py, tests_parts.py) and migrations are excluded,
         # so the figure cannot be inflated by tests covering themselves.
         # JUnit XML goes to test-reports/ for the published results.
+        # --shuffle runs the tests in a new random order each time, so a test
+        # that leaks state into another fails here instead of hiding behind a
+        # lucky order. The log prints 'Using shuffle seed: N'; reproduce a
+        # failure locally with: manage.py test --shuffle N
         run: |
           coverage run --branch --source=api --omit='*/test_*,*/tests.py,*/tests_*.py,*/migrations/*' \
-            manage.py test --noinput --testrunner xmlrunner.extra.djangotestrunner.XMLTestRunner
+            manage.py test --noinput --shuffle --testrunner xmlrunner.extra.djangotestrunner.XMLTestRunner
       - name: Coverage ratchet (ops/deploy/coverage_min)
         # A floor, not a target: it may only ever move up. Raise the file in the
         # same commit that adds the tests, never lower it to make CI pass.
