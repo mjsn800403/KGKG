@@ -77,3 +77,71 @@ class ShieldTests(TestCase):
         e = shield.epoch()
         self.assertNotEqual(shield.keys(TOKEN, e), shield.keys(TOKEN, e + 1))
         self.assertNotEqual(shield.keys(TOKEN, e), shield.keys('other', e))
+
+    def test_malformed_signature_headers_are_refused(self):
+        req = self._req()
+        req.META['HTTP_X_KG_E'] = 'soon'
+        self.assertEqual(self.mw(req).status_code, 403)
+        req = self._req(nonce='short')                       # nonce under 16 chars
+        self.assertEqual(self.mw(req).status_code, 403)
+        req = self._req()
+        req.META['HTTP_X_KG_N'] = 'x' * 20 + '/../'          # outside the nonce alphabet
+        self.assertEqual(self.mw(req).status_code, 403)
+
+    def test_only_successful_json_answers_are_sealed(self):
+        from django.http import HttpResponse
+        for resp in (HttpResponse('<p>torque</p>', content_type='text/html'),
+                     JsonResponse({'error': 'nope', 'torque': 1}, status=404)):
+            mw = shield.ShieldMiddleware(lambda r, resp=resp: resp)
+            self.assertIn(b'torque', mw(self._req()).content)
+
+    def test_repeated_bad_requests_raise_one_alert(self):
+        user = mock.Mock(id=7, username='scraper')
+        with mock.patch('api.portal.portal_user', return_value=user), \
+             mock.patch('api.monitoring._raise_alert') as alert:
+            for _ in range(shield._BAD_WARN + 5):
+                self.assertEqual(self.mw(self._req(sign=False)).status_code, 403)
+        alert.assert_called_once()
+        self.assertEqual(alert.call_args.args[0], 'sec:shield:7')
+
+
+class ShieldKeyViewTests(TestCase):
+    """GET /api/shield/key/: the per-session keys the browser signs and unseals with."""
+
+    def setUp(self):
+        from .models import AuthToken, Company, PortalUser
+        p = mock.patch.dict('os.environ', ENV)
+        p.start()
+        self.addCleanup(p.stop)
+        co = Company.objects.create(name='S', active=True)
+        u = PortalUser.objects.create(company=co, username='s', password_hash='x',
+                                      role='after_sales_specialist', active=True)
+        self.raw = AuthToken.issue(u).key
+        self.h = {'HTTP_AUTHORIZATION': f'Bearer {self.raw}'}
+
+    def get(self, **params):
+        from django.test import Client
+        return Client().get('/api/shield/key/', params, **self.h)
+
+    def test_switched_off_says_so_and_hands_out_nothing(self):
+        with mock.patch.dict('os.environ', {'KG_SHIELD': '0'}):
+            self.assertEqual(self.get().json(), {'on': False})
+
+    def test_anonymous_is_401(self):
+        from django.test import Client
+        self.assertEqual(Client().get('/api/shield/key/').status_code, 401)
+
+    def test_current_epoch_keys_match_the_server_side_keys(self):
+        r = self.get()
+        d = r.json()
+        self.assertEqual(r['Cache-Control'], 'no-store')
+        enc, sig = shield.keys(self.raw, d['e'])
+        self.assertEqual((d['enc'], d['sig']), (shield._b64(enc), shield._b64(sig)))
+        self.assertTrue(0 < d['ttl'] <= shield.EPOCH)
+
+    def test_only_the_last_two_epochs_and_never_the_future(self):
+        cur = shield.epoch()
+        self.assertEqual(self.get(e=cur - 2).json()['e'], cur - 2)
+        self.assertEqual(self.get(e=cur - 3).status_code, 400)
+        self.assertEqual(self.get(e=cur + 1).status_code, 400)
+        self.assertEqual(self.get(e='abc').json()['e'], cur)      # unparsable -> current

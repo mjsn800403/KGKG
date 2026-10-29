@@ -8,20 +8,13 @@ up by name AND brand; no match meant no access check, but the car name still
 selected the vehicle's data. The same gate fronts assist and search.
 """
 import json
+from unittest import mock
 
 from django.test import Client, TestCase
 
-from . import test_qa_catalog as catalog
+from .rag import config
+
 from .test_qa_catalog import CAMRY, QAUsersMixin
-
-
-# The catalog suite's module fixtures: temp warehouse, throttles off.
-def setUpModule():
-    catalog.setUpModule()
-
-
-def tearDownModule():
-    catalog.tearDownModule()
 
 
 class BrandMismatchGateTests(QAUsersMixin, TestCase):
@@ -33,6 +26,11 @@ class BrandMismatchGateTests(QAUsersMixin, TestCase):
     def setUp(self):
         self.make_rows()
         self.c = Client()
+        # These tests are about the gate, not retrieval: pin "no index built"
+        # so the outcome cannot depend on an index file another test left.
+        p = mock.patch.object(config, 'INDEX_DB', self.tmp / 'no-index.rag.db')
+        p.start()
+        self.addCleanup(p.stop)
 
     def _all(self, user, car, brand):
         h = self.auth(user)

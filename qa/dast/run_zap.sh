@@ -63,13 +63,15 @@ PY
   *) echo "usage: $0 baseline|full|api" >&2; exit 2 ;;
 esac
 
+IMAGE=ghcr.io/zaproxy/zaproxy:stable
+docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull -q "$IMAGE" >/dev/null
 { echo "mode=$MODE"; echo "target=$ORIGIN"; echo "started=$(date -u +%FT%TZ)"; grep QA_SHA "$QA/stack.env"
-  docker image inspect -f 'zap image {{.Id}} {{.Created}}' ghcr.io/zaproxy/zaproxy:stable; } > "$OUT/env-$MODE.txt"
+  docker image inspect -f 'zap image {{.Id}} {{.Created}}' "$IMAGE"; } > "$OUT/env-$MODE.txt"
 set +e
 cp "$HERE/rules.tsv" "$OUT/rules.tsv"
 TARGET=$ORIGIN; [[ $MODE == api ]] && TARGET=/zap/wrk/openapi-scan.yaml
 docker run --rm --network host --cpus 4 -v "$OUT":/zap/wrk:rw \
-  ghcr.io/zaproxy/zaproxy:stable $SCRIPT -t "$TARGET" "${EXTRA[@]}" -c rules.tsv -I \
+  "$IMAGE" $SCRIPT -t "$TARGET" "${EXTRA[@]}" -c rules.tsv -I \
   -r "zap-$MODE.html" -J "zap-$MODE.json" -w "zap-$MODE.md" -z "$ZAPOPTS" 2>&1 | tee "$OUT/zap-$MODE.log"
 rc=${PIPESTATUS[0]}
 echo "finished=$(date -u +%FT%TZ) exit=$rc" >> "$OUT/env-$MODE.txt"

@@ -95,7 +95,11 @@ not by a setting in GitHub.
    ```
 
    It refuses a commit with no passing staging record, or one staged more than
-   72h ago, unless you type a longer deliberate phrase. It prints the commits
+   72h ago, and a commit with no passing **full** browser E2E run recorded by
+   `qa/run_e2e.sh` (`/opt/KGKG_release/e2e/<sha>.env`, also 72h), unless you
+   type a longer deliberate phrase (`promote <sha> without staging|e2e|staging
+   and e2e`); every such override is appended to
+   `/opt/KGKG_release/promote-overrides.log`. It prints the commits
    and files to apply, whether migrations are involved and whether the
    dependency lock changed, then requires the word `promote`. There is no
    `--yes`.

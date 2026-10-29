@@ -3,7 +3,28 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
-## 2026-10-29 — CI can reach the server
+## Unreleased
+- **Fix (D-41):** a read of a missing RAG index created an empty `index.rag.db`, after which the
+  assistant answered 500 ("no such table") instead of 503 until the file was removed by hand; one
+  recommendations-panel view was enough. Read-only opens now raise `FileNotFoundError` and create
+  nothing (`api/rag/store.py`, test `api/rag/test_store_ro.py`).
+- **Fix (D-42):** malformed ids (`"abc"`) gave HTTP 500 on six admin inputs (pipeline job/ZIP
+  actions, vehicle-specs `car_id`, admin user create `company_id`); now 404/400.
+- **Tests:** backend 850 → 930. New suites for team analytics/invites and the PDF report
+  (`test_team.py`), the admin operations API (`test_adminops.py`), shield keys and alerts, and the
+  serving layer's search/diagnose filters (`rag/test_service_paths.py`). team 24→90 %, reporting
+  0→98 %, adminops 37→77 %, shield 69→95 %, rag/service 61→90 %; total 53→56 %, CI floor 52→55.
+- **Mutation testing** of the authorization modules (`qa/mutation/run.sh`, on-demand
+  `mutation` workflow): 14 surviving mutants were real blind spots (same-rank peer management on
+  the legacy path, purchase bypass by default flag, one bad grant entry dropping the rest, a
+  query-string media-gate case, the nginx `X-Real-IP` admin-token check) and are now killed by
+  tests (`test_access_rules.py` and others). Evidence: `audit-evidence/03-unit-testing/mutation/`.
+- **Docs:** `docs/00-srs.md` (FR/NFR with verifying tests) and `docs/adr/` (six decisions).
+  Tests 930 → 960 (incl. CSV exports); coverage floor 55 → 56.
+- **Release gate:** `kgkg-promote` requires a passing full E2E run for the commit
+  (`qa/run_e2e.sh` → `/opt/KGKG_release/e2e/<sha>.env`); overrides are typed and logged.
+
+### CI can reach the server (2026-10-29)
 - **Why `work` was red:** the `stage` job's secrets (`DEPLOY_HOST`, `DEPLOY_SSH_KEY`,
   `DEPLOY_KNOWN_HOSTS`) had never been set: the old `deploy.yml` dialled an empty host name from
   2026-10-17, and `stage` has stopped at "missing repository secret(s)" since it was added. Only
@@ -21,6 +42,7 @@ short and point at the doc section that was updated.
   would let promote (`status` now prints `key role:`). 66 tests in `ops/deploy/test_ci_ssh.sh`.
 - **Docs:** `ops/deploy/README.md` rewritten for the stage/promote pipeline (it still described the
   deleted auto-deploy); doc 11 §11.3 corrected: the old `deploy.yml` still fires from `main`.
+
 
 ## 2026-10-28 — v1.0.0: test architecture, security fixes, audit evidence (branch `qa-audit`)
 - **Security fixes found by the new tests** (each with a regression test; details in

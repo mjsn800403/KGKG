@@ -10,8 +10,9 @@
 #   * its own containers (label kgkg.env=qa), ports :8120 backend / :3117
 #     frontend / :8130 single-origin proxy (qa/nginx-qa.conf) on loopback; production (:8000/:3000) and staging (:8110/:3107)
 #     are never touched
-#   * a fresh copy of the production database taken with SQLite's online
-#     backup API and run through ops/deploy/sanitize_staging_db.py, so no real
+#   * a fresh copy of the production database (PostgreSQL: a pg_dump clone
+#     named <db>_qa; SQLite: the online backup API), run through
+#     ops/deploy/sanitize_staging_db.py, so no real
 #     account can log in and no real phone/e-mail is present
 #   * SMS, Sentry, Turnstile, Metis (LLM) and host jobs disabled; the RAG
 #     feedback store redirected into the copy (RAG_FEEDBACK_DB), so queries
@@ -28,6 +29,17 @@ FE_PORT=${KG_QA_FE_PORT:-3117}
 BE_CPUS=${KG_QA_BE_CPUS:-6}
 FE_CPUS=${KG_QA_FE_CPUS:-2}
 PROD_DB=${KG_QA_SOURCE_DB:-/opt/KGKG/KG_backend/db.sqlite3}
+PROD_ENV=${KG_QA_PROD_ENV:-/opt/KGKG/KG_backend/.env.prod}
+# Portal DB engine, as production runs it (ops/deploy/deploy.sh does the same).
+# On PostgreSQL the QA stack gets its own database, <name>_qa, cloned and
+# sanitized; the backend reads .env.prod, so without the override below it
+# would connect to production's database.
+env_val() { sed -n "s/^$1=//p" "$PROD_ENV" 2>/dev/null | tail -1 | tr -d "\"' "; }
+DB_ENGINE=$(env_val KG_DB_ENGINE | tr '[:upper:]' '[:lower:]')
+[[ $DB_ENGINE == postgresql ]] && DB_ENGINE=postgres
+PG_NAME=$(env_val KG_PG_NAME); PG_NAME=${PG_NAME:-kgkg}
+PG_USER=$(env_val KG_PG_USER); PG_USER=${PG_USER:-kgkg}
+PG_QA=${PG_NAME}_qa
 PX_PORT=${KG_QA_PROXY_PORT:-8130}
 BE=kgkg-qa-backend FE=kgkg-qa-frontend PX=kgkg-qa-proxy
 
@@ -66,14 +78,27 @@ up() {
   down >/dev/null
   mkdir -p "$QA/db" "$QA/logs" "$QA/cfg"
   rm -f "$QA"/db/*
-  say "copying + sanitizing the production database"
-  python3 - "$PROD_DB" "$QA/db/db.sqlite3" <<'PY'
+  local db_env=()
+  if [[ $DB_ENGINE == postgres ]]; then
+    [[ $PG_QA != "$PG_NAME" && $PG_QA == *_qa ]] || die "refusing: QA database name '$PG_QA'"
+    say "cloning + sanitizing the production database into $PG_QA"
+    dropdb --if-exists --force "$PG_QA"
+    createdb -O "$PG_USER" "$PG_QA"
+    pg_dump -Fc "$PG_NAME" | pg_restore --no-owner --role="$PG_USER" --exit-on-error -d "$PG_QA" \
+      || die "could not clone $PG_NAME into $PG_QA"
+    "${KG_QA_PY:-/opt/KGKG/KG_backend/.venv/bin/python}" -I "$REPO/ops/deploy/sanitize_staging_db.py" \
+      --pg "dbname=$PG_QA" --quiet || die "sanitizer failed; refusing to serve the copy"
+    db_env=(-e KG_PG_NAME="$PG_QA")
+  else
+    say "copying + sanitizing the production database"
+    python3 - "$PROD_DB" "$QA/db/db.sqlite3" <<'PY'
 import sqlite3, sys
 s = sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True, timeout=60)
 d = sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()
 PY
-  python3 -I "$REPO/ops/deploy/sanitize_staging_db.py" "$QA/db/db.sqlite3" --quiet \
-    || die "sanitizer failed; refusing to serve the copy"
+    python3 -I "$REPO/ops/deploy/sanitize_staging_db.py" "$QA/db/db.sqlite3" --quiet \
+      || die "sanitizer failed; refusing to serve the copy"
+  fi
   : > "$QA/db/.qa-stack"
   # The backend resolves the warehouses next to its database (/data/db): give
   # the copy the same view production has. Staging relies on a hand-made
@@ -88,6 +113,11 @@ SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 SECURE_HSTS_SECONDS = 0
+# Never start on a database that is not a QA copy (the env file is production's).
+_db = DATABASES["default"]
+if "postgresql" in _db["ENGINE"] and not str(_db["NAME"]).endswith("_qa"):
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(f"QA stack refuses database {_db['NAME']!r}: not a _qa copy")
 PY
 
   local pw
@@ -100,7 +130,7 @@ PY
   local nosec=(-e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET=
     -e KG_ALERT_PHONES= -e RAG_FEEDBACK_DB=/data/db/feedback.db
     -e DJANGO_SETTINGS_MODULE=qa_settings -e PYTHONPATH=/qacfg -v "$QA/cfg":/qacfg:ro
-    --label kgkg.env=qa)
+    "${db_env[@]}" --label kgkg.env=qa)
   say "migrating the copy"
   be_run "kgkg-backend:$short" "$QA/db" "$QA/logs" "${nosec[@]}" -- python manage.py migrate --noinput \
     > "$QA/logs/migrate.log" 2>&1 || die "migrate failed ($QA/logs/migrate.log)"

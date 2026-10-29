@@ -74,6 +74,8 @@ Baselined, with the reason:
   run of `?` placeholders, or a comma-joined list of `int()`-cast ids; user
   values are always bound parameters. Most sites are offline build commands.
   LIKE patterns built from user input are escaped (`cardb.like_escape`).
+  2026-10-29: `ingest.py` ledger migration (`INSERT ... VALUES (?,?,…)`,
+  placeholders only, added with the PostgreSQL cutover) reviewed and added.
 - **B310** `urlopen` (10). Every URL is a constant `https://` endpoint (SMS
   provider, Cloudflare Turnstile, the LLM API) or the loopback health URL;
   none is built from request data, so `file:` and SSRF are not reachable.

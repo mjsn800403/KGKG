@@ -57,6 +57,23 @@ s.backup(d); d.close(); s.close()
 os.replace(tmp, dst)
 PY
 }
+# Portal DB engine, from the live .env.prod (KG_DB_ENGINE). PostgreSQL is
+# reached from the host as the `root` role over the local socket (peer auth).
+env_val() { sed -n "s/^$1=//p" "${KG_BE_DIR:-$PROD/KG_backend}/.env.prod" 2>/dev/null | tail -1 | tr -d "\"' "; }
+DB_ENGINE=$(env_val KG_DB_ENGINE | tr '[:upper:]' '[:lower:]')
+[[ $DB_ENGINE == postgresql ]] && DB_ENGINE=postgres
+PG_NAME=$(env_val KG_PG_NAME); PG_NAME=${PG_NAME:-kgkg}
+PG_USER=$(env_val KG_PG_USER); PG_USER=${PG_USER:-kgkg}
+PG_STAGING=${PG_NAME}_staging
+is_pg() { [[ $DB_ENGINE == postgres ]]; }
+pg_backup() {  # dst   (pg_dump runs in one snapshot: consistent while prod writes)
+  pg_dump -Fc -f "$1.tmp" "$PG_NAME" && mv "$1.tmp" "$1"
+}
+pg_clone_staging() {  # fresh copy of the prod DB as $PG_STAGING, owned by the app role
+  dropdb --if-exists --force "$PG_STAGING"
+  createdb -O "$PG_USER" "$PG_STAGING"
+  pg_dump -Fc "$PG_NAME" | pg_restore --no-owner --role="$PG_USER" --exit-on-error -d "$PG_STAGING"
+}
 # Release state, written by save_state below.
 # shellcheck source=/dev/null
 load_state() { CURRENT=; PREVIOUS=; [[ -f $STATE ]] && . "$STATE"; return 0; }
@@ -360,7 +377,13 @@ FE_PUBLIC=$(grep -E '^NEXT_PUBLIC_API_BASE=' "$PROD/kg_frontend/.env.production"
 # ---- 3. staging ------------------------------------------------------------
 say "3/5 STAGING (backend :$STG_BE, frontend :$STG_FE, DB = fresh copy of prod)"
 docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
-sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
+STG_DB_ENV=()
+if is_pg; then
+  pg_clone_staging || die "could not copy the prod database into $PG_STAGING"
+  STG_DB_ENV=(-e KG_PG_NAME="$PG_STAGING")
+else
+  sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
+fi
 # The backend finds the warehouses next to its database (/data/db). This link
 # used to exist only because someone made it by hand; recreate it every run.
 ln -sfn "$KG_BE_DIR/Database_warehouse" "$STG/db/Database_warehouse"
@@ -368,7 +391,11 @@ ln -sfn "$KG_BE_DIR/Database_warehouse" "$STG/db/Database_warehouse"
 # customers. Strip what identifies a person or opens a door before anything is
 # served from it: a session token lifted from staging would otherwise work
 # against production. Representative row counts and relationships are kept.
-python3 -I "$W/ops/deploy/sanitize_staging_db.py" "$STG/db/db.sqlite3" --quiet \
+if is_pg; then
+  "$VENV/python" -I "$W/ops/deploy/sanitize_staging_db.py" --pg "dbname=$PG_STAGING" --quiet
+else
+  python3 -I "$W/ops/deploy/sanitize_staging_db.py" "$STG/db/db.sqlite3" --quiet
+fi \
   || die "could not sanitize the staging database copy; refusing to serve real credentials from staging"
 cat > "$STG/stagecfg/staging_settings.py" <<'PY'
 # Staging backend (ops/deploy/deploy.sh): prod settings on a COPY of the prod DB.
@@ -381,7 +408,8 @@ SECURE_HSTS_SECONDS = 0
 PY
 NOSEC=(-e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET= -e KG_ALERT_PHONES=
        -e RAG_FEEDBACK_DB=/data/db/feedback.db
-       -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro)
+       -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro
+       "${STG_DB_ENV[@]}")
 STG_SPOOL=/run/kgkg-hostjobs-staging   # nobody serves it: staging can never start host jobs
 KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${NOSEC[@]}" -- python manage.py migrate --noinput \
   > "$REL/logs/staging-migrate-$TS.log" 2>&1 \
@@ -409,8 +437,13 @@ fi
 # ---- 4. promote --------------------------------------------------------------
 say "4/5 PROMOTE ${PREV:0:9} -> $SHORT"
 prod_clean || die "live tree changed during the deploy; aborting before touching it"
-sqlite_copy "$KG_BE_DIR/db.sqlite3" "$REL/db-backups/db-$TS-${PREV:0:9}.sqlite3"
-{ ls -1t "$REL"/db-backups/db-*.sqlite3 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
+if is_pg; then
+  pg_backup "$REL/db-backups/db-$TS-${PREV:0:9}.pgdump" || die "pg_dump backup failed; production untouched"
+  { ls -1t "$REL"/db-backups/db-*.pgdump 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
+else
+  sqlite_copy "$KG_BE_DIR/db.sqlite3" "$REL/db-backups/db-$TS-${PREV:0:9}.sqlite3"
+  { ls -1t "$REL"/db-backups/db-*.sqlite3 2>/dev/null | tail -n +4 | xargs -r rm -f; } || true
+fi
 CHANGED=$(git -C "$PROD" diff --name-only "$PREV" "$SHA")
 git -C "$PROD" merge -q --ff-only "$SHA"
 undo_code() { git -C "$PROD" reset -q --hard "$PREV"; }

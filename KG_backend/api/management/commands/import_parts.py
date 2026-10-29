@@ -38,7 +38,7 @@ class Command(BaseCommand):
         src = opts['src']
         if not (Path(src) / 'downloads').is_dir():
             raise CommandError(f'source not found: {src}/downloads')
-        backend_dir = Path(settings.DATABASES['default']['NAME']).parent
+        backend_dir = Path(settings.KG_DATA_DIR)
         conn = partsingest.staging_conn(opts['staging'])
         report_dir = opts['report_dir']
         log = self.stdout.write

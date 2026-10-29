@@ -411,10 +411,43 @@ def scan_inbox(normalize=False, dry_run=False, log=None):
 # Parse one queued ZIP into the warehouse
 # ---------------------------------------------------------------------------
 
+def ledger_path():
+    """The parser's per-zip ledger (`processing_status`). It is the parser's
+    own bookkeeping, written with raw sqlite3 by htmlparser_logical, so it
+    lives in its own file in the data dir rather than in the portal DB, which
+    may be PostgreSQL.
+
+    The first call after the move seeds it once from the table the ledger
+    used to keep inside db.sqlite3, so zips already parsed stay skipped."""
+    path = Path(settings.KG_DATA_DIR) / 'processing_ledger.sqlite3'
+    legacy = Path(settings.KG_DATA_DIR) / 'db.sqlite3'
+    if not path.exists() and legacy.exists():
+        try:
+            src = sqlite3.connect(f'file:{legacy}?mode=ro', uri=True)
+            try:
+                ddl = src.execute("SELECT sql FROM sqlite_master WHERE type='table' "
+                                  "AND name='processing_status'").fetchone()
+                rows = src.execute('SELECT * FROM processing_status').fetchall() if ddl else []
+            finally:
+                src.close()
+            if ddl:
+                tmp = path.with_suffix('.seeding')
+                dst = sqlite3.connect(tmp)
+                dst.execute(ddl[0])
+                if rows:
+                    dst.executemany(
+                        f"INSERT INTO processing_status VALUES ({','.join('?' * len(rows[0]))})", rows)
+                dst.commit()
+                dst.close()
+                tmp.replace(path)
+        except sqlite3.Error:
+            pass                      # the parser creates an empty ledger itself
+    return path
+
+
 def _ledger_row(zip_name):
     try:
-        con = sqlite3.connect(
-            f"file:{Path(settings.DATABASES['default']['NAME'])}?mode=ro", uri=True)
+        con = sqlite3.connect(f"file:{ledger_path()}?mode=ro", uri=True)
         try:
             return con.execute(
                 'SELECT status, pages_processed, error FROM processing_status '
@@ -472,7 +505,7 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
 
     parser = parser_module()
     backend_dir = Path(settings.BASE_DIR)
-    ledger = parser.ProcessingLedger(backend_dir / 'db.sqlite3')
+    ledger = parser.ProcessingLedger(ledger_path())
 
     pkg.status = 'parsing'
     pkg.save(update_fields=['status', 'updated_at'])

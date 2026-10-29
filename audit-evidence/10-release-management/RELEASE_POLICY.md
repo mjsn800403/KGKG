@@ -8,6 +8,7 @@
 | Build identifier inside the running product | Images are tagged with the commit sha and built with `KG_RELEASE=<sha>`; `/api/metrics/` exposes the live sha (`kgkg_release_info`) | `docker ps` shows `kgkg-backend:<sha>`; Grafana release panel |
 | Nothing reaches production untested | Gate (tests, migrations check, lint, build) → staging on a sanitized prod-DB copy → smoke → only then promotable | `ops/deploy/gate.sh`, `deploy.sh`, `/opt/KGKG_release/staging.env` |
 | Only a person promotes | `kgkg-promote <sha>`: refuses unstaged or >72 h stale commits, requires typing `promote`; CI's key has no deploy verb | `ops/deploy/kgkg-promote`, `ops/deploy/kg-ci-gate`, `test_gate_roles.sh` |
+| Browser E2E passed on the exact commit | `qa/run_e2e.sh` records `$REL/e2e/<sha>.env` (`qa/e2e_record.py`); `kgkg-promote` refuses a commit without a full, passing, ≤72 h record unless `promote <sha> without e2e` is typed, and logs the override (added 2026-10-29) | `ops/deploy/test_promote.sh` (22 checks, in CI), `/opt/KGKG_release/promote-overrides.log` |
 | Rollback | `deploy.sh --rollback`; automatic rollback when the post-deploy smoke fails; pre-deploy DB backup kept | `deploy.sh` §rollback, `/opt/KGKG_release/db-backups/` |
 | Migrations are rollback-safe | `check_migrations.py` refuses migrations that would break the previous release | gate step "migrations are rollback-safe" |
 
@@ -48,5 +49,6 @@ there is no public beta channel, and none is claimed.
 7. Post-deploy: smoke (automatic), Grafana release panel shows the new sha,
    no new GlitchTip error class within one hour.
 
-Steps 3 and 5 are procedure, not yet enforced by `kgkg-promote`. That gap is
-recorded in the criteria matrix.
+Step 3's E2E run is enforced by `kgkg-promote` since 2026-10-29 (an override is
+possible but typed and logged). The load and DAST runs of step 3 and the release
+record of step 5 remain procedure, not tooling.

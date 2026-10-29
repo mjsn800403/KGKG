@@ -17,6 +17,15 @@ fail() { echo "GATE FAILED: $1 (log: $2)"; tail -40 "$2" || true; exit 1; }
 clean_env=(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root LANG=C.UTF-8
   DJANGO_DEBUG=true KG_ADMIN_TOKEN=gate-dummy-token KG_ENV_FILE=/tmp/kg-gate-dummy.env
   HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 KG_WARMUP=0)
+# Test on the engine production runs. With PostgreSQL the suite connects as
+# the `root` role over the local socket (peer auth; it may create databases)
+# and gets a per-run test database, so a CI gate and a deploy gate running at
+# the same time cannot drop each other's.
+if grep -qiE '^KG_DB_ENGINE=["'"'"']?postgres' "${KG_PROD_ENV:-/opt/KGKG/KG_backend/.env.prod}" 2>/dev/null; then
+  clean_env+=(KG_DB_ENGINE=postgres KG_PG_HOST= KG_PG_USER=root KG_PG_NAME=kgkg_gate
+              KG_PG_TEST_NAME="test_kgkg_gate_$$")
+  echo "gate: tests run on PostgreSQL"
+fi
 
 # ---- backend ---------------------------------------------------------------
 cd "$W/KG_backend"

@@ -1,0 +1,1559 @@
+### mutant 25
+--- api/access.py
++++ api/access.py
+@@ -24,7 +24,7 @@
+ 
+ # Subscription packages (modular — add new ids here and in DOC_TYPE_CHOICES).
+ PACKAGE_CHOICES = [
+-    ('manual', 'راهنمای تعمیرات'),
++    ('manual', 'XXراهنمای تعمیراتXX'),
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+
+
+### mutant 27
+--- api/access.py
++++ api/access.py
+@@ -25,7 +25,7 @@
+ # Subscription packages (modular — add new ids here and in DOC_TYPE_CHOICES).
+ PACKAGE_CHOICES = [
+     ('manual', 'راهنمای تعمیرات'),
+-    ('special_tools', 'ابزارهای مخصوص'),
++    ('special_tools', 'XXابزارهای مخصوصXX'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+     ('full_spec', 'مشخصات کامل خودرو'),
+
+
+### mutant 29
+--- api/access.py
++++ api/access.py
+@@ -26,7 +26,7 @@
+ PACKAGE_CHOICES = [
+     ('manual', 'راهنمای تعمیرات'),
+     ('special_tools', 'ابزارهای مخصوص'),
+-    ('parts', 'کاتالوگ قطعات یدکی'),
++    ('parts', 'XXکاتالوگ قطعات یدکیXX'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+     ('full_spec', 'مشخصات کامل خودرو'),
+ ]
+
+
+### mutant 31
+--- api/access.py
++++ api/access.py
+@@ -27,7 +27,7 @@
+     ('manual', 'راهنمای تعمیرات'),
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+-    ('standard_time', 'زمان استاندارد تعمیرات'),
++    ('standard_time', 'XXزمان استاندارد تعمیراتXX'),
+     ('full_spec', 'مشخصات کامل خودرو'),
+ ]
+ 
+
+
+### mutant 32
+--- api/access.py
++++ api/access.py
+@@ -28,7 +28,7 @@
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+-    ('full_spec', 'مشخصات کامل خودرو'),
++    ('XXfull_specXX', 'مشخصات کامل خودرو'),
+ ]
+ 
+ DOC_TYPE_CHOICES = PACKAGE_CHOICES  # same ids, used in car/doc grants
+
+
+### mutant 33
+--- api/access.py
++++ api/access.py
+@@ -28,7 +28,7 @@
+     ('special_tools', 'ابزارهای مخصوص'),
+     ('parts', 'کاتالوگ قطعات یدکی'),
+     ('standard_time', 'زمان استاندارد تعمیرات'),
+-    ('full_spec', 'مشخصات کامل خودرو'),
++    ('full_spec', 'XXمشخصات کامل خودروXX'),
+ ]
+ 
+ DOC_TYPE_CHOICES = PACKAGE_CHOICES  # same ids, used in car/doc grants
+
+
+### mutant 35
+--- api/access.py
++++ api/access.py
+@@ -31,7 +31,7 @@
+     ('full_spec', 'مشخصات کامل خودرو'),
+ ]
+ 
+-DOC_TYPE_CHOICES = PACKAGE_CHOICES  # same ids, used in car/doc grants
++DOC_TYPE_CHOICES = None  # same ids, used in car/doc grants
+ 
+ VALID_PACKAGES = {p for p, _ in PACKAGE_CHOICES}
+ VALID_DOCS = VALID_PACKAGES
+
+
+### mutant 45
+--- api/access.py
++++ api/access.py
+@@ -47,7 +47,7 @@
+ def role_label(role, department_label=''):
+     rid = normalize_role(role)
+     base = dict(ROLE_CHOICES).get(rid, rid)
+-    if department_label and department_label != 'خدمات پس از فروش':
++    if department_label and department_label != 'XXخدمات پس از فروشXX':
+         return base.replace('خدمات پس از فروش', department_label)
+     return base
+ 
+
+
+### mutant 56
+--- api/access.py
++++ api/access.py
+@@ -81,7 +81,7 @@
+     hides a role someone actually has.
+     """
+     from .models import CompanyRole, PortalUser  # lazy
+-    rows = list(CompanyRole.objects.filter(company=company))
++    rows = None
+     if not rows:
+         seed_company_roles(company)
+         rows = list(CompanyRole.objects.filter(company=company))
+
+
+### mutant 63
+--- api/access.py
++++ api/access.py
+@@ -87,7 +87,7 @@
+         rows = list(CompanyRole.objects.filter(company=company))
+     used = {r for r in PortalUser.objects.filter(company=company)
+             .values_list('role', flat=True) if r}
+-    dept = company.department_label
++    dept = None
+     known = set()
+     opts = []
+     for r in rows:
+
+
+### mutant 67
+--- api/access.py
++++ api/access.py
+@@ -92,7 +92,7 @@
+     opts = []
+     for r in rows:
+         known.add(r.value)
+-        opts.append({'value': r.value, 'label': role_label(r.value, dept),
++        opts.append({'value': r.value, 'XXlabelXX': role_label(r.value, dept),
+                      'builtin': r.is_builtin, 'in_use': r.value in used})
+     for v in sorted(used - known):
+         opts.append({'value': v, 'label': role_label(v, dept),
+
+
+### mutant 78
+--- api/access.py
++++ api/access.py
+@@ -102,7 +102,7 @@
+ 
+ def role_can_manage(actor_role, target_role):
+     """Higher-level roles inherit authority over lower-level roles."""
+-    a = ROLE_LEVEL.get(normalize_role(actor_role), 99)
++    a = ROLE_LEVEL.get(normalize_role(actor_role), 100)
+     t = ROLE_LEVEL.get(normalize_role(target_role), 99)
+     return a < t
+ 
+
+
+### mutant 101
+--- api/access.py
++++ api/access.py
+@@ -147,7 +147,7 @@
+ 
+     Returns (rows, total_seats) on success or (None, error_message) on failure.
+     """
+-    if not isinstance(raw, list) or not raw:
++    if not isinstance(raw, list) and not raw:
+         return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'
+     rows = []
+     total = 0
+
+
+### mutant 102
+--- api/access.py
++++ api/access.py
+@@ -148,7 +148,7 @@
+     Returns (rows, total_seats) on success or (None, error_message) on failure.
+     """
+     if not isinstance(raw, list) or not raw:
+-        return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'
++        return None, 'XXحداقل یک نقش/واحد سازمانی را مشخص کنید.XX'
+     rows = []
+     total = 0
+     for item in raw[:50]:
+
+
+### mutant 110
+--- api/access.py
++++ api/access.py
+@@ -154,7 +154,7 @@
+     for item in raw[:50]:
+         if not isinstance(item, dict):
+             continue
+-        role = normalize_role(str(item.get('role') or '').strip())
++        role = normalize_role(str(item.get('role') or 'XXXX').strip())
+         if role not in VALID_ROLES:
+             return None, 'نقش سازمانی نامعتبر است.'
+         department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]
+
+
+### mutant 114
+--- api/access.py
++++ api/access.py
+@@ -156,7 +156,7 @@
+             continue
+         role = normalize_role(str(item.get('role') or '').strip())
+         if role not in VALID_ROLES:
+-            return None, 'نقش سازمانی نامعتبر است.'
++            return None, 'XXنقش سازمانی نامعتبر است.XX'
+         department = (str(item.get('department') or 'خدمات پس از فروش')).strip()[:80]
+         try:
+             count = int(item.get('count'))
+
+
+### mutant 127
+--- api/access.py
++++ api/access.py
+@@ -161,7 +161,7 @@
+         try:
+             count = int(item.get('count'))
+             if count < 1 or count > 1000:
+-                return None, 'تعداد کاربر هر نقش باید بین ۱ تا ۱۰۰۰ باشد.'
++                return None, 'XXتعداد کاربر هر نقش باید بین ۱ تا ۱۰۰۰ باشد.XX'
+         except (TypeError, ValueError):
+             return None, 'تعداد کاربر هر نقش الزامی است.'
+         note = (str(item.get('note') or '')).strip()[:500]
+
+
+### mutant 128
+--- api/access.py
++++ api/access.py
+@@ -163,7 +163,7 @@
+             if count < 1 or count > 1000:
+                 return None, 'تعداد کاربر هر نقش باید بین ۱ تا ۱۰۰۰ باشد.'
+         except (TypeError, ValueError):
+-            return None, 'تعداد کاربر هر نقش الزامی است.'
++            return None, 'XXتعداد کاربر هر نقش الزامی است.XX'
+         note = (str(item.get('note') or '')).strip()[:500]
+         rows.append({'role': role, 'department': department, 'count': count, 'note': note})
+         total += count
+
+
+### mutant 141
+--- api/access.py
++++ api/access.py
+@@ -168,7 +168,7 @@
+         rows.append({'role': role, 'department': department, 'count': count, 'note': note})
+         total += count
+     if not rows:
+-        return None, 'حداقل یک نقش/واحد سازمانی را مشخص کنید.'
++        return None, 'XXحداقل یک نقش/واحد سازمانی را مشخص کنید.XX'
+     return rows, total
+ 
+ 
+
+
+### mutant 157
+--- api/access.py
++++ api/access.py
+@@ -223,7 +223,7 @@
+     }
+     out = {cid: set(docs) for cid, docs in company_scope.items()}
+     for a in manager.car_accesses.all():
+-        if a.admin_granted and a.car_id not in company_scope:
++        if a.admin_granted or a.car_id not in company_scope:
+             out[a.car_id] = set(effective_documents(a))
+     return out
+ 
+
+
+### mutant 160
+--- api/access.py
++++ api/access.py
+@@ -243,7 +243,7 @@
+     from django.db import transaction
+     from .models import UserCarAccess  # lazy
+     if not isinstance(accesses, list):
+-        raise ValueError('accesses must be a list')
++        raise ValueError('XXaccesses must be a listXX')
+     grantable = manager_grantable_cars(manager)
+     company_car_ids = set(employee.company.car_accesses.values_list('car_id', flat=True))
+     seen = set()
+
+
+### mutant 171
+--- api/access.py
++++ api/access.py
+@@ -253,7 +253,7 @@
+         for a in accesses:
+             car_id = a.get('car_id')
+             if car_id in seen or car_id not in grantable:
+-                continue
++                break
+             allowed = grantable[car_id]
+             requested = a.get('documents')
+             if requested:
+
+
+### mutant 178
+--- api/access.py
++++ api/access.py
+@@ -263,7 +263,7 @@
+                 # employee to every layer the manager happens to hold.
+                 docs = [d for d in requested if d in allowed]
+                 if not docs:
+-                    continue
++                    break
+             else:
+                 # Omitted/empty documents == "grant this whole car" — default to
+                 # the manager's full ceiling (never store empty, which reads as
+
+
+### mutant 185
+--- api/access.py
++++ api/access.py
+@@ -280,7 +280,7 @@
+     from django.conf import settings
+     from pathlib import Path
+     main_dir = Path(settings.DATABASES['default']['NAME']).parent
+-    return main_dir / (car.db_address or '').replace('\\', '/')
++    return main_dir / (car.db_address or 'XXXX').replace('\\', '/')
+ 
+ 
+ def car_db_ready(car):
+
+
+### mutant 200
+--- api/access.py
++++ api/access.py
+@@ -317,7 +317,7 @@
+     default; everyone gets the AI assistant on (still gated by package + the
+     company toggle in user_ai_eligible). Fully overridable by the creator.
+     """
+-    level = ROLE_LEVEL.get(normalize_role(role), 99)
++    level = ROLE_LEVEL.get(normalize_role(role), 100)
+     return {
+         'can_manage_team': level <= 2,
+         'can_view_analytics': level <= 3,
+
+
+### mutant 210
+--- api/access.py
++++ api/access.py
+@@ -330,7 +330,7 @@
+ 
+     Retained only for analytics ordering; the live structure is the org graph.
+     """
+-    return ROLE_LEVEL.get(normalize_role(u.role), 99)
++    return ROLE_LEVEL.get(normalize_role(u.role), 100)
+ 
+ 
+ def user_manage_scope(u):
+
+
+### mutant 213
+--- api/access.py
++++ api/access.py
+@@ -342,7 +342,7 @@
+ def display_role_label(u, department_label=None):
+     """Human label of ``u``'s legacy role."""
+     if department_label is None:
+-        department_label = u.company.department_label if u.company_id else ''
++        department_label = u.company.department_label if u.company_id else 'XXXX'
+     return role_label(u.role, department_label)
+ 
+ 
+
+
+### mutant 220
+--- api/access.py
++++ api/access.py
+@@ -366,7 +366,7 @@
+     if graph_ids is not None:
+         return graph_ids
+     scope = user_manage_scope(actor)
+-    if scope == 'none':
++    if scope == 'XXnoneXX':
+         ids = set()
+     elif scope == 'subtree':
+         ids = subtree_user_ids(actor)
+
+
+### mutant 221
+--- api/access.py
++++ api/access.py
+@@ -367,7 +367,7 @@
+         return graph_ids
+     scope = user_manage_scope(actor)
+     if scope == 'none':
+-        ids = set()
++        ids = None
+     elif scope == 'subtree':
+         ids = subtree_user_ids(actor)
+     else:
+
+
+### mutant 225
+--- api/access.py
++++ api/access.py
+@@ -371,7 +371,7 @@
+     elif scope == 'subtree':
+         ids = subtree_user_ids(actor)
+     else:
+-        my_rank = user_rank(actor)
++        my_rank = None
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+
+
+### mutant 226
+--- api/access.py
++++ api/access.py
+@@ -375,7 +375,7 @@
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) > my_rank
++            if u.id == actor.id and user_rank(u) > my_rank
+         }
+     if include_self:
+         ids.add(actor.id)
+
+
+### mutant 227
+--- api/access.py
++++ api/access.py
+@@ -375,7 +375,7 @@
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) > my_rank
++            if u.id != actor.id and user_rank(u) >= my_rank
+         }
+     if include_self:
+         ids.add(actor.id)
+
+
+### mutant 228
+--- api/access.py
++++ api/access.py
+@@ -375,7 +375,7 @@
+         ids = {
+             u.id for u in (PortalUser.objects
+                            .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) > my_rank
++            if u.id != actor.id or user_rank(u) > my_rank
+         }
+     if include_self:
+         ids.add(actor.id)
+
+
+### mutant 229
+--- api/access.py
++++ api/access.py
+@@ -372,11 +372,7 @@
+         ids = subtree_user_ids(actor)
+     else:
+         my_rank = user_rank(actor)
+-        ids = {
+-            u.id for u in (PortalUser.objects
+-                           .filter(company_id=actor.company_id))
+-            if u.id != actor.id and user_rank(u) > my_rank
+-        }
++        ids = None
+     if include_self:
+         ids.add(actor.id)
+     return ids
+
+
+### mutant 259
+--- api/access.py
++++ api/access.py
+@@ -448,7 +448,7 @@
+         if parent is None:
+             continue
+         my_rank = user_rank(u)
+-        if user_rank(parent) < my_rank and parent.id != u.id:
++        if user_rank(parent) <= my_rank and parent.id != u.id:
+             continue
+         new_parent = find_valid_supervisor(
+             parent, my_rank, company_id, exclude_ids={u.id})
+
+
+### mutant 260
+--- api/access.py
++++ api/access.py
+@@ -448,7 +448,7 @@
+         if parent is None:
+             continue
+         my_rank = user_rank(u)
+-        if user_rank(parent) < my_rank and parent.id != u.id:
++        if user_rank(parent) < my_rank and parent.id == u.id:
+             continue
+         new_parent = find_valid_supervisor(
+             parent, my_rank, company_id, exclude_ids={u.id})
+
+
+### mutant 263
+--- api/access.py
++++ api/access.py
+@@ -450,8 +450,7 @@
+         my_rank = user_rank(u)
+         if user_rank(parent) < my_rank and parent.id != u.id:
+             continue
+-        new_parent = find_valid_supervisor(
+-            parent, my_rank, company_id, exclude_ids={u.id})
++        new_parent = None
+         if new_parent is None and top is not None and top.id != u.id \
+                 and user_rank(top) < my_rank:
+             new_parent = top
+
+
+### mutant 267
+--- api/access.py
++++ api/access.py
+@@ -453,7 +453,7 @@
+         new_parent = find_valid_supervisor(
+             parent, my_rank, company_id, exclude_ids={u.id})
+         if new_parent is None and top is not None and top.id != u.id \
+-                and user_rank(top) < my_rank:
++                and user_rank(top) <= my_rank:
+             new_parent = top
+         if new_parent is not None and new_parent.id == u.reports_to_id:
+             continue
+
+
+### mutant 273
+--- api/access.py
++++ api/access.py
+@@ -456,7 +456,7 @@
+                 and user_rank(top) < my_rank:
+             new_parent = top
+         if new_parent is not None and new_parent.id == u.reports_to_id:
+-            continue
++            break
+         u.reports_to = new_parent
+         u.save(update_fields=['reports_to'])
+         fixed += 1
+
+
+### mutant 276
+--- api/access.py
++++ api/access.py
+@@ -459,7 +459,7 @@
+             continue
+         u.reports_to = new_parent
+         u.save(update_fields=['reports_to'])
+-        fixed += 1
++        fixed = 1
+     return fixed
+ 
+ 
+
+
+### mutant 283
+--- api/access.py
++++ api/access.py
+@@ -473,7 +473,7 @@
+     unmanageable). The rank check survives only on the legacy path, for an
+     actor with no seat. This is the authorization spine for every team write.
+     """
+-    if not actor or not target or not getattr(actor, 'can_manage_team', False):
++    if not actor or not target or not getattr(actor, 'can_manage_team', True):
+         return False
+     if actor.id == target.id:
+         return False
+
+
+### mutant 293
+--- api/access.py
++++ api/access.py
+@@ -483,7 +483,7 @@
+     graph_ids = graph_subtree_user_ids(actor)
+     if graph_ids is not None:
+         return target.id in graph_ids
+-    if user_rank(actor) >= user_rank(target):
++    if user_rank(actor) > user_rank(target):
+         return False
+     return target.id in manageable_user_ids(actor)
+ 
+
+
+### mutant 296
+--- api/access.py
++++ api/access.py
+@@ -488,7 +488,7 @@
+     return target.id in manageable_user_ids(actor)
+ 
+ 
+-def apply_user_access(user, accesses, override_purchase=False, allow_admin_grants=False):
++def apply_user_access(user, accesses, override_purchase=True, allow_admin_grants=False):
+     """Replace ``user``'s per-car grants from a list of {car_id, documents[], admin_granted?}.
+ 
+     Single source of truth (used by both the platform-admin panel and the
+
+
+### mutant 299
+--- api/access.py
++++ api/access.py
+@@ -500,7 +500,7 @@
+     from django.db import transaction
+     from .models import Car, UserCarAccess  # lazy
+     if not isinstance(accesses, list):
+-        raise ValueError('accesses must be a list')
++        raise ValueError('XXaccesses must be a listXX')
+     company_scope = {
+         a.car_id: (set(a.documents) if a.documents else set(VALID_DOCS))
+         for a in user.company.car_accesses.all()
+
+
+### mutant 305
+--- api/access.py
++++ api/access.py
+@@ -515,7 +515,7 @@
+         for a in accesses:
+             car_id = a.get('car_id')
+             if car_id in seen:
+-                continue
++                break
+             if not Car.objects.filter(id=car_id).exists():
+                 continue
+             wants_admin = allow_admin_grants and (bool(a.get('admin_granted')) or override_purchase)
+
+
+### mutant 307
+--- api/access.py
++++ api/access.py
+@@ -517,7 +517,7 @@
+             if car_id in seen:
+                 continue
+             if not Car.objects.filter(id=car_id).exists():
+-                continue
++                break
+             wants_admin = allow_admin_grants and (bool(a.get('admin_granted')) or override_purchase)
+             if wants_admin:
+                 docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
+
+
+### mutant 317
+--- api/access.py
++++ api/access.py
+@@ -523,7 +523,7 @@
+                 docs = [d for d in (a.get('documents') or []) if d in VALID_DOCS]
+                 UserCarAccess.objects.create(user=user, car_id=car_id, documents=docs, admin_granted=True)
+                 seen.add(car_id)
+-                continue
++                break
+             if car_id not in company_scope:
+                 continue
+             docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]
+
+
+### mutant 319
+--- api/access.py
++++ api/access.py
+@@ -525,7 +525,7 @@
+                 seen.add(car_id)
+                 continue
+             if car_id not in company_scope:
+-                continue
++                break
+             docs = [d for d in (a.get('documents') or []) if d in company_scope[car_id]]
+             UserCarAccess.objects.create(user=user, car_id=car_id, documents=docs)
+             seen.add(car_id)
+
+
+### mutant 330
+--- api/access.py
++++ api/access.py
+@@ -541,7 +541,7 @@
+ 
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+-                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),
++                     'aliases': ['XXengine mechanicalXX', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+
+
+### mutant 331
+--- api/access.py
++++ api/access.py
+@@ -541,7 +541,7 @@
+ 
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+-                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),
++                     'aliases': ['engine mechanical', 'XXengine performanceXX', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+
+
+### mutant 332
+--- api/access.py
++++ api/access.py
+@@ -541,7 +541,7 @@
+ 
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+-                     'aliases': ['engine mechanical', 'engine performance', 'engine']}),
++                     'aliases': ['engine mechanical', 'engine performance', 'XXengineXX']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+
+
+### mutant 333
+--- api/access.py
++++ api/access.py
+@@ -542,7 +542,7 @@
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+-    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
++    ('XXtransmissionXX', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+
+
+### mutant 335
+--- api/access.py
++++ api/access.py
+@@ -542,7 +542,7 @@
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+-    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
++    ('transmission', {'fa': 'XXگیربکس و انتقال قدرتXX', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+
+
+### mutant 337
+--- api/access.py
++++ api/access.py
+@@ -542,7 +542,7 @@
+ CONTENT_CATEGORIES = [
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+-    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
++    ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'XXTransmission & DrivelineXX',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+
+
+### mutant 339
+--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+-                     'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['XXtransmissionXX', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+
+
+### mutant 340
+--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+-                     'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['transmission', 'XXdrivelines & axlesXX', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+
+
+### mutant 341
+--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+-                     'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['transmission', 'drivelines & axles', 'XXdrivelines and axlesXX', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+
+
+### mutant 342
+--- api/access.py
++++ api/access.py
+@@ -543,7 +543,7 @@
+     ('engine',      {'fa': 'موتور',                 'en': 'Engine',
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+-                     'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
++                     'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'XXdrivelineXX']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+
+
+### mutant 345
+--- api/access.py
++++ api/access.py
+@@ -544,7 +544,7 @@
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+-    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
++    ('brakes',      {'fa': 'XXترمزXX',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+
+
+### mutant 347
+--- api/access.py
++++ api/access.py
+@@ -544,7 +544,7 @@
+                      'aliases': ['engine mechanical', 'engine performance', 'engine']}),
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+-    ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
++    ('brakes',      {'fa': 'ترمز',                  'en': 'XXBrakesXX',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+
+
+### mutant 349
+--- api/access.py
++++ api/access.py
+@@ -545,7 +545,7 @@
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+-                     'aliases': ['brakes', 'brake']}),
++                     'aliases': ['XXbrakesXX', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+
+
+### mutant 350
+--- api/access.py
++++ api/access.py
+@@ -545,7 +545,7 @@
+     ('transmission', {'fa': 'گیربکس و انتقال قدرت', 'en': 'Transmission & Driveline',
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+-                     'aliases': ['brakes', 'brake']}),
++                     'aliases': ['brakes', 'XXbrakeXX']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+
+
+### mutant 351
+--- api/access.py
++++ api/access.py
+@@ -546,7 +546,7 @@
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+-    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
++    ('XXsteeringXX',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+
+
+### mutant 353
+--- api/access.py
++++ api/access.py
+@@ -546,7 +546,7 @@
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+-    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
++    ('steering',    {'fa': 'XXفرمانXX',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+
+
+### mutant 355
+--- api/access.py
++++ api/access.py
+@@ -546,7 +546,7 @@
+                      'aliases': ['transmission', 'drivelines & axles', 'drivelines and axles', 'driveline']}),
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+-    ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
++    ('steering',    {'fa': 'فرمان',                 'en': 'XXSteeringXX',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+
+
+### mutant 357
+--- api/access.py
++++ api/access.py
+@@ -547,7 +547,7 @@
+     ('brakes',      {'fa': 'ترمز',                  'en': 'Brakes',
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+-                     'aliases': ['steering']}),
++                     'aliases': ['XXsteeringXX']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+
+
+### mutant 358
+--- api/access.py
++++ api/access.py
+@@ -548,7 +548,7 @@
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+-    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
++    ('XXsuspensionXX',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+
+
+### mutant 360
+--- api/access.py
++++ api/access.py
+@@ -548,7 +548,7 @@
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+-    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
++    ('suspension',  {'fa': 'XXسیستم تعلیقXX',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+
+
+### mutant 362
+--- api/access.py
++++ api/access.py
+@@ -548,7 +548,7 @@
+                      'aliases': ['brakes', 'brake']}),
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+-    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
++    ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'XXSuspensionXX',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+
+
+### mutant 364
+--- api/access.py
++++ api/access.py
+@@ -549,7 +549,7 @@
+     ('steering',    {'fa': 'فرمان',                 'en': 'Steering',
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+-                     'aliases': ['suspension']}),
++                     'aliases': ['XXsuspensionXX']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+
+
+### mutant 367
+--- api/access.py
++++ api/access.py
+@@ -550,7 +550,7 @@
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+-    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
++    ('electrical',  {'fa': 'XXبرق و الکترونیکXX',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+
+
+### mutant 369
+--- api/access.py
++++ api/access.py
+@@ -550,7 +550,7 @@
+                      'aliases': ['steering']}),
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+-    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
++    ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'XXElectricalXX',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+
+
+### mutant 371
+--- api/access.py
++++ api/access.py
+@@ -551,7 +551,7 @@
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+-                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
++                     'aliases': ['XXelectricalXX', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+
+
+### mutant 372
+--- api/access.py
++++ api/access.py
+@@ -551,7 +551,7 @@
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+-                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
++                     'aliases': ['electrical', 'XXwiring diagramsXX', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+
+
+### mutant 373
+--- api/access.py
++++ api/access.py
+@@ -551,7 +551,7 @@
+     ('suspension',  {'fa': 'سیستم تعلیق',           'en': 'Suspension',
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+-                     'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
++                     'aliases': ['electrical', 'wiring diagrams', 'XXwiringXX']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+
+
+### mutant 374
+--- api/access.py
++++ api/access.py
+@@ -552,7 +552,7 @@
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+-    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
++    ('XXhvacXX',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+
+
+### mutant 376
+--- api/access.py
++++ api/access.py
+@@ -552,7 +552,7 @@
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+-    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
++    ('hvac',        {'fa': 'XXتهویه و کولر (HVAC)XX',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+
+
+### mutant 378
+--- api/access.py
++++ api/access.py
+@@ -552,7 +552,7 @@
+                      'aliases': ['suspension']}),
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+-    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
++    ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'XXHVACXX',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+
+
+### mutant 380
+--- api/access.py
++++ api/access.py
+@@ -553,7 +553,7 @@
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+-                     'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
++                     'aliases': ['XXheating, ventilation & a/c (hvac)XX', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+
+
+### mutant 381
+--- api/access.py
++++ api/access.py
+@@ -553,7 +553,7 @@
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+-                     'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
++                     'aliases': ['heating, ventilation & a/c (hvac)', 'XXhvacXX', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+
+
+### mutant 382
+--- api/access.py
++++ api/access.py
+@@ -553,7 +553,7 @@
+     ('electrical',  {'fa': 'برق و الکترونیک',       'en': 'Electrical',
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+-                     'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
++                     'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'XXheatingXX',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+
+
+### mutant 383
+--- api/access.py
++++ api/access.py
+@@ -554,7 +554,7 @@
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+-                                 'heating, ventilation & a/c', 'air conditioning']}),
++                                 'XXheating, ventilation & a/cXX', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+
+
+### mutant 384
+--- api/access.py
++++ api/access.py
+@@ -554,7 +554,7 @@
+                      'aliases': ['electrical', 'wiring diagrams', 'wiring']}),
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+-                                 'heating, ventilation & a/c', 'air conditioning']}),
++                                 'heating, ventilation & a/c', 'XXair conditioningXX']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+
+
+### mutant 385
+--- api/access.py
++++ api/access.py
+@@ -555,7 +555,7 @@
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+-    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
++    ('XXbodyXX',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+
+
+### mutant 387
+--- api/access.py
++++ api/access.py
+@@ -555,7 +555,7 @@
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+-    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
++    ('body',        {'fa': 'XXبدنه و شاسیXX',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+
+
+### mutant 389
+--- api/access.py
++++ api/access.py
+@@ -555,7 +555,7 @@
+     ('hvac',        {'fa': 'تهویه و کولر (HVAC)',   'en': 'HVAC',
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+-    ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
++    ('body',        {'fa': 'بدنه و شاسی',           'en': 'XXBody & FrameXX',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+
+
+### mutant 391
+--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+-                     'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['XXbody & frameXX', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+
+
+### mutant 392
+--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+-                     'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['body & frame', 'XXbody and frameXX', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+
+
+### mutant 393
+--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+-                     'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['body & frame', 'body and frame', 'XXbodyXX', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+
+
+### mutant 394
+--- api/access.py
++++ api/access.py
+@@ -556,7 +556,7 @@
+                      'aliases': ['heating, ventilation & a/c (hvac)', 'hvac', 'heating',
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+-                     'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
++                     'aliases': ['body & frame', 'body and frame', 'body', 'XXrestraintsXX']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+
+
+### mutant 395
+--- api/access.py
++++ api/access.py
+@@ -557,7 +557,7 @@
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+-    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
++    ('XXaccessoriesXX', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+
+
+### mutant 397
+--- api/access.py
++++ api/access.py
+@@ -557,7 +557,7 @@
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+-    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
++    ('accessories', {'fa': 'XXتجهیزات و آپشنXX',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+
+
+### mutant 399
+--- api/access.py
++++ api/access.py
+@@ -557,7 +557,7 @@
+                                  'heating, ventilation & a/c', 'air conditioning']}),
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+-    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
++    ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'XXAccessories & EquipmentXX',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+
+
+### mutant 401
+--- api/access.py
++++ api/access.py
+@@ -558,7 +558,7 @@
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+-                     'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
++                     'aliases': ['XXaccessories & equipmentXX', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+
+
+### mutant 402
+--- api/access.py
++++ api/access.py
+@@ -558,7 +558,7 @@
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+-                     'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
++                     'aliases': ['accessories & equipment', 'XXaccessories and equipmentXX', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+
+
+### mutant 403
+--- api/access.py
++++ api/access.py
+@@ -558,7 +558,7 @@
+     ('body',        {'fa': 'بدنه و شاسی',           'en': 'Body & Frame',
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+-                     'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
++                     'aliases': ['accessories & equipment', 'accessories and equipment', 'XXaccessoriesXX']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+
+
+### mutant 404
+--- api/access.py
++++ api/access.py
+@@ -559,7 +559,7 @@
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+-    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
++    ('XXmaintenanceXX', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+
+
+### mutant 406
+--- api/access.py
++++ api/access.py
+@@ -559,7 +559,7 @@
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+-    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
++    ('maintenance', {'fa': 'XXسرویس و نگهداریXX',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+
+
+### mutant 408
+--- api/access.py
++++ api/access.py
+@@ -559,7 +559,7 @@
+                      'aliases': ['body & frame', 'body and frame', 'body', 'restraints']}),
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+-    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
++    ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'XXMaintenanceXX',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+
+
+### mutant 410
+--- api/access.py
++++ api/access.py
+@@ -560,7 +560,7 @@
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+-                     'aliases': ['maintenance', 'quick lookups', 'general information']}),
++                     'aliases': ['XXmaintenanceXX', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+
+
+### mutant 411
+--- api/access.py
++++ api/access.py
+@@ -560,7 +560,7 @@
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+-                     'aliases': ['maintenance', 'quick lookups', 'general information']}),
++                     'aliases': ['maintenance', 'XXquick lookupsXX', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+
+
+### mutant 412
+--- api/access.py
++++ api/access.py
+@@ -560,7 +560,7 @@
+     ('accessories', {'fa': 'تجهیزات و آپشن',        'en': 'Accessories & Equipment',
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+-                     'aliases': ['maintenance', 'quick lookups', 'general information']}),
++                     'aliases': ['maintenance', 'quick lookups', 'XXgeneral informationXX']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+
+
+### mutant 413
+--- api/access.py
++++ api/access.py
+@@ -561,7 +561,7 @@
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+-    ('other',       {'fa': 'سایر',                  'en': 'Other',
++    ('XXotherXX',       {'fa': 'سایر',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+ 
+
+
+### mutant 415
+--- api/access.py
++++ api/access.py
+@@ -561,7 +561,7 @@
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+-    ('other',       {'fa': 'سایر',                  'en': 'Other',
++    ('other',       {'fa': 'XXسایرXX',                  'en': 'Other',
+                      'aliases': ['external pages']}),
+ ]
+ 
+
+
+### mutant 417
+--- api/access.py
++++ api/access.py
+@@ -561,7 +561,7 @@
+                      'aliases': ['accessories & equipment', 'accessories and equipment', 'accessories']}),
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+-    ('other',       {'fa': 'سایر',                  'en': 'Other',
++    ('other',       {'fa': 'سایر',                  'en': 'XXOtherXX',
+                      'aliases': ['external pages']}),
+ ]
+ 
+
+
+### mutant 419
+--- api/access.py
++++ api/access.py
+@@ -562,7 +562,7 @@
+     ('maintenance', {'fa': 'سرویس و نگهداری',       'en': 'Maintenance',
+                      'aliases': ['maintenance', 'quick lookups', 'general information']}),
+     ('other',       {'fa': 'سایر',                  'en': 'Other',
+-                     'aliases': ['external pages']}),
++                     'aliases': ['XXexternal pagesXX']}),
+ ]
+ 
+ CATEGORY_MAP = dict(CONTENT_CATEGORIES)
+
+
+### mutant 422
+--- api/access.py
++++ api/access.py
+@@ -566,7 +566,7 @@
+ ]
+ 
+ CATEGORY_MAP = dict(CONTENT_CATEGORIES)
+-VALID_CATEGORIES = {c for c, _ in CONTENT_CATEGORIES}
++VALID_CATEGORIES = None
+ 
+ # Reverse lookup: normalized raw title -> canonical id.
+ _CATEGORY_ALIAS = {}
+
+
+### mutant 424
+--- api/access.py
++++ api/access.py
+@@ -571,7 +571,7 @@
+ # Reverse lookup: normalized raw title -> canonical id.
+ _CATEGORY_ALIAS = {}
+ for _cid, _meta in CONTENT_CATEGORIES:
+-    _CATEGORY_ALIAS[_cid] = _cid
++    _CATEGORY_ALIAS[_cid] = None
+     for _al in _meta['aliases']:
+         _CATEGORY_ALIAS[_al] = _cid
+ 
+
+
+### mutant 429
+--- api/access.py
++++ api/access.py
+@@ -582,7 +582,7 @@
+ 
+ 
+ def _normalize_title(s):
+-    return (str(s or '')).strip().lower()
++    return (str(s or 'XXXX')).strip().lower()
+ 
+ 
+ def resolve_category(segments_or_path):
+
+
+### mutant 433
+--- api/access.py
++++ api/access.py
+@@ -597,7 +597,7 @@
+     if not segments_or_path:
+         return ''
+     if isinstance(segments_or_path, str):
+-        segments = [s for s in segments_or_path.split('/') if s]
++        segments = [s for s in segments_or_path.split('XX/XX') if s]
+     else:
+         segments = [s for s in segments_or_path if s]
+     for seg in segments:
+
+
+### mutant 436
+--- api/access.py
++++ api/access.py
+@@ -601,7 +601,7 @@
+     else:
+         segments = [s for s in segments_or_path if s]
+     for seg in segments:
+-        cid = _CATEGORY_ALIAS.get(_normalize_title(seg))
++        cid = None
+         if cid:
+             return cid
+     # Substring fallback (titles like "Engine Mechanical > ...").
+
+

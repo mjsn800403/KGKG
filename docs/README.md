@@ -16,6 +16,7 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 
 | Doc | Covers |
 |---|---|
+| [00 — Software requirements (SRS)](00-srs.md) | What the system must do and how well: FR/NFR with the tests that verify each |
 | [01 — System overview](01-overview.md) | What the product is, who uses it, roles, top-level user flows, glossary |
 | [02 — Architecture](02-architecture.md) | Runtime topology, stack, design principles, data flow, scale strategy |
 | [03 — Data model](03-data-model.md) | Every Django model, the per-vehicle warehouse schema, the RAG index schema |
@@ -34,6 +35,7 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [16 — Parts catalog](16-parts-catalog.md) | Parts-only vehicles, import pipeline, /parts UI |
 | [17 — AI evaluation suite](17-evaluation.md) | Gold sets, baselines, retrieval/diagnosis/answer metrics, expert-review tooling |
 | [18 — Security hardening](18-security-hardening.md) | Secret/token rotation, nginx rate limiting, ModSecurity+CRS WAF, GlitchTip error monitoring |
+| [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |
 | [CHANGELOG](CHANGELOG.md) | Dated log of shipped changes, newest first |
 
 ## Quick facts (verified 2026-07-15)
