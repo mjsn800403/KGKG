@@ -20,7 +20,7 @@ rm -rf results test-results
 rc=0
 docker run --rm --network host --ipc=host -v "$PWD":/w -w /w \
   -v "$QA/fixtures.json":/qa/fixtures.json:ro -e QA_ORIGIN="$ORIGIN" \
-  mcr.microsoft.com/playwright:v1.52.0-noble \
+  mcr.microsoft.com/playwright:v1.64.1-noble \
   sh -c 'npm ci --no-audit --no-fund >/dev/null && npx playwright test "$@"' -- "$@" || rc=$?
 echo
 echo "E2E evidence record ($REL/e2e/$SHA.env):"
