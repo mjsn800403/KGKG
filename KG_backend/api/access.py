@@ -505,7 +505,7 @@ def apply_user_access(user, accesses, override_purchase=False, allow_admin_grant
         a.car_id: (set(a.documents) if a.documents else set(VALID_DOCS))
         for a in user.company.car_accesses.all()
     }
-    # One row per car: dedupe by car_id (last write wins) so a duplicated car_id
+    # One row per car: dedupe by car_id (the first entry wins) so a duplicated car_id
     # in the payload can't hit the (user, car) unique constraint mid-loop and
     # leave the grants half-rewritten. The whole replace is atomic for the same
     # reason — any failure rolls back to the pre-request grants.

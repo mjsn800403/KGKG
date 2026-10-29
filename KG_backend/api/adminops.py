@@ -29,6 +29,20 @@ def _json_body(request):
     return data if isinstance(data, dict) else {}
 
 
+def _int_id(value):
+    """A client-supplied primary key as int, else None (lookups then 404).
+
+    Bare ``filter(id='abc')`` raises ValueError inside the ORM, which turned a
+    malformed id into an HTTP 500. Booleans are not ids.
+    """
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Public liveness probe (load balancers / uptime monitors; no secrets, cheap)
 # ---------------------------------------------------------------------------
@@ -260,7 +274,7 @@ def admin_pipeline_view(request):
             return JsonResponse({'ok': True, 'job': pipeline.job_dict(job)})
 
         if action in ('resume', 'cancel'):
-            job = ProcessingJob.objects.filter(id=body.get('job_id')).first()
+            job = ProcessingJob.objects.filter(id=_int_id(body.get('job_id'))).first()
             if job is None:
                 return JsonResponse({'error': 'کار یافت نشد.'}, status=404)
             ok, err = (pipeline.resume_job(job) if action == 'resume'
@@ -364,7 +378,7 @@ def admin_pipeline_view(request):
             return JsonResponse({'ok': True, 'summary': summary})
 
         if action in ('skip_zip', 'requeue_zip'):
-            pkg = ZipPackage.objects.filter(id=body.get('zip_id')).first()
+            pkg = ZipPackage.objects.filter(id=_int_id(body.get('zip_id'))).first()
             if pkg is None:
                 return JsonResponse({'error': 'بسته یافت نشد.'}, status=404)
             if action == 'skip_zip' and pkg.status in ('pending', 'failed'):
@@ -448,7 +462,7 @@ def admin_vehicle_specs_view(request):
 
     car_id = request.GET.get('car_id')
     if car_id:
-        car = Car.objects.filter(id=car_id).first()
+        car = Car.objects.filter(id=_int_id(car_id)).first()
         if car is None:
             return JsonResponse({'error': 'خودرو یافت نشد.'}, status=404)
         sp = VehicleSpec.objects.filter(car=car).first()

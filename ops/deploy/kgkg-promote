@@ -12,6 +12,11 @@
 #     `work` against a sanitized copy of the production database; promoting
 #     something that never went through that is now a deliberate act with a
 #     different, longer confirmation, not a typo away from the normal one.
+#   * It refuses, the same way, a commit without a passing full browser E2E
+#     run (qa/run_e2e.sh writes $REL/e2e/<sha>.env). Staging smoke proves the
+#     release starts and answers; E2E proves the journeys and the access rules
+#     still hold. Every promotion without either is logged to
+#     $REL/promote-overrides.log.
 #   * It shows what will change before it changes it: the live release, the
 #     target, the commits and files between them, whether migrations are
 #     involved, and how old the staging evidence is.
@@ -29,6 +34,7 @@ PROD=${KG_PROD_DIR:-/opt/KGKG}
 REL=${KG_REL_DIR:-/opt/KGKG_release}
 DEPLOY=${KG_DEPLOY_SH:-$PROD/ops/deploy/deploy.sh}
 STAGING_MAX_AGE_H=${KG_PROMOTE_STAGING_MAX_AGE_H:-72}
+E2E_MAX_AGE_H=${KG_PROMOTE_E2E_MAX_AGE_H:-72}
 
 die() { echo "kgkg-promote: $*" >&2; exit 1; }
 
@@ -47,10 +53,11 @@ human_age() {  # epoch -> "3h 12m ago"
   printf '%dh %dm ago\n' $(( delta / 3600 )) $(( (delta % 3600) / 60 ))
 }
 
-staged_epoch() {
-  [[ -n $STAGED_AT ]] || { echo 0; return; }
-  date -u -d "$STAGED_AT" +%s 2>/dev/null || echo 0
+to_epoch() {  # ISO time -> epoch, 0 when missing or unparsable
+  [[ -n ${1:-} ]] || { echo 0; return; }
+  date -u -d "$1" +%s 2>/dev/null || echo 0
 }
+staged_epoch() { to_epoch "$STAGED_AT"; }
 
 show_status() {
   echo "live release    : ${CURRENT:0:9}${CURRENT:+ (previous ${PREVIOUS:0:9})}"
@@ -99,6 +106,26 @@ else
   fi
 fi
 
+# ---- E2E evidence ----------------------------------------------------------
+E2E_SHA=; E2E_AT=; E2E_SCOPE=; E2E_RESULT=; E2E_PASSED=; E2E_FAILED=
+NOE2E_REASON=
+E2E_FILE=$REL/e2e/$SHA.env
+if [[ ! -f $E2E_FILE ]]; then
+  NOE2E_REASON="no browser E2E run is recorded for $SHORT"
+else
+  # shellcheck source=/dev/null
+  . "$E2E_FILE"
+  if [[ $E2E_SHA != "$SHA" ]]; then
+    NOE2E_REASON="the E2E record for $SHORT names another commit (${E2E_SHA:0:9})"
+  elif [[ $E2E_SCOPE != full ]]; then
+    NOE2E_REASON="the only E2E run for $SHORT was filtered (scope=${E2E_SCOPE:-?}), not the full suite"
+  elif [[ $E2E_RESULT != pass ]]; then
+    NOE2E_REASON="the E2E run for $SHORT failed (${E2E_FAILED:-?} failed, ${E2E_PASSED:-?} passed)"
+  elif (( $(date -u +%s) - $(to_epoch "$E2E_AT") > E2E_MAX_AGE_H * 3600 )); then
+    NOE2E_REASON="the E2E evidence for $SHORT is older than ${E2E_MAX_AGE_H}h"
+  fi
+fi
+
 # ---- what will change ------------------------------------------------------
 echo
 echo "========================================================================"
@@ -121,24 +148,37 @@ echo "========================================================================"
 echo
 
 # ---- confirmation ----------------------------------------------------------
-if [[ -n $UNSTAGED_REASON ]]; then
-  cat >&2 <<WARN
-REFUSING THE NORMAL PATH: $UNSTAGED_REASON.
+MISSING=
+[[ -n $UNSTAGED_REASON ]] && MISSING=staging
+[[ -n $NOE2E_REASON ]] && MISSING=${MISSING:+$MISSING and }e2e
+if [[ -n $MISSING ]]; then
+  {
+    echo "REFUSING THE NORMAL PATH:"
+    [[ -n $UNSTAGED_REASON ]] && echo "  - $UNSTAGED_REASON"
+    [[ -n $NOE2E_REASON ]] && echo "  - $NOE2E_REASON"
+    cat <<WARN
 
-Staging is how a release is shown to work against real data shapes before it
-reaches customers. Promoting without it is a judgement call that should feel
-different from the usual one.
+Staging is how a release is shown to work against real data shapes; the E2E
+suite is how the sign-in, access and media rules are shown to still hold.
+Promoting without them is a judgement call that should feel different from
+the usual one, and it is logged.
 
-Stage it first (recommended):
-    ops/deploy/deploy.sh --staging $SHA
-
-Or, to promote anyway, type the full phrase at the prompt.
+Get the evidence first (recommended):
 WARN
-  printf 'type "promote %s without staging" to continue: ' "$SHORT"
+    [[ -n $UNSTAGED_REASON ]] && echo "    ops/deploy/deploy.sh --staging $SHA"
+    [[ -n $NOE2E_REASON ]] && echo "    qa/stack.sh up $SHA && qa/run_e2e.sh"
+    echo
+    echo "Or, to promote anyway, type the full phrase at the prompt."
+  } >&2
+  printf 'type "promote %s without %s" to continue: ' "$SHORT" "$MISSING"
   read -r reply
-  [[ $reply == "promote $SHORT without staging" ]] || die "not confirmed; nothing was done"
+  [[ $reply == "promote $SHORT without $MISSING" ]] || die "not confirmed; nothing was done"
+  printf '%s promote %s without %s by %s: %s%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SHA" "$MISSING" \
+    "${SUDO_USER:-${USER:-?}}" "${UNSTAGED_REASON:+$UNSTAGED_REASON; }" "$NOE2E_REASON" \
+    >> "$REL/promote-overrides.log"
 else
   echo "staging evidence: $SHORT passed gate=${GATE:-?} and smoke=$SMOKE $(human_age "$(staged_epoch)")"
+  echo "E2E evidence    : $SHORT passed ${E2E_PASSED} browser tests $(human_age "$(to_epoch "$E2E_AT")")"
   printf 'type "promote" to continue: '
   read -r reply
   [[ $reply == promote ]] || die "not confirmed; nothing was done"

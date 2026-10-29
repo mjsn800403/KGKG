@@ -125,6 +125,17 @@ def _send_sms_otp(phone: str, code: int) -> bool:
     return False
 
 
+def _int_id(value):
+    """A client-supplied primary key as int, else None (so the lookup misses).
+    ``filter(id='abc')`` raises inside the ORM -> HTTP 500. Booleans are not ids."""
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _body(request):
     """Parsed JSON request body, always a dict.
 
@@ -1458,7 +1469,7 @@ def admin_users_view(request):
     """
     if request.method == 'POST':
         b = _body(request)
-        company = Company.objects.filter(id=b.get('company_id')).first()
+        company = Company.objects.filter(id=_int_id(b.get('company_id'))).first()
         if not company:
             return JsonResponse({'error': 'شرکت یافت نشد.'}, status=400)
         # Users inherit the root's expiry; with no root they would never expire.

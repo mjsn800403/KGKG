@@ -161,7 +161,7 @@ jobs:
           printf 'checking %s\n' "${files[@]}"
           shellcheck -S warning -x "${files[@]}"
 
-      - name: Operations tests (deploy gate, watchdog, staging sanitizer)
+      - name: Operations tests (deploy gate, promote evidence, watchdog, staging sanitizer)
         # The gate decides whether a key may promote to production, the
         # watchdog is the last thing that would page if alerting died, and the
         # sanitizer is what keeps real credentials off staging. All three are
@@ -169,6 +169,8 @@ jobs:
         # them not to be tested on every push.
         run: |
           bash ops/deploy/test_gate_roles.sh
+          bash ops/deploy/test_promote.sh
+          python3 qa/e2e_record.py --selftest
           python3 -m unittest discover -s ops/observability -t ops/observability -p 'test_*.py' -v
           python3 ops/deploy/sanitize_staging_db.py --selftest
           python3 ops/observability/watchdog.py --selftest
