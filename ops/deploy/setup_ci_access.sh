@@ -44,7 +44,7 @@ ZERO_SHA=0000000000000000000000000000000000000000
 
 say()  { printf '  %s\n' "$*"; }
 step() { printf '\n== %s\n' "$*"; }
-warn() { printf '  WARNING: %s\n' "$*"; }
+warn() { printf '  WARNING: %s\n' "$1"; shift; (( $# )) && printf '           %s\n' "$@"; return 0; }
 die()  { printf '\nFAILED: %s\n' "$1" >&2; shift; (( $# )) && printf '  %s\n' "$@" >&2; exit 1; }
 
 HOST='' REPO='' ROTATE=0 USE_GH=auto
@@ -88,6 +88,7 @@ if [[ -n $sshd_conf ]]; then
     "Set 'PermitRootLogin prohibit-password' (keys only) in /etc/ssh/sshd_config, then: systemctl reload ssh"
   [[ $(awk '$1 == "pubkeyauthentication" {print $2; exit}' <<<"$sshd_conf") != no ]] \
     || die "sshd has 'PubkeyAuthentication no'; key logins are impossible"
+  password_auth=$(awk '$1 == "passwordauthentication" {print $2; exit}' <<<"$sshd_conf")
   akf=$(awk '$1 == "authorizedkeysfile" {$1=""; print; exit}' <<<"$sshd_conf")
   [[ -z $akf || $akf == *".ssh/authorized_keys"* || $akf == *"%h/.ssh/authorized_keys"* ]] \
     || warn "sshd's AuthorizedKeysFile is '$akf', not ~/.ssh/authorized_keys; the key below may not be read"
@@ -198,9 +199,17 @@ else
   warn "no ssh client here, so the login itself was not tested"
 fi
 
+# GitHub's runners come from changing addresses, so SSH has to accept any
+# source. That is only reasonable with password logins off: the CI key is
+# harmless, but every other account would face the whole internet.
+if [[ ${password_auth:-} == yes ]]; then
+  warn "sshd accepts passwords (PasswordAuthentication yes). Before port $port is open to every address," \
+       "set 'PasswordAuthentication no' in /etc/ssh/sshd_config (check you can log in with a key first), then: systemctl reload ssh"
+fi
 if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
   ufw status | grep -qE "^($port(/tcp)?|OpenSSH)[[:space:]]+(ALLOW|LIMIT)([[:space:]]+IN)?[[:space:]]+Anywhere" \
-    || warn "ufw is active and does not allow port $port from anywhere. GitHub's runners come from changing addresses: ufw allow $port/tcp"
+    || warn "ufw is active and does not allow port $port from anywhere, so GitHub cannot connect." \
+            "Once password logins are off: ufw limit $port/tcp"
 fi
 if command -v fail2ban-client >/dev/null && fail2ban-client ping >/dev/null 2>&1; then
   say "fail2ban is running; if CI reports 'Connection closed', check: fail2ban-client status sshd"

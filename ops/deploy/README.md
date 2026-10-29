@@ -57,7 +57,7 @@ The script is safe to re-run. `--rotate` replaces the key (paste the new one int
 | holds a public key / not a usable private key | Paste the private key file, BEGIN and END lines included. |
 | refused DEPLOY_SSH_KEY | The secret and the server disagree. Compare the fingerprint CI prints with the one the script printed; re-run the script and paste again. |
 | host key does not match | The server was rebuilt or its host keys changed: re-run the script for the new `DEPLOY_KNOWN_HOSTS`. |
-| cannot reach … port 22 | Firewall. GitHub's runners use changing addresses: `ufw allow 22/tcp` (the key can only stage). |
+| cannot reach … port 22 | Firewall. GitHub's runners use changing addresses, so SSH must accept any source. First make sure password logins are off (`PasswordAuthentication no` in `/etc/ssh/sshd_config`; the setup script warns if not), then `ufw limit 22/tcp`. The CI key itself can only stage. |
 | closed the SSH connection before authentication | fail2ban banned a runner: `fail2ban-client status sshd`. |
 | could promote to production | The CI key is pinned to `kg-deploy-gate`. Re-run the script; it repins it to `kg-ci-gate`. |
 | could not fetch origin/work | The server's own GitHub access: `git -C /opt/KGKG fetch origin work`. |
