@@ -140,9 +140,35 @@ staging run. Both mutating verbs accept only a 40-hex commit already on
 transient systemd unit so a dropped SSH connection cannot kill a deploy
 half-way. The matrix is tested: `ops/deploy/test_gate_roles.sh`.
 
+**How GitHub reaches this server:** through a Cloudflare Tunnel. The
+`cloudflared` connector here dials out to Cloudflare; the runner comes in with
+`cloudflared access ssh` and a Cloudflare Access service token (an Access
+application with a single *Service Auth* policy guards the hostname), lands on
+sshd at `localhost:22` and is pinned to `kg-ci-gate` as above. Port 22 does not
+have to be open to the internet. Three locks in a row: the Access token, the
+SSH key, the forced command.
+
+Setting it up is four steps in the Cloudflare dashboard and one command, as
+root: `bash /opt/KGKG/ops/deploy/setup_ci_access.sh --tunnel <hostname>`
+(`ops/deploy/README.md` has both, and the three lines that run it from
+`origin/work` before it is in the live release). It creates the dedicated key
+`/root/.ssh/kgkg-github-ci`, pins it to `kg-ci-gate` with `restrict`, installs
+the connector, then logs in through Cloudflare back to this machine exactly as
+CI will, with the host key pinned, and checks that Access refuses requests
+without the token. It sets the secrets with `gh` or prints them to paste.
+Re-running it is safe; `--rotate` replaces the key. Without `--tunnel` it sets
+up direct SSH to the public address instead (port 22 open, password logins off).
+On the runner, `ops/deploy/ci_ssh.sh` validates the secrets and names the fix
+for each failure (wrong or expired Access token, a policy that is not Service
+Auth, connector down, wrong key, stale host key, a key that could promote);
+`ops/deploy/test_ci_ssh.sh` tests it. Until 2026-10-29 none of these secrets had
+ever been set, so the `stage` job had never reached the server.
+
 `.github/workflows/deploy.yml` used to promote automatically on green CI, held
 back only by a GitHub environment having reviewers configured. It was deleted
-on 2026-10-27 — a deleted workflow cannot fire.
+from `work` on 2026-10-27. It is a `workflow_run` workflow, and GitHub runs
+those from the **default branch** (`main`), so it keeps firing after every CI
+run on `work` until that deletion is merged into `main`.
 
 ### Staging data
 

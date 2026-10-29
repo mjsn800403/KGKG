@@ -61,6 +61,9 @@ esac
 # ---- status ----------------------------------------------------------------
 if [[ $verb == status ]]; then
   [[ -n ${extra:-}${sha:-} ]] && deny "status takes no arguments"
+  # CI's preflight (ops/deploy/ci_ssh.sh) refuses to go on with a key that
+  # reports role operator: its key must not be able to promote.
+  echo "key role: $ROLE"
   if [[ $DRYRUN == 1 ]]; then echo "would run: status"; exit 0; fi
   bash "$DEPLOY" --status
   echo
