@@ -640,3 +640,9 @@ RERANK_CANDIDATES = 20
 
 # Car-scoped dense pass depth (retrieve.assist, pinned car only).
 CAR_VEC_K = int(os.environ.get('RAG_CAR_VEC_K', '40'))
+
+# Dense KNN backend: 'sqlite' (sqlite-vec inside index.rag.db, default) or
+# 'pgvector' (PostgreSQL HNSW, see api/rag/pgvec.py; falls back to sqlite-vec).
+VEC_BACKEND = os.environ.get('RAG_VEC_BACKEND', 'sqlite')
+PGVEC_DSN = os.environ.get('RAG_PGVEC_DSN', 'dbname=kgkg_vec')
+PGVEC_EF_SEARCH = int(os.environ.get('RAG_PGVEC_EF_SEARCH', '400'))
