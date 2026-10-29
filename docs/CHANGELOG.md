@@ -3,6 +3,20 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## 2026-10-29 — CI can reach the server
+- **Why `work` was red:** the `stage` job's secrets (`DEPLOY_HOST`, `DEPLOY_SSH_KEY`,
+  `DEPLOY_KNOWN_HOSTS`) had never been set: the old `deploy.yml` dialled an empty host name from
+  2026-10-17, and `stage` has stopped at "missing repository secret(s)" since it was added. Only
+  the server can create the key.
+- **`ops/deploy/setup_ci_access.sh`** (run once on the server as root): dedicated CI key pinned to
+  `kg-ci-gate` with `restrict`, a real SSH login test, secrets set with `gh` or printed to paste.
+- **`ops/deploy/ci_ssh.sh`** runs the `stage` job's connection: validates the secrets (CRLF,
+  public-vs-private key, passphrase, `user@host:port`), then names the fix for each SSH failure;
+  refuses a CI key the server would let promote (`status` now prints `key role:`). 46 tests in
+  `ops/deploy/test_ci_ssh.sh`, run in CI.
+- **Docs:** `ops/deploy/README.md` rewritten for the stage/promote pipeline (it still described the
+  deleted auto-deploy); doc 11 §11.3 corrected: the old `deploy.yml` still fires from `main`.
+
 ## 2026-10-28 — v1.0.0: test architecture, security fixes, audit evidence (branch `qa-audit`)
 - **Security fixes found by the new tests** (each with a regression test; details in
   `audit-evidence/14-risk-and-corrective-actions/`): cross-company paid-media download through

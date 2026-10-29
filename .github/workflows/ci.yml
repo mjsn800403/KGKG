@@ -151,6 +151,7 @@ jobs:
           python3 -m unittest discover -s ops/observability -t ops/observability -p 'test_*.py' -v
           python3 ops/deploy/sanitize_staging_db.py --selftest
           python3 ops/observability/watchdog.py --selftest
+          bash ops/deploy/test_ci_ssh.sh
 
       - name: Dockerfile lint
         run: |
@@ -255,6 +256,10 @@ jobs:
     # verb (ops/deploy/kg-deploy-gate, matrix tested by
     # ops/deploy/test_gate_roles.sh). A leaked secret buys a staging run.
     # Promotion is `kgkg-promote <sha>`, typed by a person on the host.
+    #
+    # The connection itself is ops/deploy/ci_ssh.sh: it checks the secrets
+    # before dialling and names the fix for each way SSH can fail. The secrets
+    # are created on the server by ops/deploy/setup_ci_access.sh.
     if: github.event_name == 'push' && github.ref == 'refs/heads/work'
     needs: [backend, frontend, security, images]
     runs-on: ubuntu-latest
@@ -263,50 +268,32 @@ jobs:
       group: kgkg-staging
       cancel-in-progress: false
     steps:
-      - name: Check the staging credential is configured
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ops/deploy
+
+      - name: Check the staging credential
+        # The only step that sees the secrets; it writes the key, known_hosts
+        # and target under ~/.ssh for the steps below.
         env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
-        run: |
-          missing=
-          [ -n "$KEY" ]  || missing="$missing DEPLOY_SSH_KEY"
-          [ -n "$HOST" ] || missing="$missing DEPLOY_HOST"
-          if [ -n "$missing" ]; then
-            echo "::error::Staging cannot run: missing repository secret(s):$missing"
-            echo "Add them under Settings -> Secrets and variables -> Actions."
-            echo "The key must be the one pinned to kg-ci-gate in the server's authorized_keys."
-            exit 1
-          fi
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: bash ops/deploy/ci_ssh.sh prepare
+
+      - name: Reach the server
+        # Read-only `status`: proves the login and the forced command, and
+        # refuses a CI key that the server would let promote.
+        run: bash ops/deploy/ci_ssh.sh preflight
 
       - name: Stage ${{ github.sha }}
-        env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          SHA: ${{ github.sha }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
-          if [ -n "$KNOWN_HOSTS" ]; then
-            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-            strict=yes
-          else
-            # Without a pinned host key the connection is not authenticated in
-            # the server's direction, so say so loudly rather than pretend.
-            echo "::warning::DEPLOY_KNOWN_HOSTS is not set; the server's host key is not verified."
-            strict=accept-new
-          fi
-          ssh -i ~/.ssh/deploy -o "StrictHostKeyChecking=$strict" \
-              -o ServerAliveInterval=30 -o ConnectTimeout=20 \
-              "root@$HOST" "stage $SHA"
+        run: bash ops/deploy/ci_ssh.sh run stage "$GITHUB_SHA"
 
       - name: What the server reports
         if: always()
-        env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          [ -n "$KEY" ] || exit 0
-          ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new \
-              -o ConnectTimeout=20 "root@$HOST" "status" >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          [ -f ~/.ssh/kgkg-target ] || exit 0
+          { echo '### Server status'; echo '```'
+            bash ops/deploy/ci_ssh.sh run status 2>&1
+            echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true

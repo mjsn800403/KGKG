@@ -135,9 +135,24 @@ staging run. Both mutating verbs accept only a 40-hex commit already on
 transient systemd unit so a dropped SSH connection cannot kill a deploy
 half-way. The matrix is tested: `ops/deploy/test_gate_roles.sh`.
 
+**Connecting GitHub to this server** is one command, as root:
+`bash /opt/KGKG/ops/deploy/setup_ci_access.sh`. It creates the dedicated key
+`/root/.ssh/kgkg-github-ci`, pins it to `kg-ci-gate` with `restrict`, proves a
+real login reaches the gate as role `ci`, and sets `DEPLOY_HOST`,
+`DEPLOY_KNOWN_HOSTS` and `DEPLOY_SSH_KEY` with `gh` (or prints them to paste).
+Re-running it is safe; `--rotate` replaces the key. Before it is in the live
+release, run it from `origin/work` (`ops/deploy/README.md` has the three
+lines); it still takes the gates from `/opt/KGKG`. On the runner,
+`ops/deploy/ci_ssh.sh` validates the secrets and names the fix for each
+failure (wrong key, stale host key, firewall, fail2ban, a key that could
+promote); `ops/deploy/test_ci_ssh.sh` tests it. Until 2026-10-29 none of these
+secrets had ever been set, so the `stage` job had never reached the server.
+
 `.github/workflows/deploy.yml` used to promote automatically on green CI, held
 back only by a GitHub environment having reviewers configured. It was deleted
-on 2026-10-27 — a deleted workflow cannot fire.
+from `work` on 2026-10-27. It is a `workflow_run` workflow, and GitHub runs
+those from the **default branch** (`main`), so it keeps firing after every CI
+run on `work` until that deletion is merged into `main`.
 
 ### Staging data
 
