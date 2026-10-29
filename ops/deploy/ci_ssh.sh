@@ -14,8 +14,9 @@
 #   ci_ssh.sh preflight         `status` on the server; refuse a key that can promote
 #   ci_ssh.sh run <command...>  run a gate verb on the server; explain a failure
 #
-# Reads DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (optional) and
-# DEPLOY_PORT (optional, default 22). KG_CI_SSH_DIR replaces ~/.ssh (tests).
+# Reads DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (all required: no
+# host key means no staging, never trust-on-first-use) and DEPLOY_PORT
+# (optional, default 22). KG_CI_SSH_DIR replaces ~/.ssh (tests).
 #
 # Transport. With DEPLOY_CF_ACCESS_CLIENT_ID and DEPLOY_CF_ACCESS_CLIENT_SECRET
 # set, ssh goes through a Cloudflare Tunnel instead of to a public port:
@@ -52,6 +53,10 @@ prepare() {
   local missing=
   [[ -n $(trim "$key") ]]  || missing+=" DEPLOY_SSH_KEY"
   [[ -n $(trim "$host") ]] || missing+=" DEPLOY_HOST"
+  # Required, not optional: a fresh runner has no earlier host key to trust,
+  # so without this line anyone answering at DEPLOY_HOST could pose as the
+  # server and hand back a forged staging result.
+  [[ -n $(trim "$kh") ]]   || missing+=" DEPLOY_KNOWN_HOSTS"
   [[ -z $missing ]] || fail "Staging cannot run: missing repository secret(s):$missing" \
     "GitHub has never been given the credential to reach the server; only the server can create it." \
     "$FIX" \
@@ -109,19 +114,11 @@ prepare() {
   local entry=$host strict=yes
   (( port == 22 )) || entry="[$host]:$port"
   kh=${kh//$'\r'/}
-  if [[ -n $(trim "$kh") ]]; then
-    printf '%s\n' "$(trim "$kh")" > "$KH_FILE"
-    ssh-keygen -F "$entry" -f "$KH_FILE" >/dev/null 2>&1 \
-      || fail "DEPLOY_KNOWN_HOSTS has no line for $entry" \
-           "Each line starts with the address ssh connects to, so it must match DEPLOY_HOST$( (( port == 22 )) || printf ' as [host]:port')." \
-           "$FIX It prints the right line."
-  else
-    : > "$KH_FILE"
-    # Without a pinned host key the connection is not authenticated in the
-    # server's direction, so say so loudly rather than pretend.
-    echo "::warning::DEPLOY_KNOWN_HOSTS is not set; the server's host key is not verified."
-    strict=accept-new
-  fi
+  printf '%s\n' "$(trim "$kh")" > "$KH_FILE"
+  ssh-keygen -F "$entry" -f "$KH_FILE" >/dev/null 2>&1 \
+    || fail "DEPLOY_KNOWN_HOSTS has no line for $entry" \
+         "Each line starts with the address ssh connects to, so it must match DEPLOY_HOST$( (( port == 22 )) || printf ' as [host]:port')." \
+         "$FIX It prints the right line."
 
   printf 'HOST=%q\nPORT=%q\nSTRICT=%q\nTRANSPORT=%q\n' "$host" "$port" "$strict" "$transport" > "$TARGET_FILE"
   rm -f "$ACCESS_FILE"
