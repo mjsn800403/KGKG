@@ -8,6 +8,14 @@ short and point at the doc section that was updated.
   assistant answered 500 ("no such table") instead of 503 until the file was removed by hand; one
   recommendations-panel view was enough. Read-only opens now raise `FileNotFoundError` and create
   nothing (`api/rag/store.py`, test `api/rag/test_store_ro.py`).
+- **Fix (D-32):** malformed ids (`"abc"`) gave HTTP 500 on six admin inputs (pipeline job/ZIP
+  actions, vehicle-specs `car_id`, admin user create `company_id`); now 404/400.
+- **Tests:** backend 850 → 930. New suites for team analytics/invites and the PDF report
+  (`test_team.py`), the admin operations API (`test_adminops.py`), shield keys and alerts, and the
+  serving layer's search/diagnose filters (`rag/test_service_paths.py`). team 24→90 %, reporting
+  0→98 %, adminops 37→77 %, shield 69→95 %, rag/service 61→90 %; total 53→56 %, CI floor 52→55.
+- **Release gate:** `kgkg-promote` requires a passing full E2E run for the commit
+  (`qa/run_e2e.sh` → `/opt/KGKG_release/e2e/<sha>.env`); overrides are typed and logged.
 
 ## 2026-10-28 — v1.0.0: test architecture, security fixes, audit evidence (branch `qa-audit`)
 - **Security fixes found by the new tests** (each with a regression test; details in
