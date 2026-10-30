@@ -4,6 +4,28 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Two governance gates, so the process is checked the way the code is** (`ops/governance/`,
+  new `governance` job in CI, 27 tests, standard library only):
+  * `check_traceability.py` refuses a pull request whose title and body reference no issue.
+    Deliberately the weakest rule that still produces evidence — it does not care which item or
+    whether it exists, only that the author said. A stricter rule would fail honest changes and
+    teach people to paste a number they do not mean. Quoted references inside a code fence do
+    not count: pasting someone else's log is not a claim about *this* change. It refused this
+    branch's own pull request on the first run, and the description was fixed rather than the
+    rule weakened.
+  * `check_docs_freshness.py` + `docs/OWNERS.toml` give all 25 documents in `docs/` a named
+    owner and a review interval; a document with no entry, no owner, or past
+    `reviewed + review_days` fails the build. The staleness rule is literally the one the
+    product applies to knowledge-base articles, so the repository and the product never
+    disagree about what "stale" means. `docs/superpowers/specs/` is excluded — a dated design
+    record cannot go stale. The owners are **seeded from git history and marked as needing
+    correction**; they are a starting point that makes the gate real, not a record of who
+    accepted the duty.
+- **The tracker now holds planned work, not only remediation.** Milestones `1.2.0` and
+  `Backlog` created and applied to every open issue (0 of 19 carried one before), `type:*` and
+  `priority:*` labels added, and five epics filed from the roadmap (#43 ship the desk, #44 close
+  the desk loop, #45 GitHub as the system of record, #46 knowledge base in use, #47 delivery and
+  flow metrics), each with acceptance criteria. Refs #45.
 - **Four fixes from automated review of the service-desk PR**, each with a test written first
   that fails on the previous code:
   * **A specialist never saw their own ticket move.** `events._scoped_qs` gives a plain user only

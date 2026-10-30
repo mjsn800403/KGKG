@@ -67,6 +67,14 @@ These docs only stay valuable if they stay true. The rules:
    force-added: `git add -f docs/`.
 6. **English for engineering docs, Persian for user-facing strings.** UI copy inside code and
    guidance content is Persian; these maintainer docs are English.
+7. **Every document has a named owner and a review date** in [`OWNERS.toml`](OWNERS.toml), and
+   CI enforces it (`ops/governance/check_docs_freshness.py`): a document with no entry, no
+   owner, or past `reviewed + review_days` fails the build. Reviewed a document and it is still
+   correct? Move `reviewed` to today — that is the whole ritual, deliberately cheap enough to
+   actually do. Changed one? Move it too; you have just confirmed it. The staleness rule is the
+   same one the product applies to knowledge-base articles, so the repository and the product
+   never disagree about what "stale" means. `docs/superpowers/specs/` is excluded: a dated
+   design record cannot go stale.
 
 ## Reading order for a new maintainer
 

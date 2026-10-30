@@ -55,6 +55,13 @@ Low.
 
 ## Phase 2 — GitHub as the verifiable system of record (Finding 1)
 
+**Partly delivered 2026-10-30** (tracked as #45): milestones `1.2.0` and
+`Backlog` exist and every open issue carries one — 0 of 19 did before; `type:*`
+and `priority:*` labels added; five epics filed from this roadmap so the
+tracker holds planned work rather than only remediation; and
+`ops/governance/check_traceability.py` refuses a pull request that references
+no tracked work. Still open: the Project board and the delivery dashboard.
+
 No new tooling. Configure what exists:
 
 * one milestone per release (`1.1.0`, `1.2.0`); every issue gets one;
