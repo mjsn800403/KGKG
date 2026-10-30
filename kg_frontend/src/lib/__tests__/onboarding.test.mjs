@@ -12,7 +12,7 @@ const payload = (items, dismissed = false) => ({
   done: items.filter((i) => i.done).length,
   total: items.length,
 });
-const ITEM = (id, done) => ({ id, title: `t-${id}`, why: 'w', href: '/x', done });
+const ITEM = (id, done, href = '/x') => ({ id, title: `t-${id}`, why: 'w', href, done });
 
 describe('shouldShowStrip', () => {
   test('shows while an entitled item is outstanding', () => {
@@ -24,7 +24,10 @@ describe('shouldShowStrip', () => {
   });
 
   test('hides for a seat with no entitled items at all', () => {
-    // A freshly invited seat with nothing assigned: there is nothing to suggest.
+    // A freshly invited seat with nothing assigned. The server really does
+    // return this now: before the 2026-10-30 review `ask_support` was
+    // entitled unconditionally, so this state was unreachable and this test
+    // was pinning a fiction while the real screen showed a strip.
     assert.equal(shouldShowStrip(payload([])), false);
   });
 
@@ -61,5 +64,16 @@ describe('progressLabel', () => {
 
   test('zero done is still a fraction, not an empty string', () => {
     assert.equal(progressLabel(0, 3), '۰ از ۳ قدم');
+  });
+});
+
+describe('items that are not links', () => {
+  test('an item with no href is still returned by nextItem', () => {
+    // Search, parts and the CSV exports live inside a vehicle, so they carry
+    // href: null rather than pointing back at the page the strip is on. They
+    // are still the next thing worth doing.
+    const n = nextItem(payload([ITEM('a', true), ITEM('use_search', false, null)]));
+    assert.equal(n.id, 'use_search');
+    assert.equal(n.href, null);
   });
 });

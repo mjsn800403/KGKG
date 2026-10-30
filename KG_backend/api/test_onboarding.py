@@ -46,10 +46,12 @@ class OnboardingBase(TestCase):
 
 
 class EntitlementTests(OnboardingBase):
-    def test_a_seat_with_no_grants_is_offered_only_what_needs_none(self):
-        """A freshly invited seat with nothing assigned. Filing a support
-        request needs no entitlement; everything else does."""
-        self.assertEqual(self.ids(self.bare), ['ask_support'])
+    def test_a_seat_with_no_grants_is_offered_nothing(self):
+        """Changed by the 2026-10-30 review (finding 3): `ask_support` used to
+        be entitled unconditionally, so a freshly invited seat with no vehicles
+        saw a strip whose only suggestion was "file a support ticket". Their
+        screen already tells them to contact their administrator."""
+        self.assertEqual(self.ids(self.bare), [])
 
     def test_the_assistant_item_follows_user_ai_eligible_exactly(self):
         from . import access
@@ -76,8 +78,103 @@ class EntitlementTests(OnboardingBase):
         self.assertIsNone(self.done(self.seat, 'invite_colleague'))
         self.seat.can_manage_team = True
         self.seat.save(update_fields=['can_manage_team'])
-        self.assertIs(self.done(self.seat, 'invite_colleague'), False)
-        self.assertIs(self.done(self.seat, 'read_team_report'), False)
+        self.assertIs(self.done(self.seat, 'invite_colleague'), True,
+                      'the company already has another seat')
+        # read_team_report follows the org-graph gate, not this flag — see
+        # test_the_team_report_item_follows_the_gate_that_actually_serves_it.
+        self.assertIsNone(self.done(self.seat, 'read_team_report'))
+
+
+class ReviewFixTests(OnboardingBase):
+    """Findings from the 2026-10-30 whole-branch review. Each test fails on the
+    code as first written."""
+
+    def test_an_item_is_never_offered_against_an_action_nothing_writes(self):
+        """FINDING 1 (critical). `invite_colleague` completed on an ActivityLog
+        action `team_add`, which NOTHING in the product writes. Most actions
+        are sent by the frontend to POST /api/activity/ (see logActivity); the
+        backend writes a few directly. `team_add` appears only as a KEY in two
+        Persian label maps — a display string for an action nobody logs.
+
+        The item could never tick: a manager who had invited their whole team
+        was told to invite someone on every page load, and the metric reported
+        a permanent 0 % to management. Every completion signal must be an
+        action some code path actually produces, or be derived from state.
+        """
+        import os
+        import re
+        from . import onboarding
+        roots = [os.path.join(os.getcwd(), 'api'),
+                 os.path.abspath(os.path.join(os.getcwd(), '..', 'kg_frontend', 'src'))]
+        written = set()
+        for root in roots:
+            for dirpath, _dirs, files in os.walk(root):
+                if 'node_modules' in dirpath or '__pycache__' in dirpath:
+                    continue
+                for name in files:
+                    if not name.endswith(('.py', '.js', '.jsx', '.ts', '.tsx')):
+                        continue
+                    if name.startswith('test') or 'onboarding' in name:
+                        continue        # a reader is not a writer
+                    try:
+                        src = open(os.path.join(dirpath, name), encoding='utf-8').read()
+                    except OSError:
+                        continue
+                    # A quoted literal is a value being sent or stored. An
+                    # object KEY (`team_add: 'label'`) is not, which is exactly
+                    # how the defect hid.
+                    written |= set(re.findall(r"""['"]([a-z_]{3,30})['"]""", src))
+        for action in onboarding.ACTIONS_USED:
+            self.assertIn(action, written,
+                          f"onboarding completes on ActivityLog action "
+                          f"'{action}', which no code path writes")
+
+    def test_a_manager_who_already_has_a_team_has_discovered_inviting(self):
+        """FINDING 1, the half that must stay true for existing customers. A
+        manager whose company already has colleagues plainly knows the feature
+        exists; the item is about discovery, so it is satisfied by the state
+        rather than by an action nobody logged at the time."""
+        alone = Company.objects.create(name='Onb Solo')
+        boss = PortalUser.objects.create(company=alone, username='onb_boss',
+                                         role='after_sales_manager',
+                                         can_manage_team=True)
+        UserCarAccess.objects.create(user=boss, car=self.car, documents=[],
+                                     admin_granted=True)
+        self.assertIs(self.done(boss, 'invite_colleague'), False)
+        PortalUser.objects.create(company=alone, username='onb_colleague',
+                                  role='after_sales_specialist')
+        self.assertIs(self.done(boss, 'invite_colleague'), True)
+
+    def test_the_team_report_item_follows_the_gate_that_actually_serves_it(self):
+        """FINDING 2 (critical). The item was offered on `can_manage_team`, but
+        /api/team/analytics/ is gated by orggraph.user_can_view_team — an
+        org-graph position test. A manager at a leaf node was handed the item
+        and got a 403 for following it: precisely the "manufactures support
+        tickets" harm the module exists to avoid."""
+        from . import orggraph
+        self.seat.can_manage_team = True
+        self.seat.save(update_fields=['can_manage_team'])
+        self.assertFalse(orggraph.user_can_view_team(self.seat))
+        self.assertIsNone(self.done(self.seat, 'read_team_report'),
+                          'offered an item whose page would refuse them')
+
+    def test_a_seat_with_nothing_assigned_is_offered_nothing(self):
+        """FINDING 3. `ask_support` was entitled unconditionally, so a freshly
+        invited seat with no vehicles saw a strip whose only suggestion was
+        "file a support ticket" — the product's first instruction to a new
+        user. It also made the frontend's own "empty payload" test pin a state
+        the server could not produce."""
+        self.assertEqual(self.ids(self.bare), [])
+
+    def test_vehicle_scoped_items_do_not_link_to_the_page_they_appear_on(self):
+        """FINDING 6. Search, parts and the CSV exports all live under a
+        vehicle. They were given href='/browse' — the page the strip itself is
+        rendered on — so three of eight pointers pointed at themselves."""
+        from . import onboarding
+        for item in onboarding.ITEMS:
+            if item.id in ('use_search', 'open_parts', 'export_times'):
+                self.assertIsNone(item.href,
+                                  f'{item.id} must not pretend to be a link')
 
 
 class CompletionTests(OnboardingBase):
@@ -132,6 +229,22 @@ class DiscoveryCountsTests(OnboardingBase):
         self.assertEqual(after['entitled'], 0)
         self.assertLessEqual(after['discovered'], after['entitled'])
 
+    def test_seats_that_have_never_signed_in_are_not_counted_as_failures(self):
+        """FINDING 5. `active=True` includes invited seats that have never set a
+        password and cannot sign in. Counting them as discovery failures is the
+        same error the module docstring rejects for unentitled seats."""
+        invited = PortalUser.objects.create(company=self.co, username='onb_invited',
+                                            role='after_sales_specialist')
+        invited.password_set = False
+        invited.save(update_fields=['password_set'])
+        UserCarAccess.objects.create(user=invited, car=self.car, documents=[],
+                                     admin_granted=True)
+        counts = onboarding.discovery_counts(onboarding.measurable_seats())
+        self.assertNotIn(invited.id,
+                         [u.id for u in onboarding.measurable_seats()],
+                         'a seat that cannot sign in cannot discover anything')
+        self.assertEqual(counts['read_manual']['entitled'], 1)
+
     def test_a_rate_with_no_entitled_seats_is_none_not_zero(self):
         self.assertIsNone(onboarding.discovery_counts([])['read_manual']['rate'])
 
@@ -160,10 +273,15 @@ class QueryCostTests(OnboardingBase):
         self.assertEqual(few, many)
 
     def _count_queries(self, user):
+        """Re-fetch the seat each time: Django caches related managers on the
+        instance, so measuring twice on one object compares a warm call with a
+        cold one and reports a difference that has nothing to do with the
+        activity volume under test."""
         from django.test.utils import CaptureQueriesContext
         from django.db import connection
+        fresh = PortalUser.objects.get(id=user.id)
         with CaptureQueriesContext(connection) as ctx:
-            onboarding.progress_for(user)
+            onboarding.progress_for(fresh)
         return len(ctx)
 
 
@@ -198,8 +316,8 @@ class OnboardingEndpointTests(OnboardingBase):
         """A freshly invited seat: one item, nothing done, nothing to divide by."""
         h = {'HTTP_AUTHORIZATION': f'Bearer {AuthToken.issue(self.bare).key}'}
         d = self.c.get(URL, **h).json()
-        self.assertEqual([i['id'] for i in d['items']], ['ask_support'])
-        self.assertEqual((d['done'], d['total'], d['dismissed']), (0, 1, False))
+        self.assertEqual(d['items'], [])
+        self.assertEqual((d['done'], d['total'], d['dismissed']), (0, 0, False))
 
     def test_posting_dismissed_sets_the_timestamp_and_is_idempotent(self):
         self.assertEqual(self.post({'dismissed': True}).status_code, 200)

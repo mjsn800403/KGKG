@@ -494,6 +494,13 @@ class ActivityLog(models.Model):
             models.Index(fields=['user', 'created_at']),
             models.Index(fields=['category', 'created_at']),
             models.Index(fields=['created_at']),
+            # Feature discovery asks "has this seat ever done X" as an
+            # exists() probe (api/onboarding.py). Without this, the NEGATIVE
+            # answer — the common one, since it is the undiscovered features
+            # the checklist is about — walks every row the seat has, and the
+            # heaviest production seat has ~47,000 of them. It is paid
+            # synchronously on the page they land on.
+            models.Index(fields=['user', 'action']),
         ]
 
     def __str__(self):

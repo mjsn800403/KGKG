@@ -52,11 +52,18 @@ export default function OnboardingStrip() {
     >
       <div className="onb-line">
         <span className="onb-count">{progressLabel(payload.done, payload.total)}</span>
-        {next && !open && (
+        {/* An item that lives inside a vehicle has no href: linking it back
+            to /browse, the page this strip is rendered on, would be a pointer
+            at itself. Its copy says where to go instead. */}
+        {next && !open && (next.href ? (
           <Link className="onb-next" href={next.href}>
             <Icon name="sparkles" size={14} /> {next.title}
           </Link>
-        )}
+        ) : (
+          <span className="onb-next onb-next-static">
+            <Icon name="sparkles" size={14} /> {next.title}
+          </span>
+        ))}
         <button
           type="button"
           className="onb-toggle"
@@ -83,7 +90,7 @@ export default function OnboardingStrip() {
                   {i.done ? <Icon name="check" size={14} /> : <span className="onb-dot" />}
                 </span>
                 <span className="onb-text">
-                  {i.done ? (
+                  {i.done || !i.href ? (
                     <b>{i.title}</b>
                   ) : (
                     <Link href={i.href}><b>{i.title}</b></Link>

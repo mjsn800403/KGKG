@@ -31,7 +31,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from . import access
-from .models import ActivityLog, CompanyRequest, SearchLog
+from .models import ActivityLog, CompanyRequest, PortalUser, SearchLog
 from .portal_auth import require_portal_user
 
 
@@ -48,36 +48,57 @@ class Item(NamedTuple):
 ITEMS = (
     Item('read_manual', 'یک فصل از منوال را باز کنید',
          'مستندات تعمیراتی خودروهایی که برایتان فعال شده است.', '/browse'),
+    # href is None for anything that lives INSIDE a vehicle: the strip is
+    # rendered on /browse, and an item linking back to the page it is shown on
+    # is a pointer at itself. The copy says where to go instead.
     Item('use_search', 'در محتوا جستجو کنید',
-         'جستجوی هوشمند، فارسی را هم در متن انگلیسی منوال پیدا می‌کند.', '/browse'),
+         'پس از باز کردن یک خودرو، کادر جستجوی بالای صفحه؛ فارسی را هم در متن انگلیسی منوال پیدا می‌کند.',
+         None),
     Item('ask_assistant', 'از دستیار هوشمند بپرسید',
          'به‌جای گشتن در فصل‌ها، سؤالتان را بپرسید؛ پاسخ با ارجاع به منبع می‌آید.',
          '/assistant'),
     Item('open_parts', 'کاتالوگ قطعات را ببینید',
-         'شمارهٔ فنی و نقشهٔ انفجاری قطعات همان خودرو.', '/browse'),
+         'داخل هر خودرویی که کاتالوگ دارد، دکمهٔ «قطعات»: شمارهٔ فنی و نقشهٔ انفجاری.',
+         None),
     Item('export_times', 'زمان استاندارد یا ابزار مخصوص را خروجی بگیرید',
-         'خروجی CSV برای برآورد زمان کار و فهرست ابزار.', '/browse'),
+         'داخل هر خودرو، خروجی CSV برای برآورد زمان کار و فهرست ابزار.', None),
     Item('ask_support', 'یک درخواست پشتیبانی ثبت کنید',
          'هر مشکل یا پرسشی را از همین‌جا پیگیری کنید؛ مهلت پاسخ مشخص است.',
          '/requests'),
     Item('invite_colleague', 'یک همکار را دعوت کنید',
          'برای هر کارشناس یک حساب جدا بسازید.', '/team'),
-    Item('read_team_report', 'گزارش تیم را بخوانید',
-         'میزان استفادهٔ تیم، به تفکیک حوزهٔ فنی.', '/team/analytics'),
+    # Title says DOWNLOAD because the signal is the PDF download (team.py
+    # writes `report_pdf` there and nowhere else). A title promising "read"
+    # beside a completion that needs a download is an item that never ticks
+    # for someone who opens the page every week.
+    Item('read_team_report', 'گزارش PDF تیم را دریافت کنید',
+         'میزان استفادهٔ تیم به تفکیک حوزهٔ فنی، به صورت فایل.', '/team/analytics'),
 )
 
 #: Packages that make the CSV exports meaningful.
 _EXPORT_PACKAGES = {'standard_time', 'special_tools'}
 
+#: Every ActivityLog action completion depends on. A signal nothing writes is
+#: an item that can never tick — it nags forever and reports a permanent zero
+#: to management. `test_an_item_is_never_offered_against_an_action_nothing_writes`
+#: checks each of these against the code that actually logs.
+ACTIONS_USED = ('view_node', 'view_section', 'ask_assistant', 'parts_view',
+                'download_csv', 'report_pdf')
+
 
 def _entitlements(user):
     """Everything entitlement depends on, read once per seat."""
+    from . import orggraph
     packages = access.user_package_set(user)
     return {
         'has_car': user.car_accesses.exists(),
         'packages': packages,
         'ai': access.user_ai_eligible(user),
         'manages': bool(user.can_manage_team),
+        # The gate that actually serves /api/team/analytics/ is an org-graph
+        # position test, not the can_manage_team flag. Offering the item on the
+        # flag sent a leaf-node manager to a 403.
+        'sees_team': orggraph.user_can_view_team(user),
     }
 
 
@@ -91,9 +112,15 @@ def _is_entitled(item_id, ent):
     if item_id == 'export_times':
         return bool(_EXPORT_PACKAGES & ent['packages'])
     if item_id == 'ask_support':
-        return True          # every seat may file one
-    if item_id in ('invite_colleague', 'read_team_report'):
+        # Every seat MAY file one, but a seat with nothing assigned has nothing
+        # to ask about yet, and "file a support ticket" is a poor first
+        # instruction to someone who has just been given an account. Their
+        # screen already says to contact their administrator.
+        return ent['has_car']
+    if item_id == 'invite_colleague':
         return ent['manages']
+    if item_id == 'read_team_report':
+        return ent['sees_team']
     return False
 
 
@@ -119,7 +146,14 @@ def _is_done(item_id, user):
     if item_id == 'ask_support':
         return CompanyRequest.objects.filter(created_by_id=user.id).exists()
     if item_id == 'invite_colleague':
-        return acted('team_add')
+        # Derived from STATE, not from an action. Nothing in the product logs
+        # "a manager invited someone" — the seat-creation log is written
+        # against the new user — so an action-based rule could never tick, and
+        # would have nagged every manager who had already built their team.
+        # A company with colleagues in it is a manager who plainly knows the
+        # feature exists, which is what a discovery item is asking.
+        return PortalUser.objects.filter(company_id=user.company_id).exclude(
+            id=user.id).exists()
     if item_id == 'read_team_report':
         return acted('report_pdf')
     return False
@@ -198,3 +232,17 @@ def onboarding_view(request):
         'total': len(items),
         'dismissed': user.onboarding_dismissed_at is not None,
     })
+
+
+def measurable_seats():
+    """The seats a discovery rate may be computed over.
+
+    `active=True` alone includes invited seats that have never set a password
+    and cannot sign in (see team.py: employees are provisioned with an unusable
+    password). Counting them as discovery failures is the same error the module
+    rejects for unentitled seats — it reports a feature as undiscovered by
+    people who were never able to open the product at all.
+    """
+    return (PortalUser.objects.filter(active=True, password_set=True)
+            .select_related('company')
+            .prefetch_related('car_accesses', 'company__car_accesses'))

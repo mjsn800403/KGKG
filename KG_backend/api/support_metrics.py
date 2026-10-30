@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from . import feedback, knowledge, onboarding, sla
 from .admin_auth import require_admin_token
-from .models import CompanyRequest, PortalUser
+from .models import CompanyRequest
 
 DEFAULT_DAYS = 30
 
@@ -147,7 +147,5 @@ def admin_support_metrics_view(request):
         # seat's own checklist, so the figure here and the item they see
         # cannot drift apart.
         'feature_discovery': onboarding.discovery_counts(
-            PortalUser.objects.filter(active=True)
-            .select_related('company')
-            .prefetch_related('car_accesses__car', 'company__car_accesses')),
+            onboarding.measurable_seats()),
     })
