@@ -5,6 +5,9 @@ from django.http import JsonResponse
 from django.urls import path, re_path
 from . import adminops, events, metrics_exposition, portal, recommend, requests_api, team, views
 from . import orggraph_api, parts, labortimes, sst, quota, frm
+from . import feedback as feedback_api
+from . import support_metrics
+from . import knowledge
 from . import mediaauth
 from . import vncauth
 from . import grafanaauth
@@ -43,6 +46,22 @@ urlpatterns = [
          name='admin_company_requests'),
     path('api/admin/company-requests/<int:req_id>/',
          requests_api.admin_company_request_detail_view, name='admin_company_request_detail'),
+    # Support-desk KPIs (defined in audit-evidence/16-improvement-programme/
+    # METRIC_DEFINITIONS.md) and the general feedback channel.
+    path('api/admin/support/metrics/', support_metrics.admin_support_metrics_view,
+         name='admin_support_metrics'),
+    path('api/feedback/submit/', feedback_api.submit_view, name='feedback_submit'),
+    # Knowledge base: owned, reviewed, revisioned articles; a resolved ticket
+    # can be promoted into a draft (api/knowledge.py).
+    path('api/kb/', knowledge.kb_list_view, name='kb_list'),
+    path('api/kb/<slug:slug>/', knowledge.kb_detail_view, name='kb_detail'),
+    path('api/kb/<slug:slug>/vote/', knowledge.kb_vote_view, name='kb_vote'),
+    path('api/admin/kb/', knowledge.admin_kb_view, name='admin_kb'),
+    path('api/admin/kb/<int:article_id>/', knowledge.admin_kb_detail_view,
+         name='admin_kb_detail'),
+    path('api/admin/company-requests/<int:req_id>/promote-to-article/',
+         knowledge.promote_request_view, name='admin_request_promote'),
+    path('api/admin/feedback/', feedback_api.admin_feedback_view, name='admin_feedback'),
 
     # Portal auth (company seats issued by the admin).
     path('api/auth/login/', portal.login_view, name='portal_login'),
