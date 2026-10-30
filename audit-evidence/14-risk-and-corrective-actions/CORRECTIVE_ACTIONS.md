@@ -88,6 +88,7 @@ and the proposed fix, and this table stays the index.
 | [A-18](https://github.com/mjsn800403/KGKG/issues/24) | End-to-end verification of the SMS paging path. The watchdog detects a dead alert engine but cannot detect a dead SMS provider; `_sms_failures()` sees only failures the provider reports | Operations | Design work |
 | [A-19](https://github.com/mjsn800403/KGKG/issues/25) | Move staging and the QA stack off the production host | Owner | Second host, budget |
 | [A-26](https://github.com/mjsn800403/KGKG/issues/33) | A cancelled CI run orphans the staging run on the server instead of stopping it: `systemd-run --wait` detaches, so the gate keeps running a full ~10-minute gate for a commit CI has given up on, on the host that serves production. Observed 2026-10-30 when PR #32 cancelled PR #14's run. Fix is CI-side — skip staging when `$GITHUB_SHA` is no longer the tip of `origin/work` | Engineering lead | — |
+| [A-27](https://github.com/mjsn800403/KGKG/issues/35) | **Staging images are never pruned.** Each staging run builds a 3.46 GB image pair tagged with the sha; `deploy.sh` prunes only *dangling* layers, so tagged per-sha images accumulate for ever. Measured 2026-10-30: 23 `kgkg-*` images, 40.19 GB of images with 10.12 GB reclaimable, 20 containers 99 % reclaimable, ~21 GB from six stagings in nine hours, root at 77 % with 70 G free. Fix: on promote, remove every `kgkg-{backend,frontend}:<sha>` that is neither `CURRENT` nor `PREVIOUS` — `PREVIOUS` is what `--rollback` restores | Engineering lead | — |
 
 ### Closed on 2026-10-29/30
 
