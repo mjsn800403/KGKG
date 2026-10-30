@@ -172,6 +172,7 @@ jobs:
           bash ops/deploy/test_promote.sh
           bash ops/deploy/ci_evidence.sh --selftest
           bash ops/deploy/prune_images.sh --selftest
+          bash ops/deploy/ci_is_tip.sh --selftest
           python3 qa/e2e_record.py --selftest
           python3 -m unittest discover -s ops/observability -t ops/observability -p 'test_*.py' -v
           python3 ops/deploy/sanitize_staging_db.py --selftest
@@ -293,7 +294,34 @@ jobs:
         with:
           sparse-checkout: ops/deploy
 
+      - name: Is this still the tip of work?
+        id: tip
+        # A second push cancels this run, but the gate launches staging under
+        # `systemd-run --wait` so that a dropped SSH connection cannot kill a
+        # deploy — which means a cancelled job orphans the staging run instead
+        # of stopping it, and a full gate burns ~10 minutes on the host that
+        # serves production for a commit CI has given up on. Staging a commit
+        # that is no longer the tip is pointless, so don't start.
+        # Fails open: an unreadable remote (exit 2) still stages.
+        run: |
+          # `$?` read inside an `elif` is a footgun; capture it once.
+          rc=0; bash ops/deploy/ci_is_tip.sh "$GITHUB_SHA" || rc=$?
+          case $rc in
+            0) echo 'stage=true' >> "$GITHUB_OUTPUT" ;;
+            1) echo "::warning::Not staging: a newer commit is already on work"
+               { echo '## staging skipped'
+                 echo
+                 echo "\`$GITHUB_SHA\` is no longer the tip of \`work\`, so staging it"
+                 echo 'would spend a full gate on the production host for a commit'
+                 echo 'this run has already been superseded by.'
+               } >> "$GITHUB_STEP_SUMMARY"
+               echo 'stage=false' >> "$GITHUB_OUTPUT" ;;
+            *) echo "::warning::Could not read the tip of work; staging anyway"
+               echo 'stage=true' >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Check the staging credential
+        if: steps.tip.outputs.stage == 'true'
         # The only step that sees the secrets; it writes the key, known_hosts
         # and target under ~/.ssh for the steps below.
         env:
@@ -306,6 +334,7 @@ jobs:
         run: bash ops/deploy/ci_ssh.sh prepare
 
       - name: Install cloudflared (only when the server is reached through Cloudflare Tunnel)
+        if: steps.tip.outputs.stage == 'true'
         # From Cloudflare's signed apt repository; only its list is refreshed.
         run: |
           grep -qx 'TRANSPORT=cloudflare' ~/.ssh/kgkg-target || { echo "direct SSH: not needed"; exit 0; }
@@ -319,15 +348,17 @@ jobs:
           cloudflared --version
 
       - name: Reach the server
+        if: steps.tip.outputs.stage == 'true'
         # Read-only `status`: proves the login and the forced command, and
         # refuses a CI key that the server would let promote.
         run: bash ops/deploy/ci_ssh.sh preflight
 
       - name: Stage ${{ github.sha }}
+        if: steps.tip.outputs.stage == 'true'
         run: bash ops/deploy/ci_ssh.sh run stage "$GITHUB_SHA"
 
       - name: What the server reports
-        if: always()
+        if: always() && steps.tip.outputs.stage == 'true'
         run: |
           [ -f ~/.ssh/kgkg-target ] || exit 0
           { echo '### Server status'; echo '```'
