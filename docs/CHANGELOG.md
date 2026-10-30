@@ -3,10 +3,21 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
-## 1.1.0 — unreleased
+## 1.1.0 — 2026-10-30 (`deploy-20261030-053247`, `8f6df94`)
 
 Infrastructure and governance. Nothing here changes what a customer sees; all
 of it changes what can reach them and what an evaluator can check.
+
+Promoted with the full evidence set gathered on the promoted commit — CI green,
+staging gate and smoke, E2E 42/42 at full scope, k6 load passing all four
+thresholds with production measured untouched, and the ZAP full scan at 141
+pass / 0 fail. The first release in this project's history for which the load
+and DAST runs the policy has required since 2026-10-27 were actually performed
+on the commit that shipped. Record:
+`audit-evidence/10-release-management/RELEASE_RECORD_v1.1.0.md`.
+
+The first promote attempt was **refused by the gate**, which found D-43 below
+on a commit whose CI had passed.
 
 - **The pipeline is now the only road into production.** `kgkg-promote` refuses
   a commit whose GitHub CI is not green, via `ops/deploy/ci_evidence.sh`, and
@@ -47,6 +58,21 @@ of it changes what can reach them and what an evaluator can check.
 - **SemVer is applied again.** `VERSION` had read `1.0.0` since before
   `8fa94dd` and shipped two deploys without moving; see the release records
   under `audit-evidence/10-release-management/`.
+- **Fix (D-43):** `/api/shield/key/` computed `int(EPOCH - now % EPOCH)` on a
+  float, so for the final second of every 600-second epoch the result truncated
+  to `0` and the endpoint told the client its freshly minted key had already
+  expired — one call in 600. The client already clamped
+  (`Math.max(5, k.ttl - 5)`), so the cost was one spurious key refetch and no
+  user-visible error; the real cost was a deploy gate that failed at random.
+  Integer arithmetic throughout, plus two tests red on the old form
+  (`api/test_shield.py`, 13 → 15 tests). Found by the gate re-running the suite
+  on the exact commit, which is the repetition the policy calls deliberate.
+- **Image retention runs on the staging path**, not only at the end of a
+  promote. Each staging builds a 3.46 GB image pair; six runs in nine hours had
+  left ~21 GB and taken the root filesystem from 74.5 % to 77 %.
+  `ops/deploy/prune_images.sh` (8-case selftest, in CI) keeps the live release,
+  the rollback target, the staged sha, anything a container references, and the
+  newest few others.
 
 ## 1.0.0, second deploy — 2026-10-29 (`deploy-20261029-191834`, `5e4543a`)
 
