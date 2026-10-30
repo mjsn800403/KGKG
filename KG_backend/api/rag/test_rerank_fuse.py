@@ -38,8 +38,8 @@ class RerankFuseTest(unittest.TestCase):
     def test_blend_moves_a_strong_rerank_up_one_place_not_to_the_top_from_last(self):
         # second page far ahead on the cross-encoder: promoted over the first
         self.assertEqual(self._run([0.0, 5.0, 0.0], 0.4), [1, 0, 2])
-        # last page far ahead: retrieval order still outweighs it at w=0.4
-        self.assertEqual(self._run([0.0, 0.0, 5.0], 0.4), [0, 1, 2])
+        # last page far ahead: climbs one place, the retrieval top stays first
+        self.assertEqual(self._run([0.0, 0.0, 5.0], 0.4), [0, 2, 1])
 
     def test_zfuse_is_scale_free(self):
         a = service._zfuse([1, 2, 3], [0, -1, -2], 0.5)
