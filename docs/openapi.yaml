@@ -2616,6 +2616,427 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/kb/:
+    get:
+      tags:
+      - chat
+      summary: Knowledge base — published, customer-facing articles
+      description: 'Auth: portal. A q= search is logged (api/knowledge.py); browsing the index is not.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        description: Free-text search over title and body
+        schema:
+          type: string
+        example: service reminder
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+        example: maintenance
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/kb/{slug}/:
+    get:
+      tags:
+      - chat
+      summary: One article (counts a view)
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        example: reset-service-reminder
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/kb/{slug}/vote/:
+    post:
+      tags:
+      - chat
+      summary: Was this article any use?
+      description: 'Auth: portal.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        example: reset-service-reminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - helpful
+              properties:
+                helpful:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/admin/kb/:
+    get:
+      tags:
+      - admin
+      summary: Every article, any status, with owner and staleness
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        example: published
+      - name: stale
+        in: query
+        required: false
+        description: '1 = only articles past their review interval'
+        schema:
+          type: string
+        example: '1'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Create an article (owned by the acting admin)
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - title
+              - slug
+              - body
+              properties:
+                title:
+                  type: string
+                  example: Resetting the service reminder
+                slug:
+                  type: string
+                  example: reset-service-reminder
+                body:
+                  type: string
+                category:
+                  type: string
+                audience:
+                  type: string
+                  enum: [customer, internal]
+                status:
+                  type: string
+                  enum: [draft, published, archived]
+                review_interval_days:
+                  type: integer
+                  example: 180
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/kb/{article_id}/:
+    get:
+      tags:
+      - admin
+      summary: Article with its revision history
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: article_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        example: 1
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - admin
+      summary: Edit, review, or reassign an article
+      description: 'Auth: admin. A text change appends a revision and bumps the version; status, owner, category and a plain review do not.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: article_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                body:
+                  type: string
+                status:
+                  type: string
+                  enum: [draft, published, archived]
+                owner_id:
+                  type: integer
+                  nullable: true
+                review_interval_days:
+                  type: integer
+                reviewed:
+                  type: boolean
+                  description: Confirm the article is still correct, without a new version
+                note:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/admin/company-requests/{req_id}/promote-to-article/:
+    post:
+      tags:
+      - admin
+      summary: Turn a resolved ticket into a draft knowledge article
+      description: 'Auth: admin. The ticket must be closed; it may be promoted once.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: req_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - slug
+              properties:
+                slug:
+                  type: string
+                  example: reset-service-reminder
+                title:
+                  type: string
+                category:
+                  type: string
+                audience:
+                  type: string
+                  enum: [customer, internal]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/admin/support/metrics/:
+    get:
+      tags:
+      - admin
+      summary: Support-desk KPIs (SLA, first response, resolution, CSAT, backlog)
+      description: 'Auth: admin. Metric definitions: audit-evidence/16-improvement-programme/METRIC_DEFINITIONS.md.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: days
+        in: query
+        required: false
+        description: Window in days (1-365, default 30)
+        schema:
+          type: integer
+        example: 30
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/admin/feedback/:
+    get:
+      tags:
+      - admin
+      summary: Product-feedback feed and aggregates
+      description: 'Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      parameters:
+      - name: days
+        in: query
+        required: false
+        description: Window in days (1-365, default 30)
+        schema:
+          type: integer
+        example: 30
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/feedback/submit/:
+    post:
+      tags:
+      - chat
+      summary: Send product feedback (rating and/or comment)
+      description: 'Auth: portal. Either rating or comment is required.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                page:
+                  type: string
+                  example: /browse
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 4
+                comment:
+                  type: string
+                  example: search is slow on long manuals
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /api/admin/insights/funnel/:
     get:
       tags:

@@ -4,6 +4,37 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **The support channel is open to every seat, and is now a service desk.** `api/requests_api.py`
+  was gated end to end on `@require_manager`, so any seat without `can_manage_team` got 403 on
+  every ticket endpoint and the telephone was its only channel — the technical cause of the
+  evaluation's "customer feedback is collected by telephone" finding. Support requests are now
+  self-service (commercial kinds stay manager-only); a ticket has a real conversation
+  (`TicketMessage`, with admin-only internal notes) instead of one `admin_note` field; SLA
+  response/resolution clocks with a stated policy (`api/sla.py`); `assignee` as a foreign key
+  instead of the literal string `'admin'`; escalation; reopen on a customer reply; CSAT after
+  closure; and a `source` field so a request taken by telephone is recorded in the same place and
+  the shift to digital is measurable. New: `POST /api/admin/company-requests/` (log a call),
+  `GET /api/admin/support/metrics/`. (docs/05-api-reference.md §5.7)
+- **A general feedback channel** (`api/feedback.py`): `POST /api/feedback/submit/` from any seat,
+  `GET /api/admin/feedback/` for the feed. Deliberately not a ticket. Before this the only digital
+  feedback surface was the thumb on an assistant answer. (docs/05-api-reference.md §5.7a)
+- **A knowledge base** (`api/knowledge.py`): articles with a **named owner** and a review interval
+  (so staleness is a query, not an impression), append-only revisions, search with miss logging,
+  and `POST /api/admin/company-requests/<id>/promote-to-article/` so a resolved ticket becomes a
+  draft article instead of an answer buried in one ticket. (docs/05-api-reference.md §5.7b)
+- **Metric definitions as a deliverable.** Every field the new metrics endpoint returns has a
+  calculation, a source column, a hand-reproducible query and a test, in
+  `audit-evidence/16-improvement-programme/METRIC_DEFINITIONS.md`. Rates and averages return
+  `null`, not `0`, when their denominator is empty; SLA `pending` is excluded from compliance.
+- **Root-cause analysis of the 2026-10-30 evaluation findings** in
+  `audit-evidence/16-improvement-programme/`, with a prioritised roadmap, the ten-criteria matrix
+  and an explicit list of what is **not** done — principally that all of the above is API-only
+  and has no interface yet, and that this branch has not had a CI run.
+- **Tests:** backend 1,059 → 1,154 (+95, all written test-first): `api/test_helpdesk.py` (60),
+  `api/test_knowledge.py` (35). Three pre-existing tests that asserted the old manager-only 403
+  and the literal `handled_by='admin'` were updated, each with a comment recording why the
+  behaviour changed. Nine new paths added to `docs/openapi.yaml`, caught by the spec gate.
+  Migrations `0035_helpdesk_thread_sla_csat`, `0036_knowledge_base` — additive only.
 - **Dependabot cleanup** (nothing in the production images was exposed). `KG_backend/requirements.txt`
   minimums raised to the lock's versions (Django 5.2.17, cryptography 50.0, sentence-transformers
   5.6, sentry-sdk 2.8, torch 2.12). Frontend dev/build dependencies `npm audit fix`ed (postcss,
