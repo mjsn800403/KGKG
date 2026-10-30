@@ -501,16 +501,30 @@ fi
 # Its systemd units too: the sandbox in the unit file is part of the code (a
 # ProtectHome setting silently broke the backup check today), so it must not
 # be left behind by a deploy.
+#
+# The nightly QA units are here for a different reason: they were committed on
+# 2026-10-27 and were still not installed on the host three days later, because
+# nothing installed them. A unit file that only exists in the repository runs
+# nowhere. Managing them from the release means the schedule cannot drift from
+# the suite it runs, and that enabling it is a promote rather than someone
+# remembering to log in.
 _units_changed=0
-for u in kgkg-watchdog.service kgkg-watchdog.timer; do
-  if [[ -f $PROD/ops/observability/$u ]] && ! cmp -s "$PROD/ops/observability/$u" "/etc/systemd/system/$u"; then
-    install -m 644 "$PROD/ops/observability/$u" "/etc/systemd/system/$u" && _units_changed=1
+for spec in observability:kgkg-watchdog.service observability:kgkg-watchdog.timer \
+            qa:kgkg-qa-nightly.service qa:kgkg-qa-nightly.timer; do
+  d=${spec%%:*}; u=${spec#*:}
+  if [[ -f $PROD/ops/$d/$u ]] && ! cmp -s "$PROD/ops/$d/$u" "/etc/systemd/system/$u"; then
+    install -m 644 "$PROD/ops/$d/$u" "/etc/systemd/system/$u" && _units_changed=1
     say "refreshed /etc/systemd/system/$u"
   fi
 done
 if (( _units_changed )); then
   systemctl daemon-reload
-  systemctl enable -q --now kgkg-watchdog.timer || say "WARNING: could not re-enable kgkg-watchdog.timer"
+  # Enabling the timer, not the service: the service is oneshot and the timer
+  # is what decides when it runs.
+  for t in kgkg-watchdog.timer kgkg-qa-nightly.timer; do
+    [[ -f /etc/systemd/system/$t ]] || continue
+    systemctl enable -q --now "$t" || say "WARNING: could not enable $t"
+  done
 fi
 
 PREV_IMG_OK=0; have_images "$PREV" && PREV_IMG_OK=1
