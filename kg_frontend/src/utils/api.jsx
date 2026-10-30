@@ -698,6 +698,17 @@ export const feedbackApi = {
     teamFetch('/api/feedback/submit/', { method: 'POST', body: JSON.stringify(payload) }),
 };
 
+/** Feature discovery for the signed-in seat: what it is entitled to, what it
+ *  has already found, and whether it closed the strip. Completion is derived
+ *  server-side from activity, so there is nothing to report back — the only
+ *  write is the dismissal. */
+export const onboardingApi = {
+  get: () => teamFetch('/api/auth/onboarding/'),
+  dismiss: () => teamFetch('/api/auth/onboarding/', {
+    method: 'POST', body: JSON.stringify({ dismissed: true }),
+  }),
+};
+
 /** Knowledge base, as a seat sees it: published, customer-facing articles. A
  *  `q` search is logged server-side with its result count, and the misses are
  *  what tell us which article should exist next. */
