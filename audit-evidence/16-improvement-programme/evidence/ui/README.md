@@ -71,3 +71,57 @@ from the steps above.
   form, and it has not been run here because it needs the seeded QA stack.
 * No accessibility scan of the new surfaces yet (`qa/e2e/tests/a11y.spec.js`
   covers four public pages only).
+
+---
+
+# Feature-discovery baseline, 2026-10-30
+
+Taken from production **before** the discovery strip shipped, so the next
+measurement has something to move against. Read with read-only SQL over the
+production database; nothing was changed.
+
+| Feature | Seats that ever used it | Uses |
+|---|---|---|
+| Manuals (`view_node` + `view_section`) | ~34 of 34 | 71,886 |
+| Parts catalogue (`parts_view`) | **6** | 314 |
+| Assistant (`ask_assistant`) | **9** | 43 |
+| Semantic search (`SearchLog`) | **0** | **0** |
+| CSV export (`download_csv`) | — | 3 |
+| Team PDF report (`report_pdf`) | — | 8 |
+
+Entitlement denominators are computed by `api/onboarding.py` rather than
+assumed; the floor established while writing the spec was 18 or fewer seats
+AI-entitled, and 36 with a car grant.
+
+## What a seeded seat receives
+
+Verified in a real browser against a seeded backend (same method as the
+support-desk section above). A seat with a car grant, an AI entitlement and one
+ticket already filed:
+
+```
+۱ از ۶ قدم  →  "یک فصل از منوال را باز کنید"
+items: read_manual, use_search, ask_assistant, open_parts, export_times, ask_support✓
+```
+
+`ask_support` is already ticked because that seat filed a ticket earlier the
+same day — completion is derived from what the person did, so the checklist is
+truthful for seats that have been using the product for months rather than
+starting everyone at zero.
+
+Recording one real `view_section` row moved it to `۲ از ۶ قدم` and advanced the
+pointer to "در محتوا جستجو کنید". Dismissing the strip, then wiping
+`localStorage` entirely and reading the endpoint back on a new session token,
+still returned `dismissed: true` with the items unchanged — the server
+remembers, and closing the prompt is not a claim to have discovered anything.
+
+## Limits of this evidence
+
+* The two nudges (`search-found-nothing`, `parts-never-opened`) were built and
+  linted but **not exercised in a browser**: the local database has no built
+  car manual, so neither a zero-result search nor a vehicle page can be
+  reached. Their rules are pure functions over a payload that is covered by
+  tests; their firing is not.
+* No accessibility scan of the strip.
+* Discovery rates here are a snapshot. Whether they improve needs a stored
+  series, which belongs with the phase-4 collector (#47).
