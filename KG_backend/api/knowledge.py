@@ -32,6 +32,7 @@ ought to exist.
     POST /api/admin/kb/<id>/              admin: edit / review / reassign
     POST /api/admin/company-requests/<id>/promote-to-article/
 """
+import re
 from datetime import timedelta
 
 from django.db.models import Count, F, Q
@@ -45,6 +46,12 @@ from .models import (CompanyRequest, KbSearchLog, KnowledgeArticle,
 from .portal import _body
 from .portal_auth import require_portal_user
 from .ratelimit import rate_limited
+
+#: What `path('api/kb/<slug:slug>/')` can actually match, plus a leading
+#: alphanumeric so a bare '-' is not a slug. An article whose slug falls
+#: outside this would list fine and 404 when opened, with no way to repair it
+#: from the editor — so it is refused at the point of writing instead.
+SLUG_RE = re.compile(r'^[a-zA-Z0-9][-a-zA-Z0-9_]*$')
 
 VALID_STATUSES = {s for s, _ in KnowledgeArticle.STATUS_CHOICES}
 VALID_AUDIENCES = {a for a, _ in KnowledgeArticle.AUDIENCE_CHOICES}
@@ -190,6 +197,10 @@ def _create(request):
     body = (str(b.get('body') or '')).strip()[:MAX_BODY]
     if not title or not slug or not body:
         return JsonResponse({'error': 'عنوان، شناسه و متن الزامی است.'}, status=400)
+    if not SLUG_RE.match(slug):
+        return JsonResponse(
+            {'error': 'شناسهٔ مقاله فقط می‌تواند حرف و رقم لاتین، خط تیره و زیرخط باشد.'},
+            status=400)
     if KnowledgeArticle.objects.filter(slug=slug).exists():
         return JsonResponse({'error': 'این شناسه قبلاً استفاده شده است.'}, status=400)
     status = (str(b.get('status') or 'draft')).strip()
@@ -331,6 +342,10 @@ def promote_request_view(request, req_id):
     slug = (str(b.get('slug') or '')).strip()[:120]
     if not slug:
         return JsonResponse({'error': 'شناسهٔ مقاله الزامی است.'}, status=400)
+    if not SLUG_RE.match(slug):
+        return JsonResponse(
+            {'error': 'شناسهٔ مقاله فقط می‌تواند حرف و رقم لاتین، خط تیره و زیرخط باشد.'},
+            status=400)
     if KnowledgeArticle.objects.filter(slug=slug).exists():
         return JsonResponse({'error': 'این شناسه قبلاً استفاده شده است.'}, status=400)
     audience = (str(b.get('audience') or 'customer')).strip()

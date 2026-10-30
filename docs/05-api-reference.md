@@ -100,7 +100,7 @@ analysis: `audit-evidence/16-improvement-programme/`.
 | `/api/company/requests/` | GET/POST | portal | List (own, or the company's for a manager); create `{kind, subject, body?, payload?, priority?}` (payload whitelisted per kind). `source` is always `portal` — never taken from the client |
 | `/api/company/requests/<id>/` | GET/POST | portal | Detail with the message thread (internal notes excluded). POST one of `{message}` (a reply; reopens a closed ticket and restarts the resolution clock), `{csat:{score 1..5, comment?}}` (once, after closure, by the filer), `{cancel:true}` |
 | `/api/admin/company-requests/` | GET/POST | admin | Inbox (filter by `status`, `source`, `company_id`); POST `{company_id, subject, body?, kind?, priority?, source?}` logs a request that arrived by telephone, e-mail or in person |
-| `/api/admin/company-requests/<id>/` | GET/POST | admin | GET the ticket with internal notes. POST `{status?, admin_note?, handled_by?, message?, internal?, assignee_id?, escalate?}`. The first **public** message stamps `first_response_at`; an internal note does not. `escalate` is idempotent and raises priority to high |
+| `/api/admin/company-requests/<id>/` | GET/POST | admin | GET the ticket with internal notes. POST `{status?, admin_note?, handled_by?, message?, internal?, assignee_id?, escalate?}`. The first thing the customer can read — a public message **or** a non-empty `admin_note` — stamps `first_response_at`; an internal note and a bare status change do not, and it is never overwritten. `escalate` is idempotent and raises priority to high |
 | `/api/admin/company-requests/<id>/promote-to-article/` | POST | admin | `{slug, title?, category?, audience?}` — turns a closed ticket into a **draft** knowledge article seeded with the question, the public thread and the resolution |
 | `/api/admin/support/metrics/` | GET | admin | `?days=30` — volumes, first-response and resolution times (mean and p90), SLA compliance, CSAT, `by_source`, `by_kind`, backlog ageing, feedback and knowledge blocks. Every field is defined in `audit-evidence/16-improvement-programme/METRIC_DEFINITIONS.md` |
 
@@ -126,7 +126,7 @@ they were promoted out of. Code: `api/knowledge.py`.
 | `/api/kb/` | GET | portal | `?q=&category=` — published, customer-facing articles. A `q=` search is logged with its result count (`KbSearchLog`); browsing the index is not |
 | `/api/kb/<slug>/` | GET | portal | Article; counts a view |
 | `/api/kb/<slug>/vote/` | POST | portal | `{helpful: bool}` |
-| `/api/admin/kb/` | GET/POST | admin | GET everything (`?status=`, `?audience=`, `?stale=1`); POST `{title, slug, body, category?, audience?, status?, review_interval_days?}` |
+| `/api/admin/kb/` | GET/POST | admin | GET everything (`?status=`, `?audience=`, `?stale=1`); POST `{title, slug, body, category?, audience?, status?, review_interval_days?}`. `slug` must match `^[a-zA-Z0-9][-a-zA-Z0-9_]*$` — what the reader's `<slug:slug>` route can match — so a published article is always reachable by its own URL |
 | `/api/admin/kb/<id>/` | GET/POST | admin | GET with revision history. POST `{title?, body?, category?, status?, audience?, owner_id?, review_interval_days?, reviewed?, note?}` — a **text** change appends a revision and bumps the version; a review, a status change or a reassignment does not |
 
 ## 5.8 Real-time

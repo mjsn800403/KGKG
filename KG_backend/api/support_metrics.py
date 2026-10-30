@@ -77,6 +77,12 @@ def admin_support_metrics_view(request):
            for r in window if r.resolved_at]
 
     rated = [r for r in window if r.csat_score is not None]
+    # The rate's numerator has to live inside its denominator. A ticket rated
+    # and then reopened keeps its score but is no longer closed, so counting it
+    # against `closed` alone produced rates above 100 % — and a null rate beside
+    # recorded responses when every rated ticket had been reopened. `responses`
+    # still counts every score; only the ratio is restricted.
+    rated_closed = [r for r in rated if r.status in CompanyRequest.CLOSED_STATUSES]
     distribution = {str(i): 0 for i in range(1, 6)}
     for r in rated:
         distribution[str(r.csat_score)] += 1
@@ -123,8 +129,9 @@ def admin_support_metrics_view(request):
             'responses': len(rated),
             'avg': _avg([r.csat_score for r in rated]),
             'distribution': distribution,
-            # Of the tickets that closed in the window, how many were rated.
-            'response_rate': (round(len(rated) / len(closed), 4) if closed else None),
+            # Of the tickets that are closed at the end of the window, how
+            # many carry a score. Same cohort both sides.
+            'response_rate': (round(len(rated_closed) / len(closed), 4) if closed else None),
         },
         'by_source': by_source,
         'by_kind': by_kind,

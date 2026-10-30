@@ -43,7 +43,8 @@ from .admin_auth import acting_admin, require_admin_token
 from .models import (Car, Company, CompanyRequest, PlatformAdmin, PortalUser,
                      TicketMessage)
 from .portal import _body, portal_user
-from .portal_auth import require_manager, require_portal_user
+from .portal_auth import (require_manager, require_portal_user,
+                          user_can_view_company_stream)
 
 
 VALID_KINDS = {k for k, _ in CompanyRequest.KIND_CHOICES}
@@ -160,10 +161,23 @@ def _request_dict(r, *, include_company=False, thread=None, with_internal=False,
 # ---------------------------------------------------------------------------
 
 def _emit(type_, r, **extra):
+    """Push one state change to everyone entitled to see it.
+
+    The third emit is the one that matters since the channel opened to every
+    seat. `events._scoped_qs` gives a plain user only their OWN 'user' events
+    plus broadcasts — 'company' events reach managers and analytics viewers
+    only. Without a user-scoped copy a specialist filed a ticket and then
+    watched a dashboard that never moved. Managers are skipped because the
+    company event already reached them, and a second copy would double every
+    toast.
+    """
     payload = {'request': _request_dict(r, include_company=True, thread=[])}
     payload.update(extra)
     events.emit_company(type_, r.company_id, payload)
     events.emit(type_, payload, audience='admin')
+    filer = r.created_by if r.created_by_id else None
+    if filer and not user_can_view_company_stream(filer):
+        events.emit_user(type_, filer.id, payload, company_id=r.company_id)
 
 
 # ---------------------------------------------------------------------------
@@ -522,6 +536,13 @@ def admin_company_request_detail_view(request, req_id):
     if 'admin_note' in b:
         r.admin_note = (str(b.get('admin_note') or '')).strip()[:MAX_BODY]
         changed = True
+        # `admin_note` IS the platform's reply — the customer reads it on their
+        # own ticket — so filling it in stops the response clock exactly as a
+        # message does. Without this, a ticket answered through the note field
+        # stayed unmeasured and drifted into a false SLA breach. An emptied
+        # note is not an answer, and an earlier response is never overwritten.
+        if r.admin_note and r.first_response_at is None:
+            r.first_response_at = timezone.now()
 
     message = (str(b.get('message') or '')).strip()[:MAX_MESSAGE] if 'message' in b else ''
     internal = bool(b.get('internal'))

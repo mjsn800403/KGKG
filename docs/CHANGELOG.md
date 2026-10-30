@@ -4,6 +4,24 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Four fixes from automated review of the service-desk PR**, each with a test written first
+  that fails on the previous code:
+  * **A specialist never saw their own ticket move.** `events._scoped_qs` gives a plain user only
+    their OWN 'user' events plus broadcasts, while the desk emitted 'company' events, which reach
+    managers and analytics viewers only. Opening the channel to every seat therefore gave the
+    newly admitted audience a dashboard that never updated. `_emit` now sends a user-scoped copy
+    to the filer, skipping managers so nothing is announced twice.
+  * **A ticket answered through `admin_note` stayed unmeasured** and drifted into a false SLA
+    breach: only a `message` stopped the response clock, but `admin_note` *is* the platform's
+    reply and the customer reads it. A non-empty note now stamps `first_response_at`; an internal
+    note and a bare status change still do not, and an earlier response is never overwritten.
+  * **CSAT response rate could exceed 100 %.** A ticket rated and then reopened keeps its score
+    but is no longer closed, so the numerator sat outside its denominator. The ratio now counts
+    rated tickets *within* the closed cohort; `csat.responses` still counts every score, so a
+    reopening never erases a customer's answer.
+  * **A slug the reader's route cannot match is refused at the point of writing.** An article with
+    a space, a slash or Persian letters in its slug published fine, listed fine, and 404'd when
+    opened — with no way to repair it from the editor. Same check on promote-to-article.
 - **Coverage floor 56 → 60 %** (`ops/deploy/coverage_min`). CI measured 61 % (line+branch,
   PostgreSQL, random order, 1,237 tests) on the service-desk branch, so the floor is raised in
   the commit that earned it, as the ratchet's own comment requires. One point of headroom: the

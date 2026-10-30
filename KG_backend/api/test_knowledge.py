@@ -194,6 +194,30 @@ class KbAuthoringTests(KbBase):
                      {'title': 't', 'slug': 'a'}):
             self.assertEqual(self.post(ADMIN_KB, body, self.h_admin).status_code, 400, body)
 
+    def test_a_slug_the_customer_route_cannot_match_is_rejected(self):
+        """The reader's routes are `/api/kb/<slug:slug>/`, which matches only
+        letters, digits, hyphens and underscores. A slug with a space, a slash
+        or Persian letters would publish an article that appears in the list
+        and 404s when opened, with no way to repair it from the editor."""
+        for bad in ('a b', 'a/b', 'صفر-کردن', 'a.b', 'a?b', '', '-'):
+            r = self.post(ADMIN_KB, {'title': 't', 'slug': bad, 'body': 'b'}, self.h_admin)
+            self.assertEqual(r.status_code, 400, f'{bad!r} was accepted')
+        self.assertFalse(KnowledgeArticle.objects.exists())
+
+    def test_an_acceptable_slug_is_accepted(self):
+        for ok in ('reset-service-reminder', 'a_b', 'Brake2025', 'x'):
+            r = self.post(ADMIN_KB, {'title': 't', 'slug': ok, 'body': 'b'}, self.h_admin)
+            self.assertEqual(r.status_code, 200, f'{ok!r}: {r.content}')
+
+    def test_a_published_article_is_always_reachable_by_its_own_route(self):
+        """The property the validation exists to protect, checked end to end."""
+        self.post(ADMIN_KB, {'title': 'عنوان فارسی', 'slug': 'persian-title',
+                             'body': 'متن', 'status': 'published'}, self.h_admin)
+        listed = self.c.get(KB, **self.h_user).json()['articles']
+        self.assertEqual(len(listed), 1)
+        got = self.c.get(f"{KB}{listed[0]['slug']}/", **self.h_user)
+        self.assertEqual(got.status_code, 200, got.content)
+
     def test_a_duplicate_slug_is_rejected(self):
         self.article(slug='dup')
         r = self.post(ADMIN_KB, {'title': 't', 'slug': 'dup', 'body': 'b'}, self.h_admin)
@@ -305,6 +329,13 @@ class PromoteTicketTests(KbBase):
         a = KnowledgeArticle.objects.get(slug='once')
         self.assertEqual(a.body.count(t.body), 1, a.body)
         self.assertIn('پاسخ پشتیبانی', a.body)
+
+    def test_a_promoted_article_gets_the_same_slug_check(self):
+        t = self._ticket()
+        r = self.post(f'{ADMIN_REQ}{t.id}/promote-to-article/',
+                      {'slug': 'نامعتبر مثلا'}, self.h_admin)
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(KnowledgeArticle.objects.exists())
 
     def test_an_open_ticket_cannot_be_promoted(self):
         t = self._ticket()

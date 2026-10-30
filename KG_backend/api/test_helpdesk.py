@@ -25,6 +25,7 @@ from datetime import timedelta
 from django.test import Client, TestCase
 from django.utils import timezone
 
+from . import events as events_mod
 from . import sla
 from .models import (AdminAuthToken, AuthToken, Company, CompanyRequest, Event,
                      Feedback, PlatformAdmin, PortalUser, TicketMessage)
@@ -246,6 +247,36 @@ class SlaOnTicketTests(DeskBase):
         self.post(f"{ADMIN_URL}{req['id']}/", {'message': 'still looking'}, self.h_admin)
         self.assertEqual(CompanyRequest.objects.get(id=req['id']).first_response_at, first)
 
+    def test_a_public_admin_note_also_counts_as_a_first_response(self):
+        """The admin_note field is the platform's REPLY — the customer reads it
+        on their own ticket. An agent who answers by filling it in has
+        responded, so the clock must stop, exactly as it does for a message.
+        Before this, a ticket answered that way stayed unmeasured and drifted
+        into a false SLA breach."""
+        req = self.create()
+        self.post(f"{ADMIN_URL}{req['id']}/",
+                  {'status': 'in_progress', 'admin_note': 'در حال بررسی'}, self.h_admin)
+        self.assertIsNotNone(CompanyRequest.objects.get(id=req['id']).first_response_at)
+
+    def test_an_emptied_admin_note_is_not_a_first_response(self):
+        req = self.create()
+        self.post(f"{ADMIN_URL}{req['id']}/", {'admin_note': '   '}, self.h_admin)
+        self.assertIsNone(CompanyRequest.objects.get(id=req['id']).first_response_at)
+
+    def test_a_status_change_alone_is_not_a_first_response(self):
+        """Moving a ticket to 'in progress' tells the customer nothing they can
+        read; it is not an answer."""
+        req = self.create()
+        self.post(f"{ADMIN_URL}{req['id']}/", {'status': 'in_progress'}, self.h_admin)
+        self.assertIsNone(CompanyRequest.objects.get(id=req['id']).first_response_at)
+
+    def test_an_admin_note_does_not_overwrite_an_earlier_first_response(self):
+        req = self.create()
+        self.post(f"{ADMIN_URL}{req['id']}/", {'message': 'سلام'}, self.h_admin)
+        first = CompanyRequest.objects.get(id=req['id']).first_response_at
+        self.post(f"{ADMIN_URL}{req['id']}/", {'admin_note': 'توضیح'}, self.h_admin)
+        self.assertEqual(CompanyRequest.objects.get(id=req['id']).first_response_at, first)
+
     def test_an_internal_note_is_not_a_first_response(self):
         req = self.create()
         self.post(f"{ADMIN_URL}{req['id']}/", {'message': 'hm', 'internal': True}, self.h_admin)
@@ -319,6 +350,69 @@ class AssignmentTests(DeskBase):
         first = CompanyRequest.objects.get(id=req['id']).escalated_at
         self.post(f"{ADMIN_URL}{req['id']}/", {'escalate': True}, self.h_admin)
         self.assertEqual(CompanyRequest.objects.get(id=req['id']).escalated_at, first)
+
+
+class FilerEventTests(DeskBase):
+    """A ticket's events have to reach the person who filed it.
+
+    Opening the channel to every seat created a hole nobody would have seen
+    from the API tests: `events._scoped_qs` gives a plain user only their OWN
+    'user' events plus broadcasts, while the desk emitted 'company' events,
+    which only managers and analytics viewers receive. A specialist therefore
+    filed a ticket and then watched a dashboard that never moved.
+    """
+
+    def _delivered(self, user, after=0):
+        from .portal_auth import user_can_view_company_stream
+        return [e.type for e in events_mod.events_since(
+            after, is_admin=False, company_id=user.company_id, user_id=user.id,
+            can_see_company=user_can_view_company_stream(user))]
+
+    def test_a_specialists_own_ticket_events_reach_them(self):
+        req = self.create(hdr=self.h_spec)
+        after = Event.objects.latest('id').id
+        self.post(f"{ADMIN_URL}{req['id']}/", {'message': 'در حال بررسی'}, self.h_admin)
+        self.assertIn('request.updated', self._delivered(self.spec, after))
+
+    def test_a_status_change_reaches_the_specialist_who_filed_it(self):
+        req = self.create(hdr=self.h_spec)
+        after = Event.objects.latest('id').id
+        self.post(f"{ADMIN_URL}{req['id']}/", {'status': 'completed'}, self.h_admin)
+        self.assertIn('request.updated', self._delivered(self.spec, after))
+
+    def test_a_colleagues_ticket_events_do_not_reach_another_specialist(self):
+        req = self.create(hdr=self.h_spec2)
+        after = Event.objects.latest('id').id
+        self.post(f"{ADMIN_URL}{req['id']}/", {'message': 'x'}, self.h_admin)
+        self.assertEqual(self._delivered(self.spec, after), [])
+
+    def test_a_manager_filer_is_not_told_twice(self):
+        """A manager already receives the company event; a user copy would
+        double every toast on their dashboard."""
+        req = self.create(hdr=self.h_mgr)
+        after = Event.objects.latest('id').id
+        self.post(f"{ADMIN_URL}{req['id']}/", {'message': 'x'}, self.h_admin)
+        self.assertEqual(
+            Event.objects.filter(id__gt=after, audience='user',
+                                 user_id=self.mgr.id).count(), 0)
+        self.assertIn('request.updated', self._delivered(self.mgr, after))
+
+    def test_a_ticket_logged_by_the_platform_side_emits_no_user_event(self):
+        """A telephone call has no filer, so there is nobody to address."""
+        before = Event.objects.count()
+        self.post(ADMIN_URL, {'company_id': self.co_a.id, 'subject': 'call',
+                              'source': 'phone'}, self.h_admin)
+        self.assertEqual(Event.objects.filter(id__gt=before, audience='user').count(), 0)
+
+    def test_the_user_copy_carries_the_same_payload_as_the_company_one(self):
+        req = self.create(hdr=self.h_spec)
+        after = Event.objects.latest('id').id
+        self.post(f"{ADMIN_URL}{req['id']}/", {'status': 'completed'}, self.h_admin)
+        user_ev = Event.objects.filter(id__gt=after, audience='user',
+                                       user_id=self.spec.id).latest('id')
+        company_ev = Event.objects.filter(id__gt=after, audience='company').latest('id')
+        self.assertEqual(user_ev.payload, company_ev.payload)
+        self.assertEqual(user_ev.company_id, self.co_a.id)
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +561,32 @@ class SupportMetricsTests(DeskBase):
         self.assertAlmostEqual(m['avg'], 4.0, places=2)
         self.assertEqual(m['distribution']['4'], 1)
         self.assertAlmostEqual(m['response_rate'], 0.5, places=3)
+
+    def test_the_csat_rate_never_exceeds_one_when_a_rated_ticket_is_reopened(self):
+        """`rated` and `closed` have to be the same cohort. A ticket rated and
+        then reopened keeps its score but is no longer closed, so counting it
+        in the numerator alone produced rates above 100 % — and, if every rated
+        ticket was reopened, a null rate beside recorded responses."""
+        a = self.create()
+        b = self.create()
+        for t in (a, b):
+            self.post(f"{ADMIN_URL}{t['id']}/", {'status': 'completed'}, self.h_admin)
+            self.post(f"{URL}{t['id']}/", {'csat': {'score': 5}}, self.h_spec)
+        self.post(f"{URL}{a['id']}/", {'message': 'هنوز درست نشده'}, self.h_spec)
+
+        m = self.c.get(METRICS_URL, **self.h_admin).json()['csat']
+        self.assertEqual(m['responses'], 2)          # both scores still counted
+        self.assertLessEqual(m['response_rate'], 1.0)
+        self.assertAlmostEqual(m['response_rate'], 1.0, places=3)   # 1 rated of 1 closed
+
+    def test_the_csat_rate_is_null_when_nothing_closed_in_the_window(self):
+        a = self.create()
+        self.post(f"{ADMIN_URL}{a['id']}/", {'status': 'completed'}, self.h_admin)
+        self.post(f"{URL}{a['id']}/", {'csat': {'score': 4}}, self.h_spec)
+        self.post(f"{URL}{a['id']}/", {'message': 'reopen'}, self.h_spec)
+        m = self.c.get(METRICS_URL, **self.h_admin).json()['csat']
+        self.assertEqual(m['responses'], 1)
+        self.assertIsNone(m['response_rate'])
 
     def test_backlog_reports_age_breaches_and_unassigned(self):
         old = self.create()
