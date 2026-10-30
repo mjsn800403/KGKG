@@ -355,3 +355,108 @@ Unchanged from the list above, minus what closed:
 10. **One host** runs production, staging, QA and observability. 7-day probe availability 98.6–98.8 % on two of four probes, with no declared SLO. Disk 74.5 %.
 11. **No independent penetration test.** Criteria 11–13 need contracts, CVs and market research; the templates exist and nothing was invented.
 12. **A promote briefly reads its own commit as `unknown`.** `deploy.sh` pushes to the production checkout's branch, which starts a second CI run on the same sha, so `ci_evidence.sh` answers `unknown still running` for a few minutes afterwards. Fail-closed and harmless, but it is the kind of thing to know before it surprises someone at 2 a.m.
+
+---
+
+# Addendum 2 — after Tier 2, 2026-10-30 02:10 UTC
+
+Tier 1 fixed what could let bad code reach production and what could stop a
+page being sent. Tier 2 addressed the three criteria that scored worst for a
+different reason: the practice existed and the **artefacts** did not. A policy
+with no filled record, a support process with no tracker and no stated target,
+and a public repository with no licence are all criticisms an evaluator can
+make in a single sentence, regardless of how good the engineering behind them
+is.
+
+**Score after Tier 2: 82 / 100** (70 at 18:20 on 2026-10-29, 75 at 19:45).
+
+## What changed
+
+| Finding | Status | Proof |
+|---|---|---|
+| F-5 Public repo, no licence, no governance files | **Closed** | `LICENSE` (proprietary, all rights reserved, with a carve-out for evaluation, audit and security research), `NOTICE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/CODEOWNERS`, `.github/pull_request_template.md` |
+| F-5 Nine author identities for about three people | **Closed** | `.mailmap`; `git log --format='%aN <%aE>' \| sort -u` returns **5** where it returned **9**, history byte-identical because git consults the file at read time |
+| F-6 Release management: policy without artefacts | **Substantially closed** | Tag `v1.0.0` at `8fa94dd`, the repository's **first GitHub Release**, and a filled `RELEASE_RECORD_v1.0.0.md`. `VERSION` 1.0.0 → 1.1.0; `RELEASE_RECORD_v1.1.0.md` open **before** the promote |
+| F-7 No issue history, no SLA, no on-call, no postmortem | **Substantially closed** | Issues 15–31; `SLA_AND_ONCALL.md`; `postmortem-2026-10-27-app-metrics-blind.md` |
+| F-11 Knowledge management fought its own ignore rules | **Closed** | `.gitignore` narrowed from a blanket `*.md` to `/*.md` plus named negations (PRs #13, #14) |
+| F-1 (residual) Documentation contradicted the host | **Closed for the three found** | `docs/01` and `docs/02` corrected for the PostgreSQL cutover; `docs/11` and `ops/deploy/README.md` for the tunnel |
+
+## The release records are the evidence, and they are deliberately unflattering
+
+`RELEASE_RECORD_v1.0.0.md` was reconstructed from CI runs, deploy tags, deploy
+logs and `/opt/KGKG_release/` state files — never from memory — and it records
+four things that do not flatter anyone:
+
+1. v1.0.0 was **promoted with CI red** on bandit, because the server gate did
+   not then run the security scanners.
+2. **No release record was filled at the time**, though the policy asked for one.
+3. **Load and DAST were run on neither** of 1.0.0's two commits, though the
+   policy has required both for a MINOR or MAJOR since 2026-10-27.
+4. `VERSION` then **did not move** for the second deploy, which carried new
+   capability and should have been 1.1.0.
+
+A record that only said good things would not be evidence of anything. The
+corrective half is that `RELEASE_RECORD_v1.1.0.md` exists *before* 1.1.0 is
+promoted, with the two owed rows named as **blocking** it — which is what the
+policy asked for and what did not happen last time.
+
+## The postmortem is about a non-incident, on purpose
+
+`postmortem-2026-10-27-app-metrics-blind.md` covers 49 minutes when
+`up{job="kgkg_app"}` read 0. Measured impact: **none.** All four external
+probes were up for every sample in the window, the node exporter was up, the
+containers were healthy and the deploy at 14:40:52 smoked clean. The site
+served customers throughout.
+
+It is written up because the failure worth understanding is not the scrape
+interruption — it is that **losing a signal was indistinguishable from the
+signal being good**, and the same silence would have covered a real outage.
+Two independent reasons the one liveness rule could not fire: it covered
+`job="node"` and not the application, and `<metric> == 0` matches nothing once
+the metric ceases to exist, which the engine read as health.
+
+## Revised scores
+
+| # | Criterion | 10-29 18:20 | 10-29 19:45 | **10-30** | Why it moved this time |
+|---|---|---:|---:|---:|---|
+| 1 | Design & architecture documentation | 82 | 83 | **85** | Three more documents reconciled with the host |
+| 2 | Knowledge-management infrastructure | 68 | 70 | **80** | Docs-as-code can now actually commit a document; the protocol and its hard-won rules are written in `CONTRIBUTING.md` |
+| 3 | Technical infrastructure for development | 85 | 85 | **88** | `CODEOWNERS`, PR template, and a tracker with 17 issues instead of none |
+| 4 | Source-code history & traceability | 62 | 76 | **86** | 9 identities folded to 5; review ownership by area; every PR asked for the test that was red |
+| 5 | CI/CD infrastructure | 72 | 86 | **86** | Unchanged |
+| 6 | Versioning & release management | 55 | 58 | **82** | First tag, first Release, a filled record and the next one open before its promote |
+| 7 | QA/QC processes | 84 | 86 | **86** | Unchanged |
+| 8 | Post-development support | 55 | 55 | **78** | SLA, escalation path, first postmortem, issues 15–31 |
+| 9 | Automated test coverage | 65 | 68 | **68** | Unchanged — issue #22 carries it |
+| 10 | DevOps process maturity | 70 | 82 | **84** | A private vulnerability-reporting channel with stated response targets, and documentation that matches the host |
+| | **Overall** | **70** | **75** | **82** | |
+
+## What an evaluator can still legitimately raise
+
+Shorter than it was, and every item now has an issue number.
+
+1. **One host** runs production, staging, QA and observability — [#25](https://github.com/mjsn800403/KGKG/issues/25). Two public probes measured 98.6–98.8 % over 7 days and nobody has explained why — [#20](https://github.com/mjsn800403/KGKG/issues/20). These two together are why the SLA says 99.5 % and not 99.9 %.
+2. **Two people, no rota.** If both are unreachable, nobody responds. Paging is SMS through one provider and nothing verifies that path end to end — [#24](https://github.com/mjsn800403/KGKG/issues/24). This is stated in §5 of the SLA rather than hidden.
+3. **Coverage 58 % against the stated 80 %** — [#22](https://github.com/mjsn800403/KGKG/issues/22). Offline tooling near zero, no trend service, artifacts expire at 90 days. The request path and the authorisation modules are where they should be.
+4. **No independent penetration test** — [#23](https://github.com/mjsn800403/KGKG/issues/23). Every finding to date is from our own testing, which is worst at exactly the class of fault that produced D-03, D-06, D-17 and D-30.
+5. **E2E, k6 and ZAP are not CI-triggered**, and the nightly QA timer is in the repository but not switched on — [#21](https://github.com/mjsn800403/KGKG/issues/21). Load and DAST are owed for 1.1.0 — [#19](https://github.com/mjsn800403/KGKG/issues/19).
+6. **Production's own checkout is on `rag-db-improvements`** and `deploy.sh` pushes to whatever branch it finds there — [#15](https://github.com/mjsn800403/KGKG/issues/15). `main` and `work` still diverge, and `main` holds a RAG test fix `work` lacks — [#16](https://github.com/mjsn800403/KGKG/issues/16).
+7. **`xrdp` is still installed and enabled** — [#17](https://github.com/mjsn800403/KGKG/issues/17) — and the tunnel-versus-direct-SSH decision is open — [#18](https://github.com/mjsn800403/KGKG/issues/18).
+8. **No alpha/beta channel.** Staging is the release candidate, which the policy states honestly rather than inventing channels.
+9. **No history before 2026-06-19**, and nothing can create it.
+10. **Criteria 11–13 remain blocked.** Market evidence, lifecycle staffing and personnel qualifications cannot come from a repository. The templates exist; no data was invented, and none should be.
+11. **Four hung tooling processes** have been burning ~4 vCPU on the production host since 2026-10-24 — [#26](https://github.com/mjsn800403/KGKG/issues/26).
+12. **One record is honest about being retrospective.** `RELEASE_RECORD_v1.0.0.md` was written on 2026-10-30 for a release promoted on 2026-10-29. It is reconstructed from machine evidence, and it says so in its first paragraph.
+
+## What 82 means
+
+The gap between 75 and 82 was almost entirely paperwork — but paperwork is what
+the two weakest criteria were actually asking for, and it was missing because
+nobody had written it, not because anybody disagreed that it mattered.
+
+The remaining distance to 90 is not paperwork. It is a second host, a second
+on-call engineer, an independent penetration test and roughly twenty points of
+test coverage. Those cost money and time rather than a night's work, and no
+amount of documentation substitutes for them. An evaluator who reads this
+package and asks about items 1–4 above is asking the right questions, and the
+honest answer is that they are known, costed in effort, and tracked.
