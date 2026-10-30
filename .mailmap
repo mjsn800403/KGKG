@@ -1,0 +1,35 @@
+# Canonical author identities.
+#
+# Nine distinct `name <email>` pairs existed for two people plus two
+# automations, because commits were made from different machines, from the
+# GitHub web UI (which uses the noreply address) and from the server. The
+# audit of 2026-10-29 counted them as a traceability finding: contribution
+# history cannot be read if one person appears as three contributors.
+#
+# This file is git's own mechanism for it. It rewrites nothing: `git log`,
+# `git shortlog -sne` and `git blame` consult it at read time, so history
+# stays byte-identical and every commit keeps its real committer.
+#
+# The left-hand side of each line is the canonical identity; the right-hand
+# side is an alias to fold into it. Names are as each person writes their own.
+
+# --- people ---
+Ali Sartipi <alistp27@gmail.com> <105682168+alistp27@users.noreply.github.com>
+Ali Sartipi <alistp27@gmail.com> ali sartipi <105682168+alistp27@users.noreply.github.com>
+
+mjsalimin <fin.wis.op.company@gmail.com> <mjsn800403@outlook.com>
+mjsalimin <fin.wis.op.company@gmail.com> <83552552+mjsn800403@users.noreply.github.com>
+mjsalimin <fin.wis.op.company@gmail.com> mjsn800403 <83552552+mjsn800403@users.noreply.github.com>
+
+# --- assistant ---
+# Two commits were authored as Claude with a human's address attached by
+# mistake; they belong to the assistant, not to the person whose mail client
+# happened to be configured.
+Claude <noreply@anthropic.com> Claude <fin.wis.op.company@gmail.com>
+
+# --- automation, kept distinct from people on purpose ---
+# KGKG Bot is CI; KGKG Deploy is ops/deploy/deploy.sh committing on the host.
+# Folding either into a person would overstate human contribution, which is
+# the opposite of what this file is for.
+KGKG Bot <kgkg-bot@users.noreply.github.com>
+KGKG Deploy <deploy@kgtechvault.local>

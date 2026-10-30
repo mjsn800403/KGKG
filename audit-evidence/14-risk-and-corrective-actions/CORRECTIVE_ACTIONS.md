@@ -58,14 +58,46 @@ Severity: Critical (cross-tenant data or money), High, Medium, Low.
 
 | ID | Action | Owner | Needs |
 |---|---|---|---|
-| A-01 | Delete the 39 staging rows from production `feedback.db` (query: `query='engine oil capacity' AND model='Corolla Cross'`, 2026-10-15..27) | Product owner | Approval to change production data |
+| [A-01](https://github.com/mjsn800403/KGKG/issues/27) | Delete the 39 staging rows from production `feedback.db` (query: `query='engine oil capacity' AND model='Corolla Cross'`, 2026-10-15..27) | Product owner | Approval to change production data |
 | A-02 (done) | **Closed 2026-10-28**: `deploy.sh` now installs the nginx config with each release (`77e34c0`); verified 2026-10-29 that the effective config sets `$kg_media_path` and that `/api/eval/report/` returns 401 in production. Previous text: Install `ops/nginx/kgkg.conf` and `ops/nginx/kgkg-mediaauth.conf` on production in the same window as the release that contains `eb32510`; `nginx -t` then reload | Operations | Maintenance window; the app-side fix alone leaves the 60 s cache leak (D-07) |
-| A-03 | Decide whether `deploy.sh` should install nginx files from the release (removes D-08 class of drift) | Engineering lead | Design decision |
-| A-04 | Decide the 30-seat price (D-28) | Product owner | Business decision |
-| A-05 | Reduce wrong-vehicle attribution in the assistant (46/60 in the 2026-10-27 eval) | Retrieval owner | Design work |
-| A-07 | Enable the nightly QA timer (`ops/qa/kgkg-qa-nightly.{service,timer}`) | Operations | Approval: standing configuration on the production host |
-| A-08 | Kill four hung `claude --version` probes (since 2026-10-24, ~4 vCPU continuously) and review other sessions' heavy jobs on the production host | Owner | Approval |
-| A-06 | Bound concurrent embeddings or separate the assistant's worker pool (P-01) | Engineering lead | Design work |
+| [A-03](https://github.com/mjsn800403/KGKG/issues/31) (done) | **Closed by events 2026-10-28**: `deploy.sh` installs the nginx configuration from the release (`77e34c0`). Verified 2026-10-30 that the installed site file and both `conf.d` files are byte-identical to `ops/nginx/`, and that `sites-enabled` holds nothing else (the production smoke asserts that on every deploy). Previous text: decide whether `deploy.sh` should install nginx files from the release (removes the D-08 class of drift) | Engineering lead | — |
+| [A-04](https://github.com/mjsn800403/KGKG/issues/28) | Decide the 30-seat price (D-28) | Product owner | Business decision |
+| [A-05](https://github.com/mjsn800403/KGKG/issues/29) | Reduce wrong-vehicle attribution in the assistant (46/60 in the 2026-10-27 eval) | Retrieval owner | Design work |
+| A-07 (superseded by [A-15](https://github.com/mjsn800403/KGKG/issues/21)) | Enable the nightly QA timer (`ops/qa/kgkg-qa-nightly.{service,timer}`) | Operations | Approval: standing configuration on the production host |
+| [A-08](https://github.com/mjsn800403/KGKG/issues/26) | Kill four hung `claude --version` probes (since 2026-10-24, ~4 vCPU continuously) and review other sessions' heavy jobs on the production host | Owner | Approval |
+| [A-06](https://github.com/mjsn800403/KGKG/issues/30) | Bound concurrent embeddings or separate the assistant's worker pool (P-01) | Engineering lead | Design work |
+
+## Open actions added 2026-10-29/30 (infrastructure audit)
+
+Filed as GitHub issues on 2026-10-30 (issues 15–31) so that criterion 8 has a
+tracker with history rather than a register in a file nobody can subscribe to.
+Every row below links to its issue; the issue carries the detail, the evidence
+and the proposed fix, and this table stays the index.
+
+| ID | Action | Owner | Needs |
+|---|---|---|---|
+| [A-09](https://github.com/mjsn800403/KGKG/issues/15) | Put `/opt/KGKG` on `work` or detached. `deploy.sh` pushes `HEAD:<the production checkout's branch>`, and that checkout is on `rag-db-improvements` — which is how a fourth line of development came to exist, and it recurs on every promote | Engineering lead | Decision, then one `git checkout` on the host |
+| [A-10](https://github.com/mjsn800403/KGKG/issues/16) | Reconcile `main` with `work`: they diverge 11 commits each way and `main` holds three commits `work` lacks, including a fix for four failing RAG tests | Engineering lead | One merge pass, conflicts reviewed |
+| [A-11](https://github.com/mjsn800403/KGKG/issues/17) | Remove the `xrdp` service. `3389/tcp` was open to the internet, v4 and v6, with `xrdp` listening and no human session in the host's history; the firewall rules were deleted 2026-10-29 but the service is still installed and enabled | Operations | Approval to remove a package from the production host |
+| [A-12](https://github.com/mjsn800403/KGKG/issues/18) | Either activate the Cloudflare Tunnel and close port 22, or keep direct SSH as the documented design. The documentation now states the live posture; the decision itself is still open | Engineering lead | Design decision; the Cloudflare tunnel token if activating |
+| [A-13](https://github.com/mjsn800403/KGKG/issues/19) | Run `qa/perf/run_perf.sh load` and `qa/dast/run_zap.sh full` on the commit to be promoted as 1.1.0. The policy has required both for a MINOR since 2026-10-27 and neither has been run on a commit that was actually promoted | QA | A QA-stack window on the production host |
+| [A-14](https://github.com/mjsn800403/KGKG/issues/20) | Alert on error-budget burn, not only on hard down, and investigate the two probes measuring 98.6–98.8 % over 7 days. Until this is done, no availability target above 99.5 % is credible | Operations | Rule in `api/alert_rules.py`; note every `infra:` key is a page |
+| [A-15](https://github.com/mjsn800403/KGKG/issues/21) | Trigger E2E, k6 and ZAP from CI on a schedule, and enable `ops/qa/kgkg-qa-nightly.timer` (supersedes A-07) | Operations | Approval: standing configuration on the production host |
+| [A-16](https://github.com/mjsn800403/KGKG/issues/22) | Raise backend coverage toward the stated 80 %, starting with `portal.py` (64 %) and the 602 statements of training commands that arrived with `536ac91` | Engineering lead | Test-writing time |
+| [A-17](https://github.com/mjsn800403/KGKG/issues/23) | Commission an independent penetration test. All security testing to date is our own; `SECURITY.md` says so in the document a researcher reads first | Owner | Budget, vendor selection |
+| [A-18](https://github.com/mjsn800403/KGKG/issues/24) | End-to-end verification of the SMS paging path. The watchdog detects a dead alert engine but cannot detect a dead SMS provider; `_sms_failures()` sees only failures the provider reports | Operations | Design work |
+| [A-19](https://github.com/mjsn800403/KGKG/issues/25) | Move staging and the QA stack off the production host | Owner | Second host, budget |
+
+### Closed on 2026-10-29/30
+
+| ID | Action | How |
+|---|---|---|
+| A-20 | Production was running a commit CI had rejected (`536ac91`, red on the coverage ratchet) and reachable from no promotable branch | Trunk reconciled; `kgkg-promote` now reads GitHub's verdict through `ops/deploy/ci_evidence.sh` and fails closed (PR #11) |
+| A-21 | Every infra alert rule was shaped `<metric> == 0` and starved silently when its exporter died; `up{job="kgkg_app"}` was 0 for 49 minutes with no page | Rules watch the exporters, with `absent()` guards; `RuleShapeTests` rejects the shape for good (PR #11). Postmortem in `../11-operations-and-support/` |
+| A-22 | The watchdog's failed-unit paging was hand-installed and reverted by the next promote, as predicted | Landed through the release (PR #11); verified by hash after the promote of `5e4543a` |
+| A-23 | A failed transient staging unit stayed in `failed` for ever, so one red staging became an SMS every 12 hours about a finished run | `kg-deploy-gate` resets its own unit on failure; launch path tested (PR #12) |
+| A-24 | `main` had no branch protection and no rulesets; CI was advice | Four required checks, strict, PR required, `enforce_admins`, no force-push or deletion |
+| A-25 | `.gitignore` ignored all markdown, so no new document could be committed without `git add -f` | Narrowed to root-level notes with named negations (PR #13) |
 
 ## Observations not resolved
 

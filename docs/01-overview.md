@@ -18,9 +18,11 @@ grants access, processes purchase/feature requests, and operates the data platfo
 - **Content is immutable and sharded per vehicle.** Manuals arrive as crawled HTML, parsed
   once into one self-contained SQLite DB per vehicle. Serving code opens them read-only.
   Adding vehicle #4,000 is a file copy + catalog sync — no migrations, no downtime.
-- **Everything else lives in one relational DB** (`db.sqlite3`): companies, users, grants,
-  analytics rollups, events, jobs. Engine-agnostic Django ORM — a future PostgreSQL move is a
-  settings change.
+- **Everything else lives in one relational DB**: companies, users, grants, analytics
+  rollups, events, jobs. The Django ORM is engine-agnostic, and the PostgreSQL move this
+  sentence used to describe as future **happened on 2026-10-29** (`8fa94dd`,
+  `KG_DB_ENGINE=postgres`): production is PostgreSQL 16, database `kgkg`, and the frozen
+  `db.sqlite3` is kept only as the way back. It was indeed a settings change.
 - **AI must never hallucinate beyond the paid content.** Retrieval, ranking, and the
   diagnostic rule engine are local and deterministic; the external LLM (Metis) is used only
   as a Persian *phraser* over already-retrieved context, with a no-LLM fallback. Access

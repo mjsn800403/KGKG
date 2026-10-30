@@ -1,0 +1,37 @@
+# Review ownership. Paths are matched last-rule-wins, so the specific blocks
+# below override the catch-all.
+#
+# `main` requires a pull request and the four CI jobs; code-owner review is not
+# currently required by branch protection, so these lines request the right
+# reviewer rather than block the merge. Turn on "Require review from Code
+# Owners" in branch protection when the team is large enough that a merge need
+# never wait on one person.
+
+*                                   @mjsn800403
+
+# Deployment, the forced-command gates and the promote path decide what reaches
+# production and which key may put it there. Changes here are reviewed by the
+# repository owner regardless of who wrote them.
+/ops/deploy/                        @mjsn800403
+/ops/security/                      @mjsn800403
+/.github/workflows/                 @mjsn800403
+
+# The alerting engine and the watchdog over it: a mistake here is silent, which
+# is the worst failure mode in the repository.
+/KG_backend/api/alert_rules.py      @mjsn800403
+/ops/observability/                 @mjsn800403
+
+# Authorisation and entitlements: the modules the mutation tests exist for.
+/KG_backend/api/access.py           @mjsn800403
+/KG_backend/api/mediaauth.py        @mjsn800403
+/KG_backend/api/admin_auth.py       @mjsn800403
+/KG_backend/api/portal_auth.py      @mjsn800403
+/KG_backend/api/quota.py            @mjsn800403
+
+# Retrieval and the diagnostic engine.
+/KG_backend/api/rag/                @alistp27
+/KG_backend/api/evalsuite/          @alistp27
+
+# Documentation and the evaluation evidence package.
+/docs/                              @mjsn800403
+/audit-evidence/                    @mjsn800403
