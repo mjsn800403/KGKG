@@ -12,7 +12,8 @@
         │                           │  proxy_buffering off, 3600s)  │
         ▼                           ▼                               ▼
    Disk (nginx)              Django 5.2 (KG_backend)          Next.js 16 (kg_frontend)
-                             ├─ db.sqlite3 (WAL) ────────── users/RBAC/companies/rollups/events/jobs
+                             ├─ PostgreSQL 16 `kgkg` ───── users/RBAC/companies/rollups/events/jobs
+                             │    (since 2026-10-29; db.sqlite3 frozen as the way back)
                              ├─ Database_warehouse/*.db ─── one read-only SQLite per vehicle (38)
                              │    ├─ _rag/index.rag.db ──── unified deduplicated semantic index (~2.3GB)
                              │    ├─ _rag/diag/*.db ─────── per-vehicle diagnostic sidecars
@@ -121,7 +122,8 @@ detached from request serving.
 │  ├─ api/                   ALL application code (see doc 04)
 │  ├─ Database_warehouse/    per-car DBs + _rag/ + _quarantine/  (NOT in git)
 │  ├─ static_warehouse/      per-car images                       (NOT in git)
-│  ├─ db.sqlite3             main DB                              (untracked 2026-07-10; old copies exist in git history)
+│  ├─ db.sqlite3             FORMER main DB, frozen 2026-10-29    (untracked 2026-07-10; old copies exist in git history)
+│                            the portal now runs on PostgreSQL 16, database `kgkg`
 │  ├─ ARCHITECTURE.md        original scale-strategy note (kept; superseded by docs/)
 │  └─ requirements.txt
 ├─ kg_frontend/              Next.js app (src/app routes, src/components, src/utils, src/guidance)

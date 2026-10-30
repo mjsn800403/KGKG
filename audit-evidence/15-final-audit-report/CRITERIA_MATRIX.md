@@ -42,3 +42,33 @@ claim below is backed by a commit and a test on that branch, and CI was green on
 | 6 | **Partially Verified** | Release step 3 (E2E on the same commit) is now enforced by tooling | `RELEASE_POLICY.md`, ADR-0004 | 1.0.0 promoted 2026-10-29 (`8fa94dd`, tag `deploy-20261029-084649`); release record and load/DAST steps are still procedure |
 | 7 | **Verified** | Mutation testing of the authorization modules; 14 surviving mutants were real blind spots and are now killed. Two new defects found and fixed (D-41, D-42) | `03-unit-testing/mutation/`, `api/test_access_rules.py`, `CORRECTIVE_ACTIONS.md` | Equivalent and cosmetic survivors listed with reasons |
 | 9 | **Verified (measured), target partially met** | Backend 850 → 1141 tests after merging `work` (PostgreSQL, random order); combined coverage 52.9 → 60 %. CI floor 56. team 24→90 %, reporting 0→98 %, adminops 37→77 %, shield 69→95 %, rag/service 61→90 %, labortimes/sst → 91 % | CI runs on the branch; `api/test_team.py`, `test_adminops.py`, `test_exports.py`, `rag/test_service_paths.py` | 80 % overall ambition not met; `portal.py` 64 % is next |
+
+## Update 2026-10-30 (Tier-2 governance and release management, branch `tier2/governance-and-release`)
+
+The rows above are kept as written. The full audit that drove this work, with
+per-criterion scores before and after, is
+[`INFRA_MATURITY_ASSESSMENT_2026-10-29.md`](INFRA_MATURITY_ASSESSMENT_2026-10-29.md).
+
+| # | Status now | What changed | Evidence | Still open |
+|---|---|---|---|---|
+| 1 | **Partially Verified** (narrower again) | Three documents corrected against the host: the Cloudflare Tunnel described in the present tense is not running (CI uses direct SSH), and the "future PostgreSQL move" in `docs/01` and the `db.sqlite3` box in the `docs/02` topology diagram both became true on 2026-10-29 | `docs/01-overview.md`, `docs/02-architecture.md`, `docs/11-operations-deployment.md` | No backlog-tool export |
+| 2 | **Partially Verified** (materially better) | `.gitignore` carried a blanket `*.md` with **no negations**, so every document in the repository — the SRS, the six ADRs, this whole package — was tracked only because someone used `git add -f`, and any new document would silently never have been committed. ADR-0006 is titled "docs as code". Narrowed to `/*.md` plus named negations | `.gitignore`, PR #13 | No wiki platform; owners still assigned by role, not to named people |
+| 3 | **Verified** | `CODEOWNERS` routes review by area; a pull-request template makes the verification claim and the rollback plan part of every change | `.github/CODEOWNERS`, `.github/pull_request_template.md` | Issue tracker now seeded (below), but with days of history, not months |
+| 4 | **Verified** | `main` protected: four required checks, strict, PR required, `enforce_admins`, no force-push, no deletion, conversation resolution. `.mailmap` folds nine author identities into two people plus the assistant and two automations — `git log --format='%aN <%aE>'` now reports 5 distinct identities, down from 9, with history byte-identical | branch protection API; `.mailmap` | No history before 2026-06-19 |
+| 5 | **Verified** | Unchanged from 2026-10-29 plus: `main` is now a gate rather than a suggestion | — | E2E, k6 and ZAP still not CI-triggered |
+| 6 | **Partially Verified → substantially closed** | `v1.0.0` tagged and released with a **filled** release record reconstructed from machine evidence, stating plainly that it was promoted with CI red, that no record was filled at the time, and that load and DAST were run on neither of its commits. `VERSION` bumped 1.0.0 → 1.1.0 — it had not moved across two deploys, one of which carried new capability — and `RELEASE_RECORD_v1.1.0.md` is **open before** the promote, with the two owed rows named as blocking | `RELEASE_RECORD_v1.0.0.md`, `RELEASE_RECORD_v1.1.0.md`, `docs/CHANGELOG.md`, tag `v1.0.0` | Still no alpha/beta channel (staging is the RC, stated honestly); 1.1.0 must not ship until load and DAST are run |
+| 7 | **Verified** | Unchanged | — | No independent penetration test |
+| 8 | **Partially Verified → substantially closed** | First written **SLA** (99.5 % monthly, chosen because the measured 7-day figures were 100/99.99/98.80/98.63 % and 99.9 % would already be a breach), P1–P4 response targets, business hours, maintenance policy, and a four-level on-call and escalation path with its limitations stated — two people, no rota, SMS-only paging, no severity routing. First **postmortem**, for the 49-minute loss of application-metrics visibility on 2026-10-27. Open actions filed as GitHub issues | `SLA_AND_ONCALL.md`, `postmortem-2026-10-27-app-metrics-blind.md`, repository issues | No financial remedy, no 24/7 rota; error-budget-burn alerting not implemented |
+| 9 | **Verified (measured), target partially met** | Unchanged at 58 %, floor 57 | — | 80 % ambition unmet |
+| 10 | **Verified** | `SECURITY.md` gives a private reporting channel with stated response targets and states, in the document itself, that no independent penetration test has been commissioned | `SECURITY.md` | Single host; no SLO burn alerting; `xrdp` still installed |
+| 11–13 | **Blocked**, unchanged | Nothing was invented | templates T-11/T-12/T-13 | Needs contracts, CVs, market research |
+
+### The licence question, which was not on anyone's list
+
+The repository is **public** and had no `LICENSE`, no `NOTICE` and no
+`SECURITY.md`. For a commercial product that is an unforced ambiguity: the code
+was readable by anyone with no stated terms. Resolved on the owner's decision —
+a proprietary all-rights-reserved notice that permits reading for evaluation,
+audit and security research and nothing else, plus a `NOTICE` pointing at where
+third-party licences are pinned. The repository stays public so that this
+evidence package remains inspectable.

@@ -1,0 +1,37 @@
+# Third-party components
+
+KGtechvault is built on third-party open-source software, each component
+licensed by its own authors under its own terms. Nothing in LICENSE restricts
+rights you hold in those components, and nothing here grants rights in
+KGtechvault itself.
+
+This file names the dependency sets and where their exact, pinned versions and
+licences are recorded, rather than restating licence texts that would drift out
+of date the first time a lock file moves.
+
+| Set | Manifest | Pinned at |
+|---|---|---|
+| Backend runtime (Python) | `KG_backend/requirements.txt` | `ops/docker/backend-requirements.lock` |
+| Frontend runtime and build (Node) | `kg_frontend/package.json` | `kg_frontend/package-lock.json` |
+| Browser test suite | `qa/e2e/package.json` | `qa/e2e/package-lock.json` |
+| Base images | `ops/docker/backend.Dockerfile`, `ops/docker/frontend.Dockerfile` | image digests resolved at build |
+| Observability and error tracking | `ops/observability/docker-compose.yml`, `glitchtip` compose on the host | image tags in those files |
+
+The principal components, named because they shape the architecture rather than
+because the list is exhaustive: Django, Next.js and React, PostgreSQL, SQLite
+(with `sqlite-vec`), sentence-transformers and PyTorch, BAAI `bge-m3`,
+WeasyPrint, nginx, Prometheus, Grafana, Loki, Grafana Alloy, cAdvisor,
+GlitchTip, Umami, Playwright, k6, OWASP ZAP, Trivy, gitleaks, bandit and
+hadolint.
+
+To reproduce the full licence inventory for an audit:
+
+```bash
+pip install pip-licenses && pip-licenses --from=mixed --format=markdown   # Python
+npm --prefix kg_frontend ls --all --long --json                          # Node
+docker run --rm aquasec/trivy:0.58.1 image --scanners license <image>    # images
+```
+
+Model weights are downloaded at build time from their publishers and are
+covered by those publishers' terms; `HF_HUB_OFFLINE=1` in CI and in the
+production images means no component fetches weights at runtime.

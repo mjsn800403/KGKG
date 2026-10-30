@@ -29,6 +29,12 @@
 # of them is at the root, so narrowing this rule changes nothing that exists.
 /*.md
 !/README.md
+!/SECURITY.md
+!/CONTRIBUTING.md
+!/CODE_OF_CONDUCT.md
+!/CHANGELOG.md
+!/AGENTS.md
+!/CLAUDE.md
 .DS_Store
 /.venv
 /Cars_database
