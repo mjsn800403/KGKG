@@ -18,9 +18,11 @@ short and point at the doc section that was updated.
     `reviewed + review_days` fails the build. The staleness rule is literally the one the
     product applies to knowledge-base articles, so the repository and the product never
     disagree about what "stale" means. `docs/superpowers/specs/` is excluded — a dated design
-    record cannot go stale. The owners are **seeded from git history and marked as needing
-    correction**; they are a starting point that makes the gate real, not a record of who
-    accepted the duty.
+    record cannot go stale. Ownership was then **confirmed by the maintainers**: both of them own all 25
+    documents. `owner` takes one name or several, and a stale notice names every owner, so
+    neither can assume the other was asked. The `reviewed` dates remain seeded from each
+    file's last change — a proxy, not a review; the first real review of a document moves its
+    date for the first time. Who owns which ADR is left for the maintainers to settle.
 - **The tracker now holds planned work, not only remediation.** Milestones `1.2.0` and
   `Backlog` created and applied to every open issue (0 of 19 carried one before), `type:*` and
   `priority:*` labels added, and five epics filed from the roadmap (#43 ship the desk, #44 close

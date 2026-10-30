@@ -178,6 +178,54 @@ class DocsRegistryTests(unittest.TestCase):
         self.assertIn('02-architecture.md', problems[0])
         self.assertIn('not in', problems[0])
 
+    def test_a_document_can_be_owned_by_several_people(self):
+        """Shared ownership is the normal case on a small team: two people who
+        both know a document and either of whom can confirm it."""
+        self._doc('01-overview.md')
+        self._registry("""
+            ["01-overview.md"]
+            owner = ["mjsalimin", "Ali Sartipi"]
+            reviewed = 2026-10-01
+            review_days = 180
+        """)
+        self.assertEqual(self._run(), [])
+
+    def test_an_empty_owner_list_is_as_unowned_as_an_empty_string(self):
+        self._doc('01-overview.md')
+        self._registry("""
+            ["01-overview.md"]
+            owner = []
+            reviewed = 2026-10-01
+            review_days = 180
+        """)
+        problems = self._run()
+        self.assertEqual(len(problems), 1)
+        self.assertIn('no owner', problems[0])
+
+    def test_a_list_of_blanks_is_not_ownership(self):
+        self._doc('01-overview.md')
+        self._registry("""
+            ["01-overview.md"]
+            owner = ["", "  "]
+            reviewed = 2026-10-01
+            review_days = 180
+        """)
+        self.assertIn('no owner', self._run()[0])
+
+    def test_every_owner_is_named_when_a_shared_document_goes_stale(self):
+        """A stale notice that names only one of two owners lets each assume
+        the other was asked."""
+        self._doc('01-overview.md')
+        self._registry("""
+            ["01-overview.md"]
+            owner = ["mjsalimin", "Ali Sartipi"]
+            reviewed = 2025-01-01
+            review_days = 180
+        """)
+        problem = self._run()[0]
+        self.assertIn('mjsalimin', problem)
+        self.assertIn('Ali Sartipi', problem)
+
     def test_an_unowned_document_is_reported(self):
         self._doc('01-overview.md')
         self._registry('''

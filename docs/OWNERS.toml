@@ -17,134 +17,143 @@
 #   * Changed a document? Move `reviewed` too; you have just confirmed it.
 #   * New document? Add an entry in the same commit, or CI will say so.
 #
-# PROVISIONAL OWNERS — PLEASE CORRECT
-# These were SEEDED from git history (the last human author of each file), not
-# agreed with anyone. They are a starting point that makes the gate real, not a
-# record of who accepted the duty. Replace them with the people who actually
-# own each area. `reviewed` is seeded with the date the file was last changed,
-# which is the best available proxy and is NOT the same as a review.
+# OWNERS
+# Confirmed by the maintainers on 2026-10-30: both of them own every document.
+# Shared ownership is deliberate on a team this size — either of them can
+# confirm a document is still correct, and a stale notice names both, so
+# neither can assume the other was asked.
+#
+# `owner` takes one name or several.
+#
+# `reviewed` is still SEEDED with the date each file was last changed, which is
+# the best available proxy and is NOT the same as somebody having read it. The
+# first real review of each document moves its date for the first time.
+#
+# The ADRs are left as they are for now: an ADR records a decision, and who
+# owns which decision is for the maintainers to settle — not for a script to
+# guess.
 
 ["00-srs.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["01-overview.md"]
-owner = "Ali Sartipi"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-09-26
 review_days = 180
 
 ["02-architecture.md"]
-owner = "Ali Sartipi"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-09-26
 review_days = 180
 
 ["03-data-model.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-07-16
 review_days = 180
 
 ["04-backend-reference.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-07-16
 review_days = 180
 
 ["05-api-reference.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-30
 review_days = 180
 
 ["06-permissions-rbac.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-07-16
 review_days = 180
 
 ["07-frontend.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-30
 review_days = 180
 
 ["08-ai-assistant-rag.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-07-18
 review_days = 180
 
 ["09-realtime-sse.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-07-16
 review_days = 180
 
 ["10-analytics-reporting.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-07-16
 review_days = 180
 
 ["11-operations-deployment.md"]
-owner = "mjsn800403"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["12-security.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-28
 review_days = 180
 
 ["13-guidance-system.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-30
 review_days = 180
 
 ["14-terminology.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-07-18
 review_days = 180
 
 ["15-vehicle-schema.md"]
-owner = "Ali Sartipi"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-09-26
 review_days = 180
 
 ["CHANGELOG.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-30
 review_days = 180
 
 ["README.md"]
-owner = "Ali Sartipi"
-reviewed = 2026-10-29
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-10-30
 review_days = 180
 
 ["adr/0001-sqlite-and-per-vehicle-databases.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["adr/0002-local-retrieval-llm-as-phraser.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["adr/0003-containers-with-zero-gap-swap.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["adr/0004-only-a-person-promotes.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["adr/0005-self-hosted-error-monitoring.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["adr/0006-docs-as-code.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180
 
 ["adr/README.md"]
-owner = "mjsalimin"
+owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-10-29
 review_days = 180

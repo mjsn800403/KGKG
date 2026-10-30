@@ -32,6 +32,21 @@ DEFAULT_REVIEW_DAYS = 180
 EXCLUDED_DIRS = ('superpowers',)
 
 
+def owners_of(entry):
+    """The people responsible, as a list of names.
+
+    `owner` may be one name or several: shared ownership is the normal case on
+    a small team — two people who both know a document and either of whom can
+    confirm it. A blank, an empty list, or a list of blanks is not ownership.
+    """
+    raw = entry.get('owner') if isinstance(entry, dict) else None
+    if isinstance(raw, str):
+        raw = [raw]
+    elif not isinstance(raw, (list, tuple)):
+        raw = []
+    return [str(n).strip() for n in raw if str(n).strip()]
+
+
 def is_stale(reviewed, review_days, today):
     """Never reviewed, or reviewed longer ago than its own interval."""
     if reviewed is None:
@@ -81,7 +96,8 @@ def check(docs_dir, today=None):
                 f'{REGISTRY} lists {rel}, which no longer exists: remove the '
                 f'entry so ownership describes what is actually there.')
             continue
-        if not isinstance(entry, dict) or not str(entry.get('owner') or '').strip():
+        owners = owners_of(entry)
+        if not owners:
             problems.append(f'{rel} has no owner in {REGISTRY}: an unowned '
                             f'document is one nobody maintains.')
             continue
@@ -91,10 +107,12 @@ def check(docs_dir, today=None):
             reviewed = reviewed.date()
         if is_stale(reviewed, days, today):
             last = reviewed.isoformat() if reviewed else 'never'
+            # Name EVERY owner: a notice that names one of two lets each of
+            # them assume the other was asked.
             problems.append(
                 f'{rel} is past its review interval (last reviewed {last}, '
-                f'every {days} days, owner {entry["owner"]}): read it, correct '
-                f'it, and move the reviewed date.')
+                f'every {days} days, owner {" and ".join(owners)}): read it, '
+                f'correct it, and move the reviewed date.')
     return problems
 
 
