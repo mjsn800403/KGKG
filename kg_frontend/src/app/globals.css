@@ -2509,3 +2509,33 @@ html:has(.content-renderer, .parts-viewer, .frm-wrap) .kg-watermark { display: b
 .sup-misses li{padding:7px 11px;border-radius:9px;border:1px solid var(--border-soft);
   background:color-mix(in srgb,var(--bg) 40%,transparent)}
 .sup-misses b{color:var(--accent);font-family:var(--mono);margin-inline-end:5px}
+
+/* ===========================================================================
+   Feature-discovery strip (components/OnboardingStrip.jsx)
+   Collapsed to one line; never a modal, never over content.
+   =========================================================================== */
+.onb{margin-bottom:18px;padding:11px 16px;border-radius:14px;border:1px solid var(--border-soft)}
+.onb-line{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.onb-count{font-size:12.5px;color:var(--text-dim);font-family:var(--mono);flex-shrink:0}
+.onb-next{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text);
+  text-decoration:none;border-bottom:1px dashed var(--border)}
+.onb-next:hover{color:var(--accent);border-color:var(--accent)}
+.onb-toggle{margin-inline-start:auto;background:transparent;border:0;color:var(--text-dim);
+  font:inherit;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.onb-toggle:hover{color:var(--text)}
+.onb-chev{transition:transform .2s}
+.onb-chev.up{transform:rotate(180deg)}
+.onb-dismiss{background:transparent;border:0;color:var(--text-faint);cursor:pointer;
+  display:inline-flex;padding:2px}
+.onb-dismiss:hover{color:var(--accent)}
+.onb-items{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:9px}
+.onb-item{display:flex;align-items:flex-start;gap:10px;font-size:13px}
+.onb-item.done{opacity:.6}
+.onb-mark{color:var(--ok);flex-shrink:0;margin-top:2px;width:14px;display:inline-flex}
+.onb-dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--border);
+  display:inline-block;margin:4px 3px}
+.onb-text{display:flex;flex-direction:column;gap:2px}
+.onb-text a{color:var(--text);text-decoration:none}
+.onb-text a:hover{color:var(--accent)}
+.onb-why{font-size:11.5px;color:var(--text-faint);line-height:1.7}
+.onb-done-tag{margin-inline-start:auto;font-size:10.5px;color:var(--ok);flex-shrink:0}

@@ -4,6 +4,19 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Feature-discovery onboarding.** Measured first: over four months and 34 active seats,
+  production showed 71,886 manual views, the parts catalogue opened by 6 people, the assistant
+  asked by 9, and the search box used by nobody. People found the manuals and stopped looking,
+  and nobody knew because every piece of onboarding state lived in `localStorage`.
+  `api/onboarding.py` derives what each seat is entitled to and what it has actually found from
+  the activity the product already records — no new tracking, no "mark as done", and entitlement
+  computed by the existing `access.user_ai_eligible` / `user_package_set` rather than a second
+  definition. An unentitled item is absent from the seat's checklist *and* from the metric's
+  denominator. `GET/POST /api/auth/onboarding/` serves it; dismissal is a column, so it survives
+  a device change. `components/OnboardingStrip.jsx` shows one collapsed line on `/browse`, never
+  a modal. `feature_discovery` on the admin metrics is computed by the same function the
+  checklist calls, so the figure management reads and the item the user sees cannot drift apart.
+  Spec and plan: `docs/superpowers/specs|plans/2026-10-30-feature-discovery-onboarding*`.
 - **Two governance gates, so the process is checked the way the code is** (`ops/governance/`,
   new `governance` job in CI, 27 tests, standard library only):
   * `check_traceability.py` refuses a pull request whose title and body reference no issue.
