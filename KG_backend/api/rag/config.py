@@ -637,6 +637,11 @@ FEEDBACK_DB = Path(os.environ.get('RAG_FEEDBACK_DB') or (RAG_DIR / 'feedback.db'
 RERANK = os.environ.get('RAG_RERANK', '0') == '1'
 RERANK_MODEL = os.environ.get('RAG_RERANK_MODEL', 'BAAI/bge-reranker-v2-m3')
 RERANK_CANDIDATES = 20
+# Fuse the cross-encoder with the retrieval order instead of replacing it:
+# z(rerank) * w + z(-retrieval rank) * (1 - w), per question. 1.0 = rerank only
+# (old behaviour). KG-Reranker on the gold sets, w chosen by 2-fold CV: 0.4
+# (EN nDCG@5 +0.12, FA Hit@1 +0.19, both p<0.001; pure rerank lost EN Hit@1).
+RERANK_FUSE = float(os.environ.get('RAG_RERANK_FUSE', '1.0'))
 
 # Car-scoped dense pass depth (retrieve.assist, pinned car only).
 CAR_VEC_K = int(os.environ.get('RAG_CAR_VEC_K', '40'))
