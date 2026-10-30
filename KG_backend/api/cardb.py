@@ -136,7 +136,8 @@ def ready_path(path):
         hit = _ready_cache.get(path)
         if hit is not None and now - hit[1] < READY_TTL_S:
             return hit[0]
-    ok = os.path.isfile(path)
+    # a car served from PostgreSQL may no longer have its SQLite file
+    ok = os.path.isfile(path) or cardb_pg.is_pg(path)
     with _ready_lock:
         _ready_cache[path] = (ok, now)
         if len(_ready_cache) > 4096:       # bound: prune expired entries

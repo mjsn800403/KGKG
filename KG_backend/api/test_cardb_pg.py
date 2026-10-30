@@ -78,3 +78,20 @@ class RoutingTest(unittest.TestCase):
         s = cardb_pg.schema_for(CAR)
         self.assertRegex(s, r'^car_[0-9a-f]{16}$')
         self.assertEqual(s, cardb_pg.schema_for(CAR))
+
+    def test_star_serves_every_loaded_car(self):
+        loaded = frozenset({cardb_pg.schema_for(CAR)})
+        with mock.patch.dict(os.environ, {'KG_CARDB_PG': '*'}), \
+                mock.patch.object(cardb_pg, '_loaded_schemas', return_value=loaded):
+            self.assertTrue(cardb_pg.is_pg(self.path))
+            self.assertFalse(cardb_pg.is_pg('/x/Not Loaded.db'))
+
+    def test_pg_car_is_ready_without_its_sqlite_file(self):
+        gone = os.path.join(self.dir.name, 'Gone.db')
+        cardb.invalidate_ready_cache()
+        with mock.patch.dict(os.environ, {'KG_CARDB_PG': 'Gone.db'}):
+            self.assertTrue(cardb.ready_path(gone))
+        cardb.invalidate_ready_cache()
+        with mock.patch.dict(os.environ, {'KG_CARDB_PG': ''}):
+            self.assertFalse(cardb.ready_path(gone))
+        cardb.invalidate_ready_cache()

@@ -29,11 +29,11 @@ def segs(p):
 
 
 reqs = [{}, {'nav': '1'}]
-for n in rng.sample(nodes, 400):
+for n in rng.sample(nodes, min(400, len(nodes))):
     reqs.append({'seg': segs(n['path'])})
-for n in rng.sample([n for n in nodes if not n['leaf']], 60):
+for n in (lambda L: rng.sample(L, min(60, len(L))))([n for n in nodes if not n['leaf']]):
     reqs.append({'seg': segs(n['path']), 'subtree': '1'})
-for n in rng.sample([n for n in nodes if n['href']], 60):
+for n in (lambda L: rng.sample(L, min(60, len(L))))([n for n in nodes if n['href']]):
     reqs.append({'href': n['href']})
 for q in ['brake', 'Brake Pad', 'torque', 'OIL', 'clutch', 'P0', 'sensor', 'wiper', 'bulb', 'coolant',
           'remove', 'INSTALL', 'fuse', 'airbag', 'harness', 'gasket', 'ECU', '100%', 'a_b', 'ترمز']:

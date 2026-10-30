@@ -1,7 +1,7 @@
 """PostgreSQL-backed per-vehicle databases (KG_CARDB_PG), sqlite3-compatible.
 
 A car listed in KG_CARDB_PG (file names, '|'-separated, e.g.
-"GR86 Premium, Standard Trans.db") is served from its own PostgreSQL schema
+"GR86 Premium, Standard Trans.db", or '*' for every loaded car) is served from its own PostgreSQL schema
 (``car_<md5 of the file name>``) holding the same tables as its SQLite file,
 loaded by ops/cardb/pg_car_load.py. cardb.connect() hands back a PgCarConn,
 which speaks the small sqlite3 surface the views use: execute()/cursor(),
@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import threading
+import time
 
 log = logging.getLogger(__name__)
 _tls = threading.local()
@@ -32,6 +33,39 @@ _LIKE = re.compile(r'\bLIKE\b')
 def pg_cars():
     # '|'-separated: car file names themselves contain commas
     return {s.strip() for s in os.environ.get('KG_CARDB_PG', '').split('|') if s.strip()}
+
+
+_loaded = {'at': -1e9, 'schemas': frozenset()}
+_LOADED_TTL_S = 60.0
+
+
+def _loaded_schemas():
+    """car_* schemas present in PostgreSQL (cached; empty if unreachable)."""
+    now = time.monotonic()
+    if now - _loaded['at'] >= _LOADED_TTL_S:
+        try:
+            import psycopg
+            from .rag import config
+            with psycopg.connect(os.environ.get('KG_CARDB_PG_DSN') or config.PGVEC_DSN,
+                                 connect_timeout=3) as c:
+                rows = c.execute(r"SELECT nspname FROM pg_namespace WHERE nspname LIKE 'car\_%'").fetchall()
+            _loaded['schemas'] = frozenset(r[0] for r in rows)
+        except Exception:
+            log.warning('cannot list PostgreSQL car schemas', exc_info=True)
+        _loaded['at'] = now
+    return _loaded['schemas']
+
+
+def is_pg(filename):
+    """Is this car served from PostgreSQL? KG_CARDB_PG lists file names, or
+    is '*' for every car whose schema has been loaded."""
+    cars = pg_cars()
+    if not cars:
+        return False
+    name = os.path.basename(str(filename))
+    if name in cars:
+        return True
+    return '*' in cars and schema_for(name) in _loaded_schemas()
 
 
 def schema_for(filename):
@@ -117,7 +151,7 @@ def connect(path):
 
     One connection per thread and car; a broken connection is reopened."""
     name = os.path.basename(str(path))
-    if name not in pg_cars():
+    if not is_pg(name):
         return None
     pool = getattr(_tls, 'pool', None)
     if pool is None:
