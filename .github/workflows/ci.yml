@@ -173,6 +173,7 @@ jobs:
           bash ops/deploy/ci_evidence.sh --selftest
           bash ops/deploy/prune_images.sh --selftest
           bash ops/deploy/ci_is_tip.sh --selftest
+          bash ops/deploy/test_detached_prod.sh
           python3 qa/e2e_record.py --selftest
           python3 -m unittest discover -s ops/observability -t ops/observability -p 'test_*.py' -v
           python3 ops/deploy/sanitize_staging_db.py --selftest
