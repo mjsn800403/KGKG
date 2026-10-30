@@ -8,6 +8,7 @@ from . import orggraph_api, parts, labortimes, sst, quota, frm
 from . import feedback as feedback_api
 from . import support_metrics
 from . import knowledge
+from . import onboarding
 from . import mediaauth
 from . import vncauth
 from . import grafanaauth
@@ -69,6 +70,8 @@ urlpatterns = [
     path('api/auth/me/', portal.me_view, name='portal_me'),
     path('api/auth/chat-log/', chatlog.record_view, name='chat_log_record'),
     path('api/auth/flags/', flags.flags_view, name='user_flags'),
+    # Feature discovery: what this seat is entitled to and what it has found.
+    path('api/auth/onboarding/', onboarding.onboarding_view, name='onboarding'),
     path('api/admin/flags/', flags.admin_flags_view, name='admin_flags'),
     path('api/admin/flags/<str:key>/results/', flags.admin_flag_results_view, name='admin_flag_results'),
     path('api/auth/chat-feedback/', chatlog.feedback_view, name='chat_feedback'),

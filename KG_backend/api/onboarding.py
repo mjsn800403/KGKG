@@ -26,8 +26,13 @@ counting them as a discovery failure slanders the feature.
 """
 from typing import NamedTuple
 
+from django.http import JsonResponse
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+
 from . import access
 from .models import ActivityLog, CompanyRequest, SearchLog
+from .portal_auth import require_portal_user
 
 
 class Item(NamedTuple):
@@ -153,3 +158,43 @@ def discovery_counts(users):
         if row['entitled']:
             row['rate'] = round(row['discovered'] / row['entitled'], 4)
     return counts
+
+
+# ---------------------------------------------------------------------------
+# The seat's own endpoint
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@require_portal_user
+def onboarding_view(request):
+    """GET  /api/auth/onboarding/  -> {items, done, total, dismissed}
+    POST /api/auth/onboarding/ {"dismissed": true}
+
+    `dismissed` hides the strip; it does not change the items, which keep
+    describing what the seat has and has not found. The two are separate on
+    purpose: someone who dismissed the prompt has not thereby discovered
+    anything, and the metric must not pretend otherwise.
+    """
+    user = request.portal_user
+
+    if request.method == 'POST':
+        from .portal import _body
+        b = _body(request)
+        if not b.get('dismissed'):
+            return JsonResponse(
+                {'error': 'تنها عملیات مجاز، بستن راهنمای شروع است.'}, status=400)
+        # Idempotent: a second dismissal must not restart the clock, because
+        # the timestamp is a record of when they said no.
+        if user.onboarding_dismissed_at is None:
+            user.onboarding_dismissed_at = timezone.now()
+            user.save(update_fields=['onboarding_dismissed_at'])
+    elif request.method != 'GET':
+        return JsonResponse({'error': 'GET or POST'}, status=405)
+
+    items = progress_for(user)
+    return JsonResponse({
+        'items': items,
+        'done': sum(1 for i in items if i['done']),
+        'total': len(items),
+        'dismissed': user.onboarding_dismissed_at is not None,
+    })

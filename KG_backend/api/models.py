@@ -218,6 +218,10 @@ class PortalUser(models.Model):
     notify_manual_update = models.BooleanField(default=True)
     notify_new_device = models.BooleanField(default=True)
     ai_assistant_enabled = models.BooleanField(default=False)
+    # Feature-discovery strip: one timestamp, set when the seat dismisses it.
+    # Server-side on purpose — `localStorage` loses it on a device change, and
+    # losing it is how a dismissed thing comes back and becomes a nag.
+    onboarding_dismissed_at = models.DateTimeField(null=True, blank=True)
     # Which car-content UI this user prefers: 'modern' (sidebar tree +
     # adaptive flatten) or 'classic' (the original card-by-card drill-down,
     # no sidebar). Source of truth for the per-user browsing-mode toggle.

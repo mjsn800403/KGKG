@@ -10,11 +10,15 @@ them in the metric.
 
 Run:  python manage.py test api.test_onboarding
 """
-from django.test import TestCase
+import json
+
+from django.test import Client, TestCase
 
 from . import onboarding
-from .models import (ActivityLog, Car, Company, CompanyRequest, PortalUser,
-                     SearchLog, UserCarAccess)
+from .models import (ActivityLog, AuthToken, Car, Company, CompanyRequest,
+                     PortalUser, SearchLog, UserCarAccess)
+
+URL = '/api/auth/onboarding/'
 
 
 class OnboardingBase(TestCase):
@@ -161,3 +165,70 @@ class QueryCostTests(OnboardingBase):
         with CaptureQueriesContext(connection) as ctx:
             onboarding.progress_for(user)
         return len(ctx)
+
+
+# ---------------------------------------------------------------------------
+# The seat's own endpoint
+# ---------------------------------------------------------------------------
+
+class OnboardingEndpointTests(OnboardingBase):
+    def setUp(self):
+        super().setUp()
+        self.c = Client()
+        self.h = {'HTTP_AUTHORIZATION': f'Bearer {AuthToken.issue(self.seat).key}'}
+
+    def post(self, body, hdr=None):
+        return self.c.post(URL, json.dumps(body), content_type='application/json',
+                           **(hdr or self.h))
+
+    def test_signed_out_is_401(self):
+        self.assertEqual(self.c.get(URL).status_code, 401)
+        self.assertEqual(self.c.post(URL, '{}', content_type='application/json')
+                         .status_code, 401)
+
+    def test_the_payload_counts_done_against_entitled_items_only(self):
+        ActivityLog.objects.create(user=self.seat, action='view_node')
+        d = self.c.get(URL, **self.h).json()
+        self.assertEqual(d['total'], len(d['items']))
+        self.assertEqual(d['done'], sum(1 for i in d['items'] if i['done']))
+        self.assertEqual(d['done'], 1)
+        self.assertNotIn('ask_assistant', [i['id'] for i in d['items']])
+
+    def test_a_seat_with_no_grants_gets_a_payload_it_can_render(self):
+        """A freshly invited seat: one item, nothing done, nothing to divide by."""
+        h = {'HTTP_AUTHORIZATION': f'Bearer {AuthToken.issue(self.bare).key}'}
+        d = self.c.get(URL, **h).json()
+        self.assertEqual([i['id'] for i in d['items']], ['ask_support'])
+        self.assertEqual((d['done'], d['total'], d['dismissed']), (0, 1, False))
+
+    def test_posting_dismissed_sets_the_timestamp_and_is_idempotent(self):
+        self.assertEqual(self.post({'dismissed': True}).status_code, 200)
+        self.seat.refresh_from_db()
+        first = self.seat.onboarding_dismissed_at
+        self.assertIsNotNone(first)
+        self.assertEqual(self.post({'dismissed': True}).status_code, 200)
+        self.seat.refresh_from_db()
+        self.assertEqual(self.seat.onboarding_dismissed_at, first,
+                         'a second dismissal must not restart the clock')
+
+    def test_dismissal_survives_a_new_session(self):
+        """The whole reason this is a column and not localStorage."""
+        self.post({'dismissed': True})
+        other_device = {'HTTP_AUTHORIZATION': f'Bearer {AuthToken.issue(self.seat).key}'}
+        self.assertTrue(self.c.get(URL, **other_device).json()['dismissed'])
+
+    def test_a_new_entitlement_after_dismissal_does_not_resurrect_the_strip(self):
+        self.post({'dismissed': True})
+        self.seat.can_manage_team = True
+        self.seat.save(update_fields=['can_manage_team'])
+        d = self.c.get(URL, **self.h).json()
+        self.assertTrue(d['dismissed'])
+        self.assertIn('invite_colleague', [i['id'] for i in d['items']],
+                      'the items still describe reality; only the strip is hidden')
+
+    def test_an_unknown_body_is_a_400_not_a_silent_success(self):
+        self.assertEqual(self.post({'nonsense': True}).status_code, 400)
+
+    def test_wrong_method_is_405(self):
+        self.assertEqual(self.c.put(URL, '{}', content_type='application/json',
+                                    **self.h).status_code, 405)

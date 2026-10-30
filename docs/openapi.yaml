@@ -2938,6 +2938,57 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/auth/onboarding/:
+    get:
+      tags:
+      - chat
+      summary: Feature discovery — what this seat is entitled to and what it has found
+      description: 'Auth: portal. Items are derived from the activity the product already records; there is no "mark as done". An item the seat is not entitled to is absent.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+      - chat
+      summary: Dismiss the discovery strip (for good, across devices)
+      description: 'Auth: portal. Idempotent — a second dismissal does not restart the clock. Hides the strip only; the items keep describing what the seat has found.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - dismissed
+              properties:
+                dismissed:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/admin/support/metrics/:
     get:
       tags:
