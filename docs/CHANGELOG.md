@@ -4,6 +4,10 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Coverage floor 56 → 60 %** (`ops/deploy/coverage_min`). CI measured 61 % (line+branch,
+  PostgreSQL, random order, 1,237 tests) on the service-desk branch, so the floor is raised in
+  the commit that earned it, as the ratchet's own comment requires. One point of headroom: the
+  next change that lands with thin tests will be told so by CI rather than by an audit.
 - **The support desk now has an interface.** Everything below had been API-only, which meant no
   customer could use it. `/requests` is the customer side of the desk and is open to **every**
   seat: file a ticket, hold the conversation (`components/TicketThread.jsx`), see the SLA state
