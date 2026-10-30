@@ -599,6 +599,38 @@ class SupportMetricsTests(DeskBase):
         self.assertEqual(m['breaching_now'], 1)
         self.assertAlmostEqual(m['oldest_days'], 3.0, places=1)
 
+    def test_feature_discovery_counts_entitled_and_discovered_seats(self):
+        from .models import ActivityLog, Car, UserCarAccess
+        car = Car.objects.create(brand_name='T', car_name='C', year=2021, db_address='d.db')
+        UserCarAccess.objects.create(user=self.spec, car=car, documents=[],
+                                     admin_granted=True)
+        ActivityLog.objects.create(user=self.spec, action='view_node')
+        fd = self.c.get(METRICS_URL, **self.h_admin).json()['feature_discovery']
+        self.assertEqual(fd['read_manual']['entitled'], 1)
+        self.assertEqual(fd['read_manual']['discovered'], 1)
+        self.assertAlmostEqual(fd['read_manual']['rate'], 1.0)
+
+    def test_feature_discovery_and_the_seat_checklist_agree(self):
+        """The property that justifies sharing one function: the number
+        management reads is computed from the same question the seat is
+        asked."""
+        from . import onboarding
+        from .models import ActivityLog, Car, UserCarAccess
+        car = Car.objects.create(brand_name='T', car_name='C2', year=2021, db_address='e.db')
+        UserCarAccess.objects.create(user=self.spec, car=car, documents=[],
+                                     admin_granted=True)
+        ActivityLog.objects.create(user=self.spec, action='parts_view')
+        fd = self.c.get(METRICS_URL, **self.h_admin).json()['feature_discovery']
+        for item in onboarding.progress_for(self.spec):
+            self.assertEqual(
+                item['done'], fd[item['id']]['discovered'] >= 1,
+                f"{item['id']}: the checklist and the metric disagree")
+
+    def test_feature_discovery_rate_is_none_when_nobody_is_entitled(self):
+        fd = self.c.get(METRICS_URL, **self.h_admin).json()['feature_discovery']
+        self.assertEqual(fd['open_parts']['entitled'], 0)
+        self.assertIsNone(fd['open_parts']['rate'])
+
     def test_the_window_excludes_older_rows(self):
         old = self.create()
         CompanyRequest.objects.filter(id=old['id']).update(

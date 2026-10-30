@@ -80,6 +80,25 @@ Implementation: `KG_backend/api/support_metrics.py`,
 | `knowledge.top_misses` | The 20 most frequent zero-result queries, by count then alphabetically. **This is a work list**: each entry names an article that should exist. | `KbSearchLog.query_norm` | `test_the_knowledge_block_counts_articles_staleness_and_misses` |
 | `knowledge.{views,helpful,unhelpful}` | Sums of the per-article counters. `helpful`/`unhelpful` are votes, one increment per click and not deduplicated per person — stated because it means they measure clicks, not readers. | `KnowledgeArticle` counters | `test_a_seat_can_mark_an_article_helpful_or_not` |
 
+## Feature discovery
+
+Of the seats that *could* use a feature, how many ever have. Computed by
+`api/onboarding.py` `discovery_counts`, **the same function that builds each
+seat's own checklist** — the figure here and the item the user sees are the
+same question asked twice, so they cannot drift apart.
+
+Current state, not windowed: "has this person ever used it" does not expire.
+
+| Key | Definition | Source | Reproduce by hand | Test |
+|---|---|---|---|---|
+| `feature_discovery.<item>.entitled` | Active seats for which the item applies. Entitlement is **computed, not copied**: the assistant calls `access.user_ai_eligible` (seat flag AND company flag AND the Repair Manual package), parts and exports read `access.user_package_set`, manager items read `can_manage_team`, and `ask_support` applies to everyone. | `UserCarAccess`, `Company`, `PortalUser` | run `access.user_ai_eligible(u)` per seat | `test_the_assistant_item_follows_user_ai_eligible_exactly` |
+| `feature_discovery.<item>.discovered` | Of those, the seats with at least one qualifying row. `read_manual`: `view_node`/`view_section`. `use_search`: a `SearchLog` row. **`ask_assistant`: `ask_assistant`, not `open_assistant`** — 62 opens produced 43 questions from 9 people, and opening a panel then leaving is not discovery. `open_parts`: `parts_view`. `export_times`: `download_csv`. `ask_support`: a `CompanyRequest` they filed. `invite_colleague`: `team_add`. `read_team_report`: `report_pdf`. | `ActivityLog`, `SearchLog`, `CompanyRequest` | `ActivityLog.objects.filter(user_id=u.id, action='ask_assistant').exists()` | `test_asking_the_assistant_completes_it_but_opening_does_not` |
+| `feature_discovery.<item>.rate` | `discovered / entitled`, 4 dp, **`null` when nobody is entitled**. An unentitled seat is in neither the numerator nor the denominator: counting someone as a discovery failure for a feature their company has not bought slanders the feature. | as above | divide | `test_a_rate_with_no_entitled_seats_is_none_not_zero`, `test_discovered_never_exceeds_entitled_after_a_grant_is_revoked` |
+
+**Baseline, production, 2026-10-30** (the figures this is meant to move): the
+parts catalogue opened by 6 seats, the assistant asked by 9, the search box
+used by 0, against 71,886 manual views across 34 active seats.
+
 ## Metrics deliberately NOT defined yet
 
 Named so that their absence is explicit rather than an oversight. Each belongs
@@ -88,6 +107,9 @@ to a later phase in `ROADMAP.md`:
 * **Delivery** — deployment frequency, lead time for change, change failure
   rate, MTTR. The data exists (deploy tags, CI run JSON, git history) but no
   collector reads it.
+* **Onboarding completion over time** — the discovery rates above are a
+  snapshot. Whether a cohort's rate improves after the strip ships needs a
+  stored series, which belongs with the collector in phase 4.
 * **Quality trend** — coverage and defect counts per release. Measured today
   per audit, not as a series.
 * **Task flow** — issue throughput, cycle time, ageing work in progress.

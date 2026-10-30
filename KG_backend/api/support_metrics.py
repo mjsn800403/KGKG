@@ -16,9 +16,9 @@ from django.db.models import Avg, Count, Max, Min, Q
 from django.http import JsonResponse
 from django.utils import timezone
 
-from . import feedback, knowledge, sla
+from . import feedback, knowledge, onboarding, sla
 from .admin_auth import require_admin_token
-from .models import CompanyRequest
+from .models import CompanyRequest, PortalUser
 
 DEFAULT_DAYS = 30
 
@@ -142,4 +142,12 @@ def admin_support_metrics_view(request):
         'feedback': {'submissions': fb['submissions'], 'avg_rating': fb['avg_rating'],
                      'with_comment': fb['with_comment']},
         'knowledge': knowledge.metrics(since),
+        # Current state, not windowed: "of the people who could use this, how
+        # many ever have". Computed by the same function that builds each
+        # seat's own checklist, so the figure here and the item they see
+        # cannot drift apart.
+        'feature_discovery': onboarding.discovery_counts(
+            PortalUser.objects.filter(active=True)
+            .select_related('company')
+            .prefetch_related('car_accesses__car', 'company__car_accesses')),
     })
