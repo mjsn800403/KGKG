@@ -158,3 +158,31 @@ maintainable, without a fragile generator.
   (dispatched by Settings) still works — the provider listens for it. The legacy
   `kg-tour-done` localStorage flag is honoured once so upgraders aren't re-toured.
 - Reuses proven CSS patterns from the old tour (ring + tip), re-namespaced `guide-*`.
+
+## 13.10 The knowledge base behind the help panel (2026-10-30)
+
+The help centre now searches **two** sources and shows both in one list:
+
+1. `guidance/content.js` — the built-in articles. They explain how the product
+   works, are versioned with the frontend, and change only by deploying.
+2. `/api/kb/` (`api/knowledge.py`) — the knowledge base. Articles written by
+   the support side, including ones promoted straight out of a solved ticket,
+   each with a named owner and a review interval. They change without a deploy.
+
+Mechanics (`guidance/HelpCenter.jsx`):
+
+* the knowledge-base query is debounced (320 ms), so typing does not log a
+  search per keystroke;
+* it runs **only for a signed-in seat** — the endpoint is portal-authenticated,
+  and `teamFetch` treats a 401 as "the session is gone", so asking on behalf of
+  a visitor would be both pointless and harmful;
+* a failure is silent: the built-in help must still work when the knowledge
+  base does not answer;
+* an article body is rendered as text split on blank lines, never as HTML;
+* each article takes a 👍/👎, once per panel opening.
+
+Every `q=` search is logged server-side with its result count. **The misses are
+the point**: `knowledge.top_misses` in the support metrics is a work list where
+each row names an article that ought to exist. That is the loop the evaluation's
+knowledge-transfer finding asked for — the help panel tells us what help is
+missing.

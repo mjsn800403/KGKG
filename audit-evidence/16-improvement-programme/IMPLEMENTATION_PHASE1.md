@@ -184,9 +184,9 @@ authoring, staleness, promotion and metrics.
 
 | Not done | Consequence |
 |---|---|
-| **No frontend.** Every capability above is API-only. `kg_frontend/src/app/requests/page.jsx` and the admin panel still show the old single-note request form, and the guidance system still carries hard-coded content. **A customer cannot use any of this yet.** | The finding is not closed until the interface ships. This is the largest remaining piece of phase 1. |
 | **No CI run on this branch.** Verified locally only; 17 pre-existing environment failures mean a green GitHub Actions run is required before promotion. | No promotion is permitted (`ops/deploy/kgkg-promote` requires a passing E2E record anyway). |
-| **No E2E, load or DAST** on the new endpoints. | `qa/e2e/` has no spec for the desk; `qa/perf/k6-kgkg.js` does not exercise it. |
+| **E2E written but not executed**; no load or DAST on the new endpoints. | `qa/e2e/tests/support.spec.js` exists and needs the seeded QA stack to run; `qa/perf/k6-kgkg.js` does not exercise the desk. |
+| **No accessibility scan** of the new surfaces. | `qa/e2e/tests/a11y.spec.js` covers four public pages only; the desk, the widget and the knowledge panel are unscanned. |
 | **No SLA breach alerting.** `api/alert_rules.py` can carry a rule; none was added. Breaches are visible on request, not pushed. | An ageing ticket still needs someone to look. |
 | **No notification to the customer** when an admin replies, beyond the existing SSE event. No e-mail or SMS on reply. | A customer who is not on the page learns nothing. |
 | **No attachments** on tickets or messages. | A screenshot still goes by other means. |
@@ -195,10 +195,47 @@ authoring, staleness, promotion and metrics.
 | **The `docs/` ownership registry and its CI staleness check** (Finding 3, internal half) are not implemented. | Internal documentation still has no named owners. |
 | **No production data was touched**, and no figure in this document comes from production. | The live volumes in `../11-operations-and-support/SUPPORT_AND_INCIDENTS.md` (5 tickets) still stand as the last measured state. |
 
+## 10. The interface (phase 1b, same branch)
+
+The API above was unusable by a customer until this part shipped. What it adds:
+
+| Surface | What it does |
+|---|---|
+| `/requests` (`components/RequestsView.jsx`) | The customer side: file a ticket, hold the conversation, see the SLA state and the time left, reopen a closed ticket by replying, rate the resolution. The kinds offered come from the server's `meta`, so a commercial kind is never shown to a seat that would be refused |
+| `components/TicketThread.jsx` | The conversation, shared by both sides. Internal notes are filtered out **server-side** for a customer; nothing in the client is relied on to keep them private |
+| `components/CsatPrompt.jsx` | Five faces and an optional comment, shown only when `lib/support.canRate` agrees with the server's rule |
+| `components/RequestsInbox.jsx` | The agent worklist: SLA state and what is already late without opening anything, an "only what is late" filter, a channel filter, assignee select, escalate, internal notes, **log a telephone call**, and promote-to-article on a closed ticket |
+| `components/FeedbackWidget.jsx` | Page feedback for any signed-in seat, mounted globally by the guidance provider, carrying the current pathname. Not a ticket |
+| `components/SupportAdmin.jsx` | Three admin sections — support KPIs, the product-feedback feed, knowledge-base authoring with owners, review dates, a "needs review" filter and version history |
+| `guidance/HelpCenter.jsx` | The help panel now searches the knowledge base alongside the built-in articles, debounced, signed-in seats only, with a 👍/👎 per article |
+| `components/Sidebar.jsx` | The support link is shown to **every** seat. While it was manager-only a specialist had no way in even after the API opened — the navigation was the last part of the 403 |
+| `lib/support.js` | The presentation rules (SLA tone and label, due-date text, channel labels, `canRate`, duration and rate formatting), pure and tested first: a wrong rule here would tell a customer their late ticket is on time |
+
+Verification:
+
+| Check | Result |
+|---|---|
+| Frontend unit tests | 179 → **208** (`node --test src/lib/__tests__/*.mjs`); the 29 new ones were written before `lib/support.js` existed |
+| `npm run lint` against the CI ratchet (`ops/deploy/lint_max_warnings` = 116) | **115 warnings, 0 errors** — one below the cap, so the gate passes and the ratchet tightens rather than slackens |
+| `npm run build` | passes |
+| Live journey in a real browser against a real backend | `evidence/ui/README.md`, with two screenshots and the metrics the journey produced |
+
+That live run found three defects, all fixed here: the CSAT score rendered in
+Latin digits beside Persian ones; a promoted draft repeated the ticket's
+opening paragraph (now pinned by a test that fails on the previous code); and
+`/requests` was unreachable for a specialist because the sidebar link was
+manager-gated.
+
+Playwright coverage was **written** (`qa/e2e/tests/support.spec.js`, 10 tests
+for the specialist's whole journey and the authorization of the new endpoints)
+but **not run here** — it needs the seeded QA stack from `qa/stack.sh`.
+
 ## Acceptance criteria for calling phase 1 complete
 
-1. A seat without `can_manage_team` can open, read and reply to a support
-   ticket **from the interface**, verified by a Playwright spec in `qa/e2e/`.
+1. ✅ done by hand (`evidence/ui/README.md`), ⬜ not yet by a repeatable spec:
+   a seat without `can_manage_team` can open, read and reply to a support
+   ticket **from the interface**, verified by `qa/e2e/tests/support.spec.js`
+   running in CI.
 2. A GitHub Actions run on this branch is green.
 3. `GET /api/admin/support/metrics/` on staging returns figures that match
    hand-run queries against the staging database, captured as evidence.

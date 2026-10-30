@@ -341,7 +341,10 @@ def promote_request_view(request, req_id):
     parts = []
     if r.body:
         parts.append(f'## پرسش\n\n{r.body}')
-    public = [m.body for m in r.messages.filter(internal=False).order_by('created_at', 'id')]
+    # The ticket's body also seeds the first message, so including it again
+    # would open every promoted draft with the same paragraph twice.
+    public = [m.body for m in r.messages.filter(internal=False).order_by('created_at', 'id')
+              if m.body.strip() != (r.body or '').strip()]
     if public:
         parts.append('## گفت‌وگو\n\n' + '\n\n'.join(public))
     if r.admin_note:

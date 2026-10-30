@@ -4,6 +4,36 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **The support desk now has an interface.** Everything below had been API-only, which meant no
+  customer could use it. `/requests` is the customer side of the desk and is open to **every**
+  seat: file a ticket, hold the conversation (`components/TicketThread.jsx`), see the SLA state
+  and how long is left, reopen a closed ticket by replying to it, and rate the resolution
+  (`components/CsatPrompt.jsx`). The kinds offered come from the server's `meta`, so a commercial
+  kind is never shown to someone who would be refused. The sidebar's support link is shown to
+  every seat too — while it was manager-only a specialist had no way in even after the API
+  opened, and the navigation was the last part of the 403 that sent people to the telephone.
+  (docs/07-frontend.md §7.1, §7.8)
+- **Agent worklist** (`components/RequestsInbox.jsx`): SLA state and what is already late without
+  opening anything, a "only what is late" filter, a channel filter, assignee selection, escalate,
+  internal notes, "log a telephone call" so a call lands in the same system with the same clock,
+  and promote-to-article on a closed ticket.
+- **A page-feedback widget** (`components/FeedbackWidget.jsx`), mounted globally for signed-in
+  seats by the guidance provider. It posts the current pathname — "the search is slow" is only
+  actionable with the location — and is deliberately not a ticket.
+- **The help panel searches the knowledge base**, not only the built-in guidance articles
+  (`guidance/HelpCenter.jsx`). Debounced, signed-in seats only, silent on failure, bodies
+  rendered as text, 👍/👎 per article. Every search is logged server-side with its result count:
+  the misses are the work list of articles that should exist. (docs/13-guidance-system.md §13.10)
+- **Three new admin sections** (`components/SupportAdmin.jsx`): support KPIs, the product-feedback
+  feed, and knowledge-base authoring with named owners, review dates, a "needs review" filter and
+  version history. A `null` from the metrics API renders as an em dash, never `۰` — a dashboard
+  that prints `۰٪` compliance because nothing has been decided yet is worse than one that admits
+  it does not know.
+- **Tests:** frontend unit tests 179 → 208. `lib/support.js` holds the presentation rules (SLA
+  tone and label, due-date text, channel labels, `canRate`, duration and rate formatting) with 29
+  tests written first, because a wrong rule there would tell a customer their late ticket is on
+  time. `qa/e2e/tests/support.spec.js` adds 10 Playwright tests covering the specialist's whole
+  journey and the authorization of the new endpoints.
 - **The support channel is open to every seat, and is now a service desk.** `api/requests_api.py`
   was gated end to end on `@require_manager`, so any seat without `can_manage_team` got 403 on
   every ticket endpoint and the telephone was its only channel — the technical cause of the

@@ -24,7 +24,7 @@ from django.utils import timezone
 
 from .models import (AdminAuthToken, AuthToken, Company, CompanyRequest,
                      KbSearchLog, KnowledgeArticle, KnowledgeRevision,
-                     PlatformAdmin, PortalUser)
+                     PlatformAdmin, PortalUser, TicketMessage)
 
 KB = '/api/kb/'
 ADMIN_KB = '/api/admin/kb/'
@@ -292,6 +292,19 @@ class PromoteTicketTests(KbBase):
         self.post(f'{ADMIN_KB}{a.id}/', {'status': 'published'}, self.h_admin)
         self.assertEqual([x['slug'] for x in
                           self.c.get(KB, **self.h_user).json()['articles']], ['s'])
+
+    def test_the_draft_does_not_repeat_the_opening_paragraph(self):
+        """Filing a ticket seeds its body as the first message, so a naive
+        draft opens with the same paragraph twice — once as the question and
+        once as the first line of the conversation."""
+        t = self._ticket()
+        TicketMessage.objects.create(request=t, author_user=self.user, body=t.body)
+        TicketMessage.objects.create(request=t, author_admin=self.admin,
+                                     body='پاسخ پشتیبانی')
+        self.post(f'{ADMIN_REQ}{t.id}/promote-to-article/', {'slug': 'once'}, self.h_admin)
+        a = KnowledgeArticle.objects.get(slug='once')
+        self.assertEqual(a.body.count(t.body), 1, a.body)
+        self.assertIn('پاسخ پشتیبانی', a.body)
 
     def test_an_open_ticket_cannot_be_promoted(self):
         t = self._ticket()

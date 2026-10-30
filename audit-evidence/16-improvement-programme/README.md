@@ -15,6 +15,7 @@ Read in this order:
 | `METRIC_DEFINITIONS.md` | The BI semantic layer: one entry per metric with its calculation, source column, hand-reproducible query and test. A metric not defined here may not appear on a dashboard |
 | `ROADMAP.md` | Phases 1b–6 in dependency order, with falsifiable acceptance criteria, and what the programme refuses to do |
 | `evidence/` | Machine output: baseline and branch failure sets (identical), the verbose run of the new suites, a reproducible sample of the metrics endpoint and the script that produces it |
+| `evidence/ui/` | The live browser journey: what a specialist actually did, two screenshots, the metrics that journey produced, the three defects it found, and what it does not prove |
 
 ## The one-paragraph summary
 
@@ -29,7 +30,13 @@ the telephone was their only channel. That is now removed, together with the
 single-`admin_note` design that forced even managers onto the phone for any
 back-and-forth. The channel, the SLA clocks, the ownership, the satisfaction
 question, the feedback channel, the knowledge base and the metrics exist as a
-tested API; none of it has an interface yet, and that is the next piece of work.
+tested API **and as an interface** — a specialist has filed, discussed and
+rated a ticket through a browser, and the figures that journey produced are in
+`evidence/ui/`. What is not done is listed plainly in
+`IMPLEMENTATION_PHASE1.md`: no CI run on this branch yet, the Playwright spec
+written but not executed, no load or DAST or accessibility scan of the new
+surfaces, no SLA breach alerting, and Findings 1 and 2 analysed rather than
+built.
 
 Nothing here is evidence of production usage, and no development history,
 test result, customer feedback or operational figure in this directory was
