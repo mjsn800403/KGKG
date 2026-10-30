@@ -35,7 +35,8 @@ def pg_cars():
 
 
 def schema_for(filename):
-    return 'car_' + hashlib.md5(filename.encode('utf-8')).hexdigest()[:16]
+    # a stable, identifier-safe name, not a security boundary
+    return 'car_' + hashlib.md5(filename.encode('utf-8'), usedforsecurity=False).hexdigest()[:16]
 
 
 def translate(sql):
