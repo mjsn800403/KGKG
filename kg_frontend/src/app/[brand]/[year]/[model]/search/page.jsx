@@ -10,6 +10,7 @@ import DashboardShell from '@/components/DashboardShell';
 import Breadcrumb from '@/components/Breadcrumb';
 import SearchBox from '@/components/SearchBox';
 import Icon from '@/components/Icon';
+import SignalReporter from '@/components/SignalReporter';
 
 const FA = (n) => Number(n).toLocaleString('fa-IR');
 
@@ -94,9 +95,14 @@ export default async function SearchPage({ params, searchParams }) {
       </div>
 
       {q && results.length === 0 && (
-        <div className="empty-state">
-          نتیجه‌ای برای «<bdi>{q}</bdi>» یافت نشد. عبارت کوتاه‌تر یا نام انگلیسی قطعه را امتحان کنید.
-        </div>
+        <>
+          {/* A search that found nothing is the moment the assistant is most
+              worth knowing about — see the 'search-found-nothing' hint rule. */}
+          <SignalReporter name="search.zeroResult" value={q} />
+          <div className="empty-state">
+            نتیجه‌ای برای «<bdi>{q}</bdi>» یافت نشد. عبارت کوتاه‌تر یا نام انگلیسی قطعه را امتحان کنید.
+          </div>
+        </>
       )}
 
       {counts.size > 1 && (

@@ -26,7 +26,56 @@ import { ROLES } from './content';
 const MIN = 60 * 1000;
 const DAY = 24 * 60 * MIN;
 
+// Feature-discovery nudges. These fire on FRICTION, never on a timer: the
+// discovery failure they answer does not happen at minute one — every seat saw
+// the onboarding tour and the parts catalogue still went unopened by 28 of 34
+// of them. It happens three weeks in, at the moment something would have
+// helped. Each reads `ctx.onboarding`, the same payload the discovery strip
+// uses, so a hint can never suggest a feature the seat has already used or is
+// not entitled to. A null payload (not signed in, or the request failed)
+// leaves every one of them dormant.
+const needs = (ctx, id) => {
+  const items = ctx.onboarding && ctx.onboarding.items;
+  if (!Array.isArray(items)) return false;      // unknown: stay quiet
+  const item = items.find((i) => i.id === id);
+  return Boolean(item) && !item.done;           // entitled, and not yet done
+};
+
 export const HINT_RULES = [
+  // The single best moment to mention the assistant: a search just came back
+  // empty. The person has a question the search box could not answer, which is
+  // exactly what the assistant is for.
+  {
+    id: 'search-found-nothing',
+    severity: 'tip',
+    roles: [ROLES.USER, ROLES.ANALYST, ROLES.MANAGER],
+    cooldownMs: 7 * DAY,
+    maxShows: 2,
+    test: (ctx) =>
+      Boolean(ctx.signals['search.zeroResult']) &&
+      needs(ctx, 'ask_assistant'),
+    title: 'جستجو چیزی پیدا نکرد — از دستیار بپرسید',
+    body: 'دستیار هوشمند سؤال را می‌فهمد، نه فقط کلمه را؛ پاسخ را با ارجاع به همان فصل منوال می‌دهد. فارسی هم بپرسید.',
+    action: { kind: 'link', href: '/assistant', label: 'پرسیدن از دستیار' },
+  },
+
+  // Standing on a vehicle whose grant includes the parts catalogue, having
+  // never opened it. Six of 34 seats had found it in four months.
+  {
+    id: 'parts-never-opened',
+    severity: 'tip',
+    roles: [ROLES.USER, ROLES.ANALYST, ROLES.MANAGER],
+    cooldownMs: 14 * DAY,
+    maxShows: 2,
+    test: (ctx) =>
+      /^\/[^/]+\/[^/]+\/[^/]+/.test(ctx.pathname) &&
+      !ctx.pathname.includes('/parts') &&
+      needs(ctx, 'open_parts'),
+    title: 'کاتالوگ قطعات این خودرو هم فعال است',
+    body: 'شمارهٔ فنی و نقشهٔ انفجاری قطعات، کنار همین منوال. از دکمهٔ «قطعات» در همین صفحه.',
+    action: { kind: 'dismiss', label: 'متوجه شدم' },
+  },
+
   // The classic "AI won't answer me" confusion — purely data-driven from the
   // portal user's eligibility, so it needs no instrumentation.
   {

@@ -186,3 +186,32 @@ the point**: `knowledge.top_misses` in the support metrics is a work list where
 each row names an article that ought to exist. That is the loop the evaluation's
 knowledge-transfer finding asked for — the help panel tells us what help is
 missing.
+
+## 13.11 Feature-discovery nudges (2026-10-30)
+
+Two hint rules that fire on **friction**, never on a timer, because the failure
+they answer does not happen at minute one. Every seat saw an onboarding tour,
+and the parts catalogue was still unopened by 28 of 34 active seats four months
+later. The moment that matters is mid-task, three weeks in.
+
+| Rule | Fires when | Why there |
+|---|---|---|
+| `search-found-nothing` | the `search.zeroResult` signal is set **and** the seat is entitled to the assistant and has never asked it | a search that came back empty is the single best moment to mention a tool that understands the question rather than the words |
+| `parts-never-opened` | standing on a vehicle page, not already in `/parts`, entitled to parts and never opened them | the catalogue is one click away and most people never learned it exists |
+
+Both read `ctx.onboarding` — the same payload the discovery strip uses
+(`/api/auth/onboarding/`, derived server-side from real activity) — so a nudge
+can never suggest a feature the seat has already used or is not entitled to.
+When that payload is null, because nobody is signed in or the request failed,
+every rule depending on it stays dormant: the documented behaviour for an
+un-wired signal, and the reason an outage here is silent rather than noisy.
+
+`components/SignalReporter.jsx` is how a **server** component reports a signal:
+the search results page knows its own result count, so it renders a tiny client
+island at the point where that is true rather than re-deriving it later.
+
+Hint dismissals remain in `localStorage` (`storage.dismissHint`) while the
+strip's dismissal is a column on `PortalUser`. The strip's state is progress —
+a fact about the person that should follow them to a new machine. A tooltip
+dismissal is per-surface noise control, and syncing it would mean a database
+write every time someone closes a tooltip.
