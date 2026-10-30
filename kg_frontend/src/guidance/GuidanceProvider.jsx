@@ -9,6 +9,7 @@ import { tourSeen, markTourSeen, markHelpOpened } from './storage';
 import TourEngine from './TourEngine';
 import HelpCenter from './HelpCenter';
 import HintLayer from './HintLayer';
+import FeedbackWidget from '../components/FeedbackWidget';
 
 // The single client root for the whole guidance layer. Mounted once in the app
 // layout, it works across public, portal and admin surfaces. It:
@@ -218,6 +219,11 @@ export default function GuidanceProvider() {
         onOpenHelp={openHelp}
         onStartTour={startTour}
       />
+      {/* The feedback button is for signed-in seats only: the endpoint is
+          portal-authenticated, and offering it to an anonymous visitor would
+          only produce a 401. Hidden while the help panel or a tour is open so
+          it never sits on top of them. */}
+      {portalUser && !helpOpen && !tour && <FeedbackWidget />}
     </>
   );
 }

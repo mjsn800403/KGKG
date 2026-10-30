@@ -40,15 +40,18 @@ export default function Sidebar() {
   const viewTeam = !!me?.can_view_team;
   const analytics = viewTeam;
 
-  // Open company requests, shown as a badge so a manager sees pending work.
+  // Open tickets, badged so pending work is visible without opening the page.
+  // Fetched for every seat, not only managers: the count the API returns is
+  // already scoped to what the viewer may see (their own tickets, or the
+  // company's for a manager).
   useEffect(() => {
-    if (!manage) return undefined;
+    if (!me) return undefined;
     let cancelled = false;
     teamApi.requests()
       .then((d) => { if (!cancelled) setOpenRequests(d?.meta?.open_count || 0); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [manage]);
+  }, [me]);
 
   const name = me?.display_name || me?.username || '';
   const initials = name ? name.trim().slice(0, 2) : 'KG';
@@ -83,20 +86,26 @@ export default function Sidebar() {
         </Link>
       </div>
 
+      {/* Support is its own group and is shown to EVERY seat. While this link
+          was manager-only, a specialist with a problem had no way into the desk
+          even though the page would have served them — the navigation was the
+          last part of the 403 that sent people to the telephone. */}
+      <div className="sb-group" role="group" aria-label="پشتیبانی">
+        <span className="sb-group-label">پشتیبانی</span>
+        <Link className={`sb-link${onRequests ? ' active' : ''}`} href="/requests" data-tour="nav-requests">
+          <Icon name="mail" /> پشتیبانی و درخواست‌ها
+          {openRequests > 0 && (
+            <span className="sb-badge" aria-label={`${fa(openRequests)} درخواست باز`}>{fa(openRequests)}</span>
+          )}
+        </Link>
+      </div>
+
       {(manage || viewTeam) && (
         <div className="sb-group" role="group" aria-label="تیم">
           <span className="sb-group-label">تیم</span>
           {viewTeam && (
             <Link className={`sb-link${onTeam ? ' active' : ''}`} href="/team" data-tour="nav-team">
               <Icon name="users" /> تیم و کارکنان
-            </Link>
-          )}
-          {manage && (
-            <Link className={`sb-link${onRequests ? ' active' : ''}`} href="/requests" data-tour="nav-requests">
-              <Icon name="cart" /> درخواست‌ها
-              {openRequests > 0 && (
-                <span className="sb-badge" aria-label={`${fa(openRequests)} درخواست باز`}>{fa(openRequests)}</span>
-              )}
             </Link>
           )}
           {analytics && (
