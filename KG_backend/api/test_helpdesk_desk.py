@@ -15,10 +15,10 @@ from django.test import TestCase
 from django.utils import timezone
 
 from . import listing, reads
-from .models import (Car, Company, CompanyRequest, TicketMessage, TicketRead,
-                     UserCarAccess)
+from .models import (Car, Company, CompanyRequest, KbSearchLog, KnowledgeArticle,
+                     TicketMessage, TicketRead, UserCarAccess)
 from .requests_api import awaiting_reply
-from .test_helpdesk import URL, ADMIN_URL, DeskBase
+from .test_helpdesk import URL, ADMIN_URL, METRICS_URL, DeskBase
 
 
 class TopicFieldTests(TestCase):
@@ -54,6 +54,10 @@ class DeskCarBase(DeskBase):
                                                 year=2025, db_address='lx.sqlite3')
         UserCarAccess.objects.create(user=self.spec, car=self.car,
                                      documents=['manual'], admin_granted=True)
+        self.kb_article = KnowledgeArticle.objects.create(
+            title='Resetting the reminder', slug='reset-reminder',
+            body='Hold the trip button.', status='published', audience='customer',
+            owner=self.admin, reviewed_at=timezone.now())
 
 
 class TopicAndCarApiTests(DeskCarBase):
@@ -411,3 +415,64 @@ class AdminInboxFilterTests(DeskCarBase):
     def test_the_inbox_reports_how_many_await_us(self):
         self.create(subject='waiting', body='help')
         self.assertEqual(self._inbox()['counts']['awaiting_reply'], 1)
+
+
+class DeskMetricsTests(DeskCarBase):
+    """Acceptance criteria 27-29. Every rate here is None, not 0, when its
+    denominator is empty — the module's existing convention, and the reason a
+    quiet month cannot be read as a perfect one."""
+
+    def _metrics(self):
+        r = self.c.get(METRICS_URL, **self.h_admin)
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()
+
+    def test_by_topic_counts_uncategorised_separately(self):
+        self.create(topic='missing_document')
+        self.create(topic='missing_document')
+        self.create()                                     # no topic
+        d = self._metrics()['by_topic']
+        self.assertEqual(d['missing_document'], 2)
+        self.assertEqual(d['uncategorised'], 1)
+
+    def test_by_topic_labels_every_entry(self):
+        self.create(topic='billing')
+        rows = self._metrics()['by_topic_labelled']
+        self.assertTrue(any(r['id'] == 'billing' and r['label'] for r in rows))
+
+    def test_by_vehicle_counts_only_tickets_with_a_car(self):
+        self.create(car_id=self.car.id)
+        self.create()
+        rows = self._metrics()['by_vehicle']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['car_id'], self.car.id)
+        self.assertEqual(rows[0]['count'], 1)
+        self.assertIn('Corolla Cross', rows[0]['name'])
+
+    def test_the_deflection_rate_is_none_when_nothing_was_suggested(self):
+        d = self._metrics()['deflections']
+        self.assertEqual(d['suggested'], 0)
+        self.assertEqual(d['deflected'], 0)
+        self.assertIsNone(d['rate'])
+
+    def test_a_deflection_is_counted_and_rated(self):
+        KbSearchLog.objects.create(user=self.spec, company=self.co_a, query='a',
+                                   query_norm='a', results=1, context='compose')
+        KbSearchLog.objects.create(user=self.spec, company=self.co_a, query='b',
+                                   query_norm='b', results=1, context='compose',
+                                   deflected_article=self.kb_article)
+        d = self._metrics()['deflections']
+        self.assertEqual((d['suggested'], d['deflected']), (2, 1))
+        self.assertAlmostEqual(d['rate'], 0.5, places=3)
+
+    def test_search_reports_the_zero_result_share(self):
+        KbSearchLog.objects.create(user=self.spec, company=self.co_a, query='hit',
+                                   query_norm='hit', results=3, context='compose')
+        KbSearchLog.objects.create(user=self.spec, company=self.co_a, query='miss',
+                                   query_norm='miss', results=0, context='compose')
+        d = self._metrics()['search']
+        self.assertEqual(d['compose_searches'], 2)
+        self.assertAlmostEqual(d['zero_result_share'], 0.5, places=3)
+
+    def test_the_zero_result_share_is_none_with_no_searches(self):
+        self.assertIsNone(self._metrics()['search']['zero_result_share'])

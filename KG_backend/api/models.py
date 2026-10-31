@@ -1680,6 +1680,17 @@ class KbSearchLog(models.Model):
     query = models.CharField(max_length=200)
     query_norm = models.CharField(max_length=200, db_index=True)
     results = models.PositiveIntegerField(default=0)
+    # Where the question was asked. 'compose' means it was typed into the
+    # ticket form, which is the only context where answering it instead of
+    # filing is a deflection worth counting.
+    context = models.CharField(max_length=16, blank=True, default='', db_default='',
+                               db_index=True)
+    # Set only when somebody said an article answered them. Never inferred
+    # from "opened an article and did not file a ticket": that is a guess, and
+    # a deflection rate built on a guess is invented evidence.
+    deflected_article = models.ForeignKey('KnowledgeArticle', null=True, blank=True,
+                                          on_delete=models.SET_NULL,
+                                          related_name='deflections')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

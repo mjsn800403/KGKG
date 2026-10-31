@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from . import feedback, knowledge, onboarding, sla
 from .admin_auth import require_admin_token
-from .models import CompanyRequest
+from .models import CompanyRequest, KbSearchLog
 
 DEFAULT_DAYS = 30
 
@@ -89,9 +89,37 @@ def admin_support_metrics_view(request):
 
     by_source = {}
     by_kind = {}
+    by_topic = {}
     for r in window:
         by_source[r.source] = by_source.get(r.source, 0) + 1
         by_kind[r.kind] = by_kind.get(r.kind, 0) + 1
+        # 'uncategorised' rather than '' so the gap is legible in a dashboard
+        # and cannot be mistaken for a topic nobody has named yet.
+        by_topic[r.topic or 'uncategorised'] = by_topic.get(r.topic or 'uncategorised', 0) + 1
+
+    topic_labels = dict(CompanyRequest.TOPIC_CHOICES)
+    by_topic_labelled = [{'id': t, 'label': topic_labels.get(t, 'دسته‌بندی‌نشده'),
+                          'count': n}
+                         for t, n in sorted(by_topic.items(), key=lambda kv: -kv[1])]
+
+    # Tickets per vehicle: only those that named one, so this never implies a
+    # vehicle is trouble-free when nobody said which vehicle they meant.
+    by_vehicle = [
+        {'car_id': row['car_id'],
+         'name': f"{row['car__brand_name']} {row['car__car_name']} "
+                 f"{row['car__year']}".strip(),
+         'count': row['n']}
+        for row in (CompanyRequest.objects.filter(created_at__gte=since,
+                                                  car__isnull=False)
+                    .values('car_id', 'car__brand_name', 'car__car_name', 'car__year')
+                    .annotate(n=Count('id')).order_by('-n')[:10])]
+
+    # Did the knowledge base answer anything before it became a ticket? Only
+    # an explicit "this answered it" counts; see api/knowledge.deflect_view.
+    compose = KbSearchLog.objects.filter(created_at__gte=since, context='compose')
+    suggested = compose.count()
+    deflected = compose.filter(deflected_article__isnull=False).count()
+    zero_results = compose.filter(results=0).count()
 
     # Backlog is current state, not a window: what is open right now.
     backlog_qs = CompanyRequest.objects.filter(status__in=CompanyRequest.OPEN_STATUSES)
@@ -135,6 +163,14 @@ def admin_support_metrics_view(request):
         },
         'by_source': by_source,
         'by_kind': by_kind,
+        'by_topic': by_topic,
+        'by_topic_labelled': by_topic_labelled,
+        'by_vehicle': by_vehicle,
+        'deflections': {'suggested': suggested, 'deflected': deflected,
+                        'rate': (deflected / suggested) if suggested else None},
+        'search': {'compose_searches': suggested,
+                   'zero_result_share': ((zero_results / suggested)
+                                         if suggested else None)},
         'backlog': {'open': backlog_agg['open'],
                     'unassigned': backlog_agg['unassigned'],
                     'breaching_now': backlog_agg['breaching'],
