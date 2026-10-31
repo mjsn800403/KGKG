@@ -38,7 +38,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from . import access, events, reads, sla
+from . import access, events, listing, reads, sla
 from .admin_auth import acting_admin, require_admin_token
 from .models import (Car, Company, CompanyRequest, PlatformAdmin, PortalUser,
                      TicketMessage)
@@ -100,12 +100,25 @@ def _message_dict(m, *, with_internal):
 
 
 def _thread(r, *, with_internal):
-    """The conversation. The customer never receives internal notes: they are
-    filtered out of the queryset, not hidden by the client."""
+    """The conversation, newest-capped. The customer never receives internal
+    notes: they are filtered out of the queryset, not hidden by the client.
+
+    The cap is `listing.MAX_THREAD`. One ticket with thousands of turns must
+    not be able to time out the page it appears on, and a conversation nobody
+    can load is worse than one missing its oldest turns — so the newest are
+    kept and the client is told the view is partial.
+    """
     qs = r.messages.all().select_related('author_user', 'author_admin')
     if not with_internal:
         qs = qs.filter(internal=False)
-    return [_message_dict(m, with_internal=with_internal) for m in qs]
+    newest = list(qs.order_by('-created_at', '-id')[:listing.MAX_THREAD])
+    newest.reverse()
+    return [_message_dict(m, with_internal=with_internal) for m in newest]
+
+
+def _thread_truncated(r, *, with_internal):
+    qs = r.messages.all() if with_internal else r.messages.filter(internal=False)
+    return qs.count() > listing.MAX_THREAD
 
 
 def _answered_after(last_public, first_response_at):
@@ -243,6 +256,7 @@ def _request_dict(r, *, include_company=False, thread=None, with_internal=False,
         d['messages'] = thread
     elif with_internal is not None:
         d['messages'] = _thread(r, with_internal=with_internal)
+        d['messages_truncated'] = _thread_truncated(r, with_internal=with_internal)
     return d
 
 
@@ -347,19 +361,38 @@ def company_requests_view(request):
 
     if request.method == 'GET':
         qs = _visible_qs(user)
-        status = request.GET.get('status')
-        if status in VALID_STATUSES:
-            qs = qs.filter(status=status)
+        qs, err = _apply_desk_filters(qs, request.GET, user=user)
+        if err:
+            return err
+        if request.GET.get('unread') in ('1', 'true'):
+            qs = _unread_only(qs, user=user)
+        raw_cursor = request.GET.get('cursor')
+        cursor = listing.decode_cursor(raw_cursor) if raw_cursor else None
+        if raw_cursor and cursor is None:
+            return JsonResponse({'error': 'نشانگر صفحه نامعتبر است.'}, status=400)
+        rows, next_cursor = listing.page(qs, listing.clamp_limit(request.GET.get('limit')),
+                                         cursor)
         now = timezone.now()
-        items = [_request_dict(r, with_internal=None, now=now) for r in qs[:300]]
-        open_n = sum(1 for r in items if r['is_open'])
+        unread = reads.unread_counts([r.id for r in rows], user=user)
+        items = [_request_dict(r, with_internal=None, now=now, viewer_user=user,
+                               unread=unread.get(r.id, 0)) for r in rows]
         allowed = (VALID_KINDS if user.can_manage_team else SELF_SERVICE_KINDS)
+        # These two counts are over the whole visible set, not this page: a
+        # badge that counted only the rows on screen would under-report, which
+        # is the bug the dashboard tile had.
+        all_ids = list(_visible_qs(user).values_list('id', flat=True))
         return JsonResponse({'requests': items,
+                             'next_cursor': next_cursor,
                              'meta': {'kinds': [{'id': k, 'label': l}
                                                 for k, l in CompanyRequest.KIND_CHOICES
                                                 if k in allowed],
+                                      'topics': [{'id': t, 'label': l}
+                                                 for t, l in CompanyRequest.TOPIC_CHOICES],
                                       'can_manage_team': bool(user.can_manage_team),
-                                      'open_count': open_n}})
+                                      'open_count': _visible_qs(user).filter(
+                                          status__in=CompanyRequest.OPEN_STATUSES).count(),
+                                      'unread_count': sum(
+                                          reads.unread_counts(all_ids, user=user).values())}})
 
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
@@ -400,6 +433,41 @@ def company_requests_view(request):
     _emit('request.created', r)
     return JsonResponse({'ok': True, 'request': _request_dict(r, with_internal=False)})
 
+
+
+def _apply_desk_filters(qs, params, *, user=None, admin=None):
+    """The filter vocabulary both sides share, so the customer view and the
+    desk inbox are one mental model rather than two dialects.
+
+    Returns `(qs, error_response)`. An unknown value for a closed set is
+    ignored rather than refused — a stale bookmark should show a list, not an
+    error — but a malformed cursor IS refused, because silently serving page
+    one of something the client thinks is page nine loses rows.
+    """
+    status = params.get('status')
+    if status in VALID_STATUSES:
+        qs = qs.filter(status=status)
+    kind = params.get('kind')
+    if kind in VALID_KINDS:
+        qs = qs.filter(kind=kind)
+    topic = params.get('topic')
+    if topic in VALID_TOPICS:
+        qs = qs.filter(topic=topic)
+    car_id = listing.qs_int(params.get('car_id'))
+    if car_id:
+        qs = qs.filter(car_id=car_id)
+    term = (params.get('q') or '').strip()[:200]
+    if term:
+        qs = qs.filter(listing.text_query(term, ('subject', 'messages__body'))).distinct()
+    return qs, None
+
+
+def _unread_only(qs, *, user=None, admin=None):
+    """Narrow to the tickets this viewer has something unseen in. Computed
+    from the read marks, like every other unread signal here."""
+    ids = list(qs.values_list('id', flat=True))
+    unread = reads.unread_counts(ids, user=user, admin=admin)
+    return qs.filter(id__in=[i for i, n in unread.items() if n])
 
 def _sanitize_payload(kind, payload):
     out = {}
@@ -545,10 +613,11 @@ def admin_company_requests_view(request):
     if request.method != 'GET':
         return JsonResponse({'error': 'GET or POST'}, status=405)
 
+    admin = acting_admin(request)
     qs = CompanyRequest.objects.select_related('company', 'created_by', 'assignee', 'car')
-    status = request.GET.get('status')
-    if status in VALID_STATUSES:
-        qs = qs.filter(status=status)
+    qs, err = _apply_desk_filters(qs, request.GET, admin=admin)
+    if err:
+        return err
     source = request.GET.get('source')
     if source in VALID_SOURCES:
         qs = qs.filter(source=source)
@@ -557,13 +626,33 @@ def admin_company_requests_view(request):
         if not company_id.isdigit():
             return JsonResponse({'error': 'invalid company_id'}, status=400)
         qs = qs.filter(company_id=int(company_id))
+    if request.GET.get('awaiting') in ('1', 'true'):
+        # Derived, like every other signal here: open tickets whose last public
+        # word was the customer's.
+        qs = qs.filter(id__in=[r.id for r in
+                               qs.filter(status__in=CompanyRequest.OPEN_STATUSES)
+                               if awaiting_reply(r)])
+    if admin and request.GET.get('unread') in ('1', 'true'):
+        qs = _unread_only(qs, admin=admin)
+    raw_cursor = request.GET.get('cursor')
+    cursor = listing.decode_cursor(raw_cursor) if raw_cursor else None
+    if raw_cursor and cursor is None:
+        return JsonResponse({'error': 'نشانگر صفحه نامعتبر است.'}, status=400)
+    rows, next_cursor = listing.page(qs, listing.clamp_limit(request.GET.get('limit')),
+                                     cursor)
     now = timezone.now()
-    items = [_request_dict(r, include_company=True, with_internal=None, now=now)
-             for r in qs[:500]]
+    unread = (reads.unread_counts([r.id for r in rows], admin=admin) if admin else {})
+    items = [_request_dict(r, include_company=True, with_internal=None, now=now,
+                           viewer_admin=admin, unread=unread.get(r.id, 0) if admin else None)
+             for r in rows]
     counts = {s: 0 for s, _ in CompanyRequest.STATUS_CHOICES}
     for r in CompanyRequest.objects.values('status'):
         counts[r['status']] = counts.get(r['status'], 0) + 1
+    counts['awaiting_reply'] = awaiting_reply_count()
     return JsonResponse({'requests': items, 'counts': counts,
+                         'next_cursor': next_cursor,
+                         'topics': [{'id': t, 'label': l}
+                                    for t, l in CompanyRequest.TOPIC_CHOICES],
                          'admins': [{'id': a.id, 'name': a.username}
                                     for a in PlatformAdmin.objects.filter(active=True)
                                     .order_by('username')],

@@ -14,8 +14,9 @@ from django.test import TestCase
 
 from django.utils import timezone
 
-from . import reads
-from .models import (Car, Company, CompanyRequest, TicketRead, UserCarAccess)
+from . import listing, reads
+from .models import (Car, Company, CompanyRequest, TicketMessage, TicketRead,
+                     UserCarAccess)
 from .requests_api import awaiting_reply
 from .test_helpdesk import URL, ADMIN_URL, DeskBase
 
@@ -226,3 +227,187 @@ class ReadStateTests(DeskCarBase):
         self.assertEqual(r.json()['request']['unread_count'], 0)
         self.assertEqual(reads.unread_count(CompanyRequest.objects.get(id=t['id']),
                                             admin=self.admin2), 1)
+
+
+class CursorTests(TestCase):
+    """The cursor is opaque to the client and never trusted on the way back in."""
+
+    def test_a_cursor_round_trips(self):
+        now = timezone.now()
+        self.assertEqual(listing.decode_cursor(listing.encode_cursor(now, 42)),
+                         (now, 42))
+
+    def test_garbage_decodes_to_none(self):
+        for raw in ['', 'x', 'YWJj', '!!!!', 'MTIzfA==', None]:
+            self.assertIsNone(listing.decode_cursor(raw), raw)
+
+    def test_a_limit_is_clamped_to_the_maximum(self):
+        self.assertEqual(listing.clamp_limit('5000'), listing.LIMIT_MAX)
+        self.assertEqual(listing.clamp_limit('0'), listing.LIMIT_DEFAULT)
+        self.assertEqual(listing.clamp_limit('abc'), listing.LIMIT_DEFAULT)
+        self.assertEqual(listing.clamp_limit(None), listing.LIMIT_DEFAULT)
+        self.assertEqual(listing.clamp_limit('7'), 7)
+
+
+class SearchAndPaginationTests(DeskCarBase):
+    """Acceptance criteria 16-23, plus Review Focus 2 (a literal %), 3 (a
+    forged cursor) and 5 (an unbounded thread)."""
+
+    def _get(self, qs='', hdr=None):
+        r = self.c.get(f'{URL}{qs}', **(hdr or self.h_mgr))
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()
+
+    def test_q_matches_a_word_in_the_subject(self):
+        self.create(subject='brake chapter will not open')
+        self.create(subject='seat count')
+        rows = self._get('?q=brake')['requests']
+        self.assertEqual([r['subject'] for r in rows], ['brake chapter will not open'])
+
+    def test_q_matches_a_word_in_a_message_body_and_returns_the_ticket_once(self):
+        t = self.create(subject='something vague', body='the handbrake is wrong')
+        self.post(f'{URL}{t["id"]}/', {'action': 'message', 'message': 'handbrake again'},
+                  self.h_spec)
+        rows = self._get('?q=handbrake')['requests']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['id'], t['id'])
+
+    def test_q_never_crosses_a_company_boundary(self):
+        self.post(URL, {'kind': 'support', 'subject': 'brake chapter'}, self.h_other)
+        self.assertEqual(self._get('?q=brake')['requests'], [])
+
+    def test_a_percent_sign_in_q_is_matched_literally(self):
+        """Review Focus 2: a wildcard in the query must not match everything."""
+        self.create(subject='coverage is 100% wrong')
+        self.create(subject='unrelated ticket')
+        rows = self._get('?q=100%25')['requests']
+        self.assertEqual([r['subject'] for r in rows], ['coverage is 100% wrong'])
+
+    def test_an_underscore_in_q_is_matched_literally(self):
+        self.create(subject='file_name is odd')
+        self.create(subject='fileXname is odd')
+        rows = self._get('?q=file_name')['requests']
+        self.assertEqual([r['subject'] for r in rows], ['file_name is odd'])
+
+    def test_topic_kind_status_and_car_each_filter_and_compose(self):
+        a = self.create(subject='a', topic='missing_document', car_id=self.car.id,
+                        hdr=self.h_spec)
+        self.create(subject='b', topic='billing', hdr=self.h_spec)
+        self.assertEqual([r['id'] for r in self._get('?topic=missing_document')['requests']],
+                         [a['id']])
+        self.assertEqual([r['id'] for r in self._get(f'?car_id={self.car.id}')['requests']],
+                         [a['id']])
+        self.assertEqual(
+            [r['id'] for r in
+             self._get(f'?topic=missing_document&car_id={self.car.id}&status=pending'
+                       )['requests']],
+            [a['id']])
+        self.assertEqual(self._get('?topic=billing&car_id=%d' % self.car.id)['requests'], [])
+
+    def test_unread_returns_only_the_viewers_unread_tickets(self):
+        answered = self.create(subject='answered', hdr=self.h_mgr, body='x')
+        self.post(f'{ADMIN_URL}{answered["id"]}/', {'message': 'reply'}, self.h_admin)
+        quiet = self.create(subject='quiet', hdr=self.h_mgr, body='y')
+        rows = self._get('?unread=1')['requests']
+        self.assertEqual([r['id'] for r in rows], [answered['id']])
+        self.post(f'{URL}{answered["id"]}/', {'action': 'read'}, self.h_mgr)
+        self.assertEqual(self._get('?unread=1')['requests'], [])
+        self.assertTrue(quiet)
+
+    def test_a_page_returns_a_cursor_that_yields_the_next_rows_exactly_once(self):
+        made = [self.create(subject=f't{i}', hdr=self.h_mgr)['id'] for i in range(7)]
+        first = self._get('?limit=3')
+        self.assertEqual(len(first['requests']), 3)
+        self.assertTrue(first['next_cursor'])
+        seen = [r['id'] for r in first['requests']]
+        cursor = first['next_cursor']
+        while cursor:
+            page = self._get(f'?limit=3&cursor={cursor}')
+            seen += [r['id'] for r in page['requests']]
+            cursor = page['next_cursor']
+        self.assertEqual(sorted(seen), sorted(made))
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_a_row_inserted_between_pages_neither_duplicates_nor_hides_a_row(self):
+        made = [self.create(subject=f't{i}', hdr=self.h_mgr)['id'] for i in range(5)]
+        first = self._get('?limit=2')
+        seen = [r['id'] for r in first['requests']]
+        self.create(subject='arrived late', hdr=self.h_mgr)   # newest of all
+        cursor = first['next_cursor']
+        while cursor:
+            page = self._get(f'?limit=2&cursor={cursor}')
+            seen += [r['id'] for r in page['requests']]
+            cursor = page['next_cursor']
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(sorted(set(seen)), sorted(made))
+
+    def test_an_oversized_limit_is_clamped_not_an_error(self):
+        self.create(hdr=self.h_mgr)
+        d = self._get('?limit=99999')
+        self.assertEqual(len(d['requests']), 1)
+
+    def test_a_forged_cursor_is_a_400_not_a_500(self):
+        """Review Focus 3."""
+        r = self.c.get(f'{URL}?cursor=not-a-cursor', **self.h_mgr)
+        self.assertEqual(r.status_code, 400)
+
+    def test_a_thread_is_capped_and_says_so(self):
+        """Review Focus 5: a long conversation must not be fetched whole."""
+        t = self.create(hdr=self.h_mgr, body='first')
+        r = CompanyRequest.objects.get(id=t['id'])
+        TicketMessage.objects.bulk_create([
+            TicketMessage(request=r, author_user=self.mgr, body=f'm{i}')
+            for i in range(listing.MAX_THREAD + 5)])
+        d = self.c.get(f'{URL}{t["id"]}/', **self.h_mgr).json()['request']
+        self.assertEqual(len(d['messages']), listing.MAX_THREAD)
+        self.assertTrue(d['messages_truncated'])
+
+
+class AdminInboxFilterTests(DeskCarBase):
+    """The desk searches with the same vocabulary the customer does."""
+
+    def _inbox(self, qs=''):
+        r = self.c.get(f'{ADMIN_URL}{qs}', **self.h_admin)
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()
+
+    def test_the_inbox_searches_subjects_and_message_bodies(self):
+        t = self.create(subject='vague', body='the handbrake again')
+        self.create(subject='unrelated')
+        self.assertEqual([r['id'] for r in self._inbox('?q=handbrake')['requests']],
+                         [t['id']])
+
+    def test_the_inbox_filters_by_topic_and_vehicle(self):
+        a = self.create(subject='a', topic='access_problem', car_id=self.car.id)
+        self.create(subject='b')
+        self.assertEqual([r['id'] for r in self._inbox('?topic=access_problem')['requests']],
+                         [a['id']])
+        self.assertEqual([r['id'] for r in self._inbox(f'?car_id={self.car.id}')['requests']],
+                         [a['id']])
+
+    def test_the_inbox_can_show_only_what_awaits_us(self):
+        waiting = self.create(subject='waiting', body='help')
+        answered = self.create(subject='answered', body='help')
+        self.post(f'{ADMIN_URL}{answered["id"]}/', {'message': 'done'}, self.h_admin)
+        self.assertEqual([r['id'] for r in self._inbox('?awaiting=1')['requests']],
+                         [waiting['id']])
+
+    def test_the_inbox_paginates_with_a_cursor(self):
+        made = [self.create(subject=f't{i}')['id'] for i in range(5)]
+        first = self._inbox('?limit=2')
+        seen = [r['id'] for r in first['requests']]
+        cursor = first['next_cursor']
+        while cursor:
+            page = self._inbox(f'?limit=2&cursor={cursor}')
+            seen += [r['id'] for r in page['requests']]
+            cursor = page['next_cursor']
+        self.assertEqual(sorted(seen), sorted(made))
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_a_forged_cursor_on_the_inbox_is_a_400(self):
+        r = self.c.get(f'{ADMIN_URL}?cursor=nonsense', **self.h_admin)
+        self.assertEqual(r.status_code, 400)
+
+    def test_the_inbox_reports_how_many_await_us(self):
+        self.create(subject='waiting', body='help')
+        self.assertEqual(self._inbox()['counts']['awaiting_reply'], 1)
