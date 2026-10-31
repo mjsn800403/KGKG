@@ -1,0 +1,101 @@
+{
+  "days": 30,
+  "totals": {
+    "created": 1,
+    "open": 0,
+    "closed": 1,
+    "reopened": 0,
+    "escalated": 0
+  },
+  "first_response": {
+    "measured": 1,
+    "unmeasured": 0,
+    "avg_minutes": 0.3651301666666667,
+    "p90_minutes": 0.3651301666666667
+  },
+  "resolution": {
+    "measured": 1,
+    "avg_hours": 0.006102522222222222,
+    "p90_hours": 0.006102522222222222
+  },
+  "sla": {
+    "policy_hours": {
+      "high": {
+        "response": 2.0,
+        "resolve": 8.0
+      },
+      "normal": {
+        "response": 8.0,
+        "resolve": 48.0
+      },
+      "low": {
+        "response": 24.0,
+        "resolve": 120.0
+      }
+    },
+    "response": {
+      "met": 1,
+      "breached": 0,
+      "pending": 0,
+      "untracked": 0,
+      "compliance": 1.0
+    },
+    "resolution": {
+      "met": 1,
+      "breached": 0,
+      "pending": 0,
+      "untracked": 0,
+      "compliance": 1.0
+    }
+  },
+  "csat": {
+    "responses": 1,
+    "avg": 5.0,
+    "distribution": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 1
+    },
+    "response_rate": 1.0
+  },
+  "by_source": {
+    "portal": 1
+  },
+  "by_kind": {
+    "support": 1
+  },
+  "backlog": {
+    "open": 0,
+    "unassigned": 0,
+    "breaching_now": 0,
+    "oldest_days": null
+  },
+  "feedback": {
+    "submissions": 1,
+    "avg_rating": 4.0,
+    "with_comment": 1
+  },
+  "knowledge": {
+    "articles": 2,
+    "published": 1,
+    "drafts": 1,
+    "internal": 0,
+    "stale": 0,
+    "unowned": 0,
+    "from_tickets": 1,
+    "views": 1,
+    "helpful": 1,
+    "unhelpful": 0,
+    "searches": 2,
+    "zero_result_searches": 1,
+    "zero_result_rate": 0.5,
+    "top_misses": [
+      {
+        "query": "ظرفیت روغن گیربکس",
+        "count": 1
+      }
+    ]
+  }
+}

@@ -234,6 +234,28 @@ jobs:
       - name: Node dependency audit
         run: bash ops/security/scan.sh npm
 
+  governance:
+    # Evidence that the process exists, checked the same way the code is.
+    # The 2026-10-30 evaluation could not verify task tracking or knowledge
+    # maintenance; these two gates make both verifiable from the repository
+    # itself rather than from anyone's recollection. Standard library only,
+    # seconds to run, so there is no excuse for skipping them.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Governance tests
+        run: |
+          python3 -m unittest discover -s ops/governance -t ops/governance -p 'test_*.py' -v
+      - name: Every document is owned and in date (docs/OWNERS.toml)
+        run: python3 ops/governance/check_docs_freshness.py --docs docs
+      - name: This change references the work it serves
+        # Skipped on push builds, where there is no pull request to judge.
+        run: python3 ops/governance/check_traceability.py
+
   images:
     # The production images (ops/docker/) must build from every commit, boot,
     # and carry no fixable HIGH/CRITICAL vulnerability.
@@ -283,7 +305,7 @@ jobs:
     # public SSH port. The secrets are created on the server by
     # ops/deploy/setup_ci_access.sh.
     if: github.event_name == 'push' && github.ref == 'refs/heads/work'
-    needs: [backend, frontend, security, images]
+    needs: [backend, frontend, security, images, governance]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
