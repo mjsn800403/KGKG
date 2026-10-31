@@ -38,7 +38,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from . import access, events, sla
+from . import access, events, reads, sla
 from .admin_auth import acting_admin, require_admin_token
 from .models import (Car, Company, CompanyRequest, PlatformAdmin, PortalUser,
                      TicketMessage)
@@ -181,7 +181,16 @@ def _sla_dict(r, now):
     }
 
 
-def _request_dict(r, *, include_company=False, thread=None, with_internal=False, now=None):
+def _request_dict(r, *, include_company=False, thread=None, with_internal=False, now=None,
+                  viewer_user=None, viewer_admin=None, unread=None):
+    """One ticket as JSON.
+
+    `viewer_user` / `viewer_admin` make `unread_count` meaningful: unread is a
+    fact about a reader, not about a ticket. With no viewer it is None — an
+    event payload goes to many readers at once and must not claim one's state.
+    `unread` lets a list pass a precomputed count so a page of rows costs two
+    queries rather than one per row.
+    """
     now = now or timezone.now()
     d = {
         'id': r.id,
@@ -217,6 +226,10 @@ def _request_dict(r, *, include_company=False, thread=None, with_internal=False,
         'reopen_count': r.reopen_count,
         'is_open': r.status in CompanyRequest.OPEN_STATUSES,
         'awaiting_reply': awaiting_reply(r),
+        'unread_count': (unread if unread is not None
+                         else (reads.unread_count(r, user=viewer_user, admin=viewer_admin)
+                               if (viewer_user or viewer_admin) else None)),
+        'last_message': reads.last_message(r),
         'sla': _sla_dict(r, now),
         'csat': ({'score': r.csat_score, 'comment': r.csat_comment,
                   'at': r.csat_at.isoformat() if r.csat_at else None}
@@ -436,11 +449,17 @@ def company_request_detail_view(request, req_id):
             err = _seat_cancel(r, user)
             if err:
                 return err
+        elif b.get('action') == 'read':
+            # Marking read is an action, never a side effect of GET: a page
+            # that silently consumed the unread state on render would make the
+            # badge unreliable in exactly the way this feature is fixing.
+            reads.mark_read(r, user=user)
         else:
             return JsonResponse({'error': 'عملیات نامعتبر.'}, status=400)
         r.refresh_from_db()
     return JsonResponse({'request': _request_dict(r, include_company=True,
-                                                  with_internal=False)})
+                                                  with_internal=False,
+                                                  viewer_user=user)})
 
 
 def _seat_message(r, user, raw):
@@ -614,13 +633,26 @@ def admin_company_request_detail_view(request, req_id):
     if not r:
         return JsonResponse({'error': 'not found'}, status=404)
     if request.method == 'GET':
-        return JsonResponse({'request': _request_dict(r, include_company=True,
-                                                      with_internal=True)})
+        return JsonResponse({'request': _request_dict(
+            r, include_company=True, with_internal=True,
+            viewer_admin=acting_admin(request))})
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
 
     b = _body(request)
     admin = acting_admin(request)
+
+    if b.get('action') == 'read':
+        if admin is None:
+            # The loopback KG_ADMIN_TOKEN is not a person, so there is nobody
+            # whose read state this would be. Nothing to record, nothing to fail.
+            return JsonResponse({'request': _request_dict(r, include_company=True,
+                                                          with_internal=True)})
+        reads.mark_read(r, admin=admin)
+        return JsonResponse({'request': _request_dict(r, include_company=True,
+                                                      with_internal=True,
+                                                      viewer_admin=admin)})
+
     prev_status = r.status
     changed = False
     emitted = None
@@ -699,4 +731,5 @@ def admin_company_request_detail_view(request, req_id):
         r.save()
         _emit(emitted or 'request.updated', r, prev_status=prev_status)
     return JsonResponse({'request': _request_dict(r, include_company=True,
-                                                  with_internal=True)})
+                                                  with_internal=True,
+                                                  viewer_admin=admin)})

@@ -12,7 +12,11 @@ import json
 
 from django.test import TestCase
 
-from .models import Car, Company, CompanyRequest, UserCarAccess
+from django.utils import timezone
+
+from . import reads
+from .models import (Car, Company, CompanyRequest, TicketRead, UserCarAccess)
+from .requests_api import awaiting_reply
 from .test_helpdesk import URL, ADMIN_URL, DeskBase
 
 
@@ -97,3 +101,128 @@ class TopicAndCarApiTests(DeskCarBase):
                                   'source': 'phone'}, self.h_admin)
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(r.json()['request']['car']['id'], self.forbidden_car.id)
+
+
+class ReadStateTests(DeskCarBase):
+    """Acceptance criteria 7-15. The whole point of this model is that every
+    unread badge in the product is DERIVED from it: nothing is stored that
+    could be left behind, so no badge can go stale."""
+
+    def _unread(self, req, *, user=None, admin=None):
+        return reads.unread_count(req, user=user, admin=admin)
+
+    def test_an_unopened_ticket_counts_every_message_the_viewer_did_not_write(self):
+        t = self.create(body='opening')                      # authored by spec
+        r = CompanyRequest.objects.get(id=t['id'])
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'first'}, self.h_admin)
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'second'}, self.h_admin)
+        self.assertEqual(self._unread(r, user=self.spec), 2)
+
+    def test_marking_read_zeroes_the_count(self):
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'answer'}, self.h_admin)
+        reads.mark_read(r, user=self.spec)
+        self.assertEqual(self._unread(r, user=self.spec), 0)
+
+    def test_a_message_after_reading_is_unread_again(self):
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        reads.mark_read(r, user=self.spec)
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'later'}, self.h_admin)
+        self.assertEqual(self._unread(r, user=self.spec), 1)
+
+    def test_your_own_message_is_never_unread(self):
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        self.assertEqual(self._unread(r, user=self.spec), 0)
+
+    def test_an_internal_note_is_unread_for_an_admin_and_invisible_to_the_customer(self):
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        reads.mark_read(r, user=self.spec)
+        self.post(f'{ADMIN_URL}{t["id"]}/',
+                  {'message': 'ask licensing', 'internal': True}, self.h_admin)
+        self.assertEqual(self._unread(r, user=self.spec), 0)
+        self.assertEqual(self._unread(r, admin=self.admin2), 2)
+
+    def test_two_seats_in_one_company_have_independent_read_state(self):
+        t = self.create(hdr=self.h_mgr, body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'answer'}, self.h_admin)
+        reads.mark_read(r, user=self.mgr)
+        self.assertEqual(self._unread(r, user=self.mgr), 0)
+        self.assertEqual(self._unread(r, user=self.spec), 2)
+
+    def test_an_admin_read_mark_does_not_touch_a_seat(self):
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'answer'}, self.h_admin)
+        reads.mark_read(r, admin=self.admin)
+        self.assertEqual(self._unread(r, admin=self.admin), 0)
+        self.assertEqual(self._unread(r, user=self.spec), 1)
+
+    def test_a_read_ticket_can_still_be_awaiting_our_reply(self):
+        """The distinction the old single 'open' signal could not express."""
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        reads.mark_read(r, admin=self.admin)
+        self.assertEqual(self._unread(r, admin=self.admin), 0)
+        self.assertTrue(awaiting_reply(r))
+
+    def test_a_get_does_not_mark_anything_read(self):
+        t = self.create(body='opening')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'answer'}, self.h_admin)
+        self.c.get(f'{URL}{t["id"]}/', **self.h_spec)
+        self.assertEqual(TicketRead.objects.count(), 0)
+
+    def test_the_read_action_marks_it_read_for_the_caller(self):
+        t = self.create(body='opening')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'answer'}, self.h_admin)
+        r = self.post(f'{URL}{t["id"]}/', {'action': 'read'}, self.h_spec)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['request']['unread_count'], 0)
+
+    def test_marking_read_twice_does_not_error_or_duplicate(self):
+        """Review Focus 4: two tabs, one ticket, same instant."""
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        for _ in range(2):
+            reads.mark_read(r, user=self.spec)
+        self.assertEqual(TicketRead.objects.filter(request=r, user=self.spec).count(), 1)
+
+    def test_a_read_mark_belongs_to_exactly_one_viewer(self):
+        t = self.create()
+        r = CompanyRequest.objects.get(id=t['id'])
+        with self.assertRaises(Exception):
+            TicketRead.objects.create(request=r, user=self.spec, admin=self.admin,
+                                      last_read_at=timezone.now())
+
+    def test_unread_counts_answers_for_a_whole_page_at_once(self):
+        a = self.create(body='one')
+        b = self.create(body='two')
+        for t in (a, b):
+            self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'answer'}, self.h_admin)
+        counts = reads.unread_counts([a['id'], b['id']], user=self.spec)
+        self.assertEqual(counts, {a['id']: 1, b['id']: 1})
+
+    def test_last_message_names_who_spoke_last(self):
+        t = self.create(body='opening')
+        r = CompanyRequest.objects.get(id=t['id'])
+        self.assertEqual(reads.last_message(r)['by'], 'customer')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'answer'}, self.h_admin)
+        r.refresh_from_db()
+        self.assertEqual(reads.last_message(r)['by'], 'platform')
+
+    def test_a_ticket_with_no_messages_has_no_last_message(self):
+        t = self.create()
+        r = CompanyRequest.objects.get(id=t['id'])
+        self.assertIsNone(reads.last_message(r))
+
+    def test_the_admin_read_action_marks_it_read_for_that_admin(self):
+        t = self.create(body='opening')
+        r = self.post(f'{ADMIN_URL}{t["id"]}/', {'action': 'read'}, self.h_admin)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['request']['unread_count'], 0)
+        self.assertEqual(reads.unread_count(CompanyRequest.objects.get(id=t['id']),
+                                            admin=self.admin2), 1)

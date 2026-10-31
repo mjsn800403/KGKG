@@ -1510,6 +1510,45 @@ class FeatureFlag(models.Model):
 
 
 
+class TicketRead(models.Model):
+    """How far one viewer has read one ticket.
+
+    Every unread badge in the product is computed from these rows: the count
+    is `messages newer than last_read_at that this viewer did not write`. That
+    is deliberate. The alternative — a notification row per event, decremented
+    when somebody acts — is what leaves an indicator lit after the work is
+    done, which is exactly the complaint this model answers. There is nothing
+    stored here that can be stale: opening the conversation moves the mark and
+    the count recomputes to zero.
+
+    Exactly one of ``user`` / ``admin`` is set; the check constraint is not
+    decoration, since a row belonging to both viewers would be counted twice.
+    """
+    request = models.ForeignKey(CompanyRequest, on_delete=models.CASCADE,
+                                related_name='reads')
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, null=True, blank=True,
+                             related_name='ticket_reads')
+    admin = models.ForeignKey(PlatformAdmin, on_delete=models.CASCADE, null=True,
+                              blank=True, related_name='ticket_reads')
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['request', 'user'],
+                                    name='ticketread_one_per_user'),
+            models.UniqueConstraint(fields=['request', 'admin'],
+                                    name='ticketread_one_per_admin'),
+            models.CheckConstraint(
+                condition=models.Q(user__isnull=False, admin__isnull=True)
+                | models.Q(user__isnull=True, admin__isnull=False),
+                name='ticketread_exactly_one_viewer'),
+        ]
+
+    def __str__(self):
+        who = self.user_id and f'user {self.user_id}' or f'admin {self.admin_id}'
+        return f'read {self.request_id} by {who}'
+
+
 class Feedback(models.Model):
     """Unsolicited product feedback from a signed-in seat.
 
