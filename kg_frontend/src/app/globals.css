@@ -1383,6 +1383,9 @@ h1.page-title{font-family:var(--fa);font-weight:800;font-size:29px;margin-bottom
 .rt-list-main b{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rt-list-main small{font-size:11.5px;color:var(--text-dim)}
 .rt-when{font-size:11px;color:var(--text-faint);white-space:nowrap;font-family:var(--mono)}
+/* A ticket still waiting on an answer from us — the only desk signal that
+   clears when somebody replies. */
+.rt-awaiting{color:var(--gold)}
 .rt-av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;
   background:var(--accent-glow);color:var(--accent);flex-shrink:0}
 .rt-pill{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;flex-shrink:0}
@@ -2392,9 +2395,12 @@ html:has(.content-renderer, .parts-viewer, .frm-wrap) .kg-watermark { display: b
 .inbox-chev.up{transform:rotate(180deg)}
 
 /* Channel, escalation and reopen markers */
-.tkt-src,.tkt-esc,.tkt-reopen,.tkt-csat{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.tkt-src,.tkt-esc,.tkt-reopen,.tkt-csat,.tkt-wait{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .tkt-src{background:var(--surface-3);color:var(--text-dim)}
 .tkt-esc{background:var(--accent-glow);color:var(--accent)}
+/* The desk's one actionable marker: this ticket is waiting on an answer
+   from us, and replying removes it. */
+.tkt-wait{background:var(--gold-glow);color:var(--gold)}
 .tkt-reopen{background:var(--gold-glow);color:var(--gold)}
 .tkt-csat{background:var(--ok-soft);color:var(--ok)}
 

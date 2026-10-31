@@ -111,7 +111,7 @@ export default function AdminDashboard({ go }) {
           const exists = cur.open_requests.some((r) => r.id === req.id);
           return {
             ...cur,
-            kpis: { ...cur.kpis, open_company_requests: (cur.kpis.open_company_requests || 0) + (exists ? 0 : 1) },
+            kpis: { ...cur.kpis, ...(p.counts || {}) },
             open_requests: exists ? cur.open_requests : [req, ...cur.open_requests].slice(0, 20),
           };
         });
@@ -126,8 +126,11 @@ export default function AdminDashboard({ go }) {
           let list = cur.open_requests.filter((r) => r.id !== req.id);
           if (isOpen) list = [req, ...list];
           return {
+            // The counts come from the server with the event. They used to be
+            // read off `list`, which holds at most twenty rows, so a queue
+            // larger than that reported its own cap as the total.
             ...cur,
-            kpis: { ...cur.kpis, open_company_requests: list.length },
+            kpis: { ...cur.kpis, ...(p.counts || {}) },
             open_requests: list.slice(0, 20),
           };
         });
@@ -184,7 +187,10 @@ export default function AdminDashboard({ go }) {
     { label: 'کاربران فعال', value: k.users, icon: 'users', to: 'users' },
     { label: 'خودروها', value: k.vehicles, icon: 'car', to: 'catalog' },
     { label: 'فعالیت امروز', value: k.activities_today, icon: 'clock', to: 'activity' },
-    { label: 'درخواست‌های باز', value: k.open_company_requests, icon: 'cart', to: 'company-requests', hot: k.open_company_requests > 0 },
+    // "Open" never clears by itself — answering a ticket does not close it —
+    // so the tile that glows is the one the desk can actually act on.
+    { label: 'منتظر پاسخ ما', value: k.awaiting_reply_company_requests, icon: 'cart', to: 'company-requests', hot: (k.awaiting_reply_company_requests || 0) > 0 },
+    { label: 'تیکت‌های باز', value: k.open_company_requests, icon: 'mail', to: 'company-requests' },
     { label: 'هشدارها', value: k.open_alerts, icon: 'shield', to: 'system', hot: k.open_alerts > 0 },
   ];
 
@@ -300,8 +306,11 @@ function statusClass(s) {
 }
 
 function RequestsPanel({ requests, flash, go }) {
+  const waiting = requests.filter((r) => r.awaiting_reply);
   return (
-    <Panel title="درخواست‌های شرکت‌ها" tag="در انتظار بررسی" hot={requests.length > 0} flash={flash}
+    <Panel title="درخواست‌های شرکت‌ها"
+      tag={waiting.length > 0 ? `${waiting.length.toLocaleString('fa-IR')} منتظر پاسخ ما` : 'همه پاسخ داده شده'}
+      hot={waiting.length > 0} flash={flash}
       action={<button className="rt-mini-btn" onClick={() => go?.('company-requests')}>همه</button>}>
       {requests.length === 0 ? (
         <div className="rt-idle">درخواست بازی وجود ندارد.</div>
@@ -314,7 +323,10 @@ function RequestsPanel({ requests, flash, go }) {
                 <span className={`rt-pill rt-pill-${statusClass(r.status)}`}>{r.status_label}</span>
                 <div className="rt-list-main">
                   <b>{r.subject}</b>
-                  <small>{r.company?.name} — {r.kind_label}</small>
+                  <small>
+                    {r.company?.name} — {r.kind_label}
+                    {r.awaiting_reply && <> — <b className="rt-awaiting">منتظر پاسخ ما</b></>}
+                  </small>
                 </div>
                 <span className="rt-when">{relTime(r.created_at)}</span>
               </motion.li>

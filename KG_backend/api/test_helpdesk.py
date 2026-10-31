@@ -704,3 +704,98 @@ class FeedbackChannelTests(DeskBase):
         m = self.c.get(METRICS_URL, **self.h_admin).json()['feedback']
         self.assertEqual(m['submissions'], 1)
         self.assertAlmostEqual(m['avg_rating'], 5.0, places=2)
+
+
+# ---------------------------------------------------------------------------
+# J. "The notification stays after you answer" — reported from production
+#    on 2026-10-31. The admin panel's only ticket signal was "open", and a
+#    reply does not close a ticket, so answering never cleared the indicator.
+#    A ticket we have answered is still open; it is no longer *waiting on us*.
+# ---------------------------------------------------------------------------
+
+class AwaitingReplyTests(DeskBase):
+    def _awaiting(self, req_id):
+        r = self.c.get(f'{ADMIN_URL}{req_id}/', **self.h_admin)
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()['request']['awaiting_reply']
+
+    def test_a_new_ticket_is_waiting_on_us(self):
+        t = self.create(body='The brake chapter will not open')
+        self.assertTrue(self._awaiting(t['id']))
+
+    def test_a_public_admin_reply_clears_the_signal(self):
+        t = self.create(body='The brake chapter will not open')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'Looking into it now.'},
+                  self.h_admin)
+        self.assertFalse(self._awaiting(t['id']))
+
+    def test_an_admin_note_clears_the_signal_too(self):
+        """The note field is also a reply the customer reads."""
+        t = self.create(body='The brake chapter will not open')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'admin_note': 'Fixed the entitlement.'},
+                  self.h_admin)
+        self.assertFalse(self._awaiting(t['id']))
+
+    def test_an_internal_note_does_not_clear_the_signal(self):
+        t = self.create(body='The brake chapter will not open')
+        self.post(f'{ADMIN_URL}{t["id"]}/',
+                  {'message': 'Ask licensing about this.', 'internal': True},
+                  self.h_admin)
+        self.assertTrue(self._awaiting(t['id']))
+
+    def test_a_customer_reply_after_our_answer_makes_it_wait_on_us_again(self):
+        t = self.create(body='The brake chapter will not open')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'Try again please.'},
+                  self.h_admin)
+        self.post(f'{URL}{t["id"]}/', {'action': 'message', 'message': 'Still broken.'},
+                  self.h_spec)
+        self.assertTrue(self._awaiting(t['id']))
+
+    def test_a_closed_ticket_is_never_waiting_on_us(self):
+        t = self.create(body='The brake chapter will not open')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'status': 'completed'}, self.h_admin)
+        self.assertFalse(self._awaiting(t['id']))
+
+    def test_a_public_reply_moves_a_pending_ticket_into_progress(self):
+        """So the inbox's own status column agrees with the signal."""
+        t = self.create(body='The brake chapter will not open')
+        self.assertEqual(t['status'], 'pending')
+        r = self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'On it.'}, self.h_admin)
+        self.assertEqual(r.json()['request']['status'], 'in_progress')
+
+    def test_an_explicit_status_in_the_same_request_still_wins(self):
+        t = self.create(body='The brake chapter will not open')
+        r = self.post(f'{ADMIN_URL}{t["id"]}/',
+                      {'message': 'Done, closing.', 'status': 'completed'}, self.h_admin)
+        self.assertEqual(r.json()['request']['status'], 'completed')
+
+    def test_an_internal_note_does_not_move_the_status(self):
+        t = self.create(body='The brake chapter will not open')
+        r = self.post(f'{ADMIN_URL}{t["id"]}/',
+                      {'message': 'Internal only.', 'internal': True}, self.h_admin)
+        self.assertEqual(r.json()['request']['status'], 'pending')
+
+    def test_the_dashboard_counts_tickets_waiting_on_us_apart_from_open_ones(self):
+        answered = self.create(body='one')
+        self.post(f'{ADMIN_URL}{answered["id"]}/', {'message': 'Answered.'}, self.h_admin)
+        self.create(body='two')
+        d = self.c.get('/api/admin/dashboard/', **self.h_admin)
+        self.assertEqual(d.status_code, 200, d.content)
+        k = d.json()['kpis']
+        self.assertEqual(k['open_company_requests'], 2)
+        self.assertEqual(k['awaiting_reply_company_requests'], 1)
+
+    def test_only_the_admin_copy_carries_the_queue_counts(self):
+        """The dashboard needs an exact count; a customer has no business
+        knowing the platform-wide queue size."""
+        req = self.create(hdr=self.h_spec)
+        after = Event.objects.latest('id').id
+        self.post(f"{ADMIN_URL}{req['id']}/", {'message': 'On it.'}, self.h_admin)
+        new = Event.objects.filter(id__gt=after)
+        admin_ev = new.filter(audience='admin').first()
+        self.assertIsNotNone(admin_ev)
+        self.assertEqual(admin_ev.payload['counts'],
+                         {'open_company_requests': 1,
+                          'awaiting_reply_company_requests': 0})
+        for e in new.exclude(audience='admin'):
+            self.assertNotIn('counts', e.payload)

@@ -42,6 +42,7 @@ export default function RequestsInbox() {
   const [filter, setFilter] = useState('');
   const [source, setSource] = useState('');
   const [breachOnly, setBreachOnly] = useState(false);
+  const [waitingOnly, setWaitingOnly] = useState(false);
   const [busy, setBusy] = useState(null);
   const [note, setNote] = useState({});
   const [openId, setOpenId] = useState(null);
@@ -105,9 +106,15 @@ export default function RequestsInbox() {
 
   // The visible worklist. "Only what is late" is a first-class filter because
   // a breach that nobody looks at is the same as no SLA at all.
-  const shown = breachOnly
-    ? items.filter((r) => r.sla?.response_state === 'breached' || r.sla?.resolve_state === 'breached')
-    : items;
+  // "Waiting on us" is the other first-class filter: a ticket stays open after
+  // it is answered, so an open-ticket list never empties and stops being read.
+  let shown = items;
+  if (breachOnly) {
+    shown = shown.filter((r) => r.sla?.response_state === 'breached'
+                             || r.sla?.resolve_state === 'breached');
+  }
+  if (waitingOnly) shown = shown.filter((r) => r.awaiting_reply);
+  const waitingCount = items.filter((r) => r.awaiting_reply).length;
 
   return (
     <div className="inbox">
@@ -126,6 +133,10 @@ export default function RequestsInbox() {
             {s ? sourceLabel(s) : 'همه'}
           </button>
         ))}
+        <button className={`inbox-fbtn${waitingOnly ? ' on' : ''}`} onClick={() => setWaitingOnly((v) => !v)}>
+          <Icon name="mail" size={14} /> فقط منتظر پاسخ ما
+          {waitingCount ? <span className="inbox-fcount">{waitingCount.toLocaleString('fa-IR')}</span> : null}
+        </button>
         <button className={`inbox-fbtn${breachOnly ? ' on' : ''}`} onClick={() => setBreachOnly((b) => !b)}>
           <Icon name="bell" size={14} /> فقط از مهلت گذشته
         </button>
@@ -163,6 +174,7 @@ export default function RequestsInbox() {
                     <b className="inbox-subject">{row.subject}</b>
                     <span className="inbox-kind">{row.kind_label}</span>
                     <span className="tkt-src">{sourceLabel(row.source)}</span>
+                    {row.awaiting_reply && <span className="tkt-wait">منتظر پاسخ ما</span>}
                     {row.escalated_at && <span className="tkt-esc">ارجاع‌شده</span>}
                     {row.reopen_count > 0 && <span className="tkt-reopen">بازگشایی ×{faNum(row.reopen_count)}</span>}
                     <span className="inbox-when">{fmtDate(row.created_at)}</span>
