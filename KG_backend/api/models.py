@@ -896,6 +896,19 @@ class CompanyRequest(models.Model):
         ('rejected', 'رد شد'),
     ]
     PRIORITY_CHOICES = [('low', 'کم'), ('normal', 'عادی'), ('high', 'زیاد')]
+    # What the problem IS, as against `kind`, which is what the request is FOR.
+    # They are kept apart because `kind` carries permissions — MANAGER_ONLY_KINDS
+    # gates seats, vehicle access, the assistant and documents — and folding a
+    # problem taxonomy into it would tie who may file to what they may call it.
+    TOPIC_CHOICES = [
+        ('missing_document', 'مستند موجود نیست'),
+        ('content_wrong', 'محتوا نادرست یا نامفهوم است'),
+        ('access_problem', 'مشکل دسترسی'),
+        ('assistant_wrong', 'پاسخ دستیار نادرست بود'),
+        ('error_or_slow', 'خطا یا کندی سامانه'),
+        ('billing', 'مالی و اشتراک'),
+        ('other', 'سایر'),
+    ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='requests')
     created_by = models.ForeignKey(PortalUser, on_delete=models.SET_NULL, null=True,
@@ -907,6 +920,14 @@ class CompanyRequest(models.Model):
     payload = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', db_index=True)
     priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default='normal')
+    # Both optional: a ticket filed before this existed stays uncategorised
+    # rather than being back-filled with a guess.
+    topic = models.CharField(max_length=24, choices=TOPIC_CHOICES, blank=True,
+                             default='', db_default='', db_index=True)
+    # The vehicle the problem is about. SET_NULL because a retired vehicle must
+    # not take its tickets' history with it.
+    car = models.ForeignKey('Car', null=True, blank=True, on_delete=models.SET_NULL,
+                            related_name='requests', db_index=True)
     admin_note = models.TextField(blank=True, default='')     # admin's reply / resolution
     handled_by = models.CharField(max_length=100, blank=True, default='')   # admin username
     created_at = models.DateTimeField(auto_now_add=True)
