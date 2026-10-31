@@ -34,7 +34,12 @@ def _fts_ddl(if_not_exists=True):
 # --- original car DB: strictly read-only -----------------------------------
 def open_car_ro(db_path):
     """Open an original car DB read-only. ``mode=ro`` makes any write attempt
-    fail with an error rather than mutating the file."""
+    fail with an error rather than mutating the file. A car served from
+    PostgreSQL opens there instead (read-only by its grants)."""
+    from api import cardb_pg
+    pgc = cardb_pg.open_ro(db_path)
+    if pgc is not None:
+        return pgc
     conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
     conn.row_factory = sqlite3.Row
     return conn

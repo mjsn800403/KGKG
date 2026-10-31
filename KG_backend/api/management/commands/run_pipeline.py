@@ -49,6 +49,12 @@ def parse_worker_count():
     return max(2, cores // 2)
 
 
+
+def ragcfg_path(stem):
+    from api.rag import config as ragcfg
+    return ragcfg.WAREHOUSE_DIR / f'{stem}.db'
+
+
 class _Canceled(Exception):
     pass
 
@@ -129,6 +135,7 @@ class Runner:
                     'schema': 5.0,
                     'rag': 1.0 / rate,
                     'diag': self.settings_row.diag_secs_per_car or 90.0,
+                    'pgcar': 30.0,
                     'audit': 90.0}.get(s['key'], 60.0)
         return max(1.0, s['items_total'] * per_item)
 
@@ -462,6 +469,31 @@ class Runner:
             if len(errors) == len(todo) and todo:
                 raise RuntimeError('every diag build failed')
 
+    def stage_pgcar(self, s):
+        """New cars arrive as SQLite files; with KG_CARDB_PG=* each one moves
+        into PostgreSQL (verified) and its file is deleted. Runs after rag/diag
+        so a failure here never blocks indexing; the file stays until it works."""
+        from api import cardb_pg
+        todo = pipeline.pgcar_todo()
+        errors = []
+        for i, stem in enumerate(todo):
+            self.check_cancel()
+            self.job.progress['current_item'] = stem
+            self.persist_progress()
+            try:
+                cardb_pg.adopt(ragcfg_path(stem), log=self.tee.write)
+            except Exception as e:
+                errors.append(f'{stem}: {e.__class__.__name__}: {e}')
+                self.log(f'!! PostgreSQL move failed for {stem}: {e}')
+            s['items_done'] = i + 1
+            self.update_overall()
+            self.persist_progress()
+        self.job.progress.pop('current_item', None)
+        if errors:
+            s['error'] = ' | '.join(errors)[:800]
+            if len(errors) == len(todo) and todo:
+                raise RuntimeError('every PostgreSQL move failed')
+
     def stage_audit(self, s):
         run = dataquality.run_audit_to_db(fix=False)
         if run.status != 'done':
@@ -481,7 +513,7 @@ class Runner:
             self.check_cancel()
             # Parsing landed new .db files + catalog rows: refresh the plans
             # of every later stage so none of them auto-skips fresh work.
-            self.replan_pending_stages(('catalog', 'schema', 'rag', 'diag'))
+            self.replan_pending_stages(('catalog', 'schema', 'rag', 'diag', 'pgcar'))
             ok_catalog = self.run_stage('catalog', self.stage_catalog)
             self.check_cancel()
             ok_schema = self.run_stage('schema', self.stage_schema)
@@ -496,6 +528,8 @@ class Runner:
                     d['status'] = 'skipped'
                     d['error'] = 'به دلیل خطا در مرحله RAG اجرا نشد'
                 ok_diag = False
+            self.check_cancel()
+            self.run_stage('pgcar', self.stage_pgcar)
             self.check_cancel()
             ok_audit = self.run_stage('audit', self.stage_audit)
             failed_stages = [s['key'] for s in job.stages if s['status'] == 'failed']

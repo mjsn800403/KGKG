@@ -37,9 +37,10 @@ def db_is_valid(path):
     Uses ``LIMIT 1`` probes so it stays fast even on multi-hundred-MB files, and
     treats a malformed / partially-uploaded / locked file as *not* ready (so an
     in-flight upload never produces a broken catalog row)."""
+    from api.rag import store
     try:
-        conn = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
-    except sqlite3.Error:
+        conn = store.open_car_ro(path)
+    except Exception:
         return False
     try:
         cur = conn.cursor()
@@ -55,8 +56,8 @@ def db_is_valid(path):
             "SELECT 1 FROM nodes WHERE content IS NOT NULL LIMIT 1"
         ).fetchone()
         return bool(root and leaf)
-    except sqlite3.DatabaseError:
-        # malformed image / truncated partial upload
+    except Exception:
+        # malformed image / truncated partial upload (or PostgreSQL error)
         return False
     finally:
         conn.close()

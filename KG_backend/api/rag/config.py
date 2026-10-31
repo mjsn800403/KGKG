@@ -87,14 +87,26 @@ GLOSSARY_MAX_TERMS = 16
 
 
 def car_db_files():
-    """All real car DB files on disk (top-level *.db, excluding our own
-    sidecar/backup folders). Returns a sorted list of Path."""
-    out = []
-    for p in sorted(WAREHOUSE_DIR.glob('*.db')):
+    """Every car DB: top-level *.db files on disk (excluding our own
+    sidecar/backup folders) plus the cars served from PostgreSQL, whose path
+    no longer exists but still names the car. Returns a sorted list of Path."""
+    out = {}
+    for p in WAREHOUSE_DIR.glob('*.db'):
         if any(p.name.startswith(pre) for pre in _NON_CAR_PREFIXES):
             continue
-        out.append(p)
-    return out
+        out[p.name] = p
+    from api import cardb_pg
+    if '*' in cardb_pg.pg_cars():
+        for name in cardb_pg.loaded_files():
+            out.setdefault(name, WAREHOUSE_DIR / name)
+    return [out[k] for k in sorted(out)]
+
+
+def car_db_present(stem):
+    """Is there a car DB for this stem, as a file or in PostgreSQL?"""
+    from api import cardb_pg
+    path = WAREHOUSE_DIR / f'{stem}.db'
+    return path.exists() or cardb_pg.is_pg(path)
 
 
 # ---------------------------------------------------------------------------
