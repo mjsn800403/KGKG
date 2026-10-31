@@ -926,8 +926,14 @@ class CompanyRequest(models.Model):
         ('sms', 'پیامک'),
         ('in_person', 'حضوری'),
     ]
+    # db_default as well as default: `default` is applied by Django in Python,
+    # so after this migration the column is NOT NULL with no database default.
+    # Roll the CODE back to a release that does not know the field — which is
+    # exactly what ops/deploy/deploy.sh --rollback does — and every INSERT from
+    # the old code fails. ops/deploy/check_migrations.py refuses it for that
+    # reason, and it is right to.
     source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default='portal',
-                              db_index=True)
+                              db_default='portal', db_index=True)
     # Real ownership. `handled_by` stays as the free-text audit trail of who
     # last touched the ticket; this is the queryable owner.
     assignee = models.ForeignKey(PlatformAdmin, on_delete=models.SET_NULL, null=True,
@@ -939,10 +945,10 @@ class CompanyRequest(models.Model):
     sla_response_due_at = models.DateTimeField(null=True, blank=True)
     sla_resolve_due_at = models.DateTimeField(null=True, blank=True)
     escalated_at = models.DateTimeField(null=True, blank=True)
-    reopen_count = models.PositiveSmallIntegerField(default=0)
+    reopen_count = models.PositiveSmallIntegerField(default=0, db_default=0)
     # Satisfaction, asked once, after closure, of the person who filed it.
     csat_score = models.PositiveSmallIntegerField(null=True, blank=True)
-    csat_comment = models.TextField(blank=True, default='')
+    csat_comment = models.TextField(blank=True, default='', db_default='')
     csat_at = models.DateTimeField(null=True, blank=True)
 
     OPEN_STATUSES = ('pending', 'in_progress')
