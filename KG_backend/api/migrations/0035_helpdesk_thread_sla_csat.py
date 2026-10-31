@@ -30,7 +30,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="companyrequest",
             name="csat_comment",
-            field=models.TextField(blank=True, default=""),
+            field=models.TextField(blank=True, db_default="", default=""),
         ),
         migrations.AddField(
             model_name="companyrequest",
@@ -50,7 +50,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="companyrequest",
             name="reopen_count",
-            field=models.PositiveSmallIntegerField(default=0),
+            field=models.PositiveSmallIntegerField(db_default=0, default=0),
         ),
         migrations.AddField(
             model_name="companyrequest",
@@ -73,6 +73,7 @@ class Migration(migrations.Migration):
                     ("sms", "پیامک"),
                     ("in_person", "حضوری"),
                 ],
+                db_default="portal",
                 db_index=True,
                 default="portal",
                 max_length=16,

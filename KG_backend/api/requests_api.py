@@ -73,12 +73,20 @@ def _payload_cars(payload):
             for c in Car.objects.filter(id__in=ids).order_by('car_name', 'year')]
 
 
+# A message whose author is the customer but who has no seat row to point at:
+# the opening description of a ticket the desk logged from a telephone call,
+# an email or a visit.
+CUSTOMER_LABEL = 'customer'
+
+
 def _author(m):
     if m.author_user_id and m.author_user:
         return {'kind': 'user',
                 'name': (m.author_user.display_name or m.author_user.username)}
     if m.author_admin_id and m.author_admin:
         return {'kind': 'admin', 'name': m.author_admin.username}
+    if m.author_label == CUSTOMER_LABEL:
+        return {'kind': 'user', 'name': 'مشتری'}
     return {'kind': 'admin', 'name': m.author_label or 'admin'}
 
 
@@ -97,6 +105,68 @@ def _thread(r, *, with_internal):
     if not with_internal:
         qs = qs.filter(internal=False)
     return [_message_dict(m, with_internal=with_internal) for m in qs]
+
+
+def _answered_after(last_public, first_response_at):
+    """Did the platform have the last public word? ``last_public`` is the
+    newest non-internal message as a values() dict."""
+    if last_public['author_admin_id'] or last_public['author_label'] == 'admin':
+        return True
+    return bool(first_response_at and first_response_at >= last_public['created_at'])
+
+
+def awaiting_reply(r):
+    """Is this ticket waiting on *us*?
+
+    Reported from production on 2026-10-31: answering a ticket never cleared
+    the admin panel's indicator. It could not — the only signal was "open",
+    and a reply does not close a ticket. "Open" and "waiting on us" are
+    different facts, and the panel needs the second one.
+
+    A ticket waits on us while it is open and the last thing said in public
+    came from the customer. With no public message at all, the opening request
+    itself is what we owe an answer to, so ``first_response_at`` decides.
+
+    The ``admin_note`` field is also a reply the customer reads, and it is not
+    a thread message, so a note newer than the last customer message counts as
+    an answer through its ``first_response_at`` stamp. The one case this reads
+    pessimistically — the panel keeps showing the ticket — is a note *edited*
+    after a later customer message, because only the first response is
+    stamped. Showing work that may be done beats hiding work that is not.
+    """
+    if r.status not in CompanyRequest.OPEN_STATUSES:
+        return False
+    last = (r.messages.filter(internal=False)
+            .order_by('-created_at', '-id')
+            .values('created_at', 'author_admin_id', 'author_label')
+            .first())
+    if last is None:
+        return r.first_response_at is None
+    return not _answered_after(last, r.first_response_at)
+
+
+def awaiting_reply_count():
+    """How many open tickets wait on us, in two queries rather than one per
+    ticket: the open rows, then the newest public message of each."""
+    rows = list(CompanyRequest.objects
+                .filter(status__in=CompanyRequest.OPEN_STATUSES)
+                .values('id', 'first_response_at'))
+    if not rows:
+        return 0
+    newest = {}
+    for m in (TicketMessage.objects
+              .filter(request_id__in=[r['id'] for r in rows], internal=False)
+              .order_by('request_id', '-created_at', '-id')
+              .values('request_id', 'created_at', 'author_admin_id', 'author_label')):
+        newest.setdefault(m['request_id'], m)
+    total = 0
+    for r in rows:
+        last = newest.get(r['id'])
+        if last is None:
+            total += r['first_response_at'] is None
+        elif not _answered_after(last, r['first_response_at']):
+            total += 1
+    return total
 
 
 def _sla_dict(r, now):
@@ -140,6 +210,7 @@ def _request_dict(r, *, include_company=False, thread=None, with_internal=False,
         'escalated_at': r.escalated_at.isoformat() if r.escalated_at else None,
         'reopen_count': r.reopen_count,
         'is_open': r.status in CompanyRequest.OPEN_STATUSES,
+        'awaiting_reply': awaiting_reply(r),
         'sla': _sla_dict(r, now),
         'csat': ({'score': r.csat_score, 'comment': r.csat_comment,
                   'at': r.csat_at.isoformat() if r.csat_at else None}
@@ -174,7 +245,15 @@ def _emit(type_, r, **extra):
     payload = {'request': _request_dict(r, include_company=True, thread=[])}
     payload.update(extra)
     events.emit_company(type_, r.company_id, payload)
-    events.emit(type_, payload, audience='admin')
+    # The admin copy carries the authoritative queue counts. The dashboard
+    # used to recompute them from the request list it holds, which is capped
+    # at fifteen rows, so a busy queue silently under-reported. Platform-wide
+    # totals are not a customer's business, so only the admin copy has them.
+    events.emit(type_, dict(payload, counts={
+        'open_company_requests': CompanyRequest.objects.filter(
+            status__in=CompanyRequest.OPEN_STATUSES).count(),
+        'awaiting_reply_company_requests': awaiting_reply_count(),
+    }), audience='admin')
     filer = r.created_by if r.created_by_id else None
     if filer and not user_can_view_company_stream(filer):
         events.emit_user(type_, filer.id, payload, company_id=r.company_id)
@@ -466,8 +545,12 @@ def _admin_create(request):
     _stamp_sla(r)
     r.save(update_fields=['sla_response_due_at', 'sla_resolve_due_at'])
     if body:
-        _add_message(r, body, admin=admin,
-                     label=('' if admin else 'admin'))
+        # What the admin types here is what the CUSTOMER said on the telephone,
+        # not an answer to them. Attributed to the admin it would have read as
+        # the platform having had the last word, and every phoned-in ticket
+        # would have been hidden from the queue of tickets waiting on us — the
+        # one channel the evaluation said we had to start measuring.
+        _add_message(r, body, label=CUSTOMER_LABEL)
     _emit('request.created', r)
     return JsonResponse({'ok': True, 'request': _request_dict(r, include_company=True,
                                                               with_internal=True)})
@@ -555,6 +638,13 @@ def admin_company_request_detail_view(request, req_id):
         # Only a reply the customer can see is a response.
         if not internal and r.first_response_at is None:
             r.first_response_at = timezone.now()
+        # A public reply means somebody has picked the ticket up, so the
+        # status says so without the admin having to remember the dropdown.
+        # An explicit status in the same request is the admin's own decision
+        # and always wins; an internal note moves nothing.
+        if not internal and 'status' not in b and r.status == 'pending':
+            r.status = 'in_progress'
+            r.resolved_at = None
 
     if 'handled_by' in b:
         r.handled_by = (str(b.get('handled_by') or '')).strip()[:100]
