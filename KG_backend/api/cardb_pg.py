@@ -53,7 +53,7 @@ def loaded_files():
         try:
             import psycopg
             with psycopg.connect(_dsn(), connect_timeout=3) as c:
-                rows = c.execute(f'SELECT filename FROM {REGISTRY}').fetchall()
+                rows = c.execute('SELECT filename FROM public.car_dbs').fetchall()
             _loaded['files'] = frozenset(r[0] for r in rows)
         except Exception:
             log.warning('cannot list PostgreSQL car databases', exc_info=True)
@@ -180,6 +180,13 @@ def _pgtype(decl):
     return 'text'
 
 
+def _ident(name):
+    """A SQLite table name, double-quoted after checking it is a plain identifier."""
+    if not re.fullmatch(r'\w+', name):
+        raise ValueError(f'unexpected table name {name!r}')
+    return f'"{name}"'
+
+
 def load_sqlite(path, dsn=None, log=print):
     """Copy one car's SQLite file into its own schema and register it.
 
@@ -188,6 +195,7 @@ def load_sqlite(path, dsn=None, log=print):
     place, so readers never see a half-loaded car. Returns {table: rows}."""
     import sqlite3
     import psycopg
+    from psycopg import sql as psql
     name = os.path.basename(str(path))
     final = schema_for(name)
     tmp = final + '_new'
@@ -208,10 +216,13 @@ def load_sqlite(path, dsn=None, log=print):
                 ddl += ', PRIMARY KEY (' + ', '.join(f'"{c}"' for c in pk) + ')'
             pg.execute(f'CREATE TABLE {tmp}."{t}" ({ddl})')
             names = 'rowid, ' + ', '.join(f'"{c}"' for c, _, _ in cols)
+            n = 0
             with pg.cursor().copy(f'COPY {tmp}."{t}" ({names}) FROM STDIN') as cp:
-                for r in src.execute(f'SELECT rowid, * FROM [{t}]'):
+                # t is a table of the car's own SQLite file, checked by _ident
+                for r in src.execute(' '.join(('SELECT rowid, * FROM', _ident(t)))):
                     cp.write_row([v.replace('\x00', '') if isinstance(v, str) else v for v in r])
-            counts[t] = src.execute(f'SELECT count(*) FROM [{t}]').fetchone()[0]
+                    n += 1
+            counts[t] = n
         for (sql,) in src.execute("SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL"):
             m = re.match(r'CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF NOT EXISTS\s+)?(\w+)\s+ON\s+(\w+)\s*\((.*)\)\s*$',
                          sql.strip(), re.S | re.I)
@@ -226,7 +237,8 @@ def load_sqlite(path, dsn=None, log=print):
                     pg.execute(f'CREATE INDEX ON {tmp}.nodes USING gin ({c}_lc gin_trgm_ops)')
             pg.execute(f'CREATE INDEX ON {tmp}.nodes (path_lc text_pattern_ops)')
         for t in tables:
-            got = pg.execute(f'SELECT count(*) FROM {tmp}."{t}"').fetchone()[0]
+            got = pg.execute(psql.SQL('SELECT count(*) FROM {}.{}').format(
+                psql.Identifier(tmp), psql.Identifier(t))).fetchone()[0]
             if got != counts[t]:
                 raise RuntimeError(f'{name}: {t} has {got} rows in PostgreSQL, {counts[t]} in SQLite')
         pg.execute(f'CREATE TABLE IF NOT EXISTS {REGISTRY} (filename text PRIMARY KEY, '
@@ -234,7 +246,7 @@ def load_sqlite(path, dsn=None, log=print):
         with pg.transaction():
             pg.execute(f'DROP SCHEMA IF EXISTS {final} CASCADE')
             pg.execute(f'ALTER SCHEMA {tmp} RENAME TO {final}')
-            pg.execute(f'INSERT INTO {REGISTRY} (filename, schema, nodes) VALUES (%s, %s, %s) '
+            pg.execute('INSERT INTO public.car_dbs (filename, schema, nodes) VALUES (%s, %s, %s) '
                        'ON CONFLICT (filename) DO UPDATE SET schema = EXCLUDED.schema, '
                        'nodes = EXCLUDED.nodes, loaded_at = now()',
                        (name, final, counts.get('nodes')))
