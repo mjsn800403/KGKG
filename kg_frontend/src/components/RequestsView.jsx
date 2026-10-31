@@ -12,7 +12,7 @@ import KbSuggestions from './desk/KbSuggestions';
 import { teamApi, getPortalUser, fetchGrantedFleet } from '../utils/api';
 import useEventStream from '../utils/useEventStream';
 import {
-  canRate, dueText, faNum, slaLabel, slaTone, sourceLabel, topicLabel,
+  canRate, dueText, faNum, slaLabel, slaTone, sourceLabel, topicLabel, visibleDetail,
 } from '../lib/support';
 import { friendlyError } from '../lib/friendlyError';
 
@@ -33,6 +33,7 @@ export default function RequestsView() {
   const [filters, setFilters] = useState({ q: '', status: '', topic: '', unread: '' });
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [unreadAtOpen, setUnreadAtOpen] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [toast, setToast] = useState(null);
   const [err, setErr] = useState('');
@@ -40,6 +41,12 @@ export default function RequestsView() {
   const toastTimer = useRef(null);
   const selectedRef = useRef(null);
   useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
+
+  // Re-fetch the first page under the current filters. Used by the event
+  // handler when something arrives that the loaded page cannot represent.
+  const reload = useCallback(() => {
+    setFilters((f) => ({ ...f }));
+  }, []);
 
   const load = useCallback(async (append = false) => {
     try {
@@ -87,10 +94,18 @@ export default function RequestsView() {
     setDetail(null);
     try {
       const d = await teamApi.request(id);
+      // The selection may have moved on while this was in flight. Rendering
+      // it anyway showed one ticket while every button acted on another.
+      if (selectedRef.current !== id) return;
+      const unread = d.request?.unread_count || 0;
+      // Remember where the unread began BEFORE marking read. The divider has
+      // to survive the mark, or it renders for one round-trip and then the
+      // pane jumps to the bottom — which is the whole behaviour we added it
+      // for. It is cleared when the reader moves to another ticket.
+      setUnreadAtOpen(unread);
       setDetail(d.request || null);
-      if ((d.request?.unread_count || 0) > 0) {
-        const after = await teamApi.markRead(id);
-        setDetail(after.request || d.request);
+      if (unread > 0) {
+        await teamApi.markRead(id);
         setItems((cur) => cur.map((r) => (r.id === id ? { ...r, unread_count: 0 } : r)));
         // The sidebar badge is derived from the same read marks, so it only
         // needs telling that they moved.
@@ -108,8 +123,8 @@ export default function RequestsView() {
   const refreshRow = useCallback(async (id) => {
     try {
       const d = await teamApi.request(id);
-      setDetail(d.request || null);
       setItems((cur) => cur.map((r) => (r.id === id ? { ...r, ...d.request } : r)));
+      if (selectedRef.current === id) setDetail(d.request || null);
     } catch { /* the list refresh below is the fallback */ }
   }, []);
 
@@ -126,10 +141,20 @@ export default function RequestsView() {
         teamApi.markRead(req.id).catch(() => {});
         return;
       }
-      setItems((cur) => cur.map((r) => (r.id === req?.id
-        ? { ...r, ...req, unread_count: (r.unread_count || 0) + (evt.type === 'request.message' ? 1 : 0) }
-        : r)));
       if (!req) return;
+      // A ticket this page does not hold — a colleague just filed one, or it
+      // sits on page two — needs the list fetched, not patched: mapping over
+      // `items` is a no-op for a row that is not there, so a manager watching
+      // the desk used to see nothing at all when a ticket arrived.
+      setItems((cur) => {
+        if (!cur.some((r) => r.id === req.id)) { reload(); return cur; }
+        return cur.map((r) => (r.id === req.id
+          ? { ...r, ...req, unread_count: (r.unread_count || 0) + (evt.type === 'request.message' ? 1 : 0) }
+          : r));
+      });
+      // The badge is derived from the server's marks; tell the sidebar to
+      // re-read rather than trusting the count we just incremented locally.
+      window.dispatchEvent(new CustomEvent('kg:desk-read'));
       if (evt.type === 'request.message') flashToast(`پاسخ تازه روی «${req.subject}»`, 'info');
       else if (evt.type === 'request.updated') {
         if (req.status === 'completed') flashToast(`درخواست «${req.subject}» انجام شد ✓`, 'ok');
@@ -221,7 +246,7 @@ export default function RequestsView() {
 
       <DeskLayout
         hasSelection={Boolean(selectedId)}
-        onBack={() => { setSelectedId(null); setDetail(null); }}
+        onBack={() => { setSelectedId(null); setDetail(null); setUnreadAtOpen(0); }}
         listPane={(
           <>
             <DeskFilters
@@ -246,7 +271,8 @@ export default function RequestsView() {
         )}
         conversationPane={selectedId ? (
           <Conversation
-            req={detail}
+            req={visibleDetail(detail, selectedId)}
+            unreadAtOpen={unreadAtOpen}
             onSend={reply}
             onRate={rate}
             onCancel={cancel}
@@ -273,7 +299,7 @@ export default function RequestsView() {
 // already in the accordion this replaces — SLA, progress, rating, cancel — and
 // is reused rather than reimplemented, which is what keeps that behaviour from
 // drifting while the layout changes around it.
-function Conversation({ req, onSend, onRate, onCancel }) {
+function Conversation({ req, unreadAtOpen = 0, onSend, onRate, onCancel }) {
   if (!req) return <div className="dk-none">در حال بارگذاری گفت‌وگو…</div>;
   const closed = ['completed', 'rejected'].includes(req.status);
   return (
@@ -299,7 +325,8 @@ function Conversation({ req, onSend, onRate, onCancel }) {
 
       <TicketThread
         messages={req.messages || []}
-        unreadCount={req.unread_count || 0}
+        unreadCount={unreadAtOpen}
+        viewerKind="user"
         truncated={Boolean(req.messages_truncated)}
         onSend={onSend}
         placeholder={closed

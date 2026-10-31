@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { kbApi } from '../../utils/api';
 
@@ -15,6 +15,20 @@ export default function KbSuggestions({ query, carId, onResolved }) {
   const [articles, setArticles] = useState([]);
   const [openSlug, setOpenSlug] = useState(null);
   const [body, setBody] = useState('');
+  // One id for this opened form. Every search and the deflection carry it, so
+  // the metric counts compose sessions rather than debounced keystrokes.
+  //
+  // Minted in a ref rather than useMemo (which may not call an impure
+  // initialiser during render) and rather than useId — React reuses a useId
+  // for a component remounted at the same tree position, which would merge
+  // two separate compose sessions into one opportunity.
+  const composeIdRef = useRef('');
+  const mintComposeId = () => {
+    if (!composeIdRef.current) {
+      composeIdRef.current = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    }
+    return composeIdRef.current;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -25,7 +39,7 @@ export default function KbSuggestions({ query, carId, onResolved }) {
     const id = setTimeout(() => {
       if (cancelled) return;
       if (q.length < 3) { setArticles([]); return; }
-      kbApi.suggest(q, carId)
+      kbApi.suggest(q, carId, mintComposeId())
         .then((d) => { if (!cancelled) setArticles((d.articles || []).slice(0, 3)); })
         .catch(() => { if (!cancelled) setArticles([]); });
     }, q.length < 3 ? 0 : 400);
@@ -65,7 +79,7 @@ export default function KbSuggestions({ query, carId, onResolved }) {
                 className="btn kbs-yes"
                 onClick={async () => {
                   // A failed record must not cost the reader their answer.
-                  try { await kbApi.deflect(a.slug, query); } catch { /* ignore */ }
+                  try { await kbApi.deflect(a.slug, query, mintComposeId()); } catch { /* ignore */ }
                   onResolved?.(a);
                 }}
               >

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  topicLabel, groupByDay, firstUnreadIndex, activityState, rowSubtitle,
+  topicLabel, groupByDay, firstUnreadIndex, activityState, rowSubtitle, visibleDetail,
 } from '../support.js';
 
 const msg = (at, kind, body = 'x') => ({
@@ -96,4 +96,44 @@ test('rowSubtitle names the topic and the vehicle when both are known', () => {
 
 test('rowSubtitle falls back to the kind when nothing is categorised', () => {
   assert.equal(rowSubtitle({ kind_label: 'پشتیبانی' }), 'پشتیبانی');
+});
+
+// --- findings from the 2026-10-31 whole-branch review ----------------------
+
+test('firstUnreadIndex skips the viewer\'s own messages when counting back', () => {
+  // The reviewer\'s case: you replied in the middle of the thread. The server
+  // excludes your own messages from unread_count, so counting back blindly
+  // lands the divider above your own message.
+  const messages = [msg('2026-10-30T10:00:00Z', 'user'),      // mine
+                    msg('2026-10-30T11:00:00Z', 'admin'),     // unread 1
+                    msg('2026-10-30T12:00:00Z', 'user'),      // mine
+                    msg('2026-10-30T13:00:00Z', 'admin')];    // unread 2
+  assert.equal(firstUnreadIndex(messages, 2, 'user'), 1);
+});
+
+test('firstUnreadIndex counts back over the admin\'s own messages too', () => {
+  const messages = [msg('2026-10-30T10:00:00Z', 'user'),      // unread 1
+                    msg('2026-10-30T11:00:00Z', 'admin'),     // mine
+                    msg('2026-10-30T12:00:00Z', 'user')];     // unread 2
+  assert.equal(firstUnreadIndex(messages, 2, 'admin'), 0);
+});
+
+test('firstUnreadIndex without a viewer kind keeps the trailing behaviour', () => {
+  const messages = [msg('a', 'user'), msg('b', 'admin'), msg('c', 'admin')];
+  assert.equal(firstUnreadIndex(messages, 2), 1);
+});
+
+test('firstUnreadIndex clamps when the count exceeds the visible thread', () => {
+  // A capped thread (200 newest) against an uncapped unread count.
+  const messages = [msg('a', 'admin'), msg('b', 'admin')];
+  assert.equal(firstUnreadIndex(messages, 500, 'user'), 0);
+});
+
+test('visibleDetail hides a detail that belongs to another ticket', () => {
+  // The Critical finding: the pane showed ticket A while the buttons acted on
+  // ticket B, because a slow fetch for A landed after B was selected.
+  assert.equal(visibleDetail({ id: 7 }, 7).id, 7);
+  assert.equal(visibleDetail({ id: 7 }, 9), null);
+  assert.equal(visibleDetail(null, 9), null);
+  assert.equal(visibleDetail({ id: 7 }, null), null);
 });

@@ -152,12 +152,40 @@ export function topicLabel(topic) {
 }
 
 /** Index of the first message the viewer has not seen, or -1.
- *  The server counts unread; the position is derived from that count against
- *  the thread, so the two can never disagree about how many are unread. */
-export function firstUnreadIndex(messages, unreadCount) {
+ *
+ *  `viewerKind` is 'user' on the customer side and 'admin' on the desk, and
+ *  it matters: the server excludes the viewer's OWN messages from
+ *  `unread_count`, so counting back blindly from the end lands the divider
+ *  above your own reply whenever you answered in the middle of a thread.
+ *  Counting back over only the other side's messages is the same arithmetic
+ *  the server did. Without a `viewerKind` the old trailing behaviour is kept,
+ *  so an existing caller is not silently changed. */
+export function firstUnreadIndex(messages, unreadCount, viewerKind = null) {
   const n = Number(unreadCount) || 0;
   if (!Array.isArray(messages) || messages.length === 0 || n <= 0) return -1;
-  return Math.max(0, messages.length - n);
+  if (!viewerKind) return Math.max(0, messages.length - n);
+  let remaining = n;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const mine = (messages[i].author?.kind || 'user') === viewerKind;
+    if (!mine) {
+      remaining -= 1;
+      if (remaining === 0) return i;
+    }
+  }
+  // More unread than the visible thread holds: a capped thread against an
+  // uncapped count. The top of what we can show is the honest answer.
+  return 0;
+}
+
+/** The detail to render, or null when it belongs to a different ticket.
+ *
+ *  Opening ticket A and then B before A's fetch returns used to leave the
+ *  pane showing A while every control acted on B — so «تکمیل» closed the
+ *  wrong ticket, and a reply written for one company could be posted into
+ *  another's thread, where that customer reads it. One identity check. */
+export function visibleDetail(detail, selectedId) {
+  if (!detail || !selectedId) return null;
+  return detail.id === selectedId ? detail : null;
 }
 
 /** `[{ day, messages }]` in the thread's own order, split at each date change.

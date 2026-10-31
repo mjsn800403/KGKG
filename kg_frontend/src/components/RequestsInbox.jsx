@@ -11,6 +11,7 @@ import { adminApi } from '../utils/api';
 import useEventStream from '../utils/useEventStream';
 import {
   csatFace, dueText, faNum, nextStatuses, slaLabel, slaTone, sourceLabel, topicLabel,
+  visibleDetail,
 } from '../lib/support';
 import { friendlyError } from '../lib/friendlyError';
 
@@ -35,13 +36,14 @@ export default function RequestsInbox() {
   const [topics, setTopics] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [filters, setFilters] = useState({
-    q: '', status: '', topic: '', unread: '', source: '', awaiting: '',
+    q: '', status: '', topic: '', unread: '', source: '', awaiting: '', breached: '',
   });
-  const [breachOnly, setBreachOnly] = useState(false);
+
   const [busy, setBusy] = useState(null);
   const [note, setNote] = useState({});
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [unreadAtOpen, setUnreadAtOpen] = useState(0);
   const [showLog, setShowLog] = useState(false);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
@@ -90,10 +92,15 @@ export default function RequestsInbox() {
     setDetail(null);
     try {
       const d = await adminApi.companyRequest(id);
+      // The selection may have moved while this was in flight. Rendering it
+      // anyway showed one company's ticket while «تکمیل» and the reply box
+      // acted on another's — the worst version of this bug.
+      if (selectedRef.current !== id) return;
+      const unread = d.request?.unread_count || 0;
+      setUnreadAtOpen(unread);
       setDetail(d.request || null);
-      if ((d.request?.unread_count || 0) > 0) {
-        const after = await adminApi.markCompanyRequestRead(id);
-        setDetail(after.request || d.request);
+      if (unread > 0) {
+        await adminApi.markCompanyRequestRead(id);
         setItems((cur) => cur.map((r) => (r.id === id ? { ...r, unread_count: 0 } : r)));
       }
     } catch (e) { setErr(friendlyError(e)); }
@@ -103,8 +110,8 @@ export default function RequestsInbox() {
     if (!id) return;
     try {
       const d = await adminApi.companyRequest(id);
-      setDetail(d.request || null);
       setItems((cur) => cur.map((r) => (r.id === id ? { ...r, ...d.request } : r)));
+      if (selectedRef.current === id) setDetail(d.request || null);
     } catch (e) { setErr(friendlyError(e)); }
   }, []);
 
@@ -132,26 +139,21 @@ export default function RequestsInbox() {
   const act = (id, status) => patch(id, { status, admin_note: note[id] || undefined })
     .then(() => setNote((n) => ({ ...n, [id]: '' })));
 
-  // "Only what is late" stays a client-side filter over the page: a breach
-  // nobody looks at is the same as no SLA at all, and it reads the SLA state
-  // the server already computed.
-  const shown = breachOnly
-    ? items.filter((r) => r.sla?.response_state === 'breached'
-                       || r.sla?.resolve_state === 'breached')
-    : items;
-
+  // "Only what is late" is a SERVER filter now. It used to narrow whatever
+  // page happened to be loaded, which was tolerable at 500 rows and wrong at
+  // 30: an inbox of forty could report no late tickets while late ones sat on
+  // page two, with no control that reached them.
   const filtered = Boolean(filters.q || filters.status || filters.topic || filters.unread
-                           || filters.source || filters.awaiting || breachOnly);
+                           || filters.source || filters.awaiting || filters.breached);
   const emptyNode = loading
     ? <div className="inbox-empty glass">در حال بارگذاری…</div>
     : (
       <div className="inbox-empty glass">
         <b>{filtered ? 'هیچ تیکتی با این فیلترها پیدا نشد' : 'تیکتی ثبت نشده است'}</b>
         {filtered && (
-          <button type="button" className="btn" onClick={() => {
-            setBreachOnly(false);
-            setFilters({ q: '', status: '', topic: '', unread: '', source: '', awaiting: '' });
-          }}>پاک کردن فیلترها</button>
+          <button type="button" className="btn" onClick={() => setFilters({
+            q: '', status: '', topic: '', unread: '', source: '', awaiting: '', breached: '',
+          })}>پاک کردن فیلترها</button>
         )}
       </div>
     );
@@ -171,7 +173,7 @@ export default function RequestsInbox() {
 
       <DeskLayout
         hasSelection={Boolean(selectedId)}
-        onBack={() => { setSelectedId(null); setDetail(null); }}
+        onBack={() => { setSelectedId(null); setDetail(null); setUnreadAtOpen(0); }}
         listPane={(
           <>
             <DeskFilters
@@ -197,8 +199,11 @@ export default function RequestsInbox() {
                       ? <span className="inbox-fcount">{faNum(counts.awaiting_reply)}</span>
                       : null}
                   </button>
-                  <button type="button" className={`inbox-fbtn${breachOnly ? ' on' : ''}`}
-                    onClick={() => setBreachOnly((b) => !b)}>
+                  <button type="button"
+                    className={`inbox-fbtn${filters.breached ? ' on' : ''}`}
+                    onClick={() => setFilters((f) => ({
+                      ...f, breached: f.breached ? '' : '1', cursor: null,
+                    }))}>
                     <Icon name="bell" size={14} /> از مهلت گذشته
                   </button>
                   <select className="dk-select" aria-label="کانال ورود"
@@ -219,10 +224,10 @@ export default function RequestsInbox() {
               )}
             />
             <TicketList
-              items={shown}
+              items={items}
               selectedId={selectedId}
               onSelect={open}
-              onLoadMore={cursor && !breachOnly ? () => fetchPage(true).catch(() => {}) : null}
+              onLoadMore={cursor ? () => fetchPage(true).catch(() => {}) : null}
               loading={loading}
               emptyNode={emptyNode}
               showCompany
@@ -231,7 +236,8 @@ export default function RequestsInbox() {
         )}
         conversationPane={selectedId ? (
           <AdminConversation
-            req={detail}
+            req={visibleDetail(detail, selectedId)}
+            unreadAtOpen={unreadAtOpen}
             admins={admins}
             busy={busy === selectedId}
             note={note[selectedId] || ''}
@@ -253,7 +259,7 @@ export default function RequestsInbox() {
 // it is resolved. Reused rather than reimplemented — that is what keeps this
 // behaviour from drifting while the layout changes around it.
 function AdminConversation({
-  req, admins, busy, note, onNote, onPatch, onAct, onPromoted,
+  req, admins, busy, note, onNote, onPatch, onAct, onPromoted, unreadAtOpen = 0,
 }) {
   if (!req) return <div className="dk-none">در حال بارگذاری گفت‌وگو…</div>;
   const open = ['pending', 'in_progress'].includes(req.status);
@@ -333,7 +339,8 @@ function AdminConversation({
 
       <TicketThread
         messages={req.messages || []}
-        unreadCount={req.unread_count || 0}
+        unreadCount={unreadAtOpen}
+        viewerKind="admin"
         truncated={Boolean(req.messages_truncated)}
         allowInternal
         sendLabel="ارسال پاسخ"

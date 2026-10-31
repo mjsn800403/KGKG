@@ -9,8 +9,11 @@ somebody relies on. Keeping the new tests here makes that diff easy to check:
 Spec: docs/superpowers/specs/2026-10-31-conversational-helpdesk-design.md
 """
 import json
+from datetime import timedelta
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from django.utils import timezone
 
@@ -19,6 +22,21 @@ from .models import (Car, Company, CompanyRequest, KbSearchLog, KnowledgeArticle
                      TicketMessage, TicketRead, UserCarAccess)
 from .requests_api import awaiting_reply
 from .test_helpdesk import URL, ADMIN_URL, METRICS_URL, DeskBase
+
+# A list page must cost a bounded number of queries, not one per row. Before
+# the 2026-10-31 review fixes a ten-row page cost 29 on the customer side and
+# 28 on the admin side; it is 12 and 11 now. The ceiling is asserted rather
+# than the exact count, because the contract is "does not grow with the page",
+# not "is exactly this number" — pinning the number would make an extra
+# select_related look like a regression.
+QUERY_CEILING = 14
+
+
+def assert_bounded_queries(case, fn):
+    with CaptureQueriesContext(connection) as ctx:
+        fn()
+    case.assertLessEqual(len(ctx), QUERY_CEILING,
+                         f'{len(ctx)} queries for a ten-row page; a per-row query is hiding')
 
 
 class TopicFieldTests(TestCase):
@@ -476,3 +494,181 @@ class DeskMetricsTests(DeskCarBase):
 
     def test_the_zero_result_share_is_none_with_no_searches(self):
         self.assertIsNone(self._metrics()['search']['zero_result_share'])
+
+
+class ReviewFixTests(DeskCarBase):
+    """Findings from the 2026-10-31 whole-branch review. Each test here failed
+    before its fix; together they are the proof the findings were real."""
+
+    # I4 — the read action silently discarded the rest of the body.
+    def test_a_read_action_carrying_other_changes_is_refused(self):
+        t = self.create(body='x')
+        r = self.post(f'{ADMIN_URL}{t["id"]}/',
+                      {'action': 'read', 'status': 'completed', 'message': 'we fixed it'},
+                      self.h_admin)
+        self.assertEqual(r.status_code, 400)
+        again = self.c.get(f'{ADMIN_URL}{t["id"]}/', **self.h_admin).json()['request']
+        self.assertEqual(again['status'], 'pending')
+        self.assertEqual(len(again['messages']), 1)
+
+    def test_a_read_action_on_its_own_still_works(self):
+        t = self.create(body='x')
+        r = self.post(f'{ADMIN_URL}{t["id"]}/', {'action': 'read'}, self.h_admin)
+        self.assertEqual(r.status_code, 200, r.content)
+
+    # I1 — the list claimed to be ordered by activity and was not.
+    def test_the_list_is_ordered_by_last_activity_not_creation(self):
+        old = self.create(subject='old with a fresh reply', hdr=self.h_mgr, body='q')
+        CompanyRequest.objects.filter(id=old['id']).update(
+            created_at=timezone.now() - timedelta(days=30))
+        self.create(subject='new and silent', hdr=self.h_mgr)
+        self.post(f'{ADMIN_URL}{old["id"]}/', {'message': 'answered just now'}, self.h_admin)
+        rows = self.c.get(URL, **self.h_mgr).json()['requests']
+        self.assertEqual(rows[0]['id'], old['id'],
+                         'a ticket replied to seconds ago must outrank a silent new one')
+
+    def test_the_admin_inbox_is_ordered_by_last_activity_too(self):
+        old = self.create(subject='old', hdr=self.h_mgr, body='q')
+        CompanyRequest.objects.filter(id=old['id']).update(
+            created_at=timezone.now() - timedelta(days=30))
+        self.create(subject='new', hdr=self.h_mgr)
+        self.post(f'{ADMIN_URL}{old["id"]}/', {'message': 'answered'}, self.h_admin)
+        rows = self.c.get(ADMIN_URL, **self.h_admin).json()['requests']
+        self.assertEqual(rows[0]['id'], old['id'])
+
+    def test_activity_ordering_still_paginates_without_duplicates(self):
+        made = [self.create(subject=f't{i}', hdr=self.h_mgr)['id'] for i in range(7)]
+        # Give the middle one fresh activity so the order is not creation order.
+        self.post(f'{ADMIN_URL}{made[3]}/', {'message': 'bump'}, self.h_admin)
+        seen, cursor = [], None
+        while True:
+            qs = f'?limit=3{f"&cursor={cursor}" if cursor else ""}'
+            d = self.c.get(f'{URL}{qs}', **self.h_mgr).json()
+            seen += [r['id'] for r in d['requests']]
+            cursor = d['next_cursor']
+            if not cursor:
+                break
+        self.assertEqual(sorted(seen), sorted(made))
+        self.assertEqual(len(seen), len(set(seen)))
+
+    # I6 — "only what is late" must be a server filter, not a page filter.
+    def test_breached_is_a_server_side_filter(self):
+        late = self.create(subject='late', hdr=self.h_mgr)
+        CompanyRequest.objects.filter(id=late['id']).update(
+            sla_response_due_at=timezone.now() - timedelta(hours=1))
+        self.create(subject='on time', hdr=self.h_mgr)
+        rows = self.c.get(f'{ADMIN_URL}?breached=1', **self.h_admin).json()['requests']
+        self.assertEqual([r['id'] for r in rows], [late['id']])
+
+    def test_a_met_response_target_is_not_breached(self):
+        t = self.create(subject='answered in time', hdr=self.h_mgr, body='q')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'quick'}, self.h_admin)
+        CompanyRequest.objects.filter(id=t['id']).update(
+            sla_response_due_at=timezone.now() - timedelta(hours=1))
+        rows = self.c.get(f'{ADMIN_URL}?breached=1', **self.h_admin).json()['requests']
+        self.assertEqual(rows, [])
+
+    # I7/I8/I9 — the page must not cost a query per row.
+    def test_a_customer_page_of_ten_costs_a_bounded_number_of_queries(self):
+        for i in range(10):
+            t = self.create(subject=f'q{i}', hdr=self.h_mgr, body='body')
+            self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'reply'}, self.h_admin)
+        assert_bounded_queries(self, lambda: self.c.get(f'{URL}?limit=10', **self.h_mgr))
+
+    def test_an_admin_page_of_ten_costs_a_bounded_number_of_queries(self):
+        for i in range(10):
+            self.create(subject=f'q{i}', hdr=self.h_mgr, body='body')
+        assert_bounded_queries(self, lambda: self.c.get(f'{ADMIN_URL}?limit=10', **self.h_admin))
+
+    def test_awaiting_filter_does_not_cost_a_query_per_open_ticket(self):
+        for i in range(10):
+            self.create(subject=f'q{i}', hdr=self.h_mgr, body='body')
+        assert_bounded_queries(
+            self, lambda: self.c.get(f'{ADMIN_URL}?awaiting=1&limit=10', **self.h_admin))
+
+
+class DeflectionDenominatorTests(DeskCarBase):
+    """I10 from the review: `suggested` counted one row per debounced
+    keystroke pause and counted searches that showed nothing, so the published
+    rate moved with typing speed rather than with deflection.
+
+    A compose session is the unit. The client sends one id per opened form.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.article = self.kb_article
+
+    def _log(self, query, *, results=1, compose_id='', deflected=None):
+        return KbSearchLog.objects.create(
+            user=self.spec, company=self.co_a, query=query, query_norm=query.lower(),
+            results=results, context='compose', compose_id=compose_id,
+            deflected_article=deflected)
+
+    def _deflections(self):
+        r = self.c.get(METRICS_URL, **self.h_admin)
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()['deflections']
+
+    def test_one_compose_session_counts_once_however_much_was_typed(self):
+        for q in ['br', 'bra', 'brak', 'brake']:
+            self._log(q, compose_id='session-a')
+        self.assertEqual(self._deflections()['suggested'], 1)
+
+    def test_two_sessions_count_twice(self):
+        self._log('brake', compose_id='session-a')
+        self._log('seat', compose_id='session-b')
+        self.assertEqual(self._deflections()['suggested'], 2)
+
+    def test_a_session_that_was_shown_nothing_is_not_a_suggestion(self):
+        self._log('nothing matches this', results=0, compose_id='session-a')
+        d = self._deflections()
+        self.assertEqual(d['suggested'], 0)
+        self.assertIsNone(d['rate'])
+
+    def test_a_session_counts_once_even_if_only_one_search_showed_something(self):
+        self._log('zz', results=0, compose_id='session-a')
+        self._log('brake', results=2, compose_id='session-a')
+        self.assertEqual(self._deflections()['suggested'], 1)
+
+    def test_the_rate_is_deflected_sessions_over_shown_sessions(self):
+        self._log('brake', compose_id='session-a', deflected=self.article)
+        self._log('seat', compose_id='session-b')
+        d = self._deflections()
+        self.assertEqual((d['suggested'], d['deflected']), (2, 1))
+        self.assertAlmostEqual(d['rate'], 0.5, places=3)
+
+    def test_a_deflection_counts_once_per_session_not_per_row(self):
+        self._log('br', compose_id='session-a', deflected=self.article)
+        self._log('brake', compose_id='session-a', deflected=self.article)
+        d = self._deflections()
+        self.assertEqual((d['suggested'], d['deflected']), (1, 1))
+        self.assertEqual(d['rate'], 1.0)
+
+    def test_a_row_with_no_session_id_still_counts_as_one(self):
+        """An older row, or a client that did not send one: counted, not lost."""
+        self._log('brake', compose_id='')
+        self.assertEqual(self._deflections()['suggested'], 1)
+
+    def test_the_zero_result_share_counts_searches_not_sessions(self):
+        """A miss names an article that should exist, so every miss matters —
+        this one is deliberately per search, and says so."""
+        self._log('hit', results=3, compose_id='s')
+        self._log('miss', results=0, compose_id='s')
+        d = self.c.get(METRICS_URL, **self.h_admin).json()['search']
+        self.assertEqual(d['compose_searches'], 2)
+        self.assertAlmostEqual(d['zero_result_share'], 0.5, places=3)
+
+    def test_the_compose_endpoint_stores_the_session_id(self):
+        self.c.get('/api/kb/?q=brake&context=compose&compose_id=abc123', **self.h_spec)
+        self.assertEqual(KbSearchLog.objects.latest('id').compose_id, 'abc123')
+
+    def test_a_deflection_annotates_the_session_not_just_one_query(self):
+        self.c.get('/api/kb/?q=br&context=compose&compose_id=abc', **self.h_spec)
+        self.c.get('/api/kb/?q=brake&context=compose&compose_id=abc', **self.h_spec)
+        r = self.post(f'/api/kb/{self.article.slug}/deflect/',
+                      {'query': 'brake', 'compose_id': 'abc'}, self.h_spec)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(
+            KbSearchLog.objects.filter(compose_id='abc',
+                                       deflected_article=self.article).count(), 1)

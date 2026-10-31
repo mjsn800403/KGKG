@@ -5,7 +5,7 @@
 // ticket, holds a conversation about it, and rates the resolution. Until
 // 2026-10-30 every one of those steps was a 403, which is why feedback
 // arrived by telephone. These tests fail if that gate ever comes back.
-const { test, expect, signIn } = require('./fixtures');
+const { test, expect, data, signIn } = require('./fixtures');
 
 const FA = {
   newRequest: /درخواست جدید/,
@@ -198,20 +198,53 @@ test.describe('support desk — the conversation', () => {
       expect(filed.status()).toBe(200);
       const id = (await filed.json()).request.id;
 
-      // The platform answers. Done through the API because the agent side has
-      // its own admin session; what is under test here is the customer's view.
-      const answered = await page.request.post(`/kg-api/api/company/requests/${id}/`, {
-        data: { action: 'read' },
-      });
+      // The DESK answers, with its own seeded admin token. This matters: a
+      // customer cannot create their own unread, because their own messages
+      // never count. An earlier version of this test posted {action:'read'}
+      // on the customer's own session and asserted 0 — which was already
+      // true, so it would have passed with the read-marking path deleted.
+      const answered = await page.request.post(
+        `/kg-api/api/admin/company-requests/${id}/`,
+        { data: { message: 'پاسخ پشتیبانی.' },
+          headers: { Authorization: `Bearer ${data.tokens.desk_admin}` } });
       expect(answered.status()).toBe(200);
+
+      // Unread before the customer looks.
+      const before = await page.request.get(`/kg-api/api/company/requests/${id}/`);
+      expect((await before.json()).request.unread_count).toBe(1);
 
       await page.goto('/requests');
       const row = page.locator('.tl-row', { hasText: subject });
       await expect(row).toBeVisible();
+      await expect(row.locator('.tl-dot')).toBeVisible();
       await row.locator('.tl-btn').click();
+      // The divider is shown at the first unread, and stays while reading.
+      await expect(page.locator('.tkt-unread-sep')).toBeVisible();
       // Opening it leaves nothing unread for this seat.
-      const after = await page.request.get(`/kg-api/api/company/requests/${id}/`);
-      expect((await after.json()).request.unread_count).toBe(0);
+      await expect.poll(async () => {
+        const after = await page.request.get(`/kg-api/api/company/requests/${id}/`);
+        return (await after.json()).request.unread_count;
+      }).toBe(0);
+      await expect(row.locator('.tl-dot')).toHaveCount(0);
+    });
+
+  test('a ticket replied to is ordered above a newer silent one',
+    async ({ page, context, baseURL }) => {
+      await signIn(context, baseURL, 'specialist');
+      const older = unique('E2E قدیمی با پاسخ');
+      const filedOlder = await page.request.post('/kg-api/api/company/requests/', {
+        data: { kind: 'support', subject: older, body: 'پرسش.' },
+      });
+      const olderId = (await filedOlder.json()).request.id;
+      await page.request.post('/kg-api/api/company/requests/', {
+        data: { kind: 'support', subject: unique('E2E تازه و ساکت') },
+      });
+      await page.request.post(`/kg-api/api/admin/company-requests/${olderId}/`, {
+        data: { message: 'پاسخ همین حالا.' },
+        headers: { Authorization: `Bearer ${data.tokens.desk_admin}` } });
+
+      await page.goto('/requests');
+      await expect(page.locator('.tl-row').first()).toContainText(older);
     });
 
   test('a ticket can be found again by searching its message text',

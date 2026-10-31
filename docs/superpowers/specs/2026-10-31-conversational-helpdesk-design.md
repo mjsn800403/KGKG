@@ -129,7 +129,11 @@ composer pinned at its foot. Not an accordion.
 
 **Ticket list row**: author initials, subject, topic chip, vehicle chip,
 status pill, relative time of the last message, unread dot with count.
-Sorted by last activity, not creation.
+Sorted by last activity, not creation — which needs a denormalised
+`last_activity_at` column, because the cursor in §5 paginates over the
+ordering column and an ordering computed per row in Python cannot be
+paginated. Set on insert, moved by every public message, and never by an
+internal note.
 
 **Conversation**: sticky header with subject, status, SLA state, assignee,
 topic and vehicle. Messages as bubbles grouped by consecutive author, with day

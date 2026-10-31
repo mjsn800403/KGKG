@@ -67,22 +67,28 @@ def decode_cursor(raw):
         return None
 
 
-def apply_cursor(qs, cursor):
-    """Rows strictly after `cursor` in `('-created_at', '-id')` order."""
+def apply_cursor(qs, cursor, field='created_at'):
+    """Rows strictly after `cursor` in `(-field, -id)` order.
+
+    `field` must be the column the queryset is ORDERED by, not merely a
+    timestamp on the row: a cursor over one column against an ordering by
+    another silently skips and repeats rows.
+    """
     when, row_id = cursor
-    return qs.filter(Q(created_at__lt=when)
-                     | Q(created_at=when, id__lt=row_id))
+    return qs.filter(Q(**{f'{field}__lt': when})
+                     | Q(**{field: when, 'id__lt': row_id}))
 
 
-def page(qs, limit, cursor=None):
+def page(qs, limit, cursor=None, field='created_at'):
     """`(rows, next_cursor)`. Fetches one extra row to know whether another
-    page exists, rather than issuing a second count query."""
+    page exists, rather than issuing a second count query. The cursor is cut
+    from the last RETURNED row, so the next page starts at the row after it."""
     if cursor:
-        qs = apply_cursor(qs, cursor)
+        qs = apply_cursor(qs, cursor, field=field)
     rows = list(qs[:limit + 1])
     if len(rows) > limit:
         last = rows[limit - 1]
-        return rows[:limit], encode_cursor(last.created_at, last.id)
+        return rows[:limit], encode_cursor(getattr(last, field), last.id)
     return rows, None
 
 

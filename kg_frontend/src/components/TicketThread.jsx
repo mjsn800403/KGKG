@@ -41,6 +41,7 @@ export default function TicketThread({
   note = null,
   unreadCount = 0,
   truncated = false,
+  viewerKind = 'user',
 }) {
   const [text, setText] = useState('');
   const [internal, setInternal] = useState(false);
@@ -50,8 +51,8 @@ export default function TicketThread({
   const unreadRef = useRef(null);
 
   const groups = useMemo(() => groupByDay(messages), [messages]);
-  const unreadAt = useMemo(() => firstUnreadIndex(messages, unreadCount),
-                           [messages, unreadCount]);
+  const unreadAt = useMemo(() => firstUnreadIndex(messages, unreadCount, viewerKind),
+                           [messages, unreadCount, viewerKind]);
 
   // Resume where the reader stopped. Scrolling to the bottom of a conversation
   // with eight unread replies hides the first seven, which is how a thread

@@ -33,7 +33,8 @@ Routes
     Admin      GET/POST  /api/admin/company-requests/      inbox + log a call
                GET/POST  /api/admin/company-requests/<id>/ detail + work it
 """
-from django.db.models import Prefetch
+from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -49,6 +50,8 @@ from .portal_auth import (require_manager, require_portal_user,
 
 VALID_KINDS = {k for k, _ in CompanyRequest.KIND_CHOICES}
 VALID_TOPICS = {v for v, _ in CompanyRequest.TOPIC_CHOICES}
+# How many candidate rows an unread-only view will scan. See _unread_only.
+UNREAD_SCAN_CAP = 2000
 VALID_STATUSES = {s for s, _ in CompanyRequest.STATUS_CHOICES}
 VALID_PRIORITIES = {p for p, _ in CompanyRequest.PRIORITY_CHOICES}
 VALID_SOURCES = {s for s, _ in CompanyRequest.SOURCE_CHOICES}
@@ -159,6 +162,40 @@ def awaiting_reply(r):
     return not _answered_after(last, r.first_response_at)
 
 
+def awaiting_ids(request_ids):
+    """The subset of `request_ids` that is open AND waiting on us, in two
+    queries rather than one per ticket.
+
+    `awaiting_reply(r)` per row was being called inside the serialiser and
+    again by the `awaiting=1` filter, the latter over every open ticket in the
+    table rather than the page — and the inbox re-runs it on every SSE event,
+    for every admin watching. Same rule, set at a time.
+    """
+    ids = list(request_ids)
+    if not ids:
+        return set()
+    rows = list(CompanyRequest.objects
+                .filter(id__in=ids, status__in=CompanyRequest.OPEN_STATUSES)
+                .values('id', 'first_response_at'))
+    if not rows:
+        return set()
+    newest = {}
+    for m in (TicketMessage.objects
+              .filter(request_id__in=[r['id'] for r in rows], internal=False)
+              .order_by('request_id', '-created_at', '-id')
+              .values('request_id', 'created_at', 'author_admin_id', 'author_label')):
+        newest.setdefault(m['request_id'], m)
+    out = set()
+    for r in rows:
+        last = newest.get(r['id'])
+        if last is None:
+            if r['first_response_at'] is None:
+                out.add(r['id'])
+        elif not _answered_after(last, r['first_response_at']):
+            out.add(r['id'])
+    return out
+
+
 def awaiting_reply_count():
     """How many open tickets wait on us, in two queries rather than one per
     ticket: the open rows, then the newest public message of each."""
@@ -195,7 +232,8 @@ def _sla_dict(r, now):
 
 
 def _request_dict(r, *, include_company=False, thread=None, with_internal=False, now=None,
-                  viewer_user=None, viewer_admin=None, unread=None):
+                  viewer_user=None, viewer_admin=None, unread=None, awaiting=None,
+                  last_msg=None):
     """One ticket as JSON.
 
     `viewer_user` / `viewer_admin` make `unread_count` meaningful: unread is a
@@ -238,11 +276,14 @@ def _request_dict(r, *, include_company=False, thread=None, with_internal=False,
         'escalated_at': r.escalated_at.isoformat() if r.escalated_at else None,
         'reopen_count': r.reopen_count,
         'is_open': r.status in CompanyRequest.OPEN_STATUSES,
-        'awaiting_reply': awaiting_reply(r),
+        # `awaiting` / `last_msg` are passed by a list page, which computes
+        # both for every row at once. Falling back to the per-row query here
+        # is what a single-ticket fetch wants and what a list must never do.
+        'awaiting_reply': awaiting if awaiting is not None else awaiting_reply(r),
         'unread_count': (unread if unread is not None
                          else (reads.unread_count(r, user=viewer_user, admin=viewer_admin)
                                if (viewer_user or viewer_admin) else None)),
-        'last_message': reads.last_message(r),
+        'last_message': last_msg if last_msg is not None else reads.last_message(r),
         'sla': _sla_dict(r, now),
         'csat': ({'score': r.csat_score, 'comment': r.csat_comment,
                   'at': r.csat_at.isoformat() if r.csat_at else None}
@@ -306,6 +347,26 @@ def _visible_qs(user):
     return qs
 
 
+def touch_activity(r, when=None):
+    """Move the ticket's activity stamp. Called for every public turn, so the
+    worklist orders by what actually happened rather than when it was filed."""
+    r.last_activity_at = when or timezone.now()
+    r.save(update_fields=['last_activity_at'])
+
+
+def _ordered(qs):
+    """The worklist order, with the tie-break the cursor depends on.
+
+    `last_activity_at` can be null on a row written before it existed, so
+    Coalesce falls back to created_at — otherwise those rows would sort to one
+    end regardless of their real activity. The explicit id tie-break matters
+    because two rows sharing a timestamp would otherwise order arbitrarily and
+    a page boundary could repeat or drop one.
+    """
+    return qs.annotate(activity_at=Coalesce('last_activity_at', 'created_at')) \
+             .order_by('-activity_at', '-id')
+
+
 def _stamp_sla(r, *, start=None):
     """Stamp both targets from the policy for r.priority."""
     start = start or r.created_at
@@ -313,9 +374,21 @@ def _stamp_sla(r, *, start=None):
 
 
 def _add_message(r, body, *, user=None, admin=None, label='', internal=False):
-    return TicketMessage.objects.create(
+    """Add one turn, and move the ticket's activity stamp with it.
+
+    The stamp is maintained here rather than at each call site so that no
+    future caller can add a message and leave the worklist ordering stale. An
+    internal note deliberately does not move it: it is not a turn in the
+    conversation and must not reorder the customer-visible worklist.
+    """
+    m = TicketMessage.objects.create(
         request=r, author_user=user, author_admin=admin,
         author_label=label, body=body, internal=internal)
+    if not internal:
+        r.last_activity_at = m.created_at
+        if r.pk:
+            CompanyRequest.objects.filter(pk=r.pk).update(last_activity_at=m.created_at)
+    return m
 
 
 def _int_or_none(value):
@@ -370,17 +443,26 @@ def company_requests_view(request):
         cursor = listing.decode_cursor(raw_cursor) if raw_cursor else None
         if raw_cursor and cursor is None:
             return JsonResponse({'error': 'نشانگر صفحه نامعتبر است.'}, status=400)
-        rows, next_cursor = listing.page(qs, listing.clamp_limit(request.GET.get('limit')),
-                                         cursor)
+        rows, next_cursor = listing.page(_ordered(qs),
+                                         listing.clamp_limit(request.GET.get('limit')),
+                                         cursor, field='activity_at')
         now = timezone.now()
-        unread = reads.unread_counts([r.id for r in rows], user=user)
+        page_ids = [r.id for r in rows]
+        unread = reads.unread_counts(page_ids, user=user)
+        waiting = awaiting_ids(page_ids)
+        last_msgs = reads.last_messages(page_ids)
         items = [_request_dict(r, with_internal=None, now=now, viewer_user=user,
-                               unread=unread.get(r.id, 0)) for r in rows]
+                               unread=unread.get(r.id, 0),
+                               awaiting=r.id in waiting,
+                               last_msg=last_msgs.get(r.id, False) or None)
+                 for r in rows]
         allowed = (VALID_KINDS if user.can_manage_team else SELF_SERVICE_KINDS)
         # These two counts are over the whole visible set, not this page: a
         # badge that counted only the rows on screen would under-report, which
-        # is the bug the dashboard tile had.
-        all_ids = list(_visible_qs(user).values_list('id', flat=True))
+        # is the bug the dashboard tile had. Capped like _unread_only, and
+        # built from one queryset rather than re-deriving it per count.
+        visible = _visible_qs(user)
+        all_ids = list(visible.values_list('id', flat=True)[:UNREAD_SCAN_CAP])
         return JsonResponse({'requests': items,
                              'next_cursor': next_cursor,
                              'meta': {'kinds': [{'id': k, 'label': l}
@@ -389,7 +471,7 @@ def company_requests_view(request):
                                       'topics': [{'id': t, 'label': l}
                                                  for t, l in CompanyRequest.TOPIC_CHOICES],
                                       'can_manage_team': bool(user.can_manage_team),
-                                      'open_count': _visible_qs(user).filter(
+                                      'open_count': visible.filter(
                                           status__in=CompanyRequest.OPEN_STATUSES).count(),
                                       'unread_count': sum(
                                           reads.unread_counts(all_ids, user=user).values())}})
@@ -425,7 +507,7 @@ def company_requests_view(request):
     r = CompanyRequest.objects.create(
         company_id=user.company_id, created_by=user, kind=kind,
         subject=subject, body=body, priority=priority, payload=payload,
-        topic=topic, car=car, source='portal')
+        topic=topic, car=car, source='portal', last_activity_at=timezone.now())
     _stamp_sla(r)
     r.save(update_fields=['sla_response_due_at', 'sla_resolve_due_at'])
     if body:
@@ -459,13 +541,28 @@ def _apply_desk_filters(qs, params, *, user=None, admin=None):
     term = (params.get('q') or '').strip()[:200]
     if term:
         qs = qs.filter(listing.text_query(term, ('subject', 'messages__body'))).distinct()
+    if params.get('breached') in ('1', 'true'):
+        # Server-side, because the client used to filter the page it happened
+        # to hold: once the default page became 30 rows, an inbox of 40 could
+        # report no late tickets while late tickets sat on page two with no
+        # control that reached them. A target is breached when it passed
+        # unmet — the same rule as api/sla.state.
+        now = timezone.now()
+        qs = qs.filter(
+            Q(sla_response_due_at__lt=now, first_response_at__isnull=True)
+            | Q(sla_resolve_due_at__lt=now, resolved_at__isnull=True))
     return qs, None
 
 
 def _unread_only(qs, *, user=None, admin=None):
-    """Narrow to the tickets this viewer has something unseen in. Computed
-    from the read marks, like every other unread signal here."""
-    ids = list(qs.values_list('id', flat=True))
+    """Narrow to the tickets this viewer has something unseen in.
+
+    Derived from the read marks like every other unread signal. The id list is
+    capped: an unbounded `IN (...)` against a growing table is a query that
+    works until it does not, and a viewer with more than this many unread
+    tickets has a worklist problem, not a pagination problem.
+    """
+    ids = list(qs.values_list('id', flat=True)[:UNREAD_SCAN_CAP])
     unread = reads.unread_counts(ids, user=user, admin=admin)
     return qs.filter(id__in=[i for i, n in unread.items() if n])
 
@@ -628,22 +725,30 @@ def admin_company_requests_view(request):
         qs = qs.filter(company_id=int(company_id))
     if request.GET.get('awaiting') in ('1', 'true'):
         # Derived, like every other signal here: open tickets whose last public
-        # word was the customer's.
-        qs = qs.filter(id__in=[r.id for r in
-                               qs.filter(status__in=CompanyRequest.OPEN_STATUSES)
-                               if awaiting_reply(r)])
+        # word was the customer's. Set at a time, and capped — the per-row
+        # version ran over every open ticket in the table on every SSE event.
+        open_ids = list(qs.filter(status__in=CompanyRequest.OPEN_STATUSES)
+                        .values_list('id', flat=True)[:UNREAD_SCAN_CAP])
+        qs = qs.filter(id__in=awaiting_ids(open_ids))
     if admin and request.GET.get('unread') in ('1', 'true'):
         qs = _unread_only(qs, admin=admin)
     raw_cursor = request.GET.get('cursor')
     cursor = listing.decode_cursor(raw_cursor) if raw_cursor else None
     if raw_cursor and cursor is None:
         return JsonResponse({'error': 'نشانگر صفحه نامعتبر است.'}, status=400)
-    rows, next_cursor = listing.page(qs, listing.clamp_limit(request.GET.get('limit')),
-                                     cursor)
+    rows, next_cursor = listing.page(_ordered(qs),
+                                     listing.clamp_limit(request.GET.get('limit')),
+                                     cursor, field='activity_at')
     now = timezone.now()
-    unread = (reads.unread_counts([r.id for r in rows], admin=admin) if admin else {})
+    page_ids = [r.id for r in rows]
+    unread = (reads.unread_counts(page_ids, admin=admin) if admin else {})
+    waiting = awaiting_ids(page_ids)
+    last_msgs = reads.last_messages(page_ids)
     items = [_request_dict(r, include_company=True, with_internal=None, now=now,
-                           viewer_admin=admin, unread=unread.get(r.id, 0) if admin else None)
+                           viewer_admin=admin,
+                           unread=unread.get(r.id, 0) if admin else None,
+                           awaiting=r.id in waiting,
+                           last_msg=last_msgs.get(r.id, False) or None)
              for r in rows]
     counts = {s: 0 for s, _ in CompanyRequest.STATUS_CHOICES}
     for r in CompanyRequest.objects.values('status'):
@@ -690,6 +795,7 @@ def _admin_create(request):
     r = CompanyRequest.objects.create(
         company=company, created_by=None, kind=kind, subject=subject, body=body,
         priority=priority, source=source, topic=topic, car=car,
+        last_activity_at=timezone.now(),
         handled_by=(admin.username if admin else 'admin'))
     _stamp_sla(r)
     r.save(update_fields=['sla_response_due_at', 'sla_resolve_due_at'])
@@ -732,6 +838,15 @@ def admin_company_request_detail_view(request, req_id):
     admin = acting_admin(request)
 
     if b.get('action') == 'read':
+        # Nothing else is honoured in the same breath. Before this check the
+        # handler returned here and silently dropped a status change or a
+        # customer-facing reply sent alongside, answering 200 with the
+        # unchanged ticket so the caller could not tell.
+        extra = sorted(set(b) - {'action'})
+        if extra:
+            return JsonResponse(
+                {'error': 'عملیات «خوانده‌شد» را نمی‌توان با تغییر دیگری همراه کرد: '
+                          + '، '.join(extra)}, status=400)
         if admin is None:
             # The loopback KG_ADMIN_TOKEN is not a person, so there is nobody
             # whose read state this would be. Nothing to record, nothing to fail.

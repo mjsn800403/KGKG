@@ -735,16 +735,21 @@ export const kbApi = {
   article: (slug) => teamFetch(`/api/kb/${encodeURIComponent(slug)}/`),
   // Suggestions while a ticket is being written. `context=compose` is what
   // makes the search countable as a deflection opportunity.
-  suggest: (q, carId) => {
+  suggest: (q, carId, composeId) => {
     const qs = new URLSearchParams({ q, context: 'compose' });
     if (carId) qs.set('car_id', String(carId));
+    // One id per opened ticket form. The form searches once per debounced
+    // pause while somebody types, so without this the deflection rate counted
+    // keystrokes and moved with typing speed.
+    if (composeId) qs.set('compose_id', composeId);
     return teamFetch(`/api/kb/?${qs.toString()}`);
   },
   // "This answered it." Only this records a deflection; nothing is inferred
   // from opening an article and walking away.
-  deflect: (slug, q) =>
+  deflect: (slug, q, composeId) =>
     teamFetch(`/api/kb/${encodeURIComponent(slug)}/deflect/`, {
-      method: 'POST', body: JSON.stringify({ query: q || '' }),
+      method: 'POST',
+      body: JSON.stringify({ query: q || '', compose_id: composeId || '' }),
     }),
   vote: (slug, helpful) =>
     teamFetch(`/api/kb/${encodeURIComponent(slug)}/vote/`, {

@@ -116,9 +116,20 @@ def admin_support_metrics_view(request):
 
     # Did the knowledge base answer anything before it became a ticket? Only
     # an explicit "this answered it" counts; see api/knowledge.deflect_view.
+    #
+    # The unit is a COMPOSE SESSION where an article was actually shown, not a
+    # search. The ticket form searches once per debounced pause while somebody
+    # types, so counting rows made this rate move with typing speed, and a
+    # search that showed nothing was counted as a missed deflection it never
+    # had the chance to be. A row with no session id (an older one, or a
+    # client that sends none) is its own session rather than being dropped.
     compose = KbSearchLog.objects.filter(created_at__gte=since, context='compose')
-    suggested = compose.count()
-    deflected = compose.filter(deflected_article__isnull=False).count()
+    shown = compose.filter(results__gt=0)
+    suggested = _sessions(shown)
+    deflected = _sessions(shown.filter(deflected_article__isnull=False))
+    # Deliberately per SEARCH, not per session: every miss names an article
+    # that should exist, and collapsing them would hide half of them.
+    searches = compose.count()
     zero_results = compose.filter(results=0).count()
 
     # Backlog is current state, not a window: what is open right now.
@@ -168,9 +179,9 @@ def admin_support_metrics_view(request):
         'by_vehicle': by_vehicle,
         'deflections': {'suggested': suggested, 'deflected': deflected,
                         'rate': (deflected / suggested) if suggested else None},
-        'search': {'compose_searches': suggested,
-                   'zero_result_share': ((zero_results / suggested)
-                                         if suggested else None)},
+        'search': {'compose_searches': searches,
+                   'zero_result_share': ((zero_results / searches)
+                                         if searches else None)},
         'backlog': {'open': backlog_agg['open'],
                     'unassigned': backlog_agg['unassigned'],
                     'breaching_now': backlog_agg['breaching'],
@@ -185,3 +196,20 @@ def admin_support_metrics_view(request):
         'feature_discovery': onboarding.discovery_counts(
             onboarding.measurable_seats()),
     })
+
+def _sessions(qs):
+    """How many distinct compose sessions `qs` covers.
+
+    A blank `compose_id` cannot be grouped, so each such row counts as its own
+    session — counting them as one shared session would silently merge every
+    legacy row into a single opportunity.
+    """
+    ids = set()
+    loose = 0
+    for cid in qs.values_list('compose_id', flat=True):
+        if cid:
+            ids.add(cid)
+        else:
+            loose += 1
+    return len(ids) + loose
+

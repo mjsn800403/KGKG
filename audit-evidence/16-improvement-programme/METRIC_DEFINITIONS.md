@@ -113,8 +113,8 @@ All four are served by `/api/admin/support/metrics/`.
 |---|---|---|---|
 | `by_topic` | Tickets created in the window, counted by `CompanyRequest.topic`. A ticket with no topic is counted under the key `uncategorised` — **named, not dropped**, because a silent omission would make the categorised share look better than it is. | `CompanyRequest.topic` | `test_by_topic_counts_uncategorised_separately` |
 | `by_vehicle` | Top ten vehicles by ticket count in the window, counting **only** tickets that named a vehicle. A vehicle with no tickets does not appear; absence here means "nobody said this vehicle", never "this vehicle is fine". | `CompanyRequest.car` | `test_by_vehicle_counts_only_tickets_with_a_car` |
-| `deflections` | `{suggested, deflected, rate}` over `KbSearchLog` rows with `context='compose'`. `suggested` is compose-time searches; `deflected` is those where a reader pressed «همین پاسخ را می‌خواستم». `rate` is `deflected / suggested`, **`null` when `suggested` is 0**. | `KbSearchLog.context`, `KbSearchLog.deflected_article` | `test_the_deflection_rate_is_none_when_nothing_was_suggested`, `test_a_deflection_is_counted_and_rated` |
-| `search.zero_result_share` | Share of compose-time searches that returned nothing, `null` when there were none. The most actionable knowledge signal there is: it names articles that should exist. | `KbSearchLog.results` | `test_search_reports_the_zero_result_share`, `test_the_zero_result_share_is_none_with_no_searches` |
+| `deflections` | `{suggested, deflected, rate}` counted in **compose sessions**, not searches. A session is one opened ticket form (`KbSearchLog.compose_id`, minted by the client). `suggested` counts sessions in which at least one article was actually shown (`results > 0`); `deflected` counts those where a reader pressed «همین پاسخ را می‌خواستم». `rate` is `deflected / suggested`, **`null` when `suggested` is 0**. A row with no `compose_id` — written before the field existed — counts as its own session rather than being dropped. | `KbSearchLog.compose_id`, `.context`, `.results`, `.deflected_article` | `test_one_compose_session_counts_once_however_much_was_typed`, `test_a_session_that_was_shown_nothing_is_not_a_suggestion`, `test_the_rate_is_deflected_sessions_over_shown_sessions`, `test_the_deflection_rate_is_none_when_nothing_was_suggested` |
+| `search.compose_searches` / `search.zero_result_share` | Deliberately per **search**, not per session: every miss names an article that should exist, and collapsing a session's searches would hide most of them. `zero_result_share` is `null` when there were no searches. | `KbSearchLog.results` | `test_the_zero_result_share_counts_searches_not_sessions`, `test_the_zero_result_share_is_none_with_no_searches` |
 
 **What `deflections` is not.** It counts only an explicit button press. It does
 **not** count somebody opening a suggested article and then not filing a
@@ -124,6 +124,13 @@ from "I gave up", and a deflection rate built on it would be exactly the
 fabricated evidence the 2026-10-30 evaluation warned against. The honest
 consequence is that the real deflection rate is **at least** what this
 reports, and we do not claim to know by how much.
+
+**Why the unit is a session.** The first version of this counted `KbSearchLog`
+rows, and the ticket form searches once per debounced pause while somebody
+types. One compose session therefore produced five or six "suggestions", so
+the published rate moved with **typing speed** rather than with deflection,
+and a search that showed nothing counted as a missed deflection it never had
+the chance to be. Found in review on 2026-10-31 before any reading was taken.
 
 **No baseline yet.** These four are shipped unmeasured: there was no topic, no
 vehicle link and no compose-time suggestion before 2026-10-31, so the first

@@ -116,7 +116,8 @@ def kb_list_view(request):
         try:
             KbSearchLog.objects.create(user=user, company_id=user.company_id, query=q,
                                        query_norm=q.lower(), results=len(items),
-                                       context=_context(request))
+                                       context=_context(request),
+                                       compose_id=_compose_id(request.GET.get('compose_id')))
         except Exception:
             pass        # a logging failure must never cost the reader an answer
 
@@ -421,6 +422,12 @@ def _context(request):
     return value if value in VALID_CONTEXTS else ''
 
 
+def _compose_id(raw):
+    """The client's id for one opened ticket form. Opaque to us and length-
+    capped; it only ever groups rows, so it needs no other validation."""
+    return (str(raw or '')).strip()[:36]
+
+
 @csrf_exempt
 @require_portal_user
 def deflect_view(request, slug):
@@ -437,16 +444,25 @@ def deflect_view(request, slug):
     if not article:
         return JsonResponse({'error': 'not found'}, status=404)
     user = request.portal_user
-    query = (str(_body(request).get('query') or '')).strip()[:200]
+    body = _body(request)
+    query = (str(body.get('query') or '')).strip()[:200]
+    compose_id = _compose_id(body.get('compose_id'))
     since = timezone.now() - timedelta(hours=1)
-    log = (KbSearchLog.objects
-           .filter(user=user, query_norm=query.lower(), context='compose',
-                   created_at__gte=since, deflected_article__isnull=True)
-           .order_by('-created_at').first())
+    # Prefer the session the client names: the reader may have deflected on a
+    # different query than the last one they typed, and the deflection belongs
+    # to the session either way. Falls back to matching the query for a client
+    # that sends no id.
+    qs = KbSearchLog.objects.filter(user=user, context='compose',
+                                    created_at__gte=since,
+                                    deflected_article__isnull=True)
+    log = (qs.filter(compose_id=compose_id).order_by('-created_at').first()
+           if compose_id else
+           qs.filter(query_norm=query.lower()).order_by('-created_at').first())
     if log is None:
         log = KbSearchLog.objects.create(user=user, company_id=user.company_id,
                                          query=query, query_norm=query.lower(),
-                                         results=1, context='compose')
+                                         results=1, context='compose',
+                                         compose_id=compose_id)
     log.deflected_article = article
     log.save(update_fields=['deflected_article'])
     return JsonResponse({'ok': True})
