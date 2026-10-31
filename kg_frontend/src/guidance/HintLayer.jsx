@@ -9,13 +9,13 @@ import { hintDismissed, dismissHint, hintShownCount, bumpHintShown } from './sto
 // bottom-inline-start (just above the help button). Never modal, never blocks
 // input. The user can act on it or dismiss it; dismissals persist (with an
 // optional cooldown so a still-relevant hint can return later, but not nag).
-export default function HintLayer({ audience, pathname, section, signals, onOpenHelp, onStartTour }) {
+export default function HintLayer({ audience, pathname, section, signals, onboarding, onOpenHelp, onStartTour }) {
   const [dismissTick, setDismissTick] = useState(0); // force re-eval after dismiss
   const [closing, setClosing] = useState(false);
 
   const ctx = useMemo(
-    () => ({ audience, pathname, section, signals, portalUser: null }),
-    [audience, pathname, section, signals],
+    () => ({ audience, pathname, section, signals, onboarding, portalUser: null }),
+    [audience, pathname, section, signals, onboarding],
   );
 
   const hint = useMemo(

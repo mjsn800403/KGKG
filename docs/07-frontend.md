@@ -18,7 +18,7 @@ respected via `MotionConfig`).
 | `/assistant` | portal (AI-eligible for answers) | General assistant chat (`AssistantChat`) |
 | `/team` | manager | Team area: Members / Org chart / Roles tabs (`TeamView`, `OrgChart`, `RolesPanel`) |
 | `/team/analytics` | analytics | `AnalyticsView`: category bars, member drill-down, trend, PDF download |
-| `/requests` | manager | `RequestsView`: file/watch company requests (live) |
+| `/requests` | **portal** (was manager) | `RequestsView`: the customer side of the support desk — file a ticket, hold the conversation (`TicketThread`), see the SLA state, reopen by replying to a closed ticket, rate the resolution (`CsatPrompt`). A seat sees its own tickets, a manager the company's; the kinds offered come from the server's `meta` so a commercial kind is never shown to someone who would be refused |
 | `/settings` | portal | `SettingsView`: account, theme, notifications, security, tour restart |
 | `/admin/login` | public | Dedicated platform-admin login |
 | `/admin` | admin token | Admin hub + all sections (see 7.4) |
@@ -153,3 +153,29 @@ admin `Catalog` / `AccessEditor` (user **and** company grants) / `DataQuality` /
 `VehicleSpecs`, and the `OrgGraphCanvas` seat-access panel (`dense` variant). Bulk actions
 in the grant editors act on the **filtered** set ("add all 24 shown"), which is the point of
 filtering a grant screen. Styles: `.vf-*` in `globals.css`.
+
+## 7.8 Support desk, feedback and knowledge base (2026-10-30)
+
+Added with the service-desk work; the analysis behind it is in
+`audit-evidence/16-improvement-programme/`.
+
+| Piece | Where | Note |
+|---|---|---|
+| Ticket conversation | `components/TicketThread.jsx` | Used by both sides. An internal note is filtered out **server-side** for a customer (`api/requests_api._thread`); nothing here keeps it private |
+| Satisfaction | `components/CsatPrompt.jsx` | Five faces, optional comment. Shown only when `lib/support.canRate` agrees with the server's rule: closed, unrated, and the filer (or a manager for a ticket the platform side logged) |
+| Agent worklist | `components/RequestsInbox.jsx` | SLA state and what is already late without opening anything, assignee select, escalate, internal notes, "log a telephone call", and promote-to-article on a closed ticket |
+| Page feedback | `components/FeedbackWidget.jsx` | Mounted globally by `guidance/GuidanceProvider` for signed-in seats only. Posts the current pathname — "the search is slow" is only actionable with the location. Deliberately not a ticket |
+| Admin KPIs | `components/SupportAdmin.jsx` → `SupportMetricsPanel` | Every figure defined in `METRIC_DEFINITIONS.md`. A `null` from the API renders as an em dash, never `0`: a dashboard that prints `۰٪` compliance because nothing has been decided is worse than one that admits it does not know |
+| Feedback feed | `SupportAdmin.jsx` → `ProductFeedbackPanel` | Per-page breakdown plus the raw comments |
+| Knowledge authoring | `SupportAdmin.jsx` → `KnowledgeAdmin` | Named owner, review interval, "needs review" filter, publish, and the version history. The editor states which fields create a new version and which do not |
+| Feature-discovery strip | `components/OnboardingStrip.jsx`, mounted by `FleetView` on `/browse` | One collapsed line — progress, and the next thing worth trying. Items are **earned**: the server derives them from activity (`api/onboarding.py`), so there is no "mark as done" and the list is truthful for seats that have used the product for months. Dismissal is a column on `PortalUser`, not `localStorage`, so it survives a device change — verified by wiping browser storage and reading it back on a new session token |
+| Strip state rules | `lib/onboarding.js` (+ 10 tests) | Hides when dismissed, when every entitled item is done, when the seat has no entitled items, and on a malformed payload — a discovery hint must never be why a page fails to render |
+| Presentation rules | `lib/support.js` (+ `lib/__tests__/support.test.mjs`, 29 tests) | SLA tone and label, due-date text, channel labels, `canRate`, duration and rate formatting. Pure, because a wrong rule here would tell a customer their late ticket is on time |
+
+New admin sections: `support-metrics`, `product-feedback`, `knowledge`
+(`app/admin/page.jsx` `SECTIONS`), grouped as "پشتیبانی و دانش".
+
+The sidebar's support link is shown to **every** seat (`components/Sidebar.jsx`).
+While it was manager-only, a specialist had no way into the desk even after the
+API opened — the navigation was the last part of the 403 that sent people to the
+telephone.

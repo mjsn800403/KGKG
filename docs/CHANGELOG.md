@@ -3,6 +3,132 @@
 Living log of shipped changes, newest first. One dated block per deploy/commit; keep lines
 short and point at the doc section that was updated.
 
+## Unreleased
+- **Feature-discovery onboarding.** Measured first: over four months and 34 active seats,
+  production showed 71,886 manual views, the parts catalogue opened by 6 people, the assistant
+  asked by 9, and the search box used by nobody. People found the manuals and stopped looking,
+  and nobody knew because every piece of onboarding state lived in `localStorage`.
+  `api/onboarding.py` derives what each seat is entitled to and what it has actually found from
+  the activity the product already records — no new tracking, no "mark as done", and entitlement
+  computed by the existing `access.user_ai_eligible` / `user_package_set` rather than a second
+  definition. An unentitled item is absent from the seat's checklist *and* from the metric's
+  denominator. `GET/POST /api/auth/onboarding/` serves it; dismissal is a column, so it survives
+  a device change. `components/OnboardingStrip.jsx` shows one collapsed line on `/browse`, never
+  a modal. `feature_discovery` on the admin metrics is computed by the same function the
+  checklist calls, so the figure management reads and the item the user sees cannot drift apart.
+  Spec and plan: `docs/superpowers/specs|plans/2026-10-30-feature-discovery-onboarding*`.
+- **Two governance gates, so the process is checked the way the code is** (`ops/governance/`,
+  new `governance` job in CI, 27 tests, standard library only):
+  * `check_traceability.py` refuses a pull request whose title and body reference no issue.
+    Deliberately the weakest rule that still produces evidence — it does not care which item or
+    whether it exists, only that the author said. A stricter rule would fail honest changes and
+    teach people to paste a number they do not mean. Quoted references inside a code fence do
+    not count: pasting someone else's log is not a claim about *this* change. It refused this
+    branch's own pull request on the first run, and the description was fixed rather than the
+    rule weakened.
+  * `check_docs_freshness.py` + `docs/OWNERS.toml` give all 25 documents in `docs/` a named
+    owner and a review interval; a document with no entry, no owner, or past
+    `reviewed + review_days` fails the build. The staleness rule is literally the one the
+    product applies to knowledge-base articles, so the repository and the product never
+    disagree about what "stale" means. `docs/superpowers/specs/` is excluded — a dated design
+    record cannot go stale. Ownership was then **confirmed by the maintainers**: both of them own all 25
+    documents. `owner` takes one name or several, and a stale notice names every owner, so
+    neither can assume the other was asked. The `reviewed` dates remain seeded from each
+    file's last change — a proxy, not a review; the first real review of a document moves its
+    date for the first time. Who owns which ADR is left for the maintainers to settle.
+- **The tracker now holds planned work, not only remediation.** Milestones `1.2.0` and
+  `Backlog` created and applied to every open issue (0 of 19 carried one before), `type:*` and
+  `priority:*` labels added, and five epics filed from the roadmap (#43 ship the desk, #44 close
+  the desk loop, #45 GitHub as the system of record, #46 knowledge base in use, #47 delivery and
+  flow metrics), each with acceptance criteria. Refs #45.
+- **Four fixes from automated review of the service-desk PR**, each with a test written first
+  that fails on the previous code:
+  * **A specialist never saw their own ticket move.** `events._scoped_qs` gives a plain user only
+    their OWN 'user' events plus broadcasts, while the desk emitted 'company' events, which reach
+    managers and analytics viewers only. Opening the channel to every seat therefore gave the
+    newly admitted audience a dashboard that never updated. `_emit` now sends a user-scoped copy
+    to the filer, skipping managers so nothing is announced twice.
+  * **A ticket answered through `admin_note` stayed unmeasured** and drifted into a false SLA
+    breach: only a `message` stopped the response clock, but `admin_note` *is* the platform's
+    reply and the customer reads it. A non-empty note now stamps `first_response_at`; an internal
+    note and a bare status change still do not, and an earlier response is never overwritten.
+  * **CSAT response rate could exceed 100 %.** A ticket rated and then reopened keeps its score
+    but is no longer closed, so the numerator sat outside its denominator. The ratio now counts
+    rated tickets *within* the closed cohort; `csat.responses` still counts every score, so a
+    reopening never erases a customer's answer.
+  * **A slug the reader's route cannot match is refused at the point of writing.** An article with
+    a space, a slash or Persian letters in its slug published fine, listed fine, and 404'd when
+    opened — with no way to repair it from the editor. Same check on promote-to-article.
+- **Coverage floor.** The service-desk branch measured 61 % and raised its floor 56 → 60.
+  Reconciling that branch with `work` merges two lineages that each raised the floor
+  independently (`work` was at 57), over a combined codebase neither had measured, so the
+  merge therefore held the floor at 57 until CI measured the merged tree, which came out at
+  **60 %** (16,828 statements, 5,728 branches) — and the floor is now **59**, one point of
+  headroom, the same discipline the service-desk branch applied when it measured 61 and set
+  60. The ratchet's rule — a floor moves up, never down to make CI pass —
+  is about a lineage over time; it says nothing about which of two numbers survives a merge,
+  and inheriting the higher one without measuring would be guessing.
+- **The support desk now has an interface.** Everything below had been API-only, which meant no
+  customer could use it. `/requests` is the customer side of the desk and is open to **every**
+  seat: file a ticket, hold the conversation (`components/TicketThread.jsx`), see the SLA state
+  and how long is left, reopen a closed ticket by replying to it, and rate the resolution
+  (`components/CsatPrompt.jsx`). The kinds offered come from the server's `meta`, so a commercial
+  kind is never shown to someone who would be refused. The sidebar's support link is shown to
+  every seat too — while it was manager-only a specialist had no way in even after the API
+  opened, and the navigation was the last part of the 403 that sent people to the telephone.
+  (docs/07-frontend.md §7.1, §7.8)
+- **Agent worklist** (`components/RequestsInbox.jsx`): SLA state and what is already late without
+  opening anything, a "only what is late" filter, a channel filter, assignee selection, escalate,
+  internal notes, "log a telephone call" so a call lands in the same system with the same clock,
+  and promote-to-article on a closed ticket.
+- **A page-feedback widget** (`components/FeedbackWidget.jsx`), mounted globally for signed-in
+  seats by the guidance provider. It posts the current pathname — "the search is slow" is only
+  actionable with the location — and is deliberately not a ticket.
+- **The help panel searches the knowledge base**, not only the built-in guidance articles
+  (`guidance/HelpCenter.jsx`). Debounced, signed-in seats only, silent on failure, bodies
+  rendered as text, 👍/👎 per article. Every search is logged server-side with its result count:
+  the misses are the work list of articles that should exist. (docs/13-guidance-system.md §13.10)
+- **Three new admin sections** (`components/SupportAdmin.jsx`): support KPIs, the product-feedback
+  feed, and knowledge-base authoring with named owners, review dates, a "needs review" filter and
+  version history. A `null` from the metrics API renders as an em dash, never `۰` — a dashboard
+  that prints `۰٪` compliance because nothing has been decided yet is worse than one that admits
+  it does not know.
+- **Tests:** frontend unit tests 179 → 208. `lib/support.js` holds the presentation rules (SLA
+  tone and label, due-date text, channel labels, `canRate`, duration and rate formatting) with 29
+  tests written first, because a wrong rule there would tell a customer their late ticket is on
+  time. `qa/e2e/tests/support.spec.js` adds 10 Playwright tests covering the specialist's whole
+  journey and the authorization of the new endpoints.
+- **The support channel is open to every seat, and is now a service desk.** `api/requests_api.py`
+  was gated end to end on `@require_manager`, so any seat without `can_manage_team` got 403 on
+  every ticket endpoint and the telephone was its only channel — the technical cause of the
+  evaluation's "customer feedback is collected by telephone" finding. Support requests are now
+  self-service (commercial kinds stay manager-only); a ticket has a real conversation
+  (`TicketMessage`, with admin-only internal notes) instead of one `admin_note` field; SLA
+  response/resolution clocks with a stated policy (`api/sla.py`); `assignee` as a foreign key
+  instead of the literal string `'admin'`; escalation; reopen on a customer reply; CSAT after
+  closure; and a `source` field so a request taken by telephone is recorded in the same place and
+  the shift to digital is measurable. New: `POST /api/admin/company-requests/` (log a call),
+  `GET /api/admin/support/metrics/`. (docs/05-api-reference.md §5.7)
+- **A general feedback channel** (`api/feedback.py`): `POST /api/feedback/submit/` from any seat,
+  `GET /api/admin/feedback/` for the feed. Deliberately not a ticket. Before this the only digital
+  feedback surface was the thumb on an assistant answer. (docs/05-api-reference.md §5.7a)
+- **A knowledge base** (`api/knowledge.py`): articles with a **named owner** and a review interval
+  (so staleness is a query, not an impression), append-only revisions, search with miss logging,
+  and `POST /api/admin/company-requests/<id>/promote-to-article/` so a resolved ticket becomes a
+  draft article instead of an answer buried in one ticket. (docs/05-api-reference.md §5.7b)
+- **Metric definitions as a deliverable.** Every field the new metrics endpoint returns has a
+  calculation, a source column, a hand-reproducible query and a test, in
+  `audit-evidence/16-improvement-programme/METRIC_DEFINITIONS.md`. Rates and averages return
+  `null`, not `0`, when their denominator is empty; SLA `pending` is excluded from compliance.
+- **Root-cause analysis of the 2026-10-30 evaluation findings** in
+  `audit-evidence/16-improvement-programme/`, with a prioritised roadmap, the ten-criteria matrix
+  and an explicit list of what is **not** done — principally that all of the above is API-only
+  and has no interface yet, and that this branch has not had a CI run.
+- **Tests:** backend 1,059 → 1,154 (+95, all written test-first): `api/test_helpdesk.py` (60),
+  `api/test_knowledge.py` (35). Three pre-existing tests that asserted the old manager-only 403
+  and the literal `handled_by='admin'` were updated, each with a comment recording why the
+  behaviour changed. Nine new paths added to `docs/openapi.yaml`, caught by the spec gate.
+  Migrations `0035_helpdesk_thread_sla_csat`, `0036_knowledge_base` — additive only.
 ## 1.1.0 — 2026-10-30 (`deploy-20261030-053247`, `8f6df94`)
 
 Infrastructure and governance. Nothing here changes what a customer sees; all
