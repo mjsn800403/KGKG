@@ -1,12 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Icon from './Icon';
 import TicketThread from './TicketThread';
+import DeskLayout from './desk/DeskLayout';
+import DeskFilters from './desk/DeskFilters';
+import TicketList from './desk/TicketList';
 import { adminApi } from '../utils/api';
 import useEventStream from '../utils/useEventStream';
-import { csatFace, dueText, faNum, nextStatuses, slaLabel, slaTone, sourceLabel } from '../lib/support';
+import {
+  csatFace, dueText, faNum, nextStatuses, slaLabel, slaTone, sourceLabel, topicLabel,
+} from '../lib/support';
 import { friendlyError } from '../lib/friendlyError';
 
 // The agent's side of the support desk.
@@ -18,76 +23,99 @@ import { friendlyError } from '../lib/friendlyError';
 // escalated, and a resolved one can be promoted into a knowledge article so
 // the answer is written down once instead of re-derived.
 
-function fmtDate(iso) {
-  try { return new Date(iso).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }); }
-  catch { return iso; }
-}
 function statusClass(s) {
   return { pending: 'warn', in_progress: 'info', completed: 'ok', rejected: 'bad' }[s] || 'warn';
 }
 
-const STATUS_FILTERS = [
-  { id: '', label: 'همه' },
-  { id: 'pending', label: 'در انتظار' },
-  { id: 'in_progress', label: 'در حال انجام' },
-  { id: 'completed', label: 'انجام‌شده' },
-  { id: 'rejected', label: 'رد‌شده' },
-];
-const SOURCE_FILTERS = ['', 'portal', 'phone', 'email', 'sms', 'in_person'];
 
 export default function RequestsInbox() {
   const [items, setItems] = useState([]);
   const [counts, setCounts] = useState({});
   const [admins, setAdmins] = useState([]);
-  const [filter, setFilter] = useState('');
-  const [source, setSource] = useState('');
+  const [topics, setTopics] = useState([]);
+  const [cursor, setCursor] = useState(null);
+  const [filters, setFilters] = useState({
+    q: '', status: '', topic: '', unread: '', source: '', awaiting: '',
+  });
   const [breachOnly, setBreachOnly] = useState(false);
-  const [waitingOnly, setWaitingOnly] = useState(false);
   const [busy, setBusy] = useState(null);
   const [note, setNote] = useState({});
-  const [openId, setOpenId] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [showLog, setShowLog] = useState(false);
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(true);
+  const selectedRef = useRef(null);
+  useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
+
+  const fetchPage = useCallback(async (append) => {
+    const params = { ...filters };
+    if (append && cursor) params.cursor = cursor;
+    const d = await adminApi.companyRequests(params);
+    setItems((cur) => (append ? [...cur, ...(d.requests || [])] : (d.requests || [])));
+    setCursor(d.next_cursor || null);
+    setCounts(d.counts || {});
+    setAdmins(d.admins || []);
+    setTopics(d.topics || []);
+    setErr('');
+  }, [filters, cursor]);
 
   const load = useCallback(async () => {
-    try {
-      const params = {};
-      if (filter) params.status = filter;
-      if (source) params.source = source;
-      const d = await adminApi.companyRequests(params);
-      setItems(d.requests || []);
-      setCounts(d.counts || {});
-      setAdmins(d.admins || []);
-      setErr('');
-    } catch (e) { setErr(friendlyError(e)); }
-  }, [filter, source]);
-  useEffect(() => { load(); }, [load]);
+    try { await fetchPage(false); } catch (e) { setErr(friendlyError(e)); }
+  }, [fetchPage]);
 
-  // As on the customer side: a stale detail is ignored by the row check rather
-  // than cleared, which keeps this effect free of synchronous state writes.
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const d = await adminApi.companyRequests(filters);
+        if (cancelled) return;
+        setItems(d.requests || []);
+        setCursor(d.next_cursor || null);
+        setCounts(d.counts || {});
+        setAdmins(d.admins || []);
+        setTopics(d.topics || []);
+        setErr('');
+      } catch (e) { if (!cancelled) setErr(friendlyError(e)); }
+      finally { if (!cancelled) setLoading(false); }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [filters]);
+
+  // Opening a ticket loads its thread and marks it read for THIS admin —
+  // another admin's unread state is their own.
+  const open = useCallback(async (id) => {
+    setSelectedId(id);
+    setDetail(null);
+    try {
+      const d = await adminApi.companyRequest(id);
+      setDetail(d.request || null);
+      if ((d.request?.unread_count || 0) > 0) {
+        const after = await adminApi.markCompanyRequestRead(id);
+        setDetail(after.request || d.request);
+        setItems((cur) => cur.map((r) => (r.id === id ? { ...r, unread_count: 0 } : r)));
+      }
+    } catch (e) { setErr(friendlyError(e)); }
+  }, []);
+
   const loadDetail = useCallback(async (id) => {
     if (!id) return;
     try {
       const d = await adminApi.companyRequest(id);
       setDetail(d.request || null);
+      setItems((cur) => cur.map((r) => (r.id === id ? { ...r, ...d.request } : r)));
     } catch (e) { setErr(friendlyError(e)); }
   }, []);
 
-  // Same as the customer side: the thread is fetched by the click that opens it.
-  const toggle = useCallback((id) => {
-    setOpenId((cur) => (cur === id ? null : id));
-    if (openId !== id) loadDetail(id);
-  }, [openId, loadDetail]);
-
-  // Live: a seat filing or replying, and another admin's action, both land here.
   useEventStream({
     admin: true,
     onEvent: (evt) => {
       if (!String(evt.type || '').startsWith('request.')) return;
-      load();
       const id = evt.payload?.request?.id;
-      if (openId && id === openId) loadDetail(openId);
+      const current = selectedRef.current;
+      if (current && id === current) { loadDetail(current); return; }
+      load();
     },
   });
 
@@ -96,7 +124,7 @@ export default function RequestsInbox() {
     try {
       await adminApi.setCompanyRequest(id, payload);
       await load();
-      if (openId === id) await loadDetail(id);
+      if (selectedId === id) await loadDetail(id);
     } catch (e) { setErr(friendlyError(e, 'ثبت تغییر ناموفق بود.')); }
     finally { setBusy(null); }
   };
@@ -104,47 +132,32 @@ export default function RequestsInbox() {
   const act = (id, status) => patch(id, { status, admin_note: note[id] || undefined })
     .then(() => setNote((n) => ({ ...n, [id]: '' })));
 
-  // The visible worklist. "Only what is late" is a first-class filter because
-  // a breach that nobody looks at is the same as no SLA at all.
-  // "Waiting on us" is the other first-class filter: a ticket stays open after
-  // it is answered, so an open-ticket list never empties and stops being read.
-  let shown = items;
-  if (breachOnly) {
-    shown = shown.filter((r) => r.sla?.response_state === 'breached'
-                             || r.sla?.resolve_state === 'breached');
-  }
-  if (waitingOnly) shown = shown.filter((r) => r.awaiting_reply);
-  const waitingCount = items.filter((r) => r.awaiting_reply).length;
+  // "Only what is late" stays a client-side filter over the page: a breach
+  // nobody looks at is the same as no SLA at all, and it reads the SLA state
+  // the server already computed.
+  const shown = breachOnly
+    ? items.filter((r) => r.sla?.response_state === 'breached'
+                       || r.sla?.resolve_state === 'breached')
+    : items;
+
+  const filtered = Boolean(filters.q || filters.status || filters.topic || filters.unread
+                           || filters.source || filters.awaiting || breachOnly);
+  const emptyNode = loading
+    ? <div className="inbox-empty glass">در حال بارگذاری…</div>
+    : (
+      <div className="inbox-empty glass">
+        <b>{filtered ? 'هیچ تیکتی با این فیلترها پیدا نشد' : 'تیکتی ثبت نشده است'}</b>
+        {filtered && (
+          <button type="button" className="btn" onClick={() => {
+            setBreachOnly(false);
+            setFilters({ q: '', status: '', topic: '', unread: '', source: '', awaiting: '' });
+          }}>پاک کردن فیلترها</button>
+        )}
+      </div>
+    );
 
   return (
     <div className="inbox">
-      <div className="inbox-filters">
-        {STATUS_FILTERS.map((f) => (
-          <button key={f.id} className={`inbox-fbtn${filter === f.id ? ' on' : ''}`} onClick={() => setFilter(f.id)}>
-            {f.label}
-            {f.id && counts[f.id] ? <span className="inbox-fcount">{counts[f.id].toLocaleString('fa-IR')}</span> : null}
-          </button>
-        ))}
-      </div>
-      <div className="inbox-filters">
-        <span className="inbox-flabel">کانال:</span>
-        {SOURCE_FILTERS.map((s) => (
-          <button key={s || 'all'} className={`inbox-fbtn${source === s ? ' on' : ''}`} onClick={() => setSource(s)}>
-            {s ? sourceLabel(s) : 'همه'}
-          </button>
-        ))}
-        <button className={`inbox-fbtn${waitingOnly ? ' on' : ''}`} onClick={() => setWaitingOnly((v) => !v)}>
-          <Icon name="mail" size={14} /> فقط منتظر پاسخ ما
-          {waitingCount ? <span className="inbox-fcount">{waitingCount.toLocaleString('fa-IR')}</span> : null}
-        </button>
-        <button className={`inbox-fbtn${breachOnly ? ' on' : ''}`} onClick={() => setBreachOnly((b) => !b)}>
-          <Icon name="bell" size={14} /> فقط از مهلت گذشته
-        </button>
-        <button className="btn inbox-act" onClick={() => setShowLog((v) => !v)}>
-          <Icon name="phone" size={14} /> ثبت تماس تلفنی
-        </button>
-      </div>
-
       {err && <div className="pform-error">{err}</div>}
 
       <AnimatePresence>
@@ -156,132 +169,192 @@ export default function RequestsInbox() {
         )}
       </AnimatePresence>
 
-      {shown.length === 0 ? (
-        <div className="inbox-empty glass">درخواستی در این نما وجود ندارد.</div>
-      ) : (
-        <ul className="inbox-list">
-          <AnimatePresence initial={false}>
-            {shown.map((r) => {
-              const isOpen = openId === r.id;
-              const row = isOpen && detail?.id === r.id ? detail : r;
-              const due = dueText(row.sla?.resolve_due_at);
-              const open = ['pending', 'in_progress'].includes(row.status);
-              return (
-                <motion.li key={r.id} layout className="inbox-item glass"
-                  initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }}>
-                  <div className="inbox-item-head">
-                    <span className={`rt-pill rt-pill-${statusClass(row.status)}`}>{row.status_label}</span>
-                    <b className="inbox-subject">{row.subject}</b>
-                    <span className="inbox-kind">{row.kind_label}</span>
-                    <span className="tkt-src">{sourceLabel(row.source)}</span>
-                    {row.awaiting_reply && <span className="tkt-wait">منتظر پاسخ ما</span>}
-                    {row.escalated_at && <span className="tkt-esc">ارجاع‌شده</span>}
-                    {row.reopen_count > 0 && <span className="tkt-reopen">بازگشایی ×{faNum(row.reopen_count)}</span>}
-                    <span className="inbox-when">{fmtDate(row.created_at)}</span>
-                  </div>
-
-                  <div className="tkt-sla">
-                    {slaTone(row.sla?.response_state) && (
-                      <span className={`rt-pill rt-pill-${slaTone(row.sla.response_state)}`}>
-                        پاسخ اول: {slaLabel(row.sla.response_state)}
-                      </span>
-                    )}
-                    {slaTone(row.sla?.resolve_state) && (
-                      <span className={`rt-pill rt-pill-${slaTone(row.sla.resolve_state)}`}>
-                        رسیدگی: {slaLabel(row.sla.resolve_state)}
-                      </span>
-                    )}
-                    {open && due && (
-                      <span className={`tkt-due${due.overdue ? ' overdue' : ''}`}>
-                        <Icon name="clock" size={13} /> {due.text}
-                      </span>
-                    )}
-                    {row.csat && (
-                      <span className="tkt-csat" title="رضایت مشتری">
-                        {csatFace(row.csat.score)} {faNum(row.csat.score)}/۵
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="inbox-meta">
-                    <span>شرکت: <b>{row.company?.name}</b></span>
-                    {row.created_by?.name && <span>ثبت: {row.created_by.name}</span>}
-                    {row.priority === 'high' && <span className="inbox-prio">اولویت بالا</span>}
-                    <label className="tkt-assign">
-                      مسئول:
-                      <select
-                        value={row.assignee?.id || ''}
-                        disabled={busy === r.id}
-                        onChange={(e) => patch(r.id, {
-                          assignee_id: e.target.value ? Number(e.target.value) : null,
-                        })}
-                      >
-                        <option value="">— بدون مسئول —</option>
-                        {admins.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                    </label>
-                  </div>
-
-                  {row.body && <p className="inbox-body">{row.body}</p>}
-                  {(row.cars?.length > 0 || row.payload?.documents?.length > 0 || row.payload?.seats) && (
-                    <div className="inbox-meta">
-                      {row.cars?.length > 0 && <span>خودروها: <b>{row.cars.map((c) => c.name).join('، ')}</b></span>}
-                      {row.payload?.documents?.length > 0 && <span>مستندات: <b>{row.payload.documents.join('، ')}</b></span>}
-                      {row.payload?.seats && <span>ظرفیت درخواستی: <b>{row.payload.seats}</b></span>}
-                    </div>
-                  )}
-                  {row.admin_note && <div className="inbox-adminnote">پاسخ: {row.admin_note}</div>}
-
-                  <div className="inbox-actions">
-                    <input className="inbox-note" placeholder="یادداشت پاسخ (اختیاری)"
-                      value={note[r.id] || ''} onChange={(e) => setNote((n) => ({ ...n, [r.id]: e.target.value }))} />
-                    {nextStatuses(row.status).map(([st, label]) => (
-                      <button key={st} className={`btn inbox-act inbox-act-${statusClass(st)}`}
-                        disabled={busy === r.id} onClick={() => act(r.id, st)}>
-                        {busy === r.id ? '…' : label}
-                      </button>
+      <DeskLayout
+        hasSelection={Boolean(selectedId)}
+        onBack={() => { setSelectedId(null); setDetail(null); }}
+        listPane={(
+          <>
+            <DeskFilters
+              value={filters}
+              onChange={setFilters}
+              topics={topics}
+              counts={counts}
+              statuses={[
+                { id: 'pending', label: 'در انتظار' },
+                { id: 'in_progress', label: 'در حال انجام' },
+                { id: 'completed', label: 'انجام‌شده' },
+                { id: 'rejected', label: 'رد‌شده' },
+              ]}
+              extra={(
+                <>
+                  <button type="button"
+                    className={`inbox-fbtn${filters.awaiting ? ' on' : ''}`}
+                    onClick={() => setFilters((f) => ({
+                      ...f, awaiting: f.awaiting ? '' : '1', cursor: null,
+                    }))}>
+                    <Icon name="mail" size={14} /> منتظر پاسخ ما
+                    {counts.awaiting_reply
+                      ? <span className="inbox-fcount">{faNum(counts.awaiting_reply)}</span>
+                      : null}
+                  </button>
+                  <button type="button" className={`inbox-fbtn${breachOnly ? ' on' : ''}`}
+                    onClick={() => setBreachOnly((b) => !b)}>
+                    <Icon name="bell" size={14} /> از مهلت گذشته
+                  </button>
+                  <select className="dk-select" aria-label="کانال ورود"
+                    value={filters.source || ''}
+                    onChange={(e) => setFilters((f) => ({
+                      ...f, source: e.target.value, cursor: null,
+                    }))}>
+                    <option value="">همهٔ کانال‌ها</option>
+                    {['portal', 'phone', 'email', 'sms', 'in_person'].map((sc) => (
+                      <option key={sc} value={sc}>{sourceLabel(sc)}</option>
                     ))}
-                    {open && !row.escalated_at && (
-                      <button className="btn inbox-act" disabled={busy === r.id}
-                        onClick={() => patch(r.id, { escalate: true })}>
-                        <Icon name="bell" size={14} /> ارجاع فوری
-                      </button>
-                    )}
-                    <button className="btn inbox-act" onClick={() => toggle(r.id)}
-                      aria-expanded={isOpen}>
-                      <Icon name="mail" size={14} /> گفت‌وگو
-                    </button>
-                  </div>
+                  </select>
+                  <button type="button" className="btn inbox-act"
+                    onClick={() => setShowLog((v) => !v)}>
+                    <Icon name="phone" size={14} /> ثبت تماس تلفنی
+                  </button>
+                </>
+              )}
+            />
+            <TicketList
+              items={shown}
+              selectedId={selectedId}
+              onSelect={open}
+              onLoadMore={cursor && !breachOnly ? () => fetchPage(true).catch(() => {}) : null}
+              loading={loading}
+              emptyNode={emptyNode}
+              showCompany
+            />
+          </>
+        )}
+        conversationPane={selectedId ? (
+          <AdminConversation
+            req={detail}
+            admins={admins}
+            busy={busy === selectedId}
+            note={note[selectedId] || ''}
+            onNote={(v) => setNote((n) => ({ ...n, [selectedId]: v }))}
+            onPatch={(payload) => patch(selectedId, payload)}
+            onAct={(status) => act(selectedId, status)}
+            onPromoted={() => loadDetail(selectedId)}
+          />
+        ) : (
+          <div className="dk-none">یک تیکت را از فهرست انتخاب کنید.</div>
+        )}
+      />
+    </div>
+  );
+}
 
-                  <AnimatePresence>
-                    {isOpen && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
-                        <div className="tkt-detail">
-                          {row.messages ? (
-                            <TicketThread
-                              messages={row.messages}
-                              allowInternal
-                              sendLabel="ارسال پاسخ"
-                              placeholder="پاسخ به مشتری…"
-                              note="اولین پاسخِ قابل‌مشاهده برای مشتری، زمان «پاسخ اول» را ثبت می‌کند؛ یادداشت داخلی نه."
-                              onSend={(body, { internal }) => patch(r.id, { message: body, internal })}
-                            />
-                          ) : (
-                            <p className="tkt-thread-empty">در حال بارگذاری گفت‌وگو…</p>
-                          )}
-                          {['completed', 'rejected'].includes(row.status) && (
-                            <PromoteForm req={row} onDone={() => loadDetail(r.id)} />
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.li>
-              );
-            })}
-          </AnimatePresence>
-        </ul>
+// One ticket, with every control the desk had before: owner, status, escalate,
+// the answer note, internal notes, and promotion into a knowledge article once
+// it is resolved. Reused rather than reimplemented — that is what keeps this
+// behaviour from drifting while the layout changes around it.
+function AdminConversation({
+  req, admins, busy, note, onNote, onPatch, onAct, onPromoted,
+}) {
+  if (!req) return <div className="dk-none">در حال بارگذاری گفت‌وگو…</div>;
+  const open = ['pending', 'in_progress'].includes(req.status);
+  const due = dueText(req.sla?.resolve_due_at);
+  return (
+    <div className="cv">
+      <header className="cv-head">
+        <div className="cv-head-main">
+          <span className={`rt-pill rt-pill-${statusClass(req.status)}`}>{req.status_label}</span>
+          <h2 className="cv-subject">{req.subject}</h2>
+        </div>
+        <div className="cv-meta">
+          <span>{req.company?.name}</span>
+          <span>{req.kind_label}</span>
+          <span className="tkt-src">{sourceLabel(req.source)}</span>
+          {req.topic && <span className="cv-chip">{req.topic_label || topicLabel(req.topic)}</span>}
+          {req.car?.name && <span className="cv-chip"><Icon name="car" size={12} /> {req.car.name}</span>}
+          {req.created_by?.name && <span>ثبت: {req.created_by.name}</span>}
+          {req.priority === 'high' && <span className="inbox-prio">اولویت بالا</span>}
+          {req.awaiting_reply && <span className="tkt-wait">منتظر پاسخ ما</span>}
+          {req.escalated_at && <span className="tkt-esc">ارجاع‌شده</span>}
+          {req.reopen_count > 0 && <span className="tkt-reopen">بازگشایی ×{faNum(req.reopen_count)}</span>}
+        </div>
+
+        <div className="tkt-sla">
+          {slaTone(req.sla?.response_state) && (
+            <span className={`rt-pill rt-pill-${slaTone(req.sla.response_state)}`}>
+              پاسخ اول: {slaLabel(req.sla.response_state)}
+            </span>
+          )}
+          {slaTone(req.sla?.resolve_state) && (
+            <span className={`rt-pill rt-pill-${slaTone(req.sla.resolve_state)}`}>
+              رسیدگی: {slaLabel(req.sla.resolve_state)}
+            </span>
+          )}
+          {open && due && (
+            <span className={`tkt-due${due.overdue ? ' overdue' : ''}`}>
+              <Icon name="clock" size={13} /> {due.text}
+            </span>
+          )}
+          {req.csat && (
+            <span className="tkt-csat" title="رضایت مشتری">
+              {csatFace(req.csat.score)} {faNum(req.csat.score)}/۵
+            </span>
+          )}
+        </div>
+
+        <div className="inbox-meta">
+          <label className="tkt-assign">
+            مسئول:
+            <select value={req.assignee?.id || ''} disabled={busy}
+              onChange={(e) => onPatch({
+                assignee_id: e.target.value ? Number(e.target.value) : null,
+              })}>
+              <option value="">— بدون مسئول —</option>
+              {admins.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          {open && !req.escalated_at && (
+            <button className="btn inbox-act" disabled={busy}
+              onClick={() => onPatch({ escalate: true })}>
+              <Icon name="bell" size={14} /> ارجاع فوری
+            </button>
+          )}
+        </div>
+      </header>
+
+      {req.body && <p className="inbox-body">{req.body}</p>}
+      {(req.cars?.length > 0 || req.payload?.documents?.length > 0 || req.payload?.seats) && (
+        <div className="inbox-meta">
+          {req.cars?.length > 0 && <span>خودروها: <b>{req.cars.map((c) => c.name).join('، ')}</b></span>}
+          {req.payload?.documents?.length > 0 && <span>مستندات: <b>{req.payload.documents.join('، ')}</b></span>}
+          {req.payload?.seats && <span>ظرفیت درخواستی: <b>{req.payload.seats}</b></span>}
+        </div>
+      )}
+      {req.admin_note && <div className="inbox-adminnote">پاسخ: {req.admin_note}</div>}
+
+      <TicketThread
+        messages={req.messages || []}
+        unreadCount={req.unread_count || 0}
+        truncated={Boolean(req.messages_truncated)}
+        allowInternal
+        sendLabel="ارسال پاسخ"
+        placeholder="پاسخ به مشتری…"
+        note="اولین پاسخِ قابل‌مشاهده برای مشتری، زمان «پاسخ اول» را ثبت می‌کند؛ یادداشت داخلی نه."
+        onSend={(body, { internal }) => onPatch({ message: body, internal })}
+      />
+
+      <div className="inbox-actions">
+        <input className="inbox-note" placeholder="یادداشت پاسخ (اختیاری)"
+          value={note} onChange={(e) => onNote(e.target.value)} />
+        {nextStatuses(req.status).map(([st, label]) => (
+          <button key={st} className={`btn inbox-act inbox-act-${statusClass(st)}`}
+            disabled={busy} onClick={() => onAct(st)}>
+            {busy ? '…' : label}
+          </button>
+        ))}
+      </div>
+
+      {['completed', 'rejected'].includes(req.status) && (
+        <PromoteForm req={req} onDone={onPromoted} />
       )}
     </div>
   );
