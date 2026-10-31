@@ -5,8 +5,17 @@ import Icon from '../components/Icon';
 import {
   CATEGORIES, articlesFor, contextualArticles, tourById,
 } from './content';
+import { kbApi } from '../utils/api';
 
-// On-demand, searchable help panel. Slide-over from the inline-start edge (RTL).
+// On-demand, searchable help panel.
+//
+// Two sources, on purpose. The built-in articles in ./content.js explain how
+// the product works and ship with the frontend. The knowledge base
+// (/api/kb/, api/knowledge.py) holds answers written by the support side —
+// including ones promoted straight out of a solved ticket — and changes
+// without a deploy. Searching here searches both, and a search that finds
+// nothing in the knowledge base is logged server-side: those misses are the
+// list of articles that ought to exist next. Slide-over from the inline-start edge (RTL).
 // Master/detail: a categorized, searchable list; selecting an article shows its
 // body, optional step list, an optional "start the visual tour" button, and a
 // subtle source-doc reference. Opens directly on the most relevant article for
@@ -18,6 +27,10 @@ export default function HelpCenter({
 }) {
   const [q, setQ] = useState('');
   const [selId, setSelId] = useState(null);
+  const [kbItems, setKbItems] = useState([]);
+  const [kbSel, setKbSel] = useState(null);      // the loaded KB article
+  const [kbBusy, setKbBusy] = useState(false);
+  const [kbVoted, setKbVoted] = useState(false);
   const searchRef = useRef(null);
   const panelRef = useRef(null);
 
@@ -32,9 +45,47 @@ export default function HelpCenter({
     if (!open) return;
     setQ('');
     setSelId(initialArticleId || contextual[0]?.id || null);
+    setKbSel(null);
     const t = setTimeout(() => searchRef.current?.focus(), 60);
     return () => clearTimeout(t);
   }, [open, initialArticleId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Knowledge-base results, debounced so typing does not log a search per
+  // keystroke. Only for a signed-in seat: the endpoint is portal-authenticated,
+  // and teamFetch treats a 401 as "the session is gone", so asking on behalf of
+  // a visitor would be both pointless and rude. A failure is otherwise silent —
+  // the built-in help must still work when the knowledge base does not answer.
+  const kbAllowed = Boolean(audience && audience.role !== 'visitor' && !audience.isAdmin);
+  useEffect(() => {
+    if (!open || !kbAllowed) return undefined;
+    const term = q.trim();
+    const id = setTimeout(() => {
+      setKbBusy(true);
+      kbApi.list(term ? { q: term } : {})
+        .then((d) => setKbItems(d.articles || []))
+        .catch(() => setKbItems([]))
+        .finally(() => setKbBusy(false));
+    }, term ? 320 : 0);
+    return () => clearTimeout(id);
+  }, [open, q, kbAllowed]);
+
+  const openKb = async (slug) => {
+    setKbBusy(true);
+    setKbVoted(false);
+    try {
+      const d = await kbApi.article(slug);
+      setKbSel(d.article || null);
+      setSelId(null);
+    } catch {
+      setKbSel(null);
+    } finally { setKbBusy(false); }
+  };
+
+  const voteKb = async (helpful) => {
+    if (!kbSel || kbVoted) return;
+    setKbVoted(true);
+    try { await kbApi.vote(kbSel.slug, helpful); } catch { /* a vote is not worth an error */ }
+  };
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -79,7 +130,7 @@ export default function HelpCenter({
           </button>
         </header>
 
-        {!selected && (
+        {!selected && !kbSel && (
           <>
             <div className="guide-search">
               <Icon name="search" />
@@ -111,7 +162,27 @@ export default function HelpCenter({
                 </div>
               )}
 
-              {grouped.length === 0 && (
+              {kbItems.length > 0 && (
+                <div className="guide-cat">
+                  <div className="guide-sec-label">
+                    دانش‌نامهٔ پشتیبانی
+                    {kbBusy && <span className="guide-kb-busy"> (در حال جستجو…)</span>}
+                  </div>
+                  <ul className="guide-art-list">
+                    {kbItems.slice(0, 12).map((a) => (
+                      <li key={a.slug}>
+                        <button type="button" className="guide-art-row" onClick={() => openKb(a.slug)}>
+                          <span className="gar-title">{a.title}</span>
+                          {a.category && <span className="guide-kb-cat">{a.category}</span>}
+                          <Icon name="back" className="gar-chev" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {grouped.length === 0 && kbItems.length === 0 && (
                 <div className="guide-empty">
                   {q
                     ? 'نتیجه‌ای یافت نشد. عبارت دیگری را امتحان کنید.'
@@ -138,7 +209,35 @@ export default function HelpCenter({
           </>
         )}
 
-        {selected && (
+        {kbSel && (
+          <div className="guide-help-body guide-article">
+            <button type="button" className="guide-back" onClick={() => setKbSel(null)}>
+              <Icon name="chevron" /> همهٔ مقاله‌ها
+            </button>
+            <h3 className="guide-art-h">{kbSel.title}</h3>
+            {kbSel.category && <p className="guide-art-sum">{kbSel.category}</p>}
+            {/* Article bodies are plain text written by the support side; they
+                are rendered as text, never as HTML. */}
+            {String(kbSel.body || '').split(/\n{2,}/).map((para, i) => (
+              <p className="guide-art-p" key={i}>{para}</p>
+            ))}
+            <div className="guide-kb-vote">
+              {kbVoted ? (
+                <span>ممنون از بازخوردتان 🙏</span>
+              ) : (
+                <>
+                  <span>این مقاله کمک‌کننده بود؟</span>
+                  <button type="button" className="fb-btn" aria-label="کمک‌کننده بود"
+                    onClick={() => voteKb(true)}>👍</button>
+                  <button type="button" className="fb-btn" aria-label="کمک‌کننده نبود"
+                    onClick={() => voteKb(false)}>👎</button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!kbSel && selected && (
           <div className="guide-help-body guide-article">
             <button type="button" className="guide-back" onClick={() => setSelId(null)}>
               <Icon name="chevron" /> همهٔ مقاله‌ها

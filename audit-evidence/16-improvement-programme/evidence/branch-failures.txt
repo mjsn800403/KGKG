@@ -1,0 +1,17 @@
+ERROR: api.rag.test_diag_engine
+ERROR: api.rag.test_embed
+ERROR: api.rag.test_fts
+ERROR: api.rag.test_retrieve
+ERROR: api.rag.test_service
+ERROR: api.rag.test_service_paths
+ERROR: api.rag.test_store_ro
+ERROR: test_like_fallback_injection_payload_is_literal
+ERROR: test_like_fallback_limit_clamped
+ERROR: test_like_fallback_returns_car_results_with_segments
+ERROR: test_like_fallback_without_car_returns_nothing
+ERROR: test_member_names_are_escaped_in_the_report
+ERROR: test_signed_request_gets_sealed_answer
+FAIL: test_downvote_reaches_review_queue_upvote_does_not
+FAIL: test_manager_gets_a_pdf_and_the_download_is_logged
+FAIL: test_path_like_or_huge_car_names_never_500
+FAIL: test_procs_round_trip

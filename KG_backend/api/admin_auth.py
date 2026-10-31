@@ -32,20 +32,34 @@ def _from_server_itself(request):
     return not any(request.META.get(h) for h in _PROXY_HEADERS)
 
 
-def _admin_session_valid(token):
-    """Live, unexpired session belonging to an active admin?
+def _admin_session(token):
+    """The live session's PlatformAdmin, or None.
 
     Resolution is by sha256 (the raw key is never stored) and rejects anything
     past ``expires_at``; a hit slides the idle window forward.
     """
     if not token:
-        return False
+        return None
     from .models import AdminAuthToken
     obj = AdminAuthToken.resolve(token, select_related=('admin',))
     if not obj or not obj.admin.active:
-        return False
+        return None
     obj.touch()
-    return True
+    return obj.admin
+
+
+def _admin_session_valid(token):
+    """Boolean form of :func:`_admin_session`, kept because api/events.py
+    resolves a viewer without needing the admin row itself."""
+    return _admin_session(token) is not None
+
+
+def acting_admin(request):
+    """The PlatformAdmin behind this request, or None for a loopback call made
+    with the static KG_ADMIN_TOKEN (a server script or cron, which is not a
+    person). Views that record ownership use this instead of inventing the
+    literal string 'admin'."""
+    return getattr(request, 'platform_admin', None)
 
 
 def require_admin_token(view):
@@ -64,7 +78,9 @@ def require_admin_token(view):
         if (configured and presented and hmac.compare_digest(presented, configured)
                 and _from_server_itself(request)):
             return view(request, *args, **kwargs)
-        if _admin_session_valid(presented):
+        admin = _admin_session(presented)
+        if admin is not None:
+            request.platform_admin = admin
             return view(request, *args, **kwargs)
         return JsonResponse({'error': 'unauthorized'}, status=401)
     return wrapped

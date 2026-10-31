@@ -86,14 +86,48 @@ and replaced by the org-graph API `/api/org/*` (see `docs/openapi.yaml`).
 | `/api/team/insights/` | GET | manager | Seat utilization, idle/top members, category coverage & gaps |
 | `/api/recommendations/` | GET | portal | `?limit=N` → personalized: continue / related / focus_areas / popular_in_company / explore |
 
-## 5.7 Company requests (manager ↔ admin)
+## 5.7 Support desk (any seat ↔ admin)
+
+Was "company requests (manager ↔ admin)". Since 2026-10-30 **any signed-in seat**
+may file a `support` or `other` request; the commercial kinds (`vehicle_access`,
+`seats`, `ai_assistant`, `documents`) remain manager-only because they commit the
+company to cost or scope. A seat sees the tickets it filed; a manager sees the
+company's. Code: `api/requests_api.py`, `api/sla.py`. Rationale and root-cause
+analysis: `audit-evidence/16-improvement-programme/`.
 
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
-| `/api/company/requests/` | GET/POST | manager | List own company's; create `{kind, subject, body?, payload?, priority?}` (payload whitelisted per kind) |
-| `/api/company/requests/<id>/` | GET/POST | manager | Detail; cancel while pending |
-| `/api/admin/company-requests/` | GET | admin | Inbox (filter by status) |
-| `/api/admin/company-requests/<id>/` | POST | admin | `{status, admin_note?, priority?}` — transitions emit events to both sides |
+| `/api/company/requests/` | GET/POST | portal | List (own, or the company's for a manager); create `{kind, subject, body?, payload?, priority?}` (payload whitelisted per kind). `source` is always `portal` — never taken from the client |
+| `/api/company/requests/<id>/` | GET/POST | portal | Detail with the message thread (internal notes excluded). POST one of `{message}` (a reply; reopens a closed ticket and restarts the resolution clock), `{csat:{score 1..5, comment?}}` (once, after closure, by the filer), `{cancel:true}` |
+| `/api/admin/company-requests/` | GET/POST | admin | Inbox (filter by `status`, `source`, `company_id`); POST `{company_id, subject, body?, kind?, priority?, source?}` logs a request that arrived by telephone, e-mail or in person |
+| `/api/admin/company-requests/<id>/` | GET/POST | admin | GET the ticket with internal notes. POST `{status?, admin_note?, handled_by?, message?, internal?, assignee_id?, escalate?}`. The first thing the customer can read — a public message **or** a non-empty `admin_note` — stamps `first_response_at`; an internal note and a bare status change do not, and it is never overwritten. `escalate` is idempotent and raises priority to high |
+| `/api/admin/company-requests/<id>/promote-to-article/` | POST | admin | `{slug, title?, category?, audience?}` — turns a closed ticket into a **draft** knowledge article seeded with the question, the public thread and the resolution |
+| `/api/admin/support/metrics/` | GET | admin | `?days=30` — volumes, first-response and resolution times (mean and p90), SLA compliance, CSAT, `by_source`, `by_kind`, backlog ageing, feedback and knowledge blocks. Every field is defined in `audit-evidence/16-improvement-programme/METRIC_DEFINITIONS.md` |
+
+**SLA targets** (`api/sla.py`, calendar hours, not business hours): high 2 h first
+response / 8 h resolution · normal 8 h / 48 h · low 24 h / 120 h. State per ticket is
+`met` / `breached` / `pending`; `pending` is excluded from compliance.
+
+## 5.7a Product feedback
+
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
+| `/api/feedback/submit/` | POST | portal | `{page?, rating? 1..5, comment?}` — either a rating or a comment is required. Rate-limited `feedback` 30/60s. Emits to the admin audience |
+| `/api/admin/feedback/` | GET | admin | `?days=30` — feed plus totals and a per-page breakdown |
+
+## 5.7b Knowledge base
+
+Articles have a **named owner**, a review interval (`is_stale` = never reviewed or
+past the interval), append-only revisions, and optional provenance from the ticket
+they were promoted out of. Code: `api/knowledge.py`.
+
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
+| `/api/kb/` | GET | portal | `?q=&category=` — published, customer-facing articles. A `q=` search is logged with its result count (`KbSearchLog`); browsing the index is not |
+| `/api/kb/<slug>/` | GET | portal | Article; counts a view |
+| `/api/kb/<slug>/vote/` | POST | portal | `{helpful: bool}` |
+| `/api/admin/kb/` | GET/POST | admin | GET everything (`?status=`, `?audience=`, `?stale=1`); POST `{title, slug, body, category?, audience?, status?, review_interval_days?}`. `slug` must match `^[a-zA-Z0-9][-a-zA-Z0-9_]*$` — what the reader's `<slug:slug>` route can match — so a published article is always reachable by its own URL |
+| `/api/admin/kb/<id>/` | GET/POST | admin | GET with revision history. POST `{title?, body?, category?, status?, audience?, owner_id?, review_interval_days?, reviewed?, note?}` — a **text** change appends a revision and bumps the version; a review, a status change or a reassignment does not |
 
 ## 5.8 Real-time
 

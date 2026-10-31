@@ -22,6 +22,7 @@ import Icon from '@/components/Icon';
 import AdminDashboard from '@/components/AdminDashboard';
 import JalaliDateTimeInput from '@/components/JalaliDateTimeInput';
 import RequestsInbox from '@/components/RequestsInbox';
+import { KnowledgeAdmin, ProductFeedbackPanel, SupportMetricsPanel } from '@/components/SupportAdmin';
 import ChatLogsView from '@/components/ChatLogsView';
 import { AiCostPanel, AssistantBehaviorPanel, AuditLogPanel, ExperimentsPanel, FunnelPanel, GrafanaPanel, SearchInsightsPanel } from '@/components/AdminInsights';
 import { familyOf, useVehicleFilter } from '@/components/VehicleFilter';
@@ -208,7 +209,10 @@ const SECTIONS = [
   { id: 'overview', label: 'نمای کلی', icon: 'catalog', desc: 'خلاصه وضعیت کل پلتفرم در یک نگاه' },
   { id: 'catalog', label: 'فهرست خودروها', icon: 'car', desc: 'خودروهای ثبت‌شده و وضعیت دیتابیس هرکدام' },
   { id: 'requests', label: 'درخواست‌های خرید', icon: 'cart', desc: 'درخواست‌های جدید مشتریان و صدور دسترسی' },
-  { id: 'company-requests', label: 'درخواست‌های شرکت‌ها', icon: 'cart', desc: 'درخواست‌های مدیران شرکت‌ها و رسیدگی به آن‌ها' },
+  { id: 'company-requests', label: 'میز پشتیبانی', icon: 'mail', desc: 'تیکت‌های مشتریان، گفت‌وگو، مهلت پاسخ و ارجاع' },
+  { id: 'support-metrics', label: 'شاخص‌های پشتیبانی', icon: 'chart', desc: 'زمان پاسخ، پایبندی به مهلت، رضایت مشتری و کانال ورود' },
+  { id: 'product-feedback', label: 'بازخورد محصول', icon: 'mailplus', desc: 'بازخورد کاربران دربارهٔ صفحه‌ها، جدا از تیکت‌ها' },
+  { id: 'knowledge', label: 'دانش‌نامه', icon: 'manual', desc: 'مقاله‌ها، مالک هر مقاله، بازبینی و تاریخچهٔ نسخه‌ها' },
   { id: 'companies', label: 'شرکت‌ها و دسترسی‌ها', icon: 'building', desc: 'تعریف شرکت و دامنه خرید هرکدام' },
   { id: 'users', label: 'کاربران', icon: 'users', desc: 'صدور و مدیریت حساب‌های شرکتی' },
   { id: 'analytics', label: 'تحلیل کل پلتفرم', icon: 'chart', desc: 'میزان استفاده به تفکیک شرکت و حوزه فنی' },
@@ -230,7 +234,8 @@ const SECTIONS = [
 // The hub groups the sections so the admin lands on a calm "desk", not the
 // full firehose — a section's tools appear only after entering it.
 const SECTION_GROUPS = [
-  { title: 'آنلاین', tag: 'داشبورد و درخواست‌ها', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
+  { title: 'آنلاین', tag: 'داشبورد و میز پشتیبانی', guide: 'admin-group-realtime', ids: ['dashboard', 'company-requests'] },
+  { title: 'پشتیبانی و دانش', tag: 'شاخص‌ها، بازخورد، دانش‌نامه', guide: 'admin-group-support', ids: ['support-metrics', 'product-feedback', 'knowledge'] },
   { title: 'مشتریان و فروش', tag: 'درخواست خرید، شرکت‌ها، کاربران', guide: 'admin-group-customers', ids: ['requests', 'companies', 'users'] },
   { title: 'گزارش و تحلیل', tag: 'نمای کلی، تحلیل، فعالیت، گفتگوها', guide: 'admin-group-insights', ids: ['overview', 'analytics', 'funnel', 'search-insights', 'activity', 'chats', 'assistant-behavior', 'ai-cost', 'experiments'] },
   { title: 'داده و عملیات', tag: 'کاتالوگ، کیفیت داده، پردازش، سیستم', guide: 'admin-group-operations', ids: ['catalog', 'dataquality', 'pipeline', 'vehicle-specs', 'system', 'logs', 'audit'] },
@@ -416,6 +421,9 @@ export default function AdminPage() {
               {!section && <AdminHub guard={guard} go={go} adminUser={adminUser} />}
               {section === 'dashboard' && <AdminDashboard go={go} />}
               {section === 'company-requests' && <RequestsInbox />}
+              {section === 'support-metrics' && <SupportMetricsPanel />}
+              {section === 'product-feedback' && <ProductFeedbackPanel />}
+              {section === 'knowledge' && <KnowledgeAdmin />}
               {section === 'overview' && <Overview guard={guard} go={go} />}
               {section === 'catalog' && <Catalog guard={guard} />}
               {section === 'requests' && (

@@ -25,6 +25,26 @@ def require_manager(view):
     return wrapped
 
 
+def require_portal_user(view):
+    """Attach any signed-in seat as ``request.portal_user`` or 401.
+
+    The support channel uses this rather than require_manager. Gating the
+    whole request API on ``can_manage_team`` meant a specialist with a problem
+    got a 403 and reached for the telephone instead — the root cause of the
+    "feedback is collected by telephone" finding. Per-kind and per-ticket
+    authorisation is applied inside the view, where it belongs.
+    """
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        from .portal import portal_user   # lazy: avoids import cycle
+        user = portal_user(request)
+        if not user:
+            return JsonResponse({'error': 'unauthorized'}, status=401)
+        request.portal_user = user
+        return view(request, *args, **kwargs)
+    return wrapped
+
+
 def user_can_view_company_stream(user):
     """Whether a portal user may receive company-scoped real-time events.
 

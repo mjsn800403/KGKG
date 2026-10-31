@@ -749,8 +749,13 @@ class CompanyRequestIsolationTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual([x['subject'] for x in r.json()['requests']], ['A1'])
 
-    def test_non_manager_and_anonymous_rejected(self):
-        self.assertEqual(Client().get('/api/company/requests/', **bearer(self.spec)).status_code, 403)
+    def test_anonymous_rejected_and_a_non_manager_sees_only_their_own(self):
+        # Changed 2026-10-30: the support channel is open to every seat, so a
+        # specialist gets 200 — but scoped to the tickets they filed, which is
+        # none here. Anonymous is still 401.
+        r = Client().get('/api/company/requests/', **bearer(self.spec))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['requests'], [])
         self.assertEqual(Client().get('/api/company/requests/').status_code, 401)
 
     def test_cross_company_detail_and_cancel_are_404(self):
