@@ -73,12 +73,20 @@ def _payload_cars(payload):
             for c in Car.objects.filter(id__in=ids).order_by('car_name', 'year')]
 
 
+# A message whose author is the customer but who has no seat row to point at:
+# the opening description of a ticket the desk logged from a telephone call,
+# an email or a visit.
+CUSTOMER_LABEL = 'customer'
+
+
 def _author(m):
     if m.author_user_id and m.author_user:
         return {'kind': 'user',
                 'name': (m.author_user.display_name or m.author_user.username)}
     if m.author_admin_id and m.author_admin:
         return {'kind': 'admin', 'name': m.author_admin.username}
+    if m.author_label == CUSTOMER_LABEL:
+        return {'kind': 'user', 'name': 'مشتری'}
     return {'kind': 'admin', 'name': m.author_label or 'admin'}
 
 
@@ -537,8 +545,12 @@ def _admin_create(request):
     _stamp_sla(r)
     r.save(update_fields=['sla_response_due_at', 'sla_resolve_due_at'])
     if body:
-        _add_message(r, body, admin=admin,
-                     label=('' if admin else 'admin'))
+        # What the admin types here is what the CUSTOMER said on the telephone,
+        # not an answer to them. Attributed to the admin it would have read as
+        # the platform having had the last word, and every phoned-in ticket
+        # would have been hidden from the queue of tickets waiting on us — the
+        # one channel the evaluation said we had to start measuring.
+        _add_message(r, body, label=CUSTOMER_LABEL)
     _emit('request.created', r)
     return JsonResponse({'ok': True, 'request': _request_dict(r, include_company=True,
                                                               with_internal=True)})

@@ -799,3 +799,42 @@ class AwaitingReplyTests(DeskBase):
                           'awaiting_reply_company_requests': 0})
         for e in new.exclude(audience='admin'):
             self.assertNotIn('counts', e.payload)
+
+    def test_a_ticket_logged_from_a_phone_call_is_waiting_on_us(self):
+        """The body an admin types when logging a call is what the *customer*
+        said, not an answer to them. Attributing it to the admin would have
+        hidden every phoned-in ticket from the queue it belongs in — the exact
+        channel the evaluation said we had to start measuring."""
+        r = self.post(ADMIN_URL, {'company_id': self.co_a.id, 'subject': 'call',
+                                  'body': 'Brake chapter will not open.',
+                                  'source': 'phone'}, self.h_admin)
+        self.assertEqual(r.status_code, 200, r.content)
+        req = r.json()['request']
+        self.assertTrue(req['awaiting_reply'])
+        self.assertEqual(req['messages'][0]['author']['kind'], 'user')
+
+    def test_answering_a_logged_call_clears_it(self):
+        req = self.post(ADMIN_URL, {'company_id': self.co_a.id, 'subject': 'call',
+                                    'body': 'Brake chapter will not open.',
+                                    'source': 'phone'}, self.h_admin).json()['request']
+        self.post(f'{ADMIN_URL}{req["id"]}/', {'message': 'Entitlement restored.'},
+                  self.h_admin)
+        self.assertFalse(self._awaiting(req['id']))
+
+    def test_a_logged_call_with_no_body_is_still_waiting_on_us(self):
+        req = self.post(ADMIN_URL, {'company_id': self.co_a.id, 'subject': 'call',
+                                    'source': 'phone'}, self.h_admin).json()['request']
+        self.assertTrue(self._awaiting(req['id']))
+
+    def test_every_request_event_carries_the_counts_for_the_dashboard(self):
+        """The dashboard keeps its KPIs from these events alone between
+        resyncs, so an event that changes the queue and omits the counts
+        leaves the panel stating something false for up to a minute."""
+        t = self.create(body='one')
+        self.post(f'{ADMIN_URL}{t["id"]}/', {'message': 'Answered.'}, self.h_admin)
+        after = Event.objects.latest('id').id
+        self.post(f'{URL}{t["id"]}/', {'action': 'message', 'message': 'Still broken.'},
+                  self.h_spec)
+        ev = Event.objects.filter(id__gt=after, audience='admin').first()
+        self.assertEqual(ev.type, 'request.message')
+        self.assertEqual(ev.payload['counts']['awaiting_reply_company_requests'], 1)

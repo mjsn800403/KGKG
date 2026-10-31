@@ -45,6 +45,10 @@ const EVENT_FA = {
   'pipeline.paused': 'پردازش موقتاً متوقف شد',
   'request.created': 'درخواست جدید شرکت',
   'request.updated': 'به‌روزرسانی درخواست',
+  'request.message': 'پیام تازه در تیکت',
+  'request.reopened': 'بازگشایی تیکت',
+  'request.escalated': 'ارجاع تیکت',
+  'request.rated': 'ثبت رضایت مشتری',
   'alert.opened': 'هشدار جدید',
   'alert.resolved': 'هشدار برطرف شد',
 };
@@ -118,7 +122,14 @@ export default function AdminDashboard({ go }) {
         pulse('requests');
         pushFeed(evt, `${EVENT_FA[evt.type]} — ${p.request?.subject || ''}`);
         break;
+      // Every one of these changes the queue: a customer reply or a reopen is
+      // exactly what makes an answered ticket need attention again, and the
+      // dashboard holds its KPIs from these events alone between resyncs.
       case 'request.updated':
+      case 'request.message':
+      case 'request.reopened':
+      case 'request.escalated':
+      case 'request.rated':
         setD((cur) => {
           if (!cur) return cur;
           const req = p.request;
@@ -216,7 +227,8 @@ export default function AdminDashboard({ go }) {
 
       <div className="rt-grid">
         <ProcessingPanel proc={proc} counts={counts} job={job} flash={flash.processing} go={go} />
-        <RequestsPanel requests={d.open_requests} flash={flash.requests} go={go} />
+        <RequestsPanel requests={d.open_requests} waiting={k.awaiting_reply_company_requests}
+          flash={flash.requests} go={go} />
         <AlertsPanel alerts={d.alerts} flash={flash.alerts} go={go} />
         <ActivityPanel activity={d.recent_activity} />
         <TrafficPanel spark={d.traffic_spark} />
@@ -305,12 +317,15 @@ function statusClass(s) {
   return { pending: 'warn', in_progress: 'info', completed: 'ok', rejected: 'bad' }[s] || 'warn';
 }
 
-function RequestsPanel({ requests, flash, go }) {
-  const waiting = requests.filter((r) => r.awaiting_reply);
+function RequestsPanel({ requests, waiting, flash, go }) {
+  // `requests` is the newest fifteen rows, not the queue. Counting them would
+  // declare "all answered" whenever the one ticket still waiting is older than
+  // the preview, so the count and the glow come from the server's KPI.
+  const n = waiting || 0;
   return (
     <Panel title="درخواست‌های شرکت‌ها"
-      tag={waiting.length > 0 ? `${waiting.length.toLocaleString('fa-IR')} منتظر پاسخ ما` : 'همه پاسخ داده شده'}
-      hot={waiting.length > 0} flash={flash}
+      tag={n > 0 ? `${n.toLocaleString('fa-IR')} منتظر پاسخ ما` : 'همه پاسخ داده شده'}
+      hot={n > 0} flash={flash}
       action={<button className="rt-mini-btn" onClick={() => go?.('company-requests')}>همه</button>}>
       {requests.length === 0 ? (
         <div className="rt-idle">درخواست بازی وجود ندارد.</div>
