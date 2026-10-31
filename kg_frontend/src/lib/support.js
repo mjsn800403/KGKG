@@ -126,3 +126,74 @@ const FACES = { 1: '😠', 2: '🙁', 3: '😐', 4: '🙂', 5: '😀' };
 export function csatFace(score) {
   return FACES[score] || '';
 }
+
+// --- The conversational desk ------------------------------------------------
+// Pure functions, deliberately. This project's frontend suite is node:test over
+// plain modules — there is no renderer — so logic that lives in a component
+// cannot be tested at all. Anything here worth getting right is therefore kept
+// out of the components and tested directly.
+
+const TOPIC_LABELS = {
+  missing_document: 'مستند موجود نیست',
+  content_wrong: 'محتوا نادرست یا نامفهوم است',
+  access_problem: 'مشکل دسترسی',
+  assistant_wrong: 'پاسخ دستیار نادرست بود',
+  error_or_slow: 'خطا یا کندی سامانه',
+  billing: 'مالی و اشتراک',
+  other: 'سایر',
+};
+export const UNCATEGORISED = 'دسته‌بندی‌نشده';
+
+/** A topic's Persian label. An unset topic is named, never left blank: a gap
+ *  the reader can see is a gap somebody can close. */
+export function topicLabel(topic) {
+  if (!topic) return UNCATEGORISED;
+  return TOPIC_LABELS[topic] || topic;
+}
+
+/** Index of the first message the viewer has not seen, or -1.
+ *  The server counts unread; the position is derived from that count against
+ *  the thread, so the two can never disagree about how many are unread. */
+export function firstUnreadIndex(messages, unreadCount) {
+  const n = Number(unreadCount) || 0;
+  if (!Array.isArray(messages) || messages.length === 0 || n <= 0) return -1;
+  return Math.max(0, messages.length - n);
+}
+
+/** `[{ day, messages }]` in the thread's own order, split at each date change.
+ *  Grouping by calendar day is what makes a long conversation readable. */
+export function groupByDay(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  const groups = [];
+  for (const m of messages) {
+    const day = String(m.created_at || '').slice(0, 10);
+    const last = groups[groups.length - 1];
+    if (last && last.day === day) last.messages.push(m);
+    else groups.push({ day, messages: [m] });
+  }
+  return groups;
+}
+
+/** What this ticket wants from the person looking at it.
+ *
+ *  The order is the whole point. Unread outranks awaiting because something
+ *  was said that nobody has read; a closed ticket outranks both because it
+ *  wants nothing. These are three different facts, and the single "open"
+ *  signal this replaces could express none of them. */
+export function activityState(req) {
+  if (!req) return 'closed';
+  if (['completed', 'rejected'].includes(req.status)) return 'closed';
+  if ((Number(req.unread_count) || 0) > 0) return 'unread';
+  return req.awaiting_reply ? 'awaiting_us' : 'awaiting_them';
+}
+
+/** The second line of a ticket row: how it is categorised, falling back to the
+ *  request type when it is not. */
+export function rowSubtitle(req) {
+  if (!req) return '';
+  const parts = [];
+  if (req.topic) parts.push(req.topic_label || topicLabel(req.topic));
+  if (req.car?.name) parts.push(req.car.name);
+  if (parts.length === 0 && req.kind_label) parts.push(req.kind_label);
+  return parts.join(' · ');
+}
