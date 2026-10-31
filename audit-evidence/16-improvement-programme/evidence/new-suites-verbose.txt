@@ -1,0 +1,196 @@
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+Found 123 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: corsheaders, messages, staticfiles
+  Apply all migrations: admin, api, auth, contenttypes, sessions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying api.0001_initial... OK
+  Applying api.0002_car_car_name... OK
+  Applying api.0003_purchaserequest... OK
+  Applying api.0004_company_purchaserequest_employees_count_and_more... OK
+  Applying api.0005_rbac_packages_platform_admin... OK
+  Applying api.0006_purchaserequest_seat_plan... OK
+  Applying api.0007_invitetoken_activitylog_car_activitylog_category_and_more... OK
+  Applying api.0008_dataqualityrun_systemalert_trafficstat_visitorseen... OK
+  Applying api.0009_pipelinesettings_processingjob... OK
+  Applying api.0010_orgrole... OK
+  Applying api.0011_companyrequest_event_systemstate_and_more... OK
+  Applying api.0012_activitylog_app_url... OK
+  Applying api.0013_downloadrequest_zippackage_and_more... OK
+  Applying api.0014_pipelinesettings_max_power... OK
+  Applying api.0015_orggraph_orgnode_nodepermission_nodeinvite_and_more... OK
+  Applying api.0016_remove_portaluser_org_role_delete_orgrole... OK
+  Applying api.0017_hash_session_tokens... OK
+  Applying api.0018_portaluser_browse_mode... OK
+  Applying api.0019_otpchallenge... OK
+  Applying api.0020_otpevent... OK
+  Applying api.0021_delete_downloadrequest... OK
+  Applying api.0022_otpchallenge_purpose... OK
+  Applying api.0023_alter_portaluser_role_companyrole... OK
+  Applying api.0024_company_plan... OK
+  Applying api.0025_qa11_allcars_quota_adminotp... OK
+  Applying api.0026_portaluser_otp_enabled... OK
+  Applying api.0027_notify_prefs... OK
+  Applying api.0028_retired_device... OK
+  Applying api.0029_chat_log... OK
+  Applying api.0030_audit_log... OK
+  Applying api.0031_chatlog_usage... OK
+  Applying api.0032_search_log... OK
+  Applying api.0033_chatlog_behavior... OK
+  Applying api.0034_feature_flags... OK
+  Applying api.0035_helpdesk_thread_sla_csat... OK
+  Applying api.0036_knowledge_base... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying sessions.0001_initial...test_an_admin_can_assign_a_ticket_to_a_named_admin (api.test_helpdesk.AssignmentTests.test_an_admin_can_assign_a_ticket_to_a_named_admin) ... ok
+test_assignee_id_null_unassigns (api.test_helpdesk.AssignmentTests.test_assignee_id_null_unassigns) ... ok
+test_assigning_to_an_unknown_admin_is_a_400 (api.test_helpdesk.AssignmentTests.test_assigning_to_an_unknown_admin_is_a_400) ... ok
+test_escalation_is_idempotent (api.test_helpdesk.AssignmentTests.test_escalation_is_idempotent) ... ok
+test_escalation_stamps_the_time_raises_priority_and_emits (api.test_helpdesk.AssignmentTests.test_escalation_stamps_the_time_raises_priority_and_emits) ... ok
+test_handled_by_records_the_acting_admin_not_the_literal_admin (api.test_helpdesk.AssignmentTests.test_handled_by_records_the_acting_admin_not_the_literal_admin) ... ok
+test_a_manager_may_open_every_kind (api.test_helpdesk.ChannelAccessTests.test_a_manager_may_open_every_kind) ... ok
+test_a_manager_sees_every_ticket_in_the_company (api.test_helpdesk.ChannelAccessTests.test_a_manager_sees_every_ticket_in_the_company) ... ok
+test_a_specialist_can_open_a_support_ticket (api.test_helpdesk.ChannelAccessTests.test_a_specialist_can_open_a_support_ticket)
+The whole finding: before this change require_manager made every ... ok
+test_a_specialist_cannot_read_a_colleagues_ticket (api.test_helpdesk.ChannelAccessTests.test_a_specialist_cannot_read_a_colleagues_ticket) ... ok
+test_a_specialist_may_not_open_a_commercial_request (api.test_helpdesk.ChannelAccessTests.test_a_specialist_may_not_open_a_commercial_request) ... ok
+test_a_specialist_sees_only_their_own_tickets (api.test_helpdesk.ChannelAccessTests.test_a_specialist_sees_only_their_own_tickets) ... ok
+test_another_company_cannot_read_the_ticket (api.test_helpdesk.ChannelAccessTests.test_another_company_cannot_read_the_ticket) ... ok
+test_signed_out_is_still_401 (api.test_helpdesk.ChannelAccessTests.test_signed_out_is_still_401) ... ok
+test_a_colleague_who_did_not_file_it_cannot_rate_it (api.test_helpdesk.CsatTests.test_a_colleague_who_did_not_file_it_cannot_rate_it) ... ok
+test_a_score_outside_one_to_five_is_rejected (api.test_helpdesk.CsatTests.test_a_score_outside_one_to_five_is_rejected) ... ok
+test_a_ticket_cannot_be_rated_twice (api.test_helpdesk.CsatTests.test_a_ticket_cannot_be_rated_twice) ... ok
+test_an_open_ticket_cannot_be_rated (api.test_helpdesk.CsatTests.test_an_open_ticket_cannot_be_rated) ... ok
+test_the_requester_can_rate_a_closed_ticket (api.test_helpdesk.CsatTests.test_the_requester_can_rate_a_closed_ticket) ... ok
+test_a_comment_alone_is_enough (api.test_helpdesk.FeedbackChannelTests.test_a_comment_alone_is_enough) ... ok
+test_a_rating_outside_one_to_five_is_rejected (api.test_helpdesk.FeedbackChannelTests.test_a_rating_outside_one_to_five_is_rejected) ... ok
+test_any_seat_can_send_feedback (api.test_helpdesk.FeedbackChannelTests.test_any_seat_can_send_feedback) ... ok
+test_feedback_submission_is_rate_limited (api.test_helpdesk.FeedbackChannelTests.test_feedback_submission_is_rate_limited)
+The limiter is per client IP (api/ratelimit.py), in-process. The cap ... ok
+test_feedback_with_neither_rating_nor_comment_is_rejected (api.test_helpdesk.FeedbackChannelTests.test_feedback_with_neither_rating_nor_comment_is_rejected) ... ok
+test_signed_out_feedback_is_401 (api.test_helpdesk.FeedbackChannelTests.test_signed_out_feedback_is_401) ... ok
+test_the_admin_feed_lists_and_aggregates (api.test_helpdesk.FeedbackChannelTests.test_the_admin_feed_lists_and_aggregates) ... ok
+test_the_metrics_endpoint_reports_the_feedback_channel (api.test_helpdesk.FeedbackChannelTests.test_the_metrics_endpoint_reports_the_feedback_channel) ... ok
+test_a_ticket_resolved_before_its_due_date_reads_as_met (api.test_helpdesk.SlaOnTicketTests.test_a_ticket_resolved_before_its_due_date_reads_as_met) ... ok
+test_an_internal_note_is_not_a_first_response (api.test_helpdesk.SlaOnTicketTests.test_an_internal_note_is_not_a_first_response) ... ok
+test_an_unanswered_ticket_past_its_due_date_reads_as_breached (api.test_helpdesk.SlaOnTicketTests.test_an_unanswered_ticket_past_its_due_date_reads_as_breached) ... ok
+test_creation_stamps_both_due_dates_from_the_policy (api.test_helpdesk.SlaOnTicketTests.test_creation_stamps_both_due_dates_from_the_policy) ... ok
+test_reopening_restarts_the_resolution_clock (api.test_helpdesk.SlaOnTicketTests.test_reopening_restarts_the_resolution_clock) ... ok
+test_the_first_public_admin_reply_stamps_first_response_once (api.test_helpdesk.SlaOnTicketTests.test_the_first_public_admin_reply_stamps_first_response_once) ... ok
+test_an_unknown_priority_falls_back_to_normal (api.test_helpdesk.SlaPolicyTests.test_an_unknown_priority_falls_back_to_normal) ... ok
+test_due_dates_are_the_policy_added_to_the_clock_start (api.test_helpdesk.SlaPolicyTests.test_due_dates_are_the_policy_added_to_the_clock_start) ... ok
+test_every_priority_has_a_policy (api.test_helpdesk.SlaPolicyTests.test_every_priority_has_a_policy) ... ok
+test_no_due_date_has_no_state (api.test_helpdesk.SlaPolicyTests.test_no_due_date_has_no_state) ... ok
+test_response_state_is_pending_met_or_breached (api.test_helpdesk.SlaPolicyTests.test_response_state_is_pending_met_or_breached) ... ok
+test_a_portal_user_cannot_use_the_admin_create_endpoint (api.test_helpdesk.SourceTests.test_a_portal_user_cannot_use_the_admin_create_endpoint) ... ok
+test_a_ticket_filed_in_the_portal_is_sourced_portal (api.test_helpdesk.SourceTests.test_a_ticket_filed_in_the_portal_is_sourced_portal) ... ok
+test_an_admin_can_log_a_telephone_call_as_a_ticket (api.test_helpdesk.SourceTests.test_an_admin_can_log_a_telephone_call_as_a_ticket) ... ok
+test_an_admin_ticket_needs_a_known_company_and_source (api.test_helpdesk.SourceTests.test_an_admin_ticket_needs_a_known_company_and_source) ... ok
+test_the_source_cannot_be_faked_by_the_client (api.test_helpdesk.SourceTests.test_the_source_cannot_be_faked_by_the_client) ... ok
+test_an_absurd_window_is_clamped_not_a_500 (api.test_helpdesk.SupportMetricsTests.test_an_absurd_window_is_clamped_not_a_500) ... ok
+test_backlog_reports_age_breaches_and_unassigned (api.test_helpdesk.SupportMetricsTests.test_backlog_reports_age_breaches_and_unassigned) ... ok
+test_counts_match_the_rows (api.test_helpdesk.SupportMetricsTests.test_counts_match_the_rows) ... ok
+test_csat_aggregates_and_response_rate (api.test_helpdesk.SupportMetricsTests.test_csat_aggregates_and_response_rate) ... ok
+test_first_response_minutes_are_measured_from_the_stamps (api.test_helpdesk.SupportMetricsTests.test_first_response_minutes_are_measured_from_the_stamps) ... ok
+test_resolution_hours_are_measured_from_the_stamps (api.test_helpdesk.SupportMetricsTests.test_resolution_hours_are_measured_from_the_stamps) ... ok
+test_sla_compliance_counts_met_against_decided (api.test_helpdesk.SupportMetricsTests.test_sla_compliance_counts_met_against_decided) ... ok
+test_the_endpoint_is_admin_only (api.test_helpdesk.SupportMetricsTests.test_the_endpoint_is_admin_only) ... ok
+test_the_window_excludes_older_rows (api.test_helpdesk.SupportMetricsTests.test_the_window_excludes_older_rows) ... ok
+test_a_customer_message_on_a_closed_ticket_reopens_it (api.test_helpdesk.ThreadTests.test_a_customer_message_on_a_closed_ticket_reopens_it) ... ok
+test_a_message_from_another_company_is_a_404_and_writes_nothing (api.test_helpdesk.ThreadTests.test_a_message_from_another_company_is_a_404_and_writes_nothing) ... ok
+test_an_admin_public_reply_reaches_the_customer (api.test_helpdesk.ThreadTests.test_an_admin_public_reply_reaches_the_customer) ... ok
+test_an_empty_message_is_rejected (api.test_helpdesk.ThreadTests.test_an_empty_message_is_rejected) ... ok
+test_an_internal_note_is_never_shown_to_the_customer (api.test_helpdesk.ThreadTests.test_an_internal_note_is_never_shown_to_the_customer) ... ok
+test_creation_seeds_the_opening_message_from_the_body (api.test_helpdesk.ThreadTests.test_creation_seeds_the_opening_message_from_the_body) ... ok
+test_creation_without_a_body_seeds_no_message (api.test_helpdesk.ThreadTests.test_creation_without_a_body_seeds_no_message) ... ok
+test_the_customer_can_reply_and_the_thread_is_returned (api.test_helpdesk.ThreadTests.test_the_customer_can_reply_and_the_thread_is_returned) ... ok
+test_a_duplicate_slug_is_rejected (api.test_knowledge.KbAuthoringTests.test_a_duplicate_slug_is_rejected) ... ok
+test_a_seat_cannot_author (api.test_knowledge.KbAuthoringTests.test_a_seat_cannot_author) ... ok
+test_a_title_body_and_slug_are_required (api.test_knowledge.KbAuthoringTests.test_a_title_body_and_slug_are_required) ... ok
+test_an_admin_can_create_an_article_and_owns_it (api.test_knowledge.KbAuthoringTests.test_an_admin_can_create_an_article_and_owns_it) ... ok
+test_an_edit_bumps_the_version_and_keeps_the_previous_text (api.test_knowledge.KbAuthoringTests.test_an_edit_bumps_the_version_and_keeps_the_previous_text) ... ok
+test_an_edit_that_changes_nothing_does_not_create_a_revision (api.test_knowledge.KbAuthoringTests.test_an_edit_that_changes_nothing_does_not_create_a_revision) ... ok
+test_reviewing_an_article_stamps_the_review_date_without_a_new_version (api.test_knowledge.KbAuthoringTests.test_reviewing_an_article_stamps_the_review_date_without_a_new_version) ... ok
+test_the_owner_can_be_reassigned_to_another_admin (api.test_knowledge.KbAuthoringTests.test_the_owner_can_be_reassigned_to_another_admin) ... ok
+test_a_draft_or_archived_article_is_not_served_to_a_seat (api.test_knowledge.KbReadTests.test_a_draft_or_archived_article_is_not_served_to_a_seat) ... ok
+test_a_seat_can_list_published_customer_articles (api.test_knowledge.KbReadTests.test_a_seat_can_list_published_customer_articles) ... ok
+test_an_admin_sees_internal_articles_in_the_admin_list (api.test_knowledge.KbReadTests.test_an_admin_sees_internal_articles_in_the_admin_list) ... ok
+test_an_internal_article_is_never_served_to_a_seat (api.test_knowledge.KbReadTests.test_an_internal_article_is_never_served_to_a_seat) ... ok
+test_an_unknown_slug_is_a_404 (api.test_knowledge.KbReadTests.test_an_unknown_slug_is_a_404) ... ok
+test_detail_returns_the_body_and_counts_the_view (api.test_knowledge.KbReadTests.test_detail_returns_the_body_and_counts_the_view) ... ok
+test_signed_out_cannot_read_the_knowledge_base (api.test_knowledge.KbReadTests.test_signed_out_cannot_read_the_knowledge_base) ... ok
+test_a_category_filter_narrows_the_list (api.test_knowledge.KbSearchTests.test_a_category_filter_narrows_the_list) ... ok
+test_every_search_is_logged_with_its_result_count (api.test_knowledge.KbSearchTests.test_every_search_is_logged_with_its_result_count) ... ok
+test_listing_without_a_query_is_not_logged_as_a_search (api.test_knowledge.KbSearchTests.test_listing_without_a_query_is_not_logged_as_a_search) ... ok
+test_search_is_case_insensitive (api.test_knowledge.KbSearchTests.test_search_is_case_insensitive) ... ok
+test_search_matches_the_title_and_the_body (api.test_knowledge.KbSearchTests.test_search_matches_the_title_and_the_body) ... ok
+test_a_never_reviewed_article_is_stale (api.test_knowledge.KbStalenessTests.test_a_never_reviewed_article_is_stale) ... ok
+test_an_article_inside_its_interval_is_not_stale (api.test_knowledge.KbStalenessTests.test_an_article_inside_its_interval_is_not_stale) ... ok
+test_an_article_past_its_review_interval_is_stale (api.test_knowledge.KbStalenessTests.test_an_article_past_its_review_interval_is_stale) ... ok
+test_a_seat_can_mark_an_article_helpful_or_not (api.test_knowledge.KbVoteTests.test_a_seat_can_mark_an_article_helpful_or_not) ... ok
+test_a_vote_needs_the_helpful_flag (api.test_knowledge.KbVoteTests.test_a_vote_needs_the_helpful_flag) ... ok
+test_voting_signed_out_is_401 (api.test_knowledge.KbVoteTests.test_voting_signed_out_is_401) ... ok
+test_articles_promoted_from_tickets_are_counted (api.test_knowledge.KnowledgeMetricsTests.test_articles_promoted_from_tickets_are_counted) ... ok
+test_the_knowledge_block_counts_articles_staleness_and_misses (api.test_knowledge.KnowledgeMetricsTests.test_the_knowledge_block_counts_articles_staleness_and_misses) ... ok
+test_the_knowledge_block_is_honest_when_nothing_was_searched (api.test_knowledge.KnowledgeMetricsTests.test_the_knowledge_block_is_honest_when_nothing_was_searched) ... ok
+test_a_seat_cannot_promote (api.test_knowledge.PromoteTicketTests.test_a_seat_cannot_promote) ... ok
+test_an_admin_can_promote_a_resolved_ticket_into_a_draft_article (api.test_knowledge.PromoteTicketTests.test_an_admin_can_promote_a_resolved_ticket_into_a_draft_article) ... ok
+test_an_open_ticket_cannot_be_promoted (api.test_knowledge.PromoteTicketTests.test_an_open_ticket_cannot_be_promoted) ... ok
+test_an_unknown_ticket_is_a_404 (api.test_knowledge.PromoteTicketTests.test_an_unknown_ticket_is_a_404) ... ok
+test_promoting_the_same_ticket_twice_is_rejected (api.test_knowledge.PromoteTicketTests.test_promoting_the_same_ticket_twice_is_rejected) ... ok
+test_the_draft_is_not_visible_to_seats_until_published (api.test_knowledge.PromoteTicketTests.test_the_draft_is_not_visible_to_seats_until_published) ... ok
+test_admin_endpoints_reject_portal_managers (api.test_qa_requests.AdminRequestTests.test_admin_endpoints_reject_portal_managers) ... ok
+test_admin_note_truncated (api.test_qa_requests.AdminRequestTests.test_admin_note_truncated) ... ok
+test_detail_serves_get_and_404s_an_unknown_id (api.test_qa_requests.AdminRequestTests.test_detail_serves_get_and_404s_an_unknown_id) ... ok
+test_inbox_filters (api.test_qa_requests.AdminRequestTests.test_inbox_filters) ... ok
+test_inbox_lists_all_companies_with_counts (api.test_qa_requests.AdminRequestTests.test_inbox_lists_all_companies_with_counts) ... ok
+test_inbox_non_numeric_company_filter_is_not_a_500 (api.test_qa_requests.AdminRequestTests.test_inbox_non_numeric_company_filter_is_not_a_500) ... ok
+test_invalid_status_rejected_without_change (api.test_qa_requests.AdminRequestTests.test_invalid_status_rejected_without_change) ... ok
+test_noop_post_emits_nothing (api.test_qa_requests.AdminRequestTests.test_noop_post_emits_nothing) ... ok
+test_status_transitions_stamp_and_clear_resolution (api.test_qa_requests.AdminRequestTests.test_status_transitions_stamp_and_clear_resolution) ... ok
+test_cancel_appends_to_existing_admin_note (api.test_qa_requests.ManagerRequestTests.test_cancel_appends_to_existing_admin_note) ... ok
+test_cancel_lifecycle (api.test_qa_requests.ManagerRequestTests.test_cancel_lifecycle) ... ok
+test_create_defaults_and_truncation (api.test_qa_requests.ManagerRequestTests.test_create_defaults_and_truncation) ... ok
+test_create_emits_company_and_admin_events (api.test_qa_requests.ManagerRequestTests.test_create_emits_company_and_admin_events) ... ok
+test_create_stamps_company_and_creator_from_token_not_body (api.test_qa_requests.ManagerRequestTests.test_create_stamps_company_and_creator_from_token_not_body) ... ok
+test_create_validation (api.test_qa_requests.ManagerRequestTests.test_create_validation) ... ok
+test_detail_includes_company (api.test_qa_requests.ManagerRequestTests.test_detail_includes_company) ... ok
+test_list_is_scoped_to_own_company (api.test_qa_requests.ManagerRequestTests.test_list_is_scoped_to_own_company) ... ok
+test_list_status_filter_and_invalid_filter_ignored (api.test_qa_requests.ManagerRequestTests.test_list_status_filter_and_invalid_filter_ignored) ... ok
+test_non_dict_payload_and_unrelated_kinds_store_nothing (api.test_qa_requests.ManagerRequestTests.test_non_dict_payload_and_unrelated_kinds_store_nothing) ... ok
+test_non_manager_may_use_the_support_channel_but_not_commercial_kinds (api.test_qa_requests.ManagerRequestTests.test_non_manager_may_use_the_support_channel_but_not_commercial_kinds)
+Changed 2026-10-30. This test used to assert 403 for every request a ... ok
+test_other_company_cannot_cancel_request (api.test_qa_requests.ManagerRequestTests.test_other_company_cannot_cancel_request) ... ok
+test_other_company_cannot_read_request (api.test_qa_requests.ManagerRequestTests.test_other_company_cannot_read_request) ... ok
+test_seats_payload_is_clamped (api.test_qa_requests.ManagerRequestTests.test_seats_payload_is_clamped) ... ok
+test_signed_out_is_401_everywhere (api.test_qa_requests.ManagerRequestTests.test_signed_out_is_401_everywhere) ... ok
+test_unknown_id_is_404 (api.test_qa_requests.ManagerRequestTests.test_unknown_id_is_404) ... ok
+test_vehicle_access_payload_is_sanitised (api.test_qa_requests.ManagerRequestTests.test_vehicle_access_payload_is_sanitised) ... ok
+test_vehicle_access_with_only_unknown_cars_drops_car_ids (api.test_qa_requests.ManagerRequestTests.test_vehicle_access_with_only_unknown_cars_drops_car_ids) ... ok
+test_wrong_method_is_405 (api.test_qa_requests.ManagerRequestTests.test_wrong_method_is_405) ... ok
+
+----------------------------------------------------------------------
+Ran 123 tests in 1.956s
+
+OK
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+ OK
+System check identified no issues (0 silenced).

@@ -1,0 +1,102 @@
+{
+  "days": 30,
+  "totals": {
+    "created": 3,
+    "open": 2,
+    "closed": 1,
+    "reopened": 0,
+    "escalated": 0
+  },
+  "first_response": {
+    "measured": 1,
+    "unmeasured": 2,
+    "avg_minutes": 8.219999999999999e-05,
+    "p90_minutes": 8.219999999999999e-05
+  },
+  "resolution": {
+    "measured": 1,
+    "avg_hours": 2.1275e-06,
+    "p90_hours": 2.1275e-06
+  },
+  "sla": {
+    "policy_hours": {
+      "high": {
+        "response": 2.0,
+        "resolve": 8.0
+      },
+      "normal": {
+        "response": 8.0,
+        "resolve": 48.0
+      },
+      "low": {
+        "response": 24.0,
+        "resolve": 120.0
+      }
+    },
+    "response": {
+      "met": 1,
+      "breached": 1,
+      "pending": 1,
+      "untracked": 0,
+      "compliance": 0.5
+    },
+    "resolution": {
+      "met": 1,
+      "breached": 0,
+      "pending": 2,
+      "untracked": 0,
+      "compliance": 1.0
+    }
+  },
+  "csat": {
+    "responses": 1,
+    "avg": 5.0,
+    "distribution": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 1
+    },
+    "response_rate": 1.0
+  },
+  "by_source": {
+    "phone": 1,
+    "portal": 2
+  },
+  "by_kind": {
+    "support": 3
+  },
+  "backlog": {
+    "open": 2,
+    "unassigned": 2,
+    "breaching_now": 0,
+    "oldest_days": 1.695486111111111e-07
+  },
+  "feedback": {
+    "submissions": 1,
+    "avg_rating": 4.0,
+    "with_comment": 1
+  },
+  "knowledge": {
+    "articles": 1,
+    "published": 1,
+    "drafts": 0,
+    "internal": 0,
+    "stale": 0,
+    "unowned": 0,
+    "from_tickets": 1,
+    "views": 0,
+    "helpful": 0,
+    "unhelpful": 0,
+    "searches": 2,
+    "zero_result_searches": 1,
+    "zero_result_rate": 0.5,
+    "top_misses": [
+      {
+        "query": "gearbox oil capacity",
+        "count": 1
+      }
+    ]
+  }
+}
