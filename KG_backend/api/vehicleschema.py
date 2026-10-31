@@ -26,6 +26,7 @@ import re
 import sqlite3
 
 from .rag import config
+from . import cardb, cardb_pg
 from . import dataquality
 
 BUILDER_VERSION = 'v1'
@@ -262,12 +263,22 @@ def parse_manual_specs(stem):
            'fuel_tank_l': None, 'sections': [], 'source': 'lemon',
            'displacement_l': None, 'engine_code': None, 'hybrid': False}
     path = config.WAREHOUSE_DIR / f'{stem}.db'
+    if cardb_pg.is_pg(path):
+        try:
+            con = cardb.connect(path)
+        except Exception:
+            return out
+        return _parse_manual(con, out, close=False)
     if not path.exists():
         return out
     try:
         con = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
     except sqlite3.Error:
         return out
+    return _parse_manual(con, out, close=True)
+
+
+def _parse_manual(con, out, close):
     try:
         # Fluids table: a dedicated "Quick Lookups/Fluids" page where the
         # manual has one; otherwise the fluid rows inside the model's
@@ -303,10 +314,11 @@ def parse_manual_specs(stem):
                 if tf:
                     out['sections'].append(tf[0])
                 out['tires'] = sizes
-    except sqlite3.Error:
+    except Exception:       # sqlite3 or psycopg
         pass
     finally:
-        con.close()
+        if close:           # pooled PostgreSQL connections stay open
+            con.close()
     return out
 
 
