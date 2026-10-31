@@ -38,7 +38,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from . import events, sla
+from . import access, events, sla
 from .admin_auth import acting_admin, require_admin_token
 from .models import (Car, Company, CompanyRequest, PlatformAdmin, PortalUser,
                      TicketMessage)
@@ -48,6 +48,7 @@ from .portal_auth import (require_manager, require_portal_user,
 
 
 VALID_KINDS = {k for k, _ in CompanyRequest.KIND_CHOICES}
+VALID_TOPICS = {v for v, _ in CompanyRequest.TOPIC_CHOICES}
 VALID_STATUSES = {s for s, _ in CompanyRequest.STATUS_CHOICES}
 VALID_PRIORITIES = {p for p, _ in CompanyRequest.PRIORITY_CHOICES}
 VALID_SOURCES = {s for s, _ in CompanyRequest.SOURCE_CHOICES}
@@ -194,6 +195,11 @@ def _request_dict(r, *, include_company=False, thread=None, with_internal=False,
         'status_label': dict(CompanyRequest.STATUS_CHOICES).get(r.status, r.status),
         'priority': r.priority,
         'source': r.source,
+        'topic': r.topic,
+        'topic_label': dict(CompanyRequest.TOPIC_CHOICES).get(r.topic, ''),
+        'car': ({'id': r.car_id,
+                 'name': f'{r.car.brand_name} {r.car.car_name} {r.car.year}'.strip()}
+                if r.car_id and r.car else None),
         'source_label': dict(CompanyRequest.SOURCE_CHOICES).get(r.source, r.source),
         'admin_note': r.admin_note,
         'handled_by': r.handled_by,
@@ -267,7 +273,7 @@ def _visible_qs(user):
     """What this seat may see: a manager sees the company, anyone else sees
     only the tickets they filed themselves."""
     qs = (CompanyRequest.objects.filter(company_id=user.company_id)
-          .select_related('created_by', 'company', 'assignee'))
+          .select_related('created_by', 'company', 'assignee', 'car'))
     if not user.can_manage_team:
         qs = qs.filter(created_by_id=user.id)
     return qs
@@ -291,6 +297,28 @@ def _int_or_none(value):
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value
+
+def _topic_or_400(raw):
+    """`(topic, error_response)` — an empty topic is allowed, a wrong one is not."""
+    topic = (str(raw or '')).strip()
+    if topic and topic not in VALID_TOPICS:
+        return None, JsonResponse({'error': 'نوع مشکل نامعتبر است.'}, status=400)
+    return topic, None
+
+
+def _car_or_400(raw, *, user=None):
+    """`(car, error_response)`. With `user`, the car must be one they may open:
+    this field must not become a way to enumerate the catalogue. With no user
+    (the desk logging a call) any real vehicle is fair game."""
+    if raw in (None, '', 0):
+        return None, None
+    car_id = _int_or_none(raw)
+    car = Car.objects.filter(id=car_id).first() if car_id else None
+    if not car:
+        return None, JsonResponse({'error': 'خودروی انتخاب‌شده یافت نشد.'}, status=400)
+    if user is not None and not access.user_can_open_car(user, car):
+        return None, JsonResponse({'error': 'خودروی انتخاب‌شده در دسترس شما نیست.'}, status=400)
+    return car, None
 
 
 # ---------------------------------------------------------------------------
@@ -339,13 +367,19 @@ def company_requests_view(request):
         priority = 'normal'
     payload = b.get('payload') if isinstance(b.get('payload'), dict) else {}
     payload = _sanitize_payload(kind, payload)
+    topic, err = _topic_or_400(b.get('topic'))
+    if err:
+        return err
+    car, err = _car_or_400(b.get('car_id'), user=user)
+    if err:
+        return err
 
     # `source` is never taken from the client: a ticket filed here came through
     # the portal by definition. Only the admin endpoint may say otherwise.
     r = CompanyRequest.objects.create(
         company_id=user.company_id, created_by=user, kind=kind,
         subject=subject, body=body, priority=priority, payload=payload,
-        source='portal')
+        topic=topic, car=car, source='portal')
     _stamp_sla(r)
     r.save(update_fields=['sla_response_due_at', 'sla_resolve_due_at'])
     if body:
@@ -492,7 +526,7 @@ def admin_company_requests_view(request):
     if request.method != 'GET':
         return JsonResponse({'error': 'GET or POST'}, status=405)
 
-    qs = CompanyRequest.objects.select_related('company', 'created_by', 'assignee')
+    qs = CompanyRequest.objects.select_related('company', 'created_by', 'assignee', 'car')
     status = request.GET.get('status')
     if status in VALID_STATUSES:
         qs = qs.filter(status=status)
@@ -536,11 +570,18 @@ def _admin_create(request):
     if priority not in VALID_PRIORITIES:
         priority = 'normal'
     body = (str(b.get('body') or '')).strip()[:MAX_BODY]
+    topic, err = _topic_or_400(b.get('topic'))
+    if err:
+        return err
+    # No `user=`: the desk logs calls about vehicles no single seat can open.
+    car, err = _car_or_400(b.get('car_id'))
+    if err:
+        return err
     admin = acting_admin(request)
 
     r = CompanyRequest.objects.create(
         company=company, created_by=None, kind=kind, subject=subject, body=body,
-        priority=priority, source=source,
+        priority=priority, source=source, topic=topic, car=car,
         handled_by=(admin.username if admin else 'admin'))
     _stamp_sla(r)
     r.save(update_fields=['sla_response_due_at', 'sla_resolve_due_at'])
@@ -569,7 +610,7 @@ def admin_company_request_detail_view(request, req_id):
     both the company and the admin audience.
     """
     r = (CompanyRequest.objects.filter(id=req_id)
-         .select_related('company', 'created_by', 'assignee').first())
+         .select_related('company', 'created_by', 'assignee', 'car').first())
     if not r:
         return JsonResponse({'error': 'not found'}, status=404)
     if request.method == 'GET':
