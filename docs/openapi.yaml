@@ -2679,6 +2679,53 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/kb/{slug}/deflect/:
+    post:
+      tags:
+      - chat
+      summary: This article answered it, so no ticket was filed
+      description: 'Auth: portal. Records a deflection against the reader''s most
+        recent compose-context search, or creates one when there was none. Only
+        this explicit action counts as a deflection: it is never inferred from
+        somebody opening an article and not filing.'
+      x-kg-auth: portal
+      security:
+      - portalCookie: []
+      - bearer: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        example: reset-service-reminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: What they had typed into the ticket form.
+                  example: service reminder
+      responses:
+        '200':
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '401':
+          description: Not signed in.
+        '404':
+          description: No such published article.
+        '405':
+          description: POST only.
   /api/kb/{slug}/vote/:
     post:
       tags:

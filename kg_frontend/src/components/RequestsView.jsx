@@ -5,9 +5,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import Icon from './Icon';
 import TicketThread from './TicketThread';
 import CsatPrompt from './CsatPrompt';
-import { teamApi, getPortalUser } from '../utils/api';
+import DeskLayout from './desk/DeskLayout';
+import DeskFilters from './desk/DeskFilters';
+import TicketList from './desk/TicketList';
+import KbSuggestions from './desk/KbSuggestions';
+import { teamApi, getPortalUser, fetchGrantedFleet } from '../utils/api';
 import useEventStream from '../utils/useEventStream';
-import { canRate, dueText, faNum, slaLabel, slaTone, sourceLabel } from '../lib/support';
+import {
+  canRate, dueText, faNum, slaLabel, slaTone, sourceLabel, topicLabel, visibleDetail,
+} from '../lib/support';
 import { friendlyError } from '../lib/friendlyError';
 
 // The customer's side of the support desk.
@@ -19,51 +25,94 @@ import { friendlyError } from '../lib/friendlyError';
 // rather than a list in this file, so the manager-only commercial kinds are
 // never even shown to someone who would be refused.
 
-function fmtDate(iso) {
-  try { return new Date(iso).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }); }
-  catch { return iso; }
-}
-function statusClass(s) {
-  return { pending: 'warn', in_progress: 'info', completed: 'ok', rejected: 'bad' }[s] || 'warn';
-}
 
 export default function RequestsView() {
   const [items, setItems] = useState([]);
-  const [meta, setMeta] = useState({ kinds: [], can_manage_team: false });
-  const [openId, setOpenId] = useState(null);
+  const [meta, setMeta] = useState({ kinds: [], topics: [], can_manage_team: false });
+  const [cursor, setCursor] = useState(null);
+  const [filters, setFilters] = useState({ q: '', status: '', topic: '', unread: '' });
+  const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [unreadAtOpen, setUnreadAtOpen] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [toast, setToast] = useState(null);
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(true);
   const toastTimer = useRef(null);
+  const selectedRef = useRef(null);
+  useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
 
-  const load = useCallback(async () => {
+  // Re-fetch the first page under the current filters. Used by the event
+  // handler when something arrives that the loaded page cannot represent.
+  const reload = useCallback(() => {
+    setFilters((f) => ({ ...f }));
+  }, []);
+
+  const load = useCallback(async (append = false) => {
     try {
-      const d = await teamApi.requests();
-      setItems(d.requests || []);
-      setMeta(d.meta || { kinds: [] });
+      const params = { ...filters };
+      if (append && cursor) params.cursor = cursor;
+      const d = await teamApi.requests(params);
+      setItems((cur) => (append ? [...cur, ...(d.requests || [])] : (d.requests || [])));
+      setCursor(d.next_cursor || null);
+      setMeta(d.meta || { kinds: [], topics: [] });
       setErr('');
     } catch (e) { setErr(friendlyError(e)); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
+    finally { setLoading(false); }
+  }, [filters, cursor]);
 
-  // A closed row needs no clearing: every read of `detail` checks that it
-  // belongs to the row being rendered, so a stale one is simply ignored.
-  const loadDetail = useCallback(async (id) => {
-    if (!id) return;
+  // Filters re-query from the start; `cursor` is deliberately not a dependency
+  // here, or every page append would retrigger the first page.
+  useEffect(() => {
+    let cancelled = false;
+    // The loading flag and the cursor reset ride on the fetch's own callbacks
+    // rather than the effect body: a synchronous setState here would render
+    // twice for every keystroke in the search box.
+    const run = async () => {
+      try {
+        const d = await teamApi.requests(filters);
+        if (cancelled) return;
+        setItems(d.requests || []);
+        setCursor(d.next_cursor || null);
+        setMeta(d.meta || { kinds: [], topics: [] });
+        setErr('');
+      } catch (e) {
+        if (!cancelled) setErr(friendlyError(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [filters]);
+
+
+  // Opening a ticket loads its thread AND marks it read. Those happen together
+  // because "read" means the conversation was put in front of somebody.
+  const open = useCallback(async (id) => {
+    setSelectedId(id);
+    setDetail(null);
     try {
       const d = await teamApi.request(id);
+      // The selection may have moved on while this was in flight. Rendering
+      // it anyway showed one ticket while every button acted on another.
+      if (selectedRef.current !== id) return;
+      const unread = d.request?.unread_count || 0;
+      // Remember where the unread began BEFORE marking read. The divider has
+      // to survive the mark, or it renders for one round-trip and then the
+      // pane jumps to the bottom — which is the whole behaviour we added it
+      // for. It is cleared when the reader moves to another ticket.
+      setUnreadAtOpen(unread);
       setDetail(d.request || null);
+      if (unread > 0) {
+        await teamApi.markRead(id);
+        setItems((cur) => cur.map((r) => (r.id === id ? { ...r, unread_count: 0 } : r)));
+        // The sidebar badge is derived from the same read marks, so it only
+        // needs telling that they moved.
+        window.dispatchEvent(new CustomEvent('kg:desk-read'));
+      }
     } catch (e) { setErr(friendlyError(e)); }
   }, []);
-
-  // Opening a row fetches its thread from the click, not from an effect
-  // mirroring `openId`: the fetch belongs to the action that caused it, and the
-  // live event handler below calls the same function.
-  const toggle = useCallback((id) => {
-    setOpenId((cur) => (cur === id ? null : id));
-    if (openId !== id) loadDetail(id);
-  }, [openId, loadDetail]);
 
   const flashToast = useCallback((msg, tone = 'ok') => {
     setToast({ msg, tone });
@@ -71,35 +120,95 @@ export default function RequestsView() {
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   }, []);
 
-  // Live: the agent's progress and replies appear without a refresh.
+  const refreshRow = useCallback(async (id) => {
+    try {
+      const d = await teamApi.request(id);
+      setItems((cur) => cur.map((r) => (r.id === id ? { ...r, ...d.request } : r)));
+      if (selectedRef.current === id) setDetail(d.request || null);
+    } catch { /* the list refresh below is the fallback */ }
+  }, []);
+
   useEventStream({
     admin: false,
     onEvent: (evt) => {
       if (!String(evt.type || '').startsWith('request.')) return;
       const req = evt.payload?.request;
-      load();
-      if (req && openId === req.id) loadDetail(openId);
-      if (evt.type === 'request.updated' && req) {
+      const current = selectedRef.current;
+      if (req && current === req.id) {
+        // On screen: it arrives in the thread and is marked read. Announcing
+        // it as well would be the duplicate notification we are removing.
+        refreshRow(req.id);
+        teamApi.markRead(req.id).catch(() => {});
+        return;
+      }
+      if (!req) return;
+      // A ticket this page does not hold — a colleague just filed one, or it
+      // sits on page two — needs the list fetched, not patched: mapping over
+      // `items` is a no-op for a row that is not there, so a manager watching
+      // the desk used to see nothing at all when a ticket arrived.
+      setItems((cur) => {
+        if (!cur.some((r) => r.id === req.id)) { reload(); return cur; }
+        return cur.map((r) => (r.id === req.id
+          ? { ...r, ...req, unread_count: (r.unread_count || 0) + (evt.type === 'request.message' ? 1 : 0) }
+          : r));
+      });
+      // The badge is derived from the server's marks; tell the sidebar to
+      // re-read rather than trusting the count we just incremented locally.
+      window.dispatchEvent(new CustomEvent('kg:desk-read'));
+      if (evt.type === 'request.message') flashToast(`پاسخ تازه روی «${req.subject}»`, 'info');
+      else if (evt.type === 'request.updated') {
         if (req.status === 'completed') flashToast(`درخواست «${req.subject}» انجام شد ✓`, 'ok');
         else if (req.status === 'rejected') flashToast(`درخواست «${req.subject}» رد شد`, 'bad');
         else if (req.status === 'in_progress') flashToast(`رسیدگی به «${req.subject}» آغاز شد`, 'info');
       }
-      if (evt.type === 'request.message' && req) flashToast(`پاسخ تازه روی «${req.subject}»`, 'info');
     },
   });
 
   const reply = async (body) => {
     const wasClosed = detail && ['completed', 'rejected'].includes(detail.status);
-    await teamApi.replyRequest(openId, body);
-    await Promise.all([load(), loadDetail(openId)]);
+    await teamApi.replyRequest(selectedId, body);
+    await refreshRow(selectedId);
     flashToast(wasClosed ? 'درخواست بازگشایی شد و پیام شما ثبت شد' : 'پیام شما ثبت شد', 'ok');
   };
 
   const rate = async (csat) => {
-    await teamApi.rateRequest(openId, csat);
-    await Promise.all([load(), loadDetail(openId)]);
+    await teamApi.rateRequest(selectedId, csat);
+    await refreshRow(selectedId);
     flashToast('ممنون از بازخوردتان 🙏', 'ok');
   };
+
+  const cancel = async () => {
+    await teamApi.cancelRequest(selectedId);
+    await refreshRow(selectedId);
+    flashToast('درخواست لغو شد', 'info');
+  };
+
+  const filtered = Boolean(filters.q || filters.status || filters.topic || filters.unread);
+  const emptyNode = loading ? (
+    <div className="inbox-empty glass">در حال بارگذاری…</div>
+  ) : filtered ? (
+    // Distinct from having no tickets at all: telling somebody they have none
+    // when they have forty and a bad filter is how a tool loses their trust.
+    <div className="inbox-empty glass">
+      <b>هیچ تیکتی با این فیلترها پیدا نشد</b>
+      <button type="button" className="btn"
+        onClick={() => setFilters({ q: '', status: '', topic: '', unread: '' })}>
+        پاک کردن فیلترها
+      </button>
+    </div>
+  ) : (
+    <div className="inbox-empty glass">
+      <span className="inbox-empty-ico" aria-hidden="true"><Icon name="mailplus" /></span>
+      <b>هنوز درخواستی ثبت نکرده‌اید</b>
+      <p>
+        برای هر مشکل فنی، پرسش دربارهٔ مستندات یا هر درخواست دیگری از همین‌جا تیکت بدهید؛
+        پاسخ پشتیبانی و روند رسیدگی را در همین صفحه می‌بینید.
+      </p>
+      <button type="button" className="btn btn-accent" onClick={() => setShowForm(true)}>
+        ثبت درخواست جدید
+      </button>
+    </div>
+  );
 
   return (
     <div className="reqview">
@@ -110,7 +219,8 @@ export default function RequestsView() {
             مشکل یا پرسش خود را همین‌جا ثبت کنید، گفت‌وگو را دنبال کنید و مهلت پاسخ را ببینید.
           </p>
         </div>
-        <button className="btn btn-accent" onClick={() => setShowForm((s) => !s)} id="req-new">
+        <button className="btn btn-accent" onClick={() => setShowForm((v) => !v)} id="req-new"
+          data-guide="desk-new">
           <Icon name="plus" size={16} /> درخواست جدید
         </button>
       </div>
@@ -123,109 +233,54 @@ export default function RequestsView() {
             exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
             <NewRequestForm
               kinds={meta.kinds || []}
-              onDone={() => { setShowForm(false); load(); flashToast('درخواست شما ثبت شد', 'ok'); }}
+              topics={meta.topics || []}
+              onDone={(msg) => {
+                setShowForm(false);
+                setFilters((f) => ({ ...f }));
+                flashToast(msg || 'درخواست شما ثبت شد', 'ok');
+              }}
             />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {items.length === 0 ? (
-        <div className="inbox-empty glass">
-          <span className="inbox-empty-ico" aria-hidden="true"><Icon name="mailplus" /></span>
-          <b>هنوز درخواستی ثبت نکرده‌اید</b>
-          <p>
-            برای هر مشکل فنی، پرسش دربارهٔ مستندات یا هر درخواست دیگری از همین‌جا تیکت بدهید؛
-            پاسخ پشتیبانی و روند رسیدگی را در همین صفحه می‌بینید.
-          </p>
-          <button type="button" className="btn btn-accent" onClick={() => setShowForm(true)}>
-            ثبت درخواست جدید
-          </button>
-        </div>
-      ) : (
-        <ul className="inbox-list">
-          <AnimatePresence initial={false}>
-            {items.map((r) => {
-              const isOpen = openId === r.id;
-              const shown = isOpen && detail?.id === r.id ? detail : r;
-              return (
-                <motion.li key={r.id} layout className="inbox-item glass"
-                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                  <button
-                    type="button"
-                    className="inbox-item-head inbox-item-toggle"
-                    aria-expanded={isOpen}
-                    onClick={() => toggle(r.id)}
-                  >
-                    <span className={`rt-pill rt-pill-${statusClass(shown.status)}`}>{shown.status_label}</span>
-                    <b className="inbox-subject">{shown.subject}</b>
-                    <span className="inbox-kind">{shown.kind_label}</span>
-                    {shown.source && shown.source !== 'portal' && (
-                      <span className="tkt-src">از {sourceLabel(shown.source)}</span>
-                    )}
-                    {shown.reopen_count > 0 && <span className="tkt-reopen">بازگشایی‌شده</span>}
-                    <span className="inbox-when">{fmtDate(shown.created_at)}</span>
-                    <Icon name="chevron" size={15} className={`inbox-chev${isOpen ? ' up' : ''}`} />
-                  </button>
-
-                  <SlaRow req={shown} />
-                  <ReqProgress status={shown.status} />
-
-                  <AnimatePresence>
-                    {isOpen && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
-                        <div className="tkt-detail">
-                          {shown.messages ? (
-                            <TicketThread
-                              messages={shown.messages}
-                              onSend={reply}
-                              placeholder={
-                                ['completed', 'rejected'].includes(shown.status)
-                                  ? 'اگر مشکل حل نشده، همین‌جا بنویسید تا درخواست بازگشایی شود…'
-                                  : 'پاسخ یا توضیح بیشتر…'
-                              }
-                              note={
-                                ['completed', 'rejected'].includes(shown.status)
-                                  ? 'ارسال پیام روی یک درخواست بسته، آن را بازگشایی می‌کند.'
-                                  : null
-                              }
-                            />
-                          ) : (
-                            <p className="tkt-thread-empty">در حال بارگذاری گفت‌وگو…</p>
-                          )}
-
-                          {shown.csat && (
-                            <div className="csat-done">
-                              امتیاز شما ثبت شده است: <b>{faNum(shown.csat.score)} از ۵</b>
-                              {shown.csat.comment ? ` — «${shown.csat.comment}»` : ''}
-                            </div>
-                          )}
-                          {/* Read at the moment it is needed: this branch only
-                              renders after the reader opened the row, so it never
-                              runs during the server render and cannot create a
-                              hydration gap. */}
-                          {canRate(shown, getPortalUser()) && <CsatPrompt onRate={rate} />}
-
-                          {['pending', 'in_progress'].includes(shown.status) && (
-                            <div className="inbox-actions">
-                              <button className="btn" onClick={async () => {
-                                await teamApi.cancelRequest(r.id);
-                                await Promise.all([load(), loadDetail(r.id)]);
-                              }}>
-                                انصراف از درخواست
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.li>
-              );
-            })}
-          </AnimatePresence>
-        </ul>
-      )}
+      <DeskLayout
+        hasSelection={Boolean(selectedId)}
+        onBack={() => { setSelectedId(null); setDetail(null); setUnreadAtOpen(0); }}
+        listPane={(
+          <>
+            <DeskFilters
+              value={filters}
+              onChange={setFilters}
+              topics={meta.topics || []}
+              statuses={[
+                { id: 'pending', label: 'در انتظار' },
+                { id: 'in_progress', label: 'در حال انجام' },
+                { id: 'completed', label: 'انجام‌شده' },
+              ]}
+            />
+            <TicketList
+              items={items}
+              selectedId={selectedId}
+              onSelect={open}
+              onLoadMore={cursor ? () => load(true) : null}
+              loading={loading}
+              emptyNode={emptyNode}
+            />
+          </>
+        )}
+        conversationPane={selectedId ? (
+          <Conversation
+            req={visibleDetail(detail, selectedId)}
+            unreadAtOpen={unreadAtOpen}
+            onSend={reply}
+            onRate={rate}
+            onCancel={cancel}
+          />
+        ) : (
+          <div className="dk-none">یک تیکت را از فهرست انتخاب کنید.</div>
+        )}
+      />
 
       <AnimatePresence>
         {toast && (
@@ -236,6 +291,63 @@ export default function RequestsView() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// One ticket's conversation, with its state above it. Every control here was
+// already in the accordion this replaces — SLA, progress, rating, cancel — and
+// is reused rather than reimplemented, which is what keeps that behaviour from
+// drifting while the layout changes around it.
+function Conversation({ req, unreadAtOpen = 0, onSend, onRate, onCancel }) {
+  if (!req) return <div className="dk-none">در حال بارگذاری گفت‌وگو…</div>;
+  const closed = ['completed', 'rejected'].includes(req.status);
+  return (
+    <div className="cv">
+      <header className="cv-head">
+        <div className="cv-head-main">
+          <span className={`rt-pill rt-pill-${
+            { pending: 'warn', in_progress: 'info', completed: 'ok', rejected: 'bad' }[req.status] || 'warn'
+          }`}>{req.status_label}</span>
+          <h2 className="cv-subject">{req.subject}</h2>
+        </div>
+        <div className="cv-meta">
+          <span>{req.kind_label}</span>
+          {req.topic && <span className="cv-chip">{req.topic_label || topicLabel(req.topic)}</span>}
+          {req.car?.name && <span className="cv-chip"><Icon name="car" size={12} /> {req.car.name}</span>}
+          {req.source && req.source !== 'portal' && (
+            <span className="tkt-src">از {sourceLabel(req.source)}</span>
+          )}
+        </div>
+        <SlaRow req={req} />
+        <ReqProgress status={req.status} />
+      </header>
+
+      <TicketThread
+        messages={req.messages || []}
+        unreadCount={unreadAtOpen}
+        viewerKind="user"
+        truncated={Boolean(req.messages_truncated)}
+        onSend={onSend}
+        placeholder={closed
+          ? 'اگر مشکل حل نشده، همین‌جا بنویسید تا درخواست بازگشایی شود…'
+          : 'پاسخ یا توضیح بیشتر…'}
+        note={closed ? 'ارسال پیام روی یک درخواست بسته، آن را بازگشایی می‌کند.' : null}
+      />
+
+      {req.csat && (
+        <div className="csat-done">
+          امتیاز شما ثبت شده است: <b>{faNum(req.csat.score)} از ۵</b>
+          {req.csat.comment ? ` — «${req.csat.comment}»` : ''}
+        </div>
+      )}
+      {canRate(req, getPortalUser()) && <CsatPrompt onRate={onRate} />}
+
+      {['pending', 'in_progress'].includes(req.status) && (
+        <div className="inbox-actions">
+          <button className="btn" onClick={onCancel}>انصراف از درخواست</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -287,20 +399,37 @@ function ReqProgress({ status }) {
   );
 }
 
-function NewRequestForm({ kinds, onDone }) {
+function NewRequestForm({ kinds, topics = [], onDone }) {
   const options = kinds.length ? kinds : [{ id: 'support', label: 'پشتیبانی' }];
   const [kind, setKind] = useState(options.some((k) => k.id === 'support') ? 'support' : options[0].id);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [priority, setPriority] = useState('normal');
+  const [topic, setTopic] = useState('');
+  const [carId, setCarId] = useState('');
+  const [cars, setCars] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  // Only vehicles this seat can already open: the server refuses any other,
+  // so offering one would be offering a dead end.
+  useEffect(() => {
+    let cancelled = false;
+    fetchGrantedFleet()
+      .then((list) => { if (!cancelled) setCars(list || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const submit = async () => {
     if (!subject.trim()) { setErr('موضوع درخواست الزامی است.'); return; }
     setBusy(true); setErr('');
     try {
-      await teamApi.createRequest({ kind, subject: subject.trim(), body: body.trim(), priority });
+      await teamApi.createRequest({
+        kind, subject: subject.trim(), body: body.trim(), priority,
+        topic: topic || undefined,
+        car_id: carId ? Number(carId) : undefined,
+      });
       onDone?.();
     } catch (e) { setErr(friendlyError(e, 'ثبت درخواست ناموفق بود.')); }
     finally { setBusy(false); }
@@ -314,11 +443,41 @@ function NewRequestForm({ kinds, onDone }) {
           {options.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
         </select>
       </div>
+      {topics.length > 0 && (
+        <div className="reqform-row">
+          <label htmlFor="req-topic">دستهٔ مشکل</label>
+          <select id="req-topic" value={topic} onChange={(e) => setTopic(e.target.value)}>
+            <option value="">انتخاب نشده</option>
+            {topics.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
+      )}
+      {cars.length > 0 && (
+        <div className="reqform-row">
+          <label htmlFor="req-car">خودرو (اختیاری)</label>
+          <select id="req-car" value={carId} onChange={(e) => setCarId(e.target.value)}>
+            <option value="">مربوط به خودروی خاصی نیست</option>
+            {cars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {[c.brand_name, c.car_name, c.year].filter(Boolean).join(' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="reqform-row">
         <label htmlFor="req-subject">موضوع</label>
         <input id="req-subject" value={subject} onChange={(e) => setSubject(e.target.value)}
           placeholder="مثلاً: فصل ترمز کمری ۲۰۲۵ باز نمی‌شود" />
       </div>
+
+      {/* Offered while they type, so a question the knowledge base already
+          answers need not become a ticket at all. */}
+      <KbSuggestions
+        query={subject}
+        carId={carId ? Number(carId) : null}
+        onResolved={() => onDone?.('خوشحالیم که راهنما پاسخ شما بود — تیکتی ثبت نشد.')}
+      />
       <div className="reqform-row">
         <label htmlFor="req-body">توضیحات</label>
         <textarea id="req-body" value={body} onChange={(e) => setBody(e.target.value)} rows={3}

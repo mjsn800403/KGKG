@@ -395,3 +395,64 @@ class KnowledgeMetricsTests(KbBase):
         self.post(f'{ADMIN_REQ}{t.id}/promote-to-article/', {'slug': 'p'}, self.h_admin)
         k = self.c.get(SUPPORT_METRICS, **self.h_admin).json()['knowledge']
         self.assertEqual(k['from_tickets'], 1)
+
+
+# ---------------------------------------------------------------------------
+# Deflection: did the knowledge base answer it before it became a ticket?
+#
+# Recorded ONLY when somebody says so. "Opened an article and did not file a
+# ticket" is an inference, and a deflection rate built on it would be invented
+# evidence — the thing the 2026-10-30 evaluation told us not to produce.
+# ---------------------------------------------------------------------------
+
+class DeflectionTests(KbBase):
+    def test_a_compose_search_is_logged_with_its_context(self):
+        self.article()
+        self.c.get('/api/kb/?q=service+reminder&context=compose', **self.h_user)
+        log = KbSearchLog.objects.latest('id')
+        self.assertEqual(log.context, 'compose')
+        self.assertIsNone(log.deflected_article_id)
+
+    def test_an_ordinary_search_has_no_context(self):
+        self.article()
+        self.c.get('/api/kb/?q=service+reminder', **self.h_user)
+        self.assertEqual(KbSearchLog.objects.latest('id').context, '')
+
+    def test_an_unknown_context_is_not_stored(self):
+        self.article()
+        self.c.get('/api/kb/?q=x&context=whatever', **self.h_user)
+        self.assertEqual(KbSearchLog.objects.latest('id').context, '')
+
+    def test_this_answered_it_records_the_article_and_creates_no_ticket(self):
+        a = self.article()
+        self.c.get('/api/kb/?q=service+reminder&context=compose', **self.h_user)
+        r = self.post(f'/api/kb/{a.slug}/deflect/', {'query': 'service reminder'},
+                      self.h_user)
+        self.assertEqual(r.status_code, 200, r.content)
+        log = KbSearchLog.objects.latest('id')
+        self.assertEqual(log.deflected_article_id, a.id)
+        self.assertEqual(log.context, 'compose')
+        self.assertEqual(CompanyRequest.objects.count(), 0)
+
+    def test_a_deflection_with_no_prior_search_still_records(self):
+        a = self.article()
+        r = self.post(f'/api/kb/{a.slug}/deflect/', {'query': 'direct hit'}, self.h_user)
+        self.assertEqual(r.status_code, 200, r.content)
+        log = KbSearchLog.objects.latest('id')
+        self.assertEqual(log.deflected_article_id, a.id)
+        self.assertEqual(log.context, 'compose')
+
+    def test_abandoning_the_form_records_no_deflection(self):
+        self.article()
+        self.c.get('/api/kb/?q=service+reminder&context=compose', **self.h_user)
+        self.assertIsNone(KbSearchLog.objects.latest('id').deflected_article_id)
+
+    def test_deflecting_an_unknown_article_is_a_404(self):
+        r = self.post('/api/kb/no-such-thing/deflect/', {'query': 'x'}, self.h_user)
+        self.assertEqual(r.status_code, 404)
+
+    def test_a_signed_out_visitor_cannot_record_a_deflection(self):
+        a = self.article()
+        r = self.c.post(f'/api/kb/{a.slug}/deflect/', json.dumps({'query': 'x'}),
+                        content_type='application/json')
+        self.assertEqual(r.status_code, 401)

@@ -896,6 +896,19 @@ class CompanyRequest(models.Model):
         ('rejected', 'رد شد'),
     ]
     PRIORITY_CHOICES = [('low', 'کم'), ('normal', 'عادی'), ('high', 'زیاد')]
+    # What the problem IS, as against `kind`, which is what the request is FOR.
+    # They are kept apart because `kind` carries permissions — MANAGER_ONLY_KINDS
+    # gates seats, vehicle access, the assistant and documents — and folding a
+    # problem taxonomy into it would tie who may file to what they may call it.
+    TOPIC_CHOICES = [
+        ('missing_document', 'مستند موجود نیست'),
+        ('content_wrong', 'محتوا نادرست یا نامفهوم است'),
+        ('access_problem', 'مشکل دسترسی'),
+        ('assistant_wrong', 'پاسخ دستیار نادرست بود'),
+        ('error_or_slow', 'خطا یا کندی سامانه'),
+        ('billing', 'مالی و اشتراک'),
+        ('other', 'سایر'),
+    ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='requests')
     created_by = models.ForeignKey(PortalUser, on_delete=models.SET_NULL, null=True,
@@ -907,6 +920,20 @@ class CompanyRequest(models.Model):
     payload = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', db_index=True)
     priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default='normal')
+    # Both optional: a ticket filed before this existed stays uncategorised
+    # rather than being back-filled with a guess.
+    topic = models.CharField(max_length=24, choices=TOPIC_CHOICES, blank=True,
+                             default='', db_default='', db_index=True)
+    # When anything last happened in public on this ticket. Denormalised on
+    # purpose: the worklist is ordered by activity, and the cursor pagination
+    # is a tuple over the ordering column, so that column has to be sortable
+    # in the database rather than computed per row in Python. Set to
+    # created_at on insert and moved by every public message.
+    last_activity_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # The vehicle the problem is about. SET_NULL because a retired vehicle must
+    # not take its tickets' history with it.
+    car = models.ForeignKey('Car', null=True, blank=True, on_delete=models.SET_NULL,
+                            related_name='requests', db_index=True)
     admin_note = models.TextField(blank=True, default='')     # admin's reply / resolution
     handled_by = models.CharField(max_length=100, blank=True, default='')   # admin username
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1489,6 +1516,45 @@ class FeatureFlag(models.Model):
 
 
 
+class TicketRead(models.Model):
+    """How far one viewer has read one ticket.
+
+    Every unread badge in the product is computed from these rows: the count
+    is `messages newer than last_read_at that this viewer did not write`. That
+    is deliberate. The alternative — a notification row per event, decremented
+    when somebody acts — is what leaves an indicator lit after the work is
+    done, which is exactly the complaint this model answers. There is nothing
+    stored here that can be stale: opening the conversation moves the mark and
+    the count recomputes to zero.
+
+    Exactly one of ``user`` / ``admin`` is set; the check constraint is not
+    decoration, since a row belonging to both viewers would be counted twice.
+    """
+    request = models.ForeignKey(CompanyRequest, on_delete=models.CASCADE,
+                                related_name='reads')
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, null=True, blank=True,
+                             related_name='ticket_reads')
+    admin = models.ForeignKey(PlatformAdmin, on_delete=models.CASCADE, null=True,
+                              blank=True, related_name='ticket_reads')
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['request', 'user'],
+                                    name='ticketread_one_per_user'),
+            models.UniqueConstraint(fields=['request', 'admin'],
+                                    name='ticketread_one_per_admin'),
+            models.CheckConstraint(
+                condition=models.Q(user__isnull=False, admin__isnull=True)
+                | models.Q(user__isnull=True, admin__isnull=False),
+                name='ticketread_exactly_one_viewer'),
+        ]
+
+    def __str__(self):
+        who = self.user_id and f'user {self.user_id}' or f'admin {self.admin_id}'
+        return f'read {self.request_id} by {who}'
+
+
 class Feedback(models.Model):
     """Unsolicited product feedback from a signed-in seat.
 
@@ -1620,6 +1686,24 @@ class KbSearchLog(models.Model):
     query = models.CharField(max_length=200)
     query_norm = models.CharField(max_length=200, db_index=True)
     results = models.PositiveIntegerField(default=0)
+    # Where the question was asked. 'compose' means it was typed into the
+    # ticket form, which is the only context where answering it instead of
+    # filing is a deflection worth counting.
+    context = models.CharField(max_length=16, blank=True, default='', db_default='',
+                               db_index=True)
+    # One id per opened ticket form, generated by the client. The unit of a
+    # deflection opportunity is a COMPOSE SESSION, not a search: the form is
+    # searched once per debounced pause while somebody types, so counting rows
+    # made the published rate move with typing speed. Blank on an older row,
+    # which is then counted as one session rather than dropped.
+    compose_id = models.CharField(max_length=36, blank=True, default='', db_default='',
+                                  db_index=True)
+    # Set only when somebody said an article answered them. Never inferred
+    # from "opened an article and did not file a ticket": that is a guess, and
+    # a deflection rate built on a guess is invented evidence.
+    deflected_article = models.ForeignKey('KnowledgeArticle', null=True, blank=True,
+                                          on_delete=models.SET_NULL,
+                                          related_name='deflections')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
