@@ -62,8 +62,10 @@ short and point at the doc section that was updated.
 - **Coverage floor.** The service-desk branch measured 61 % and raised its floor 56 → 60.
   Reconciling that branch with `work` merges two lineages that each raised the floor
   independently (`work` was at 57), over a combined codebase neither had measured, so the
-  merge holds the floor at **57** until CI measures the merged tree and it is raised to what
-  that run actually earns. The ratchet's rule — a floor moves up, never down to make CI pass —
+  merge therefore held the floor at 57 until CI measured the merged tree, which came out at
+  **60 %** (16,828 statements, 5,728 branches) — and the floor is now **59**, one point of
+  headroom, the same discipline the service-desk branch applied when it measured 61 and set
+  60. The ratchet's rule — a floor moves up, never down to make CI pass —
   is about a lineage over time; it says nothing about which of two numbers survives a merge,
   and inheriting the higher one without measuring would be guessing.
 - **The support desk now has an interface.** Everything below had been API-only, which meant no
