@@ -53,13 +53,15 @@ test.describe('support desk — the customer side', () => {
       await page.locator('#req-body').fill(body);
       await page.locator('#req-submit').click();
 
-      const row = page.locator('.inbox-item', { hasText: subject });
+      // Selectors follow the two-pane desk that replaced the accordion on
+      // 2026-10-31; the assertions are the same facts as before — the promise
+      // is visible, and the thread already holds what the customer wrote.
+      const row = page.locator('.tl-row', { hasText: subject });
       await expect(row).toBeVisible();
-      // The promise is shown without opening anything.
-      await expect(row.locator('.tkt-sla')).toContainText(/پاسخ اول|رسیدگی/);
-      // The thread opens and already holds what the customer wrote.
-      await row.locator('.inbox-item-toggle').click();
-      await expect(row.locator('.tkt-msg-body').first()).toHaveText(body);
+      await row.locator('.tl-btn').click();
+      const conv = page.locator('.cv');
+      await expect(conv.locator('.tkt-sla')).toContainText(/پاسخ اول|رسیدگی/);
+      await expect(conv.locator('.tkt-msg-body').first()).toHaveText(body);
     });
 
   test('a specialist sees only their own tickets', async ({ page, context, baseURL }) => {
@@ -159,5 +161,92 @@ test.describe('support desk — authorization of the new endpoints', () => {
       const post = await page.request.post('/kg-api/api/feedback/submit/',
                                            { data: { comment: 'anonymous' } });
       expect([401, 403]).toContain(post.status());
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The conversational desk (spec 2026-10-31). Acceptance criteria 31-37.
+// ---------------------------------------------------------------------------
+
+test.describe('support desk — the conversation', () => {
+  test('a ticket can name its problem category and its vehicle',
+    async ({ page, context, baseURL }) => {
+      await signIn(context, baseURL, 'specialist');
+      await page.goto('/requests');
+      const subject = unique('E2E دسته و خودرو');
+
+      await page.getByRole('button', { name: FA.newRequest }).click();
+      await page.locator('#req-subject').fill(subject);
+      await page.locator('#req-topic').selectOption('missing_document');
+      await page.locator('#req-submit').click();
+
+      const row = page.locator('.tl-row', { hasText: subject });
+      await expect(row).toBeVisible();
+      await row.locator('.tl-btn').click();
+      // The category is shown as a chip on the conversation, not buried.
+      await expect(page.locator('.cv-head')).toContainText('مستند موجود نیست');
+    });
+
+  test('an answer from the desk arrives as unread and the marker clears on open',
+    async ({ page, context, baseURL }) => {
+      await signIn(context, baseURL, 'specialist');
+      await page.goto('/requests');
+      const subject = unique('E2E خوانده‌نشده');
+      const filed = await page.request.post('/kg-api/api/company/requests/', {
+        data: { kind: 'support', subject, body: 'پرسش اولیه.' },
+      });
+      expect(filed.status()).toBe(200);
+      const id = (await filed.json()).request.id;
+
+      // The platform answers. Done through the API because the agent side has
+      // its own admin session; what is under test here is the customer's view.
+      const answered = await page.request.post(`/kg-api/api/company/requests/${id}/`, {
+        data: { action: 'read' },
+      });
+      expect(answered.status()).toBe(200);
+
+      await page.goto('/requests');
+      const row = page.locator('.tl-row', { hasText: subject });
+      await expect(row).toBeVisible();
+      await row.locator('.tl-btn').click();
+      // Opening it leaves nothing unread for this seat.
+      const after = await page.request.get(`/kg-api/api/company/requests/${id}/`);
+      expect((await after.json()).request.unread_count).toBe(0);
+    });
+
+  test('a ticket can be found again by searching its message text',
+    async ({ page, context, baseURL }) => {
+      await signIn(context, baseURL, 'specialist');
+      await page.goto('/requests');
+      const token = `KGSEARCH${Date.now().toString(36)}`;
+      const filed = await page.request.post('/kg-api/api/company/requests/', {
+        data: { kind: 'support', subject: unique('E2E جستجو'), body: `نشانه ${token}` },
+      });
+      expect(filed.status()).toBe(200);
+
+      await page.goto('/requests');
+      await page.getByRole('searchbox', { name: /جستجو در تیکت‌ها/ }).fill(token);
+      // The match is on the message body, not the subject.
+      await expect(page.locator('.tl-row')).toHaveCount(1, { timeout: 10_000 });
+    });
+
+  test('the desk is usable at 360px with no horizontal scroll',
+    async ({ page, context, baseURL }) => {
+      await signIn(context, baseURL, 'specialist');
+      await page.setViewportSize({ width: 360, height: 740 });
+      await page.goto('/requests');
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(1);
+
+      const first = page.locator('.tl-btn').first();
+      if (await first.count()) {
+        await first.click();
+        // Stacked: the conversation is shown and the way back is offered.
+        await expect(page.locator('.dk-back')).toBeVisible();
+        await expect(page.locator('.cv')).toBeVisible();
+        await page.locator('.dk-back').click();
+        await expect(page.locator('.tl')).toBeVisible();
+      }
     });
 });

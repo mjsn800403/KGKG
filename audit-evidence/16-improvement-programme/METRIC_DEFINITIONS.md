@@ -104,6 +104,32 @@ who knows the feature exists, which is what a discovery item asks.
 parts catalogue opened by 6 seats, the assistant asked by 9, the search box
 used by 0, against 71,886 manual views across 34 active seats.
 
+## Desk categorisation and deflection (added 2026-10-31)
+
+Spec: `docs/superpowers/specs/2026-10-31-conversational-helpdesk-design.md`.
+All four are served by `/api/admin/support/metrics/`.
+
+| Metric | Definition | Source | Test |
+|---|---|---|---|
+| `by_topic` | Tickets created in the window, counted by `CompanyRequest.topic`. A ticket with no topic is counted under the key `uncategorised` — **named, not dropped**, because a silent omission would make the categorised share look better than it is. | `CompanyRequest.topic` | `test_by_topic_counts_uncategorised_separately` |
+| `by_vehicle` | Top ten vehicles by ticket count in the window, counting **only** tickets that named a vehicle. A vehicle with no tickets does not appear; absence here means "nobody said this vehicle", never "this vehicle is fine". | `CompanyRequest.car` | `test_by_vehicle_counts_only_tickets_with_a_car` |
+| `deflections` | `{suggested, deflected, rate}` over `KbSearchLog` rows with `context='compose'`. `suggested` is compose-time searches; `deflected` is those where a reader pressed «همین پاسخ را می‌خواستم». `rate` is `deflected / suggested`, **`null` when `suggested` is 0**. | `KbSearchLog.context`, `KbSearchLog.deflected_article` | `test_the_deflection_rate_is_none_when_nothing_was_suggested`, `test_a_deflection_is_counted_and_rated` |
+| `search.zero_result_share` | Share of compose-time searches that returned nothing, `null` when there were none. The most actionable knowledge signal there is: it names articles that should exist. | `KbSearchLog.results` | `test_search_reports_the_zero_result_share`, `test_the_zero_result_share_is_none_with_no_searches` |
+
+**What `deflections` is not.** It counts only an explicit button press. It does
+**not** count somebody opening a suggested article and then not filing a
+ticket, although that is easy to measure and would produce a larger, more
+flattering number. That inference cannot distinguish "the article answered me"
+from "I gave up", and a deflection rate built on it would be exactly the
+fabricated evidence the 2026-10-30 evaluation warned against. The honest
+consequence is that the real deflection rate is **at least** what this
+reports, and we do not claim to know by how much.
+
+**No baseline yet.** These four are shipped unmeasured: there was no topic, no
+vehicle link and no compose-time suggestion before 2026-10-31, so the first
+reading will be the first window after the release, not a comparison. Stated
+here rather than back-filled.
+
 ## Metrics deliberately NOT defined yet
 
 Named so that their absence is explicit rather than an oversight. Each belongs
