@@ -574,7 +574,7 @@ def admin_dashboard_view(request):
     from .requests_api import _request_dict
     open_requests = [_request_dict(r, include_company=True) for r in
                      CompanyRequest.objects.filter(status__in=CompanyRequest.OPEN_STATUSES)
-                     .select_related('company', 'created_by')[:15]]
+                     .select_related('company', 'created_by', 'car')[:15]]
 
     # Recent activity feed (cross-company, compact).
     recent_activity = [{

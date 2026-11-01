@@ -40,17 +40,25 @@ export default function Sidebar() {
   const viewTeam = !!me?.can_view_team;
   const analytics = viewTeam;
 
-  // Open tickets, badged so pending work is visible without opening the page.
-  // Fetched for every seat, not only managers: the count the API returns is
-  // already scoped to what the viewer may see (their own tickets, or the
-  // company's for a manager).
+  // UNREAD tickets, not open ones.
+  //
+  // This badge used to show `open_count`, which cannot reach zero while a
+  // ticket is legitimately open — so it sat there permanently and became
+  // furniture. Unread is a fact about the reader: it clears when they have
+  // seen the messages, which is what a badge is for. The count is scoped
+  // server-side to what the viewer may see (their own tickets, or the
+  // company's for a manager), so every seat can have one.
   useEffect(() => {
     if (!me) return undefined;
     let cancelled = false;
-    teamApi.requests()
-      .then((d) => { if (!cancelled) setOpenRequests(d?.meta?.open_count || 0); })
+    const read = () => teamApi.requests()
+      .then((d) => { if (!cancelled) setOpenRequests(d?.meta?.unread_count || 0); })
       .catch(() => {});
-    return () => { cancelled = true; };
+    read();
+    // The desk marks tickets read as they are opened, so the badge has to hear
+    // about it rather than waiting for a navigation.
+    window.addEventListener('kg:desk-read', read);
+    return () => { cancelled = true; window.removeEventListener('kg:desk-read', read); };
   }, [me]);
 
   const name = me?.display_name || me?.username || '';
@@ -95,7 +103,7 @@ export default function Sidebar() {
         <Link className={`sb-link${onRequests ? ' active' : ''}`} href="/requests" data-tour="nav-requests">
           <Icon name="mail" /> پشتیبانی و درخواست‌ها
           {openRequests > 0 && (
-            <span className="sb-badge" aria-label={`${fa(openRequests)} درخواست باز`}>{fa(openRequests)}</span>
+            <span className="sb-badge" aria-label={`${fa(openRequests)} پیام خوانده‌نشده`}>{fa(openRequests)}</span>
           )}
         </Link>
       </div>

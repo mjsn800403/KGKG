@@ -2545,3 +2545,114 @@ html:has(.content-renderer, .parts-viewer, .frm-wrap) .kg-watermark { display: b
 .onb-text a:hover{color:var(--accent)}
 .onb-why{font-size:11.5px;color:var(--text-faint);line-height:1.7}
 .onb-done-tag{margin-inline-start:auto;font-size:10.5px;color:var(--ok);flex-shrink:0}
+
+/* ===========================================================================
+   The conversational desk (components/desk/*, RequestsView, RequestsInbox)
+
+   Two panes above 860px, a stack below it. The breakpoint is handled here
+   rather than by measuring the viewport in JavaScript, so the first paint
+   after hydration is never the wrong layout.
+   =========================================================================== */
+.dk{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;align-items:start;
+    min-height:min(72vh,640px)}
+.dk-list{display:flex;flex-direction:column;gap:10px;min-width:0}
+.dk-conv{min-width:0}
+.dk-back{display:none}
+.dk-none{padding:28px 18px;text-align:center;color:var(--text-faint);
+         border:1px dashed var(--line);border-radius:14px}
+
+/* --- filters -------------------------------------------------------------- */
+.dk-filters{display:flex;flex-direction:column;gap:8px}
+.dk-search{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);
+           border-radius:999px;background:var(--surface)}
+.dk-search input{flex:1;min-width:0;border:0;background:transparent;color:inherit;font:inherit;
+                 outline:none}
+.dk-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.dk-select{padding:6px 10px;border:1px solid var(--line);border-radius:999px;
+           background:var(--surface);color:inherit;font:inherit;font-size:12px}
+
+/* --- ticket list ---------------------------------------------------------- */
+.tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;
+    max-height:min(64vh,560px);overflow-y:auto}
+.tl-row{border-radius:12px;border:1px solid transparent}
+.tl-row.tl-on{border-color:var(--acc1,#6366f1);background:var(--surface-2,rgba(127,127,127,.08))}
+.tl-btn{display:flex;align-items:flex-start;gap:10px;width:100%;padding:10px;border:0;
+        background:transparent;color:inherit;text-align:start;cursor:pointer;font:inherit;
+        border-radius:12px;min-height:44px}
+.tl-btn:hover{background:var(--surface-2,rgba(127,127,127,.06))}
+.tl-ava{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;
+        background:var(--gold-glow);color:var(--gold);font-size:12px;font-weight:700}
+.tl-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.tl-top{display:flex;align-items:baseline;gap:8px}
+.tl-subject{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            font-size:13px}
+.tl-when{flex:0 0 auto;font-size:11px;color:var(--text-faint);font-family:var(--mono)}
+.tl-sub{display:flex;gap:6px;font-size:11px;color:var(--text-faint);min-width:0}
+.tl-who,.tl-cat{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.tl-dot{flex:0 0 auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;
+        background:var(--gold);color:#1a1205;font-size:11px;font-weight:700;
+        display:grid;place-items:center}
+.tl-unread .tl-subject{font-weight:700}
+.tl-closed .tl-subject{color:var(--text-faint)}
+.tl-more{display:grid;place-items:center;padding:6px}
+
+/* --- conversation --------------------------------------------------------- */
+.cv{display:flex;flex-direction:column;gap:12px}
+.cv-head{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--line);
+         border-radius:14px;background:var(--surface);position:sticky;top:0;z-index:2}
+.cv-head-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cv-subject{margin:0;font-size:15px;font-weight:700}
+.cv-meta{display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--text-faint);
+         align-items:center}
+.cv-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;
+         background:var(--surface-2,rgba(127,127,127,.1))}
+
+/* --- thread: day separators and the unread divider ----------------------- */
+.tkt-msgs-wrap{display:flex;flex-direction:column;gap:4px;max-height:min(52vh,460px);
+               overflow-y:auto;padding-inline-end:4px}
+.tkt-day-sep{display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:11px;
+             font-weight:600;color:var(--text-faint)}
+.tkt-day-sep::before,.tkt-day-sep::after{content:"";flex:1;height:1px;background:var(--line)}
+/* The one marker that says "you have not read from here down". */
+.tkt-unread-sep{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:11px;
+                font-weight:700;color:var(--gold)}
+.tkt-unread-sep::before,.tkt-unread-sep::after{content:"";flex:1;height:1px;background:var(--gold)}
+.tkt-thread-trunc{font-size:11px;color:var(--text-faint);margin:0 0 6px}
+
+/* --- knowledge-base suggestions while composing -------------------------- */
+.kbs{margin:8px 0;padding:10px 12px;border:1px dashed var(--line);border-radius:12px}
+.kbs-head{margin:0 0 6px;font-size:12px;display:flex;align-items:center;gap:6px;
+          color:var(--text-faint)}
+.kbs-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.kbs-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kbs-link{flex:1;min-width:0;display:flex;align-items:center;gap:4px;border:0;background:none;
+          color:var(--acc1,#6366f1);font:inherit;font-size:13px;cursor:pointer;text-align:start;
+          padding:4px 0}
+.kbs-yes{font-size:11px;padding:4px 10px;min-height:32px}
+.kbs-body{margin-top:6px;padding:8px 10px;border-radius:10px;font-size:12px;line-height:1.7;
+          background:var(--surface-2,rgba(127,127,127,.08));white-space:pre-wrap}
+
+@media (max-width:860px){
+  /* One pane at a time. The conversation covers the list; the back control
+     appears and takes focus, so a keyboard user is never left on a row that
+     has scrolled out of the world. */
+  .dk{grid-template-columns:1fr;min-height:0}
+  .dk.dk-on-conv .dk-list{display:none}
+  .dk:not(.dk-on-conv) .dk-conv{display:none}
+  .dk-back{display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;min-height:44px;
+           padding:8px 12px;border:1px solid var(--line);border-radius:999px;
+           background:var(--surface);color:inherit;font:inherit;cursor:pointer}
+  .tl{max-height:none}
+  .tkt-msgs-wrap{max-height:none}
+  .cv-head{position:static}
+}
+
+@media (max-width:420px){
+  /* 360px is the floor: no horizontal scroll, and the composer stays usable. */
+  .tl-btn{padding:8px}
+  .tl-ava{flex-basis:28px;height:28px}
+  .cv-subject{font-size:14px}
+  .kbs-row{flex-direction:column;align-items:stretch}
+  .kbs-yes{width:100%}
+}
