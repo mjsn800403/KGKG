@@ -1,0 +1,60 @@
+# Version updates, kept deliberately quiet for a two-person team: one weekly
+# batch per ecosystem, minor and patch bumps grouped into a single PR, and at
+# most three open PRs per ecosystem. Security updates are separate (enabled in
+# repository settings) and are not limited by this file.
+#
+# Every PR is a normal PR into `work`: CI gates it, a person merges it, and
+# nothing here can reach production (promotion stays `kgkg-promote <sha>`).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /KG_backend
+    schedule: {interval: weekly, day: monday}
+    open-pull-requests-limit: 3
+    target-branch: work
+    commit-message: {prefix: "deps(backend)"}
+    labels: [dependencies]
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /kg_frontend
+    schedule: {interval: weekly, day: monday}
+    open-pull-requests-limit: 3
+    target-branch: work
+    commit-message: {prefix: "deps(frontend)"}
+    labels: [dependencies]
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /qa/e2e
+    schedule: {interval: monthly}
+    open-pull-requests-limit: 2
+    target-branch: work
+    commit-message: {prefix: "deps(qa)"}
+    labels: [dependencies]
+    groups:
+      qa-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories: [/KG_backend, /kg_frontend]
+    schedule: {interval: weekly, day: monday}
+    open-pull-requests-limit: 2
+    target-branch: work
+    commit-message: {prefix: "deps(docker)"}
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly, day: monday}
+    open-pull-requests-limit: 2
+    target-branch: work
+    commit-message: {prefix: "ci(deps)"}
+    labels: [dependencies]
+    groups:
+      actions:
+        patterns: ["*"]
