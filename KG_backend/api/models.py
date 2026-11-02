@@ -1711,3 +1711,6 @@ class KbSearchLog(models.Model):
 
     def __str__(self):
         return f'kb-search {self.query_norm!r} -> {self.results}'
+
+
+from .notifications.models import NotificationOutbox  # noqa: E402,F401
