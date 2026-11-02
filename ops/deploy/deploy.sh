@@ -557,13 +557,24 @@ write_release_metrics
 TAG=deploy-$TS
 VERSION=$(git -C "$PROD" show "$SHA:VERSION" 2>/dev/null | head -1 || true)
 git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT${VERSION:+ version $VERSION}" "$SHA"
-# Production is a detached HEAD, so name the refs in full: the release tag,
-# and the deployed branch when REF is one that origin has.
-PUSH_REFS=("refs/tags/$TAG")
-git -C "$PROD" show-ref -q --verify "refs/remotes/origin/$REF" \
-  && PUSH_REFS=("$SHA:refs/heads/$REF" "${PUSH_REFS[@]}")
-timeout 60 git -C "$PROD" push -q origin "${PUSH_REFS[@]}" \
-  || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin ${PUSH_REFS[*]}"
+# The tag, and only the tag. This used to push
+# "HEAD:$(git rev-parse --abbrev-ref HEAD)" as well, which made the production
+# checkout's branch whatever production happened to be running: that is how the
+# live commit 536ac91 came to sit on `rag-db-improvements` while `work` and
+# `main` had never seen it, with its CI red (#15), and it started a second CI
+# run on the already-promoted sha after every promote (#33). The live tree is
+# an artefact of a release, not a place to develop. It is detached, and the tag
+# is the only thing anyone else needs from it.
+# ops/deploy/test_detached_prod.sh proves every git operation above works
+# without a current branch, `merge --ff-only` included.
+timeout 60 git -C "$PROD" push -q origin "$TAG" \
+  || say "WARNING: pushing $TAG to origin failed (deploy itself is fine): git -C $PROD push origin $TAG"
+# A live tree on a branch is the configuration this guard exists to catch: the
+# push above no longer moves it, but a branch here still invites someone to
+# commit in the one checkout that must only ever fast-forward.
+if [[ $(git -C "$PROD" rev-parse --abbrev-ref HEAD) != HEAD ]]; then
+  say "WARNING: $PROD is on branch $(git -C "$PROD" rev-parse --abbrev-ref HEAD); it should be detached (see #15): git -C $PROD checkout --detach"
+fi
 # Keep the live and rollback images plus the newest few others. The same
 # retention now runs at the end of a staging run too (see the staging exit
 # above): this block was correct and only ever reached on a promote, so the
