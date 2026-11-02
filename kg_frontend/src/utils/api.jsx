@@ -672,12 +672,89 @@ export const teamApi = {
   },
   // Behavioural insights for the manager dashboard (seat use, idle/top members).
   insights: (range = 30) => teamFetch(`/api/team/insights/?range=${range}`),
-  // Company requests the manager files for the platform admin to action.
-  requests: (status) => teamFetch(`/api/company/requests/${status ? `?status=${status}` : ''}`),
+  // Support desk. Any signed-in seat may file a support request (the
+  // commercial kinds stay manager-only, enforced server-side); a seat sees
+  // the tickets it filed, a manager the company's.
+  // `params` is the desk's shared filter vocabulary: q, status, kind, topic,
+  // car_id, unread, limit, cursor. A bare string is still accepted so older
+  // callers keep working.
+  requests: (params) => {
+    const p = typeof params === 'string' ? (params ? { status: params } : {}) : (params || {});
+    const qs = new URLSearchParams(
+      Object.entries(p).filter(([, v]) => v !== '' && v !== null && v !== undefined),
+    ).toString();
+    return teamFetch(`/api/company/requests/${qs ? `?${qs}` : ''}`);
+  },
   createRequest: (payload) =>
     teamFetch('/api/company/requests/', { method: 'POST', body: JSON.stringify(payload) }),
+  // Detail carries the message thread (internal notes are filtered out
+  // server-side, not hidden here).
+  request: (id) => teamFetch(`/api/company/requests/${id}/`),
+  replyRequest: (id, message) =>
+    teamFetch(`/api/company/requests/${id}/`, { method: 'POST', body: JSON.stringify({ message }) }),
+  // A reply to a closed ticket reopens it; the server restarts the resolution
+  // clock and leaves the response clock alone.
+  rateRequest: (id, csat) =>
+    teamFetch(`/api/company/requests/${id}/`, { method: 'POST', body: JSON.stringify({ csat }) }),
   cancelRequest: (id) =>
     teamFetch(`/api/company/requests/${id}/`, { method: 'POST', body: JSON.stringify({ cancel: true }) }),
+  // Marking read is an action, never a side effect of opening the detail: the
+  // unread badge has to mean something, so only this clears it.
+  markRead: (id) =>
+    teamFetch(`/api/company/requests/${id}/`, { method: 'POST', body: JSON.stringify({ action: 'read' }) }),
+};
+
+/** Product feedback from any seat — an observation, not a support request, so
+ *  it is deliberately a different endpoint and a different model. */
+export const feedbackApi = {
+  submit: (payload) =>
+    teamFetch('/api/feedback/submit/', { method: 'POST', body: JSON.stringify(payload) }),
+};
+
+/** Feature discovery for the signed-in seat: what it is entitled to, what it
+ *  has already found, and whether it closed the strip. Completion is derived
+ *  server-side from activity, so there is nothing to report back — the only
+ *  write is the dismissal. */
+export const onboardingApi = {
+  get: () => teamFetch('/api/auth/onboarding/'),
+  dismiss: () => teamFetch('/api/auth/onboarding/', {
+    method: 'POST', body: JSON.stringify({ dismissed: true }),
+  }),
+};
+
+/** Knowledge base, as a seat sees it: published, customer-facing articles. A
+ *  `q` search is logged server-side with its result count, and the misses are
+ *  what tell us which article should exist next. */
+export const kbApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v)),
+    ).toString();
+    return teamFetch(`/api/kb/${qs ? `?${qs}` : ''}`);
+  },
+  article: (slug) => teamFetch(`/api/kb/${encodeURIComponent(slug)}/`),
+  // Suggestions while a ticket is being written. `context=compose` is what
+  // makes the search countable as a deflection opportunity.
+  suggest: (q, carId, composeId) => {
+    const qs = new URLSearchParams({ q, context: 'compose' });
+    if (carId) qs.set('car_id', String(carId));
+    // One id per opened ticket form. The form searches once per debounced
+    // pause while somebody types, so without this the deflection rate counted
+    // keystrokes and moved with typing speed.
+    if (composeId) qs.set('compose_id', composeId);
+    return teamFetch(`/api/kb/?${qs.toString()}`);
+  },
+  // "This answered it." Only this records a deflection; nothing is inferred
+  // from opening an article and walking away.
+  deflect: (slug, q, composeId) =>
+    teamFetch(`/api/kb/${encodeURIComponent(slug)}/deflect/`, {
+      method: 'POST',
+      body: JSON.stringify({ query: q || '', compose_id: composeId || '' }),
+    }),
+  vote: (slug, helpful) =>
+    teamFetch(`/api/kb/${encodeURIComponent(slug)}/vote/`, {
+      method: 'POST', body: JSON.stringify({ helpful }),
+    }),
 };
 
 /** Personalised behavioural recommendations for the logged-in portal user. */
@@ -903,14 +980,52 @@ export const adminApi = {
   dashboard: () => adminFetch('/api/admin/dashboard/'),
   processingSnapshot: () => adminFetch('/api/admin/processing-snapshot/'),
   // Company requests inbox (managers file these; admin actions them).
+  // Same filter vocabulary as the customer side, plus source, company_id and
+  // awaiting. Empty values are dropped so a cleared filter does not become
+  // `?topic=` and match nothing.
   companyRequests: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined),
+    ).toString();
     return adminFetch(`/api/admin/company-requests/${qs ? `?${qs}` : ''}`);
   },
+  companyRequest: (id) => adminFetch(`/api/admin/company-requests/${id}/`),
+  markCompanyRequestRead: (id) =>
+    adminFetch(`/api/admin/company-requests/${id}/`, {
+      method: 'POST', body: JSON.stringify({ action: 'read' }),
+    }),
   setCompanyRequest: (id, payload) =>
     adminFetch(`/api/admin/company-requests/${id}/`, {
       method: 'POST', body: JSON.stringify(payload),
     }),
+  // Log a request that arrived by telephone, e-mail or in person, so it gets
+  // the same thread, the same SLA clock and the same metrics as a digital one.
+  logCompanyRequest: (payload) =>
+    adminFetch('/api/admin/company-requests/', {
+      method: 'POST', body: JSON.stringify(payload),
+    }),
+  // Turn a resolved ticket into a DRAFT knowledge article.
+  promoteRequest: (id, payload) =>
+    adminFetch(`/api/admin/company-requests/${id}/promote-to-article/`, {
+      method: 'POST', body: JSON.stringify(payload),
+    }),
+  // Support KPIs. Every field is defined in
+  // audit-evidence/16-improvement-programme/METRIC_DEFINITIONS.md.
+  supportMetrics: (days = 30) => adminFetch(`/api/admin/support/metrics/?days=${days}`),
+  productFeedback: (days = 30) => adminFetch(`/api/admin/feedback/?days=${days}`),
+  // Knowledge base authoring: every article has a named owner and a review
+  // interval, and a text edit appends a revision.
+  kb: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v)),
+    ).toString();
+    return adminFetch(`/api/admin/kb/${qs ? `?${qs}` : ''}`);
+  },
+  kbCreate: (payload) =>
+    adminFetch('/api/admin/kb/', { method: 'POST', body: JSON.stringify(payload) }),
+  kbArticle: (id) => adminFetch(`/api/admin/kb/${id}/`),
+  kbUpdate: (id, payload) =>
+    adminFetch(`/api/admin/kb/${id}/`, { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 // --- admin auth (review queue + pin) ---------------------------------------

@@ -466,7 +466,7 @@ def _embed_rows(diag, table_vec, items, log):
 def build_car(car_stem, rebuild=False, log=print):
     """Build the diagnostic sidecar for one car. Returns a stats dict."""
     src_path = config.WAREHOUSE_DIR / f"{car_stem}.db"
-    if not src_path.exists():
+    if not config.car_db_present(car_stem):
         raise FileNotFoundError(str(src_path))
     out_path = config.diag_db_path(car_stem)
     if rebuild:

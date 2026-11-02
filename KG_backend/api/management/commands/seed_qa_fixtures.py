@@ -31,7 +31,8 @@ from django.db import connection
 from django.core.management.base import BaseCommand, CommandError
 
 from api.access import VALID_DOCS
-from api.models import AuthToken, Car, Company, CompanyCarAccess, PortalUser, UserCarAccess
+from api.models import (AdminAuthToken, AuthToken, Car, Company, CompanyCarAccess,
+                        PlatformAdmin, PortalUser, UserCarAccess)
 
 CAR = ('Toyota', 2025, 'Corolla Cross Hybrid S')
 MARKER = '.qa-stack'
@@ -101,9 +102,19 @@ class Command(BaseCommand):
             user=mgr, car=car, defaults={'documents': docs, 'admin_granted': True})
         tokens = {k: AuthToken.issue(u).key for k, u in accounts.items()}
         tokens['manager_logout'] = AuthToken.issue(mgr).key
+        # A desk account, so an E2E can exercise the TWO-SIDED behaviour: a
+        # customer cannot create their own unread (their own messages never
+        # count), so without this the test for "an answer arrives unread and
+        # the marker clears on open" cannot answer anything, and would pass
+        # with the whole read-marking path deleted.
+        desk, _ = PlatformAdmin.objects.update_or_create(
+            username='qa_e2e_desk',
+            defaults={'password_hash': 'x', 'active': True})
+        tokens['desk_admin'] = AdminAuthToken.issue(desk).key
         self.stdout.write(json.dumps({
             'tokens': tokens,
             'companies': ['QA-E2E-A', 'QA-E2E-B'],
             'users': ['qa_e2e_manager', 'qa_e2e_specialist', 'qa_e2e_locked', 'qa_e2e_other'],
+            'admins': ['qa_e2e_desk'],
             'car': {'brand': car.brand_name, 'year': car.year, 'model': car.car_name},
         }))

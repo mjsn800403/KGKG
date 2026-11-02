@@ -125,7 +125,8 @@ def expected_sections(stem):
 # ---------------------------------------------------------------------------
 
 def _ro(path):
-    return sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+    from .rag import store
+    return store.open_car_ro(path)
 
 
 def audit_vehicle_db(path):
@@ -138,7 +139,7 @@ def audit_vehicle_db(path):
     stem = os.path.splitext(os.path.basename(path))[0]
     info = {
         'stem': stem,
-        'size_mb': round(os.path.getsize(path) / 1e6, 1),
+        'size_mb': round(os.path.getsize(path) / 1e6, 1) if os.path.exists(path) else None,
         'integrity': None, 'error': None,
         'total_nodes': 0, 'content_leaves': 0, 'empty_leaves': 0,
         'content_mb': 0.0, 'sections': [], 'fingerprint': None,
@@ -146,7 +147,7 @@ def audit_vehicle_db(path):
     try:
         con = _ro(path)
         cur = con.cursor()
-    except sqlite3.Error as e:
+    except Exception as e:
         info['error'] = f'cannot open: {e}'
         info['integrity'] = 'unreadable'
         return info

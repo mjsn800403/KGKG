@@ -136,13 +136,14 @@ class PendingWorkQueueTest(TestCase):
     def test_stage_definitions_order_and_plans(self):
         keys = [d['key'] for d in pipeline.stage_definitions()]
         self.assertEqual(keys, ['parse', 'catalog', 'schema',
-                                'rag', 'diag', 'audit'])
+                                'rag', 'diag', 'pgcar', 'audit'])
         work = {'need_parse': 7, 'need_catalog': ['a'],
                 'need_schema': ['a', 'b'], 'need_rag_ingest': [],
                 'pages_to_embed': 0, 'graph_pending': False, 'need_diag': []}
         plans = {d['key']: d['plan'](work) for d in pipeline.stage_definitions()}
         self.assertEqual(plans['parse'], 7)
         self.assertEqual(plans['schema'], 2)
+        self.assertEqual(plans['pgcar'], 0)
         self.assertEqual(plans['audit'], 1)
 
     def test_estimate_includes_queue_terms(self):

@@ -557,8 +557,13 @@ write_release_metrics
 TAG=deploy-$TS
 VERSION=$(git -C "$PROD" show "$SHA:VERSION" 2>/dev/null | head -1 || true)
 git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT${VERSION:+ version $VERSION}" "$SHA"
-timeout 60 git -C "$PROD" push -q origin "HEAD:$(git -C "$PROD" rev-parse --abbrev-ref HEAD)" "$TAG" \
-  || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin HEAD $TAG"
+# Production is a detached HEAD, so name the refs in full: the release tag,
+# and the deployed branch when REF is one that origin has.
+PUSH_REFS=("refs/tags/$TAG")
+git -C "$PROD" show-ref -q --verify "refs/remotes/origin/$REF" \
+  && PUSH_REFS=("$SHA:refs/heads/$REF" "${PUSH_REFS[@]}")
+timeout 60 git -C "$PROD" push -q origin "${PUSH_REFS[@]}" \
+  || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin ${PUSH_REFS[*]}"
 # Keep the live and rollback images plus the newest few others. The same
 # retention now runs at the end of a staging run too (see the staging exit
 # above): this block was correct and only ever reached on a promote, so the

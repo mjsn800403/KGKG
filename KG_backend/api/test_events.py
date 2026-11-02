@@ -127,12 +127,17 @@ class CompanyRequestLifecycleTests(TestCase):
         r = self._post('/api/company/requests/', {'kind': 'support'}, self.tok)
         self.assertEqual(r.status_code, 400)
 
-    def test_specialist_cannot_file_request(self):
+    def test_specialist_can_file_a_support_request_but_not_a_commercial_one(self):
+        """Changed 2026-10-30: a specialist filing a support ticket used to be
+        a 403, which left the telephone as their only channel. Commercial
+        kinds are still a manager's decision."""
         spec = PortalUser(company=self.company, username='rq_spec',
                           role='after_sales_specialist', )
         spec.set_password('p'); spec.save()
         st = AuthToken.issue(spec).key
         r = self._post('/api/company/requests/', {'kind': 'support', 'subject': 'x'}, st)
+        self.assertEqual(r.status_code, 200, r.content)
+        r = self._post('/api/company/requests/', {'kind': 'seats', 'subject': 'x'}, st)
         self.assertEqual(r.status_code, 403)
 
     def test_manager_can_cancel_own_open_request(self):

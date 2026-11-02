@@ -115,7 +115,7 @@ class JobLifecycleTests(TestCase):
             self.assertEqual(job.status, 'pending')
             self.assertEqual([s['key'] for s in job.stages],
                              ['parse', 'catalog', 'schema',
-                              'rag', 'diag', 'audit'])
+                              'rag', 'diag', 'pgcar', 'audit'])
             launch.assert_called_once()
             # Second start while one is active must refuse.
             job2, err2 = pipeline.start_job()
