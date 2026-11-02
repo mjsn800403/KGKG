@@ -35,6 +35,8 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [16 — Parts catalog](16-parts-catalog.md) | Parts-only vehicles, import pipeline, /parts UI |
 | [17 — AI evaluation suite](17-evaluation.md) | Gold sets, baselines, retrieval/diagnosis/answer metrics, expert-review tooling |
 | [18 — Security hardening](18-security-hardening.md) | Secret/token rotation, nginx rate limiting, ModSecurity+CRS WAF, GlitchTip error monitoring |
+| [19 — Engineer onboarding](19-onboarding.md) | Day 1 / week 1 / month 1 path for a new engineer, with a check per step; how knowledge is handed over |
+| [20 — Runbooks](20-runbooks.md) | Site down, false alerts, slowness, failed deploy, AI provider outage, disk, restore, adding a vehicle, SMS paging |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |
 | [CHANGELOG](CHANGELOG.md) | Dated log of shipped changes, newest first |
 

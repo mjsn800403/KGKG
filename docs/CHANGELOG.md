@@ -4,6 +4,9 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Engineer onboarding and runbooks.** `docs/19-onboarding.md` gives a new engineer a
+  checked day-1/week-1/month-1 path and the hand-over rule; `docs/20-runbooks.md` holds nine
+  incident runbooks (notice, confirm, do, fixed-when). Both registered in `OWNERS.toml`.
 - **Feature-discovery onboarding.** Measured first: over four months and 34 active seats,
   production showed 71,886 manual views, the parts catalogue opened by 6 people, the assistant
   asked by 9, and the search box used by nobody. People found the manuals and stopped looking,
