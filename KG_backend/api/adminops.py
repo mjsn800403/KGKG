@@ -537,6 +537,7 @@ def admin_dashboard_view(request):
     open company requests, recent events, and a small traffic sparkline. After
     this, the dashboard stays current from the SSE stream alone."""
     from . import events as ev
+    from .requests_api import awaiting_reply_count
     from .models import (
         ActivityLog, Car, Company, CompanyRequest, Event, PortalUser,
         PurchaseRequest,
@@ -553,6 +554,10 @@ def admin_dashboard_view(request):
         'activities_today': ActivityLog.objects.filter(created_at__date=today).count(),
         'open_company_requests': CompanyRequest.objects.filter(
             status__in=CompanyRequest.OPEN_STATUSES).count(),
+        # Open and waiting on us are different facts: a ticket we have
+        # answered is still open. The panel's indicator follows this one, so
+        # that answering a ticket actually clears it.
+        'awaiting_reply_company_requests': awaiting_reply_count(),
         'open_purchase_requests': PurchaseRequest.objects.filter(status='new').count(),
         'open_alerts': SystemAlert.objects.filter(is_open=True).count(),
     }
@@ -569,7 +574,7 @@ def admin_dashboard_view(request):
     from .requests_api import _request_dict
     open_requests = [_request_dict(r, include_company=True) for r in
                      CompanyRequest.objects.filter(status__in=CompanyRequest.OPEN_STATUSES)
-                     .select_related('company', 'created_by')[:15]]
+                     .select_related('company', 'created_by', 'car')[:15]]
 
     # Recent activity feed (cross-company, compact).
     recent_activity = [{

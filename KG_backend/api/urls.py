@@ -57,6 +57,7 @@ urlpatterns = [
     path('api/kb/', knowledge.kb_list_view, name='kb_list'),
     path('api/kb/<slug:slug>/', knowledge.kb_detail_view, name='kb_detail'),
     path('api/kb/<slug:slug>/vote/', knowledge.kb_vote_view, name='kb_vote'),
+    path('api/kb/<slug:slug>/deflect/', knowledge.deflect_view, name='kb_deflect'),
     path('api/admin/kb/', knowledge.admin_kb_view, name='admin_kb'),
     path('api/admin/kb/<int:article_id>/', knowledge.admin_kb_detail_view,
          name='admin_kb_detail'),

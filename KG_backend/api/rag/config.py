@@ -87,14 +87,26 @@ GLOSSARY_MAX_TERMS = 16
 
 
 def car_db_files():
-    """All real car DB files on disk (top-level *.db, excluding our own
-    sidecar/backup folders). Returns a sorted list of Path."""
-    out = []
-    for p in sorted(WAREHOUSE_DIR.glob('*.db')):
+    """Every car DB: top-level *.db files on disk (excluding our own
+    sidecar/backup folders) plus the cars served from PostgreSQL, whose path
+    no longer exists but still names the car. Returns a sorted list of Path."""
+    out = {}
+    for p in WAREHOUSE_DIR.glob('*.db'):
         if any(p.name.startswith(pre) for pre in _NON_CAR_PREFIXES):
             continue
-        out.append(p)
-    return out
+        out[p.name] = p
+    from api import cardb_pg
+    if '*' in cardb_pg.pg_cars():
+        for name in cardb_pg.loaded_files():
+            out.setdefault(name, WAREHOUSE_DIR / name)
+    return [out[k] for k in sorted(out)]
+
+
+def car_db_present(stem):
+    """Is there a car DB for this stem, as a file or in PostgreSQL?"""
+    from api import cardb_pg
+    path = WAREHOUSE_DIR / f'{stem}.db'
+    return path.exists() or cardb_pg.is_pg(path)
 
 
 # ---------------------------------------------------------------------------
@@ -637,6 +649,33 @@ FEEDBACK_DB = Path(os.environ.get('RAG_FEEDBACK_DB') or (RAG_DIR / 'feedback.db'
 RERANK = os.environ.get('RAG_RERANK', '0') == '1'
 RERANK_MODEL = os.environ.get('RAG_RERANK_MODEL', 'BAAI/bge-reranker-v2-m3')
 RERANK_CANDIDATES = 20
+# Fuse the cross-encoder with the retrieval order instead of replacing it:
+# z(rerank) * w + z(-retrieval rank) * (1 - w), per question. 1.0 = rerank only
+# (old behaviour). KG-Reranker on the gold sets, w chosen by 2-fold CV: 0.4
+# (EN nDCG@5 +0.12, FA Hit@1 +0.19, both p<0.001; pure rerank lost EN Hit@1).
+RERANK_FUSE = float(os.environ.get('RAG_RERANK_FUSE', '1.0'))
 
 # Car-scoped dense pass depth (retrieve.assist, pinned car only).
 CAR_VEC_K = int(os.environ.get('RAG_CAR_VEC_K', '40'))
+
+# Query-side adapter for the embedding model (train_query_adapter): a small
+# learned map applied to QUESTION vectors only, so page vectors need no rebuild.
+# Path to the adapter directory; empty = off.
+QUERY_ADAPTER = os.environ.get('RAG_QUERY_ADAPTER', '')
+
+# Keyword (BM25) backend: 'sqlite' (FTS5 in index.rag.db, default) or 'pg'
+# (FTS5's bm25 formula in PostgreSQL, api/rag/pgfts.py; falls back to FTS5).
+FTS_BACKEND = os.environ.get('RAG_FTS_BACKEND', 'sqlite')
+
+# Dense KNN backend: 'sqlite' (sqlite-vec inside index.rag.db, default) or
+# 'pgvector' (PostgreSQL HNSW, see api/rag/pgvec.py; falls back to sqlite-vec).
+VEC_BACKEND = os.environ.get('RAG_VEC_BACKEND', 'sqlite')
+# Same server and login as the portal DB (KG_PG_*), separate database.
+PGVEC_DSN = os.environ.get('RAG_PGVEC_DSN') or ' '.join(
+    f"{k}='{v}'" for k, v in (
+        ('dbname', os.environ.get('RAG_PGVEC_DB', 'kgkg_vec')),
+        ('host', os.environ.get('KG_PG_HOST', '')),
+        ('port', os.environ.get('KG_PG_PORT', '')),
+        ('user', os.environ.get('KG_PG_USER', '')),
+        ('password', os.environ.get('KG_PG_PASSWORD', ''))) if v)
+PGVEC_EF_SEARCH = int(os.environ.get('RAG_PGVEC_EF_SEARCH', '400'))

@@ -23,10 +23,15 @@ avoidable syscall + page-cache churn on 400-900MB files. This module gives:
 Thread-safety: sqlite3 connections stay on the thread that opened them
 (default ``check_same_thread=True``); the pool is a ``threading.local``.
 """
+import logging
 import os
 import sqlite3
 import threading
 import time
+
+from . import cardb_pg
+
+log = logging.getLogger(__name__)
 
 MAX_POOLED_PER_THREAD = int(os.environ.get('KG_CARDB_POOL', '8'))
 READY_TTL_S = 30.0
@@ -46,8 +51,19 @@ def _pragmas(conn):
 
 
 def connect(path):
-    """Read-only pooled connection to ``path`` for the current thread."""
+    """Read-only pooled connection to ``path`` for the current thread.
+
+    Cars listed in KG_CARDB_PG are served from PostgreSQL (see cardb_pg); if
+    PostgreSQL is unreachable they fall back to their SQLite file."""
     path = str(path)
+    if cardb_pg.pg_cars():
+        try:
+            pgc = cardb_pg.connect(path)
+        except Exception:
+            log.warning('PostgreSQL car db unavailable, serving %s from SQLite', path, exc_info=True)
+            pgc = None
+        if pgc is not None:
+            return pgc
     pool = getattr(_tls, 'pool', None)
     if pool is None:
         pool = _tls.pool = {}
@@ -120,7 +136,8 @@ def ready_path(path):
         hit = _ready_cache.get(path)
         if hit is not None and now - hit[1] < READY_TTL_S:
             return hit[0]
-    ok = os.path.isfile(path)
+    # a car served from PostgreSQL may no longer have its SQLite file
+    ok = os.path.isfile(path) or cardb_pg.is_pg(path)
     with _ready_lock:
         _ready_cache[path] = (ok, now)
         if len(_ready_cache) > 4096:       # bound: prune expired entries

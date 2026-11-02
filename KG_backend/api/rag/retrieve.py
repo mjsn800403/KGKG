@@ -21,7 +21,7 @@ from urllib.parse import quote
 import logging
 from collections import OrderedDict
 
-from . import config, store, embed, glossary, scoring, feedback
+from . import config, store, embed, glossary, scoring, feedback, pgvec, pgfts
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +232,62 @@ def _matched_via(kind, sim, bm25_norm, vehicle_boost, pinned=False):
     return 'keyword' if bm25_norm >= sim else 'semantic'
 
 
+
+
+def _bm25(index, fts_query, k):
+    """Global keyword pass: [(blob_id, bm25)] best first (FTS5 sign: lower = better)."""
+    if config.FTS_BACKEND == 'pg':
+        hits = pgfts.search(fts_query, k)
+        if hits is not None:
+            return hits
+    return [(r['bid'], float(r['bm'])) for r in index.execute(
+        "SELECT rowid AS bid, bm25(blobs_fts, ?, ?, ?) AS bm FROM blobs_fts "
+        "WHERE blobs_fts MATCH ? ORDER BY bm LIMIT ?",
+        (config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP,
+         fts_query, k)).fetchall()]
+
+
+def _bm25_scoped(index, fts_query, own):
+    """Car-scoped keyword pass over the car's own blobs, best first.
+
+    PostgreSQL filters by blob directly; FTS5 cannot (it refuses bm25() on a
+    joined MATCH), so it scans SCOPE_FTS_SCAN deep and intersects in Python."""
+    if config.FTS_BACKEND == 'pg' and own:
+        hits = pgfts.search(fts_query, config.SCOPE_FTS_K, own)
+        if hits is not None:
+            return hits
+    out = []
+    for r in index.execute(
+            "SELECT rowid AS bid, bm25(blobs_fts, ?, ?, ?) AS bm "
+            "FROM blobs_fts WHERE blobs_fts MATCH ? ORDER BY bm LIMIT ?",
+            (config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP,
+             fts_query, config.SCOPE_FTS_SCAN)):
+        if r['bid'] in own:
+            out.append((r['bid'], float(r['bm'])))
+            if len(out) >= config.SCOPE_FTS_K:
+                break
+    return out
+
+def _knn(index, qlist, qblob, k, ids=None):
+    """Dense nearest neighbours as [(blob_id, cosine_distance)], nearest first.
+    pgvector when RAG_VEC_BACKEND=pgvector and reachable, else sqlite-vec."""
+    if config.VEC_BACKEND == 'pgvector':
+        hits = pgvec.knn(qlist, k, ids)
+        if hits is not None:
+            return hits
+    if ids:
+        idl = ','.join(str(int(b)) for b in ids)
+        rows = index.execute(
+            "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
+            "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
+            f"AND rowid IN ({idl}) ORDER BY distance", (qblob, k)).fetchall()
+    else:
+        rows = index.execute(
+            "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
+            "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
+            "ORDER BY distance", (qblob, k)).fetchall()
+    return [(r['bid'], float(r['dist'])) for r in rows]
+
 def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
            allowed_cars=None, expand=True, with_text=True, scope_fts=False):
     """Retrieve grounded manual excerpts for ``query``.
@@ -320,12 +376,9 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
         if bm25 is not None and (s['bm25'] is None or bm25 < s['bm25']):
             s['bm25'] = bm25     # FTS5 bm25(): more negative == better
 
-    vec = index.execute(
-        "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
-        "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
-        "ORDER BY distance", (qblob, vec_k)).fetchall()
-    for rank, r in enumerate(vec):
-        bump(r['bid'], rank, wv, sim=1.0 - float(r['dist']))
+    vec = _knn(index, qlist, qblob, vec_k)
+    for rank, (bid, dist) in enumerate(vec):
+        bump(bid, rank, wv, sim=1.0 - dist)
 
     # Car-scoped dense pass: the global KNN above ranks all ~301k blobs, so for
     # a descriptive (often Persian) question none of the pinned car's pages may
@@ -334,26 +387,17 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
     if car_stem:
         own = _car_blob_ids(index, car_stem)
         if own:
-            ids = ','.join(str(int(b)) for b in own)
-            for rank, r in enumerate(index.execute(
-                    "SELECT rowid AS bid, distance AS dist FROM vec_blobs "
-                    "WHERE embedding MATCH vec_quantize_int8(vec_f32(?),'unit') AND k=? "
-                    f"AND rowid IN ({ids}) ORDER BY distance",
-                    (qblob, config.CAR_VEC_K)).fetchall()):
-                bump(r['bid'], rank, wv, sim=1.0 - float(r['dist']))
+            for rank, (bid, dist) in enumerate(
+                    _knn(index, qlist, qblob, config.CAR_VEC_K, own)):
+                bump(bid, rank, wv, sim=1.0 - dist)
 
     if fts_query:
         try:
             # bm25() takes per-column weights (text, title, comp). Ordering by
             # the weighted value rather than `rank` also changes WHICH pages are
             # fetched, not just how they score -- a title match now competes.
-            fts = index.execute(
-                "SELECT rowid AS bid, bm25(blobs_fts, ?, ?, ?) AS bm FROM blobs_fts "
-                "WHERE blobs_fts MATCH ? ORDER BY bm LIMIT ?",
-                (config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP,
-                 fts_query, fts_k)).fetchall()
-            for rank, r in enumerate(fts):
-                bump(r['bid'], rank, wf, bm25=float(r['bm']))
+            for rank, (bid, bm) in enumerate(_bm25(index, fts_query, fts_k)):
+                bump(bid, rank, wf, bm25=bm)
         except Exception:
             pass
 
@@ -367,17 +411,8 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
             # Python. Joining occurrences inside the query instead cost ~3.6s;
             # FTS5 also refuses bm25() whenever the MATCH table is joined.
             own = _car_blob_ids(index, car_stem)
-            taken = 0
-            for r in index.execute(
-                    "SELECT rowid AS bid, bm25(blobs_fts, ?, ?, ?) AS bm "
-                    "FROM blobs_fts WHERE blobs_fts MATCH ? ORDER BY bm LIMIT ?",
-                    (config.FTS_W_TEXT, config.FTS_W_TITLE, config.FTS_W_COMP,
-                     fts_query, config.SCOPE_FTS_SCAN)):
-                if r['bid'] in own:
-                    bump(r['bid'], taken, wf, bm25=float(r['bm']))
-                    taken += 1
-                    if taken >= config.SCOPE_FTS_K:
-                        break
+            for rank, (bid, bm) in enumerate(_bm25_scoped(index, fts_query, own)):
+                bump(bid, rank, wf, bm25=bm)
         except Exception:
             # additive pass: never fail the query over it, but do not hide the
             # failure the way a bare `pass` did.

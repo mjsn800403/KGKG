@@ -101,21 +101,37 @@ fi
 # held the lock teaches people to ignore red. KG_GATE_LOCK_WAIT=0 restores the
 # fail-fast behaviour for an interactive operator who would rather know now.
 LOCK_WAIT=${KG_GATE_LOCK_WAIT:-1800}
-exec 9>/run/kg-deploy.lock
+exec 9>"${KG_GATE_LOCK:-/run/kg-deploy.lock}"
 if ! flock -n 9; then
   echo "another deploy or staging run is in progress; waiting up to ${LOCK_WAIT}s for it"
   flock -w "$LOCK_WAIT" 9 || { echo "still locked after ${LOCK_WAIT}s; giving up" >&2; exit 3; }
 fi
 
+# The three systemd entry points are indirected so the launch path below can
+# be tested with stubs (ops/deploy/test_gate_roles.sh); in production they are
+# the real commands.
+SYSTEMD_RUN=${KG_GATE_SYSTEMD_RUN:-systemd-run}
+SYSTEMCTL=${KG_GATE_SYSTEMCTL:-systemctl}
+JOURNALCTL=${KG_GATE_JOURNALCTL:-journalctl}
+
 unit=kgkg-$label-$(date -u +%Y%m%d-%H%M%S)
 echo "starting $unit for ${sha:0:9} (role=$ROLE)"
-journalctl -q -f -o cat -n 0 -u "$unit" &
+$JOURNALCTL -q -f -o cat -n 0 -u "$unit" &
 follow=$!
 # --wait returns the run's exit status; if this SSH session dies, the unit
 # carries on regardless.
-systemd-run -q --wait --unit "$unit" --property=RuntimeMaxSec=3600 \
+$SYSTEMD_RUN -q --wait --unit "$unit" --property=RuntimeMaxSec=3600 \
   /bin/bash "$DEPLOY" "${args[@]}"
 rc=$?
 sleep 2; kill $follow 2>/dev/null
 echo "$label exit status: $rc"
+# The run's name is unique per invocation, so a non-zero exit leaves a failed
+# unit behind for ever: `systemctl list-units --state=failed` keeps naming a
+# staging run that finished, was reported red to CI, and has nothing left to
+# act on. Since the watchdog started paging for failed units (2026-10-29) that
+# residue is an SMS every 12 hours, which is how a true signal gets trained
+# into noise. The exit status above is the result; the unit is bookkeeping, so
+# this clears it. A failure that matters is still in the journal under $unit
+# and in the deploy log the run names.
+(( rc == 0 )) || $SYSTEMCTL reset-failed "$unit" 2>/dev/null || true
 exit $rc

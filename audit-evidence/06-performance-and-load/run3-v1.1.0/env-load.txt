@@ -1,0 +1,8 @@
+profile=load
+started=2026-10-30T05:24:30Z
+QA_SHA=8f6df9433ea95fec440940d4dd5146123fd29046
+host=16 vCPU, 31 GiB RAM
+/kgkg-qa-backend cpus=6000000000 mem=10737418240
+/kgkg-qa-frontend cpus=2000000000 mem=3221225472
+/kgkg-qa-proxy cpus=1000000000 mem=0
+finished=2026-10-30T05:31:01Z exit=0

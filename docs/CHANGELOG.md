@@ -59,10 +59,15 @@ short and point at the doc section that was updated.
   * **A slug the reader's route cannot match is refused at the point of writing.** An article with
     a space, a slash or Persian letters in its slug published fine, listed fine, and 404'd when
     opened — with no way to repair it from the editor. Same check on promote-to-article.
-- **Coverage floor 56 → 60 %** (`ops/deploy/coverage_min`). CI measured 61 % (line+branch,
-  PostgreSQL, random order, 1,237 tests) on the service-desk branch, so the floor is raised in
-  the commit that earned it, as the ratchet's own comment requires. One point of headroom: the
-  next change that lands with thin tests will be told so by CI rather than by an audit.
+- **Coverage floor.** The service-desk branch measured 61 % and raised its floor 56 → 60.
+  Reconciling that branch with `work` merges two lineages that each raised the floor
+  independently (`work` was at 57), over a combined codebase neither had measured, so the
+  merge therefore held the floor at 57 until CI measured the merged tree, which came out at
+  **60 %** (16,828 statements, 5,728 branches) — and the floor is now **59**, one point of
+  headroom, the same discipline the service-desk branch applied when it measured 61 and set
+  60. The ratchet's rule — a floor moves up, never down to make CI pass —
+  is about a lineage over time; it says nothing about which of two numbers survives a merge,
+  and inheriting the higher one without measuring would be guessing.
 - **The support desk now has an interface.** Everything below had been API-only, which meant no
   customer could use it. `/requests` is the customer side of the desk and is open to **every**
   seat: file a ticket, hold the conversation (`components/TicketThread.jsx`), see the SLA state
@@ -124,6 +129,86 @@ short and point at the doc section that was updated.
   and the literal `handled_by='admin'` were updated, each with a comment recording why the
   behaviour changed. Nine new paths added to `docs/openapi.yaml`, caught by the spec gate.
   Migrations `0035_helpdesk_thread_sla_csat`, `0036_knowledge_base` — additive only.
+## 1.1.0 — 2026-10-30 (`deploy-20261030-053247`, `8f6df94`)
+
+Infrastructure and governance. Nothing here changes what a customer sees; all
+of it changes what can reach them and what an evaluator can check.
+
+Promoted with the full evidence set gathered on the promoted commit — CI green,
+staging gate and smoke, E2E 42/42 at full scope, k6 load passing all four
+thresholds with production measured untouched, and the ZAP full scan at 141
+pass / 0 fail. The first release in this project's history for which the load
+and DAST runs the policy has required since 2026-10-27 were actually performed
+on the commit that shipped. Record:
+`audit-evidence/10-release-management/RELEASE_RECORD_v1.1.0.md`.
+
+The first promote attempt was **refused by the gate**, which found D-43 below
+on a commit whose CI had passed.
+
+- **The pipeline is now the only road into production.** `kgkg-promote` refuses
+  a commit whose GitHub CI is not green, via `ops/deploy/ci_evidence.sh`, and
+  treats an unreachable GitHub as "not green" rather than "fine". The gap this
+  closes is not hypothetical: `536ac91` went live on 2026-10-29 with CI red on
+  the coverage ratchet, because the server gate proves a release *runs* and
+  never saw GitHub's verdict. `test_promote.sh` 22 → 40 checks.
+- **The alerting engine can no longer go quiet.** Every infra rule was shaped
+  `<metric> == 0`, which matches nothing once the exporter behind it dies — read
+  by the engine as healthy. `up{job="kgkg_app"}` was 0 for 49 minutes on
+  2026-10-27 and nobody was told. Rules now watch the exporters themselves,
+  with `absent()` guards, and `RuleShapeTests` fails any future rule written
+  the old way. Postmortem in `audit-evidence/11-operations-and-support/`.
+- **Failed systemd units page**, and the fix arrived through the release rather
+  than by hand, so the next promote cannot revert it — which is exactly what
+  happened to the first attempt.
+- **A transient staging unit no longer outlives its run.** The first failed
+  staging after the above was one watchdog tick from an SMS every 12 hours
+  about a run already reported red in CI. `kg-deploy-gate` resets its own unit;
+  the launch path has tests for the first time (`test_gate_roles.sh` 21 → 24).
+- **`main` is protected**: required checks, pull request required, admins
+  included, no force-push, no deletion. CI was advice until now.
+- **Governance**: `README.md`, `LICENSE` (proprietary — the repository is public
+  but not open source), `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`,
+  `CODEOWNERS`, a pull-request template, and `.mailmap` folding nine author
+  identities into two people plus the assistant and two automations.
+- **`.gitignore` no longer ignores all markdown.** It carried a blanket `*.md`
+  with no negations, so the SRS, the six ADRs and the whole audit-evidence
+  package are tracked only because someone used `git add -f`, and any new
+  document would silently never have been committed. ADR-0006 is titled "docs
+  as code".
+- **Documentation corrected against the host**: the Cloudflare Tunnel that two
+  documents described in the present tense is not running (CI uses direct SSH),
+  and the "future PostgreSQL move" in `docs/01`/`docs/02` happened on
+  2026-10-29.
+- **`3389/tcp` closed.** It was open to the internet, v4 and v6, with `xrdp`
+  listening behind it and no human session in the server's history.
+- **SemVer is applied again.** `VERSION` had read `1.0.0` since before
+  `8fa94dd` and shipped two deploys without moving; see the release records
+  under `audit-evidence/10-release-management/`.
+- **Fix (D-43):** `/api/shield/key/` computed `int(EPOCH - now % EPOCH)` on a
+  float, so for the final second of every 600-second epoch the result truncated
+  to `0` and the endpoint told the client its freshly minted key had already
+  expired — one call in 600. The client already clamped
+  (`Math.max(5, k.ttl - 5)`), so the cost was one spurious key refetch and no
+  user-visible error; the real cost was a deploy gate that failed at random.
+  Integer arithmetic throughout, plus two tests red on the old form
+  (`api/test_shield.py`, 13 → 15 tests). Found by the gate re-running the suite
+  on the exact commit, which is the repetition the policy calls deliberate.
+- **Image retention runs on the staging path**, not only at the end of a
+  promote. Each staging builds a 3.46 GB image pair; six runs in nine hours had
+  left ~21 GB and taken the root filesystem from 74.5 % to 77 %.
+  `ops/deploy/prune_images.sh` (8-case selftest, in CI) keeps the live release,
+  the rollback target, the staged sha, anything a container references, and the
+  newest few others.
+
+## 1.0.0, second deploy — 2026-10-29 (`deploy-20261029-191834`, `5e4543a`)
+
+Shipped under an **unchanged** `VERSION` of 1.0.0, which is the versioning
+lapse recorded in `RELEASE_RECORD_v1.0.0.md`: this content is new capability
+(pgvector dense retrieval) and should have been 1.1.0. It is listed under the
+number it actually shipped as, not the number it deserved. Promoted with
+complete evidence — CI run 40934280389 green, staging gate and smoke pass, E2E
+42/42 at full scope — the first release to satisfy all three gates.
+
 - **Dependabot cleanup** (nothing in the production images was exposed). `KG_backend/requirements.txt`
   minimums raised to the lock's versions (Django 5.2.17, cryptography 50.0, sentence-transformers
   5.6, sentry-sdk 2.8, torch 2.12). Frontend dev/build dependencies `npm audit fix`ed (postcss,

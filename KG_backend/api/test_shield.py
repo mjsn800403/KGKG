@@ -139,6 +139,33 @@ class ShieldKeyViewTests(TestCase):
         self.assertEqual((d['enc'], d['sig']), (shield._b64(enc), shield._b64(sig)))
         self.assertTrue(0 < d['ttl'] <= shield.EPOCH)
 
+    def test_ttl_is_never_zero_anywhere_in_the_epoch(self):
+        """The deploy gate caught this at 04:40 on 2026-10-30, on a commit whose
+        CI had passed: `int(EPOCH - now % EPOCH)` truncated a float, so in the
+        final second of every epoch the endpoint answered `ttl: 0` and told the
+        client its freshly minted key had already expired. One call in 600.
+
+        The old form fails this test at every offset below; the loop is the
+        point, since a single mocked instant is what let the bug live.
+        """
+        base = shield.epoch() * shield.EPOCH
+        for frac in (0.0, 0.5, 1.0, 299.5, 598.0, 599.0, 599.5, 599.9, 599.999, 599.9999):
+            with mock.patch.object(shield.time, 'time', return_value=base + frac):
+                d = self.get().json()
+            self.assertGreaterEqual(d['ttl'], 1, f'ttl fell to {d["ttl"]} at +{frac}s')
+            self.assertLessEqual(d['ttl'], shield.EPOCH, f'ttl exceeded EPOCH at +{frac}s')
+
+    def test_ttl_counts_down_in_whole_seconds(self):
+        base = shield.epoch() * shield.EPOCH
+        with mock.patch.object(shield.time, 'time', return_value=base + 0.0):
+            self.assertEqual(self.get().json()['ttl'], shield.EPOCH)
+        with mock.patch.object(shield.time, 'time', return_value=base + 1.0):
+            self.assertEqual(self.get().json()['ttl'], shield.EPOCH - 1)
+        # Sub-second progress must not change the answer: a client polling
+        # twice in the same second should not see the deadline move.
+        with mock.patch.object(shield.time, 'time', return_value=base + 1.4):
+            self.assertEqual(self.get().json()['ttl'], shield.EPOCH - 1)
+
     def test_only_the_last_two_epochs_and_never_the_future(self):
         cur = shield.epoch()
         self.assertEqual(self.get(e=cur - 2).json()['e'], cur - 2)

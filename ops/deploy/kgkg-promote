@@ -8,6 +8,13 @@
 #
 # Why a wrapper around ops/deploy/deploy.sh, which already does the work:
 #
+#   * It refuses a commit GitHub's CI did not pass. The server's own gate says
+#     whether a release runs, not whether the suite passed — it runs no
+#     coverage ratchet, no eslint ratchet, no bandit, no dependency audit and
+#     no image scan. On 2026-10-29 that gap let 536ac91 go live with CI red on
+#     the coverage ratchet (55 % against a 56 % floor). ops/deploy/ci_evidence.sh
+#     asks GitHub about the exact commit; anything but four green required jobs,
+#     GitHub being unreachable included, needs the longer phrase.
 #   * It refuses a commit that has not passed staging. CI stages every push to
 #     `work` against a sanitized copy of the production database; promoting
 #     something that never went through that is now a deliberate act with a
@@ -33,6 +40,7 @@ set -Eeuo pipefail
 PROD=${KG_PROD_DIR:-/opt/KGKG}
 REL=${KG_REL_DIR:-/opt/KGKG_release}
 DEPLOY=${KG_DEPLOY_SH:-$PROD/ops/deploy/deploy.sh}
+CI_EVIDENCE=${KG_CI_EVIDENCE_SH:-$PROD/ops/deploy/ci_evidence.sh}
 STAGING_MAX_AGE_H=${KG_PROMOTE_STAGING_MAX_AGE_H:-72}
 E2E_MAX_AGE_H=${KG_PROMOTE_E2E_MAX_AGE_H:-72}
 
@@ -126,6 +134,18 @@ else
   fi
 fi
 
+# ---- CI evidence -----------------------------------------------------------
+# Fails closed: "unknown" is not "pass". A host that cannot reach GitHub can
+# still promote, but only through the phrase, and the reason is logged.
+NOCI_REASON=
+CI_VERDICT=$(KG_PROD_DIR="$PROD" bash "$CI_EVIDENCE" verdict "$SHA" 2>/dev/null || echo 'unknown ci_evidence.sh could not be run')
+case $CI_VERDICT in
+  pass) ;;
+  fail*)    NOCI_REASON="GitHub CI did not pass $SHORT (${CI_VERDICT#fail })" ;;
+  unknown*) NOCI_REASON="GitHub CI cannot be confirmed for $SHORT (${CI_VERDICT#unknown })" ;;
+  *)        NOCI_REASON="ci_evidence.sh answered something unexpected: $CI_VERDICT" ;;
+esac
+
 # ---- what will change ------------------------------------------------------
 echo
 echo "========================================================================"
@@ -149,22 +169,28 @@ echo
 
 # ---- confirmation ----------------------------------------------------------
 MISSING=
-[[ -n $UNSTAGED_REASON ]] && MISSING=staging
+# Order is fixed — ci, staging, e2e — so the phrase a person is asked to type
+# is the same every time for the same combination of missing evidence.
+[[ -n $NOCI_REASON ]] && MISSING=ci
+[[ -n $UNSTAGED_REASON ]] && MISSING=${MISSING:+$MISSING and }staging
 [[ -n $NOE2E_REASON ]] && MISSING=${MISSING:+$MISSING and }e2e
 if [[ -n $MISSING ]]; then
   {
     echo "REFUSING THE NORMAL PATH:"
+    [[ -n $NOCI_REASON ]] && echo "  - $NOCI_REASON"
     [[ -n $UNSTAGED_REASON ]] && echo "  - $UNSTAGED_REASON"
     [[ -n $NOE2E_REASON ]] && echo "  - $NOE2E_REASON"
     cat <<WARN
 
-Staging is how a release is shown to work against real data shapes; the E2E
+CI is how the suite, the ratchets and the scanners are shown to have passed;
+staging is how a release is shown to work against real data shapes; the E2E
 suite is how the sign-in, access and media rules are shown to still hold.
 Promoting without them is a judgement call that should feel different from
 the usual one, and it is logged.
 
 Get the evidence first (recommended):
 WARN
+    [[ -n $NOCI_REASON ]] && echo "    push $SHORT and wait for ci to go green: gh run list --commit $SHA"
     [[ -n $UNSTAGED_REASON ]] && echo "    ops/deploy/deploy.sh --staging $SHA"
     [[ -n $NOE2E_REASON ]] && echo "    qa/stack.sh up $SHA && qa/run_e2e.sh"
     echo
@@ -173,10 +199,12 @@ WARN
   printf 'type "promote %s without %s" to continue: ' "$SHORT" "$MISSING"
   read -r reply
   [[ $reply == "promote $SHORT without $MISSING" ]] || die "not confirmed; nothing was done"
-  printf '%s promote %s without %s by %s: %s%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SHA" "$MISSING" \
-    "${SUDO_USER:-${USER:-?}}" "${UNSTAGED_REASON:+$UNSTAGED_REASON; }" "$NOE2E_REASON" \
+  printf '%s promote %s without %s by %s: %s%s%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SHA" "$MISSING" \
+    "${SUDO_USER:-${USER:-?}}" "${NOCI_REASON:+$NOCI_REASON; }" \
+    "${UNSTAGED_REASON:+$UNSTAGED_REASON; }" "$NOE2E_REASON" \
     >> "$REL/promote-overrides.log"
 else
+  echo "CI evidence     : $SHORT passed every required job on GitHub"
   echo "staging evidence: $SHORT passed gate=${GATE:-?} and smoke=$SMOKE $(human_age "$(staged_epoch)")"
   echo "E2E evidence    : $SHORT passed ${E2E_PASSED} browser tests $(human_age "$(to_epoch "$E2E_AT")")"
   printf 'type "promote" to continue: '

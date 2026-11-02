@@ -36,10 +36,20 @@ cat > "$T/deploy.sh" <<'EOF'
 echo "STUB DEPLOY $1"
 EOF
 
+# Stands in for ops/deploy/ci_evidence.sh: prints whatever $T/ci-verdict says,
+# so each case can set GitHub's answer without a network call. ci_evidence.sh
+# has its own tests for turning real check-run JSON into these verdicts.
+cat > "$T/ci_evidence.sh" <<'EOF'
+#!/usr/bin/env bash
+cat "$(dirname "$0")/ci-verdict"
+EOF
+ci() { printf '%s\n' "$1" > "$T/ci-verdict"; }
+
 now() { date -u -d "${1:-now}" +%Y-%m-%dT%H:%M:%SZ; }
 
-reset() {  # fresh evidence: live=LIVE, SHA staged+smoked now, E2E full pass now
+reset() {  # fresh evidence: CI green, live=LIVE, SHA staged+smoked now, E2E full pass now
   rm -rf "$REL"; mkdir -p "$REL/e2e"
+  ci pass
   printf 'CURRENT=%s\nPREVIOUS=\n' "$LIVE" > "$REL/state.env"
   printf 'STAGED_SHA=%s\nSTAGED_AT=%s\nSMOKE=pass\nGATE=pass\n' "$SHA" "$(now)" > "$REL/staging.env"
   e2e "$SHA" full pass "$(now)"
@@ -52,6 +62,7 @@ e2e() {  # sha scope result at
 
 run() {  # reply -> RC, OUT
   OUT=$(printf '%s\n' "$1" | KG_PROD_DIR="$T/prod" KG_REL_DIR="$REL" KG_DEPLOY_SH="$T/deploy.sh" \
+        KG_CI_EVIDENCE_SH="$T/ci_evidence.sh" \
         bash "$PROMOTE" "$SHA" 2>&1)
   RC=$?
 }
@@ -96,6 +107,38 @@ reset; rm -f "$REL/staging.env" "$REL/e2e/$SHA.env"
 expect_refuse "promote $SHORT without e2e" "with both missing, one phrase is not enough"
 expect_deploy "promote $SHORT without staging and e2e" "the combined phrase deploys"
 logged "staging and e2e" && ok "the combined override is logged" || no "the combined override is logged"
+
+echo "CI evidence (the gap that put a red commit in production):"
+reset; ci 'fail backend=failure'
+expect_refuse "promote" "CI red: plain 'promote' is refused"
+[[ $OUT == *"GitHub CI did not pass"* && $OUT == *"backend=failure"* ]] \
+  && ok "CI red: the refusal names the job that failed" || no "CI red: the refusal names the job that failed"
+[[ $OUT == *"promote $SHORT without ci"* ]] && ok "CI red: the prompt names the phrase" || no "CI red: the prompt names the phrase"
+expect_refuse "promote" "CI red: a second plain 'promote' is still refused"
+reset; ci 'fail backend=failure'
+expect_deploy "promote $SHORT without ci" "the ci phrase deploys"
+logged ci && ok "the ci override is logged" || no "the ci override is logged"
+grep -q 'backend=failure' "$REL/promote-overrides.log" \
+  && ok "the log records why CI was red" || { RC=-; OUT=$(cat "$REL/promote-overrides.log"); no "the log records why CI was red"; }
+
+for v in 'unknown GitHub is unreachable (curl exit 7)' 'unknown still running: backend' 'unknown no check run named images' 'nonsense'; do
+  reset; ci "$v"
+  expect_refuse "promote" "CI '${v:0:28}': plain 'promote' is refused"
+done
+reset; ci 'unknown GitHub is unreachable (curl exit 7)'
+expect_deploy "promote $SHORT without ci" "an unreachable GitHub can still be overridden"
+
+echo "CI evidence does not shadow the other gates:"
+reset; ci 'fail backend=failure'; rm -f "$REL/e2e/$SHA.env"
+expect_refuse "promote $SHORT without ci" "the ci phrase alone does not cover missing E2E"
+expect_deploy "promote $SHORT without ci and e2e" "the combined ci+e2e phrase deploys"
+logged "ci and e2e" && ok "the ci+e2e override is logged" || no "the ci+e2e override is logged"
+reset; ci 'fail backend=failure'; rm -f "$REL/staging.env" "$REL/e2e/$SHA.env"
+expect_deploy "promote $SHORT without ci and staging and e2e" "all three missing: the full phrase deploys"
+logged "ci and staging and e2e" && ok "the three-way override is logged" || no "the three-way override is logged"
+reset; run "promote"
+[[ $OUT == *"CI evidence     : $SHORT passed"* ]] \
+  && ok "a green CI is stated in the normal path" || no "a green CI is stated in the normal path"
 
 echo
 echo "passed $PASS, failed $FAIL"

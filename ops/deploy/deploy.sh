@@ -429,6 +429,25 @@ bash "$W/ops/deploy/smoke.sh" http://127.0.0.1:$STG_BE http://127.0.0.1:$STG_FE 
 save_staging_state "$SHA" pass
 write_release_metrics
 if [[ $MODE == staging ]]; then
+  # Retention, which used to live only at the end of a full promote. Staging
+  # builds a 3.46 GB image pair and exits several hundred lines before that
+  # block, so on 2026-10-30 six staging runs in nine hours had left ~21 GB
+  # behind and the root filesystem had gone 74.5 % -> 77 % with 70 G free.
+  # Keep the live release and the rollback target (never this run's business
+  # to delete) and the sha just staged, since that is the one about to be
+  # promoted and a rebuild would be pure waste.
+  load_state
+  # From $PROD, not the staged worktree, for the same reason the gates are:
+  # a commit under test must not be able to choose which images get deleted.
+  # The first staging after this lands finds no script there and prunes
+  # nothing, which is why the call tolerates a missing file.
+  pruned=$(KEEP_IMAGES=$KEEP_IMAGES bash "$PROD/ops/deploy/prune_images.sh" \
+             "$SHA" "$CURRENT" "$PREVIOUS" 2>/dev/null || echo 0)
+  if [[ ${pruned:-0} =~ ^[0-9]+$ ]] && (( pruned )); then say "removed $pruned superseded release image(s)"; fi
+  # The builder also leaves untagged intermediates on this path, for the same
+  # reason and at the same rate as on a promote.
+  reclaimed=$(docker image prune -f 2>/dev/null | sed -n 's/^Total reclaimed space: //p')
+  if [[ -n ${reclaimed:-} && $reclaimed != 0B ]]; then say "pruned dangling build images ($reclaimed)"; fi
   say "STAGING PASSED for $SHORT (production untouched)"
   say "promote it with: kgkg-promote $SHA"
   exit 0
@@ -482,16 +501,30 @@ fi
 # Its systemd units too: the sandbox in the unit file is part of the code (a
 # ProtectHome setting silently broke the backup check today), so it must not
 # be left behind by a deploy.
+#
+# The nightly QA units are here for a different reason: they were committed on
+# 2026-10-27 and were still not installed on the host three days later, because
+# nothing installed them. A unit file that only exists in the repository runs
+# nowhere. Managing them from the release means the schedule cannot drift from
+# the suite it runs, and that enabling it is a promote rather than someone
+# remembering to log in.
 _units_changed=0
-for u in kgkg-watchdog.service kgkg-watchdog.timer; do
-  if [[ -f $PROD/ops/observability/$u ]] && ! cmp -s "$PROD/ops/observability/$u" "/etc/systemd/system/$u"; then
-    install -m 644 "$PROD/ops/observability/$u" "/etc/systemd/system/$u" && _units_changed=1
+for spec in observability:kgkg-watchdog.service observability:kgkg-watchdog.timer \
+            qa:kgkg-qa-nightly.service qa:kgkg-qa-nightly.timer; do
+  d=${spec%%:*}; u=${spec#*:}
+  if [[ -f $PROD/ops/$d/$u ]] && ! cmp -s "$PROD/ops/$d/$u" "/etc/systemd/system/$u"; then
+    install -m 644 "$PROD/ops/$d/$u" "/etc/systemd/system/$u" && _units_changed=1
     say "refreshed /etc/systemd/system/$u"
   fi
 done
 if (( _units_changed )); then
   systemctl daemon-reload
-  systemctl enable -q --now kgkg-watchdog.timer || say "WARNING: could not re-enable kgkg-watchdog.timer"
+  # Enabling the timer, not the service: the service is oneshot and the timer
+  # is what decides when it runs.
+  for t in kgkg-watchdog.timer kgkg-qa-nightly.timer; do
+    [[ -f /etc/systemd/system/$t ]] || continue
+    systemctl enable -q --now "$t" || say "WARNING: could not enable $t"
+  done
 fi
 
 PREV_IMG_OK=0; have_images "$PREV" && PREV_IMG_OK=1
@@ -524,13 +557,19 @@ write_release_metrics
 TAG=deploy-$TS
 VERSION=$(git -C "$PROD" show "$SHA:VERSION" 2>/dev/null | head -1 || true)
 git -C "$PROD" tag -a "$TAG" -m "deployed $SHORT${VERSION:+ version $VERSION}" "$SHA"
-timeout 60 git -C "$PROD" push -q origin "HEAD:$(git -C "$PROD" rev-parse --abbrev-ref HEAD)" "$TAG" \
-  || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin HEAD $TAG"
-# Keep the live and rollback images plus the newest few others.
-for repo in kgkg-backend kgkg-frontend; do
-  docker images "$repo" --format '{{.Tag}}' | grep -xE '[0-9a-f]{9}' | grep -vxF -e "$SHORT" -e "${PREV:0:9}" \
-    | tail -n +$KEEP_IMAGES | xargs -r -I{} docker image rm -f "$repo:{}" >/dev/null 2>&1 || true
-done
+# Production is a detached HEAD, so name the refs in full: the release tag,
+# and the deployed branch when REF is one that origin has.
+PUSH_REFS=("refs/tags/$TAG")
+git -C "$PROD" show-ref -q --verify "refs/remotes/origin/$REF" \
+  && PUSH_REFS=("$SHA:refs/heads/$REF" "${PUSH_REFS[@]}")
+timeout 60 git -C "$PROD" push -q origin "${PUSH_REFS[@]}" \
+  || say "WARNING: push to origin failed (deploy itself is fine): git -C $PROD push origin ${PUSH_REFS[*]}"
+# Keep the live and rollback images plus the newest few others. The same
+# retention now runs at the end of a staging run too (see the staging exit
+# above): this block was correct and only ever reached on a promote, so the
+# images staging built on every push to `work` were never considered.
+pruned=$(KEEP_IMAGES=$KEEP_IMAGES bash "$PROD/ops/deploy/prune_images.sh" "$SHA" "$PREV" 2>/dev/null || echo 0)
+if [[ ${pruned:-0} =~ ^[0-9]+$ ]] && (( pruned )); then say "removed $pruned superseded release image(s)"; fi
 
 # The builder leaves an untagged intermediate per build step, twice per run,
 # and nothing removed them: 102 had piled up by 2026-10-28, worth ~40GB of

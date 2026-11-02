@@ -105,8 +105,13 @@ def key_view(request):
     if not cur - 2 <= e <= cur:
         return JsonResponse({'error': 'epoch'}, status=400)
     enc, sig = keys(raw, e)
+    # Whole seconds left in this epoch, never 0. `int(EPOCH - now % EPOCH)`
+    # truncated a float: in the last second of every epoch the subtraction
+    # lands below 1 and the client was told its key had already expired, once
+    # per 600 calls on average. Doing the modulo on int(now) keeps the whole
+    # expression in integers, so the result is 1..EPOCH by construction.
     resp = JsonResponse({'on': True, 'e': e, 'enc': _b64(enc), 'sig': _b64(sig),
-                         'ttl': int(EPOCH - now % EPOCH)})
+                         'ttl': EPOCH - int(now) % EPOCH})
     resp['Cache-Control'] = 'no-store'
     return resp
 

@@ -10,10 +10,13 @@ silence is exactly what a healthy system looks like.
 
 This closes that hole and nothing else. It deliberately does not re-implement
 the engine's rules: duplicating them would double every page and halve the
-trust in both. It answers one question — "is anybody still watching?" — and
-pages only when the answer is no. In that case the SMS also carries the direct
-service checks, because if the engine is down these are the only facts anyone
-is going to get.
+trust in both. It answers two questions. "Is anybody still watching?" — and if the answer
+is no it pages, carrying the direct service checks too, because if the engine
+is down these are the only facts anyone is going to get. And "is any systemd
+unit sitting in a failed state?", which the engine does not look at and nobody
+else did either: boot.mount failed for four and a half hours on 2026-10-29 and
+/boot stayed unmounted, with the failure recorded in this file's own metric the
+whole time and no path from that metric to anyone's phone.
 
 It shares nothing with the application: standard library only, no Django, no
 ORM, no database. It reads the SMS credentials straight out of .env.prod so
@@ -77,6 +80,19 @@ SMS_OPT_OUT = 'لغو11'
 SMS_MAX_BODY = 250
 
 ALERT_UNITS = ('kgkg-alerts.timer',)
+
+# Units whose failed state must not page, as a comma-separated list. Empty on
+# purpose: a unit left failed is precisely what this check is for, and both
+# silences it has caught so far — logrotate on 2026-10-27, boot.mount on
+# 2026-10-29 — would have been filtered out by any list written in advance.
+IGNORED_UNITS = tuple(
+    u.strip() for u in os.environ.get('KG_WATCHDOG_IGNORE_UNITS', '').split(',')
+    if u.strip())
+
+# A failed unit is rarely a sixty-second emergency, and it stays failed until
+# someone intervenes, so it needs a longer cooldown than an alerting outage or
+# it would page twice a shift until fixed.
+UNITS_COOLDOWN_H = float(os.environ.get('KG_WATCHDOG_UNITS_COOLDOWN_H', '12'))
 
 # The internal company server pulls an off-host snapshot hourly and runs
 # /root/kgkg_snapshot.py to build it (doc 11 §11.6). Six hours allows for a
@@ -300,17 +316,27 @@ def check_backup_snapshot(now: float | None = None,
 def check_failed_units(show_output: str | None = None) -> tuple[bool, str]:
     """Any systemd unit in a failed state.
 
-    Not a paging check — the alert engine owns paging — but it is reported and
-    turned into a metric, because a unit can fail silently for a long time.
-    logrotate did exactly that for 14 hours on 2026-10-27, which meant nginx
-    logs stopped rotating on a disk at 73%.
+    This used to be reported and metered but never paged, on the reasoning
+    that the alert engine owns paging. That reasoning was wrong: the engine has
+    no rule for systemd units, Prometheus here carries no alert rules and no
+    Alertmanager, so the metric went nowhere. boot.mount then failed at 09:52
+    on 2026-10-29 and was still failed at 14:33 — four and a half hours in
+    which /boot was unmounted, which would have sent the next kernel update to
+    a directory the bootloader never reads. The metric recorded all of it.
+
+    So it pages now, under its own key and its own cooldown. Units named in
+    KG_WATCHDOG_IGNORE_UNITS are excluded but still counted, so silencing one
+    is visible rather than indistinguishable from a healthy system.
     """
     out = show_output if show_output is not None else _systemctl(
         'list-units', '--failed', '--no-legend', '--plain', '--no-pager')
     units = [line.split()[0] for line in out.splitlines() if line.strip()]
+    ignored = [u for u in units if u in IGNORED_UNITS]
+    units = [u for u in units if u not in IGNORED_UNITS]
+    suffix = f' ({len(ignored)} ignored)' if ignored else ''
     if not units:
-        return True, 'no failed units'
-    return False, 'failed: ' + ','.join(units[:5])
+        return True, f'no failed units{suffix}'
+    return False, 'failed: ' + ','.join(units[:5]) + suffix
 
 
 def check_disk(path: str = '/', critical_pct: float = 95.0) -> tuple[bool, str]:
@@ -520,6 +546,71 @@ def compose_message(checks: list[tuple[str, bool, str]]) -> str:
     return f'{head} علت: {reasons}. {state}'
 
 
+def compose_units_message(detail: str) -> str:
+    """A failed unit is not an alerting outage, so it does not borrow that
+    message. Saying "the alerting system is down" when it is up and a mount
+    unit failed would send someone to the wrong place at 3am.
+
+    The detail is deliberately NOT passed through fa(): it carries unit names,
+    and the first version of this localised the digits in them, so a page about
+    kgkg-wdtest-244359.service arrived naming a unit that systemctl has never
+    heard of. Prose gets Persian digits; identifiers stay typeable.
+    """
+    return ('هشدار زیرساخت: یک سرویس سیستمی در وضعیت خطا است. '
+            + scrub(detail)
+            + '. سامانهٔ هشدار سالم است.')
+
+
+def page_failed_units(checks: list[tuple[str, bool, str]], state: dict,
+                      now: float, dry_run: bool) -> int:
+    """Page for failed systemd units, independently of the alerting path.
+
+    Separate state key, so its debounce streak and cooldown never interfere
+    with the alerting-down page, and a unit failing during an alerting outage
+    does not consume the quota for either.
+    """
+    key = 'units_failed'
+    failed = [c for c in checks if c[0] == 'systemd_units' and not c[1]]
+    if not failed:
+        clear_failures(state, key)
+        return 0
+
+    detail = failed[0][2]
+    message = compose_units_message(detail)
+
+    if dry_run:
+        print(f'\nwould page (units): {message}')
+        print('(dry run: nothing sent, no state written)')
+        return 1
+
+    if not should_page(state, key, now):
+        print(f'\n{detail}: failing sample {state["fails"][key]} of '
+              f'{PAGE_AFTER_FAILURES}; not paging until it persists')
+        return 0
+
+    print(f'\npaging (units): {message}')
+    if not due(state, key, now, cooldown_h=UNITS_COOLDOWN_H):
+        print('within cooldown; not sending again')
+        return 0
+
+    env = read_env()
+    targets = phones(env)
+    if not targets:
+        print('no KG_ALERT_PHONES configured — cannot page', file=sys.stderr)
+        return 2
+
+    sent_any = False
+    for phone in targets:
+        ok, info = send_sms(env, phone, message)
+        print(f'sms {phone}: {"sent " + info if ok else "FAILED " + info}')
+        sent_any = sent_any or ok
+    if sent_any:
+        mark_sent(state, key, now)
+        return 0
+    print('every page attempt failed', file=sys.stderr)
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--dry-run', action='store_true',
@@ -546,9 +637,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if watched:
         clear_failures(state, key)
+        # The engine owns every alert it has a rule for. It has none for
+        # systemd units, so that one is this process's job even while the
+        # engine is healthy.
+        rc = page_failed_units(checks, state, now, dry_run=args.dry_run)
         save_state(state)
-        print('the engine is alive and owns every other alert; staying quiet')
-        return 0
+        if rc == 0:
+            print('the engine is alive and owns every other alert; staying quiet')
+        return rc
 
     message = compose_message(checks)
 

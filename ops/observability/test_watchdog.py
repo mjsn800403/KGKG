@@ -96,9 +96,142 @@ class FailedUnitTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(detail.count(','), 4)      # five names at most
 
-    def test_failed_units_do_not_page(self):
-        """The alert engine owns paging; this check is for visibility."""
+    def test_ignored_units_are_excluded_but_counted(self):
+        out = ('logrotate.service loaded failed failed Rotate log files\n'
+               'noisy.service loaded failed failed Noisy\n')
+        with mock.patch.object(watchdog, 'IGNORED_UNITS', ('noisy.service',)):
+            ok, detail = watchdog.check_failed_units(show_output=out)
+        self.assertFalse(ok)
+        self.assertIn('logrotate.service', detail)
+        self.assertNotIn('noisy.service', detail)
+        self.assertIn('1 ignored', detail)
+
+    def test_silencing_the_only_failure_is_visible(self):
+        """Healthy-because-ignored must not read the same as healthy."""
+        with mock.patch.object(watchdog, 'IGNORED_UNITS', ('noisy.service',)):
+            ok, detail = watchdog.check_failed_units(
+                show_output='noisy.service loaded failed failed Noisy\n')
+        self.assertTrue(ok)
+        self.assertIn('1 ignored', detail)
+
+    def test_it_is_not_part_of_the_alerting_path(self):
+        """PAGING_PATH answers "is the engine alive". A failed mount unit is
+        not an answer to that question, so it pages under its own key."""
         self.assertNotIn('systemd_units', watchdog.PAGING_PATH)
+
+
+class FailedUnitPagingTests(unittest.TestCase):
+    """boot.mount failed at 09:52 on 2026-10-29 and was still failed at 14:33.
+    The metric recorded every sample of it; nothing paged, because Prometheus
+    here has no alert rules and no Alertmanager."""
+
+    OK = [('systemd_units', True, 'no failed units')]
+    BAD = [('systemd_units', False, 'failed: boot.mount')]
+
+    def setUp(self):
+        self.sent = []
+        self.env = mock.patch.object(watchdog, 'read_env', lambda: {'x': 'y'})
+        self.ph = mock.patch.object(watchdog, 'phones', lambda env: ['09120000000'])
+        self.sms = mock.patch.object(
+            watchdog, 'send_sms',
+            lambda env, phone, msg: (self.sent.append((phone, msg)), (True, '1'))[1])
+        for m in (self.env, self.ph, self.sms):
+            m.start()
+            self.addCleanup(m.stop)
+
+    def test_healthy_units_send_nothing(self):
+        state = {}
+        rc = watchdog.page_failed_units(self.OK, state, now=1000.0, dry_run=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.sent, [])
+
+    def test_recovery_clears_the_streak(self):
+        state = {'fails': {'units_failed': 1}}
+        watchdog.page_failed_units(self.OK, state, now=1000.0, dry_run=False)
+        self.assertNotIn('units_failed', state['fails'])
+
+    def test_first_failing_sample_does_not_page(self):
+        state = {}
+        rc = watchdog.page_failed_units(self.BAD, state, now=1000.0, dry_run=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.sent, [])
+        self.assertEqual(state['fails']['units_failed'], 1)
+
+    def test_second_consecutive_sample_pages(self):
+        state = {'fails': {'units_failed': 1}}
+        rc = watchdog.page_failed_units(self.BAD, state, now=1000.0, dry_run=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn('boot.mount', self.sent[0][1])
+        self.assertEqual(state['sent']['units_failed'], 1000.0)
+
+    def test_cooldown_suppresses_the_repeat(self):
+        state = {'fails': {'units_failed': 1}, 'sent': {'units_failed': 1000.0}}
+        rc = watchdog.page_failed_units(self.BAD, state, now=1000.0 + 3600,
+                                        dry_run=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.sent, [])
+
+    def test_cooldown_expires_on_its_own_schedule(self):
+        later = 1000.0 + watchdog.UNITS_COOLDOWN_H * 3600 + 1
+        state = {'fails': {'units_failed': 1}, 'sent': {'units_failed': 1000.0}}
+        watchdog.page_failed_units(self.BAD, state, now=later, dry_run=False)
+        self.assertEqual(len(self.sent), 1)
+
+    def test_its_state_is_separate_from_the_alerting_page(self):
+        """An alerting outage must not consume the units quota, or either page
+        can swallow the other."""
+        state = {'fails': {'alerting_down': 1}, 'sent': {'alerting_down': 1000.0}}
+        rc = watchdog.page_failed_units(self.BAD, state, now=1000.0, dry_run=False)
+        self.assertEqual(rc, 0)                     # debounced on its own key
+        self.assertEqual(self.sent, [])
+        self.assertEqual(state['fails']['units_failed'], 1)
+        self.assertEqual(state['fails']['alerting_down'], 1)
+
+    def test_dry_run_sends_nothing(self):
+        state = {}
+        rc = watchdog.page_failed_units(self.BAD, state, now=1000.0, dry_run=True)
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.sent, [])
+        self.assertEqual(state, {})
+
+    def test_unconfigured_phones_are_reported_not_raised(self):
+        with mock.patch.object(watchdog, 'phones', lambda env: []):
+            state = {'fails': {'units_failed': 1}}
+            rc = watchdog.page_failed_units(self.BAD, state, now=1000.0,
+                                            dry_run=False)
+        self.assertEqual(rc, 2)
+
+    def test_failure_to_send_is_a_unit_failure(self):
+        with mock.patch.object(watchdog, 'send_sms',
+                               lambda env, phone, msg: (False, 'provider_code:11')):
+            state = {'fails': {'units_failed': 1}}
+            rc = watchdog.page_failed_units(self.BAD, state, now=1000.0,
+                                            dry_run=False)
+        self.assertEqual(rc, 2)
+        self.assertNotIn('units_failed', state.get('sent', {}))
+
+    def test_the_message_does_not_claim_the_engine_is_down(self):
+        msg = watchdog.compose_units_message('failed: boot.mount')
+        self.assertIn('boot.mount', msg)
+        self.assertIn('سالم', msg)                  # "the alerting system is healthy"
+        alerting = watchdog.compose_message(
+            [('alerts_timer_active', False, 'timer inactive')])
+        self.assertNotEqual(msg, alerting)
+        self.assertNotIn('کار نمی\u200cکند', msg)
+
+    def test_unit_names_stay_typeable(self):
+        """fa() would turn php8.3-fpm into a name systemctl does not know."""
+        msg = watchdog.compose_units_message('failed: kgkg-wdtest-244359.service')
+        self.assertIn('kgkg-wdtest-244359.service', msg)
+        for digit in '۰۱۲۳۴۵۶۷۸۹':
+            self.assertNotIn(digit, msg)
+
+    def test_the_message_survives_the_sms_envelope(self):
+        body = watchdog.sms_body(watchdog.compose_units_message('failed: boot.mount'))
+        self.assertIn(watchdog.SMS_OPT_OUT, body)   # or the provider refuses it
+        self.assertIn('boot.mount', body)
+        self.assertNotIn('://', body)
 
 
 class BackupSnapshotTests(unittest.TestCase):

@@ -1,0 +1,102 @@
+<testsuites id="" name="" tests="42" failures="0" skipped="0" errors="0" time="29.021031999999998">
+<testsuite name="a11y.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="chromium" tests="4" failures="0" skipped="0" time="4.583" errors="0">
+<testcase name="accessibility scan of /" classname="a11y.spec.js" time="1.581">
+</testcase>
+<testcase name="accessibility scan of /login" classname="a11y.spec.js" time="0.772">
+</testcase>
+<testcase name="accessibility scan of /purchase" classname="a11y.spec.js" time="1.525">
+</testcase>
+<testcase name="accessibility scan of /recover" classname="a11y.spec.js" time="0.705">
+</testcase>
+</testsuite>
+<testsuite name="auth.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="chromium" tests="8" failures="0" skipped="0" time="3.262" errors="0">
+<testcase name="authentication › signed-out visit to /browse is redirected to login with next=" classname="auth.spec.js" time="0.357">
+</testcase>
+<testcase name="authentication › signed-out visit to /assistant is redirected to login with next=" classname="auth.spec.js" time="0.331">
+</testcase>
+<testcase name="authentication › signed-out visit to /settings is redirected to login with next=" classname="auth.spec.js" time="0.366">
+</testcase>
+<testcase name="authentication › signed-out visit to /team is redirected to login with next=" classname="auth.spec.js" time="0.35">
+</testcase>
+<testcase name="authentication › signed-out visit to /toyota/2025/corolla-cross-hybrid-s is redirected to login with next=" classname="auth.spec.js" time="0.38">
+</testcase>
+<testcase name="authentication › login cannot be submitted before the bot check passes" classname="auth.spec.js" time="0.467">
+</testcase>
+<testcase name="authentication › server rejects a bot-check token it cannot verify (fail-closed)" classname="auth.spec.js" time="0.932">
+</testcase>
+<testcase name="authentication › a forged session cookie is not accepted" classname="auth.spec.js" time="0.079">
+</testcase>
+</testsuite>
+<testsuite name="authz.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="chromium" tests="5" failures="0" skipped="0" time="0.737" errors="0">
+<testcase name="authorization › specialist without a grant cannot read the vehicle manual" classname="authz.spec.js" time="0.38">
+</testcase>
+<testcase name="authorization › specialist cannot reach admin or team-management APIs" classname="authz.spec.js" time="0.101">
+</testcase>
+<testcase name="authorization › another company cannot see QA-E2E-A data" classname="authz.spec.js" time="0.125">
+</testcase>
+<testcase name="authorization › a mismatched brand cannot unlock another vehicle&apos;s content" classname="authz.spec.js" time="0.126">
+</testcase>
+<testcase name="authorization › metrics endpoint is never exposed through the public origin" classname="authz.spec.js" time="0.005">
+</testcase>
+</testsuite>
+<testsuite name="media.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="chromium" tests="3" failures="0" skipped="0" time="0.031" errors="0">
+<testcase name="media gate › signed-out request for paid media is refused" classname="media.spec.js" time="0.008">
+</testcase>
+<testcase name="media gate › a car outside the subscription is refused, however the path is spelled" classname="media.spec.js" time="0.013">
+</testcase>
+<testcase name="media gate › a cached allow for a shared folder does not leak to another car" classname="media.spec.js" time="0.01">
+</testcase>
+</testsuite>
+<testsuite name="public.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="chromium" tests="5" failures="0" skipped="0" time="2.793" errors="0">
+<testcase name="public pages › landing renders the product and links to pricing and login" classname="public.spec.js" time="0.586">
+</testcase>
+<testcase name="public pages › pricing page loads with plans" classname="public.spec.js" time="0.408">
+</testcase>
+<testcase name="public pages › unknown page is a real 404 with a way back" classname="public.spec.js" time="0.278">
+</testcase>
+<testcase name="public pages › pages carry a per-request CSP nonce and anti-framing headers" classname="public.spec.js" time="0.461">
+</testcase>
+<testcase name="public pages › no uncaught script errors on the landing page" classname="public.spec.js" time="1.06">
+</testcase>
+</testsuite>
+<testsuite name="session.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="chromium" tests="7" failures="0" skipped="0" time="4.845" errors="0">
+<testcase name="signed-in manager › profile API identifies the right account and company" classname="session.spec.js" time="0.095">
+</testcase>
+<testcase name="signed-in manager › fleet view lists the granted vehicle" classname="session.spec.js" time="0.367">
+</testcase>
+<testcase name="signed-in manager › opening the vehicle from the fleet loads its manual" classname="session.spec.js" time="1.386">
+</testcase>
+<testcase name="signed-in manager › manual content API is sealed against scraping (content shield)" classname="session.spec.js" time="0.092">
+</testcase>
+<testcase name="signed-in manager › retrieval assistant answers from the manuals without the LLM" classname="session.spec.js" time="0.962">
+</testcase>
+<testcase name="signed-in manager › settings page shows the account" classname="session.spec.js" time="0.33">
+</testcase>
+<testcase name="logout › UI logout ends the session server-side" classname="session.spec.js" time="1.613">
+</testcase>
+</testsuite>
+<testsuite name="public.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="firefox" tests="5" failures="0" skipped="0" time="5.664" errors="0">
+<testcase name="public pages › landing renders the product and links to pricing and login" classname="public.spec.js" time="1.629">
+</testcase>
+<testcase name="public pages › pricing page loads with plans" classname="public.spec.js" time="0.653">
+</testcase>
+<testcase name="public pages › unknown page is a real 404 with a way back" classname="public.spec.js" time="0.577">
+</testcase>
+<testcase name="public pages › pages carry a per-request CSP nonce and anti-framing headers" classname="public.spec.js" time="1.625">
+</testcase>
+<testcase name="public pages › no uncaught script errors on the landing page" classname="public.spec.js" time="1.18">
+</testcase>
+</testsuite>
+<testsuite name="public.spec.js" timestamp="2026-10-30T05:07:48.083Z" hostname="mobile" tests="5" failures="0" skipped="0" time="4.31" errors="0">
+<testcase name="public pages › landing renders the product and links to pricing and login" classname="public.spec.js" time="1.264">
+</testcase>
+<testcase name="public pages › pricing page loads with plans" classname="public.spec.js" time="0.546">
+</testcase>
+<testcase name="public pages › unknown page is a real 404 with a way back" classname="public.spec.js" time="0.324">
+</testcase>
+<testcase name="public pages › pages carry a per-request CSP nonce and anti-framing headers" classname="public.spec.js" time="0.544">
+</testcase>
+<testcase name="public pages › no uncaught script errors on the landing page" classname="public.spec.js" time="1.632">
+</testcase>
+</testsuite>
+</testsuites>

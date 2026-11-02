@@ -273,6 +273,15 @@ def _get_reranker():
     return _RERANKER
 
 
+def _zfuse(rerank, prior, w):
+    """w * z(rerank) + (1 - w) * z(prior), z = per-question standard score."""
+    def z(xs):
+        m = sum(xs) / len(xs)
+        sd = (sum((x - m) ** 2 for x in xs) / len(xs)) ** 0.5 or 1.0
+        return [(x - m) / sd for x in xs]
+    return [w * a + (1 - w) * b for a, b in zip(z(rerank), z(prior))]
+
+
 def _rerank(query, result):
     hits = result['hits']
     cand = hits[:config.RERANK_CANDIDATES]
@@ -280,6 +289,13 @@ def _rerank(query, result):
     scores = _get_reranker().predict(pairs)
     for h, s in zip(cand, scores):
         h['rerank'] = float(s)
-    cand.sort(key=lambda h: h.get('rerank', 0.0), reverse=True)
+    w = config.RERANK_FUSE
+    if w < 1.0 and len(cand) > 1:
+        fused = _zfuse([h['rerank'] for h in cand], [-i for i in range(len(cand))], w)
+        for h, f in zip(cand, fused):
+            h['rerank_fused'] = f
+        cand.sort(key=lambda h: h['rerank_fused'], reverse=True)
+    else:
+        cand.sort(key=lambda h: h.get('rerank', 0.0), reverse=True)
     result['hits'] = cand + hits[config.RERANK_CANDIDATES:]
     result['reranked'] = True
