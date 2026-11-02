@@ -104,6 +104,19 @@ who knows the feature exists, which is what a discovery item asks.
 parts catalogue opened by 6 seats, the assistant asked by 9, the search box
 used by 0, against 71,886 manual views across 34 active seats.
 
+> **CORRECTION, dated 2026-11-02. The manual-view figure above is superseded and
+> must not be used as a measure of adoption.** Of the 71,886 manual views
+> counted on 2026-10-30, **70,534 are rows generated for evaluation/demo purposes**
+> (they carry the reconstruction marker and are not user behaviour) and **1,352 do
+> not carry it**; those 1,352 are not all independently verified either. As of
+> 2026-11-02, 12 seats have at least one unmarked manual view, not "~34". "34" was
+> the number of seats with any logged activity out of 36 active seats (two seats
+> created on 2026-09-29 and 2026-10-01 have none), not a count of seats that read
+> manuals. The parts catalogue (6 seats, 314 uses), assistant (9 seats, 43
+> questions), search (0), CSV export (3) and team PDF (8) figures are unaffected:
+> no reconstructed row has those actions. Evidence and method:
+> `audit-evidence/17-data-integrity/` (GitHub #64, Jira KGTEC-20).
+
 ## Desk categorisation and deflection (added 2026-10-31)
 
 Spec: `docs/superpowers/specs/2026-10-31-conversational-helpdesk-design.md`.

@@ -16,6 +16,17 @@ Production, 2026-10-30, four months of data, 34 seats with any activity:
 | CSV export, labour times / SST (`download_csv`) | 3 | — | — | — |
 | Team PDF report (`report_pdf`) | 8 | — | — | — |
 
+> **CORRECTION, dated 2026-11-02 (this record is kept as written; the manuals row
+> is superseded).** Of the 71,886 manual uses, 70,534 are rows generated for
+> evaluation/demo purposes (marked as reconstructed) and 1,352 are not marked,
+> not all independently verified. As of 2026-11-02 the seats with an unmarked
+> manual view number 12, so manuals "~94 %" discovery is not supported; the
+> corrected order of seats is manuals 12, assistant 9, parts catalogue 6,
+> search 0. The parts, assistant, search, CSV and PDF rows are unaffected, and
+> so is the direction of the argument below (manuals remain the most-used
+> feature), but not its magnitude. See `audit-evidence/17-data-integrity/`
+> (GitHub #64, Jira KGTEC-20).
+
 The counts are exact (`api_activitylog`, `api_searchlog`). The *entitled*
 column is not: 36 is every active seat with a car grant, and ~18 is the number
 whose own flag and whose company's flag both allow the assistant — it does not

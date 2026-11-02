@@ -100,7 +100,7 @@ review_days = 180
 
 ["13-guidance-system.md"]
 owner = ["mjsalimin", "Ali Sartipi"]
-reviewed = 2026-10-30
+reviewed = 2026-11-02
 review_days = 180
 
 ["14-terminology.md"]
@@ -115,7 +115,7 @@ review_days = 180
 
 ["CHANGELOG.md"]
 owner = ["mjsalimin", "Ali Sartipi"]
-reviewed = 2026-10-30
+reviewed = 2026-11-02
 review_days = 180
 
 ["README.md"]

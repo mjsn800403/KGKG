@@ -194,6 +194,12 @@ they answer does not happen at minute one. Every seat saw an onboarding tour,
 and the parts catalogue was still unopened by 28 of 34 active seats four months
 later. The moment that matters is mid-task, three weeks in.
 
+> Clarification, 2026-11-02 (#64): "34 active seats" means 34 seats with any logged
+> activity, out of 36 active seats. The parts-catalogue figure (6 seats opened it)
+> is unaffected by the reconstructed activity described in
+> `audit-evidence/17-data-integrity/`, because no reconstructed row has that action.
+> The manual-view figure quoted elsewhere for the same date is superseded.
+
 | Rule | Fires when | Why there |
 |---|---|---|
 | `search-found-nothing` | the `search.zeroResult` signal is set **and** the seat is entitled to the assistant and has never asked it | a search that came back empty is the single best moment to mention a tool that understands the question rather than the words |

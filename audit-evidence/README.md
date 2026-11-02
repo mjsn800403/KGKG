@@ -25,6 +25,7 @@ Start here:
 | `12-knowledge-management` | Knowledge stores, update process, internal vs third-party knowledge |
 | `13-team-and-domain-evidence` | Domain evidence from code; templates for team records (pending) |
 | `14-risk-and-corrective-actions` | Defect register (30), open actions, unresolved observation |
+| `17-data-integrity` | Reconstructed activity in production (#64): verified inventory, corrections, preservation procedure, remediation design and test plan |
 
 Test code itself lives with the product: `KG_backend/api/test_*.py`,
 `kg_frontend/src/lib/__tests__/`, `qa/` (QA stack, E2E, load, DAST,
