@@ -1714,3 +1714,4 @@ class KbSearchLog(models.Model):
 
 
 from .notifications.models import NotificationOutbox  # noqa: E402,F401
+from .chat.models import AgentPresence, ChatMessage, ChatThread  # noqa: E402,F401
