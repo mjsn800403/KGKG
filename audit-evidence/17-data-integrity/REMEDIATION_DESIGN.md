@@ -106,6 +106,7 @@ A database superuser can still disable a trigger; that is outside this design an
 - `ActivityLog.objects`: unchanged, unfiltered (Django admin, audit, evidence tooling).
 - `ActivityLog.analytics(mode)`: returns the queryset for `strict`, `operational` or `audit`, annotated with both axes. It is the **only** supported entry point for analytics.
 - **No process-level cache.** The registry is a handful of rows and is read once per request (a single indexed query, memoized for that request). A per-process cache cannot be invalidated across several gunicorn workers or containers (production, staging and QA each run their own), and a few seconds of staleness after an attestation would be an integrity bug. If measurement ever shows a need, the cache key is a fingerprint `(count, max(id))` read by one cheap query per request.
+- Every analytics entry point takes an optional `as_of` timestamp (default: now). Windows are `[as_of - N days, as_of]`. It exists so that a comparison, a test or an evidence entry can pin the instant and get the same answer later; it adds no data access.
 - A static guard test fails the build if an analytics module uses `ActivityLog.objects` outside an explicit allow-list.
 
 ## 5. Reader behaviour and presentation
@@ -178,7 +179,7 @@ What it does not settle: if removal is ever proposed, it is a new decision, not 
 
 ## 11. Risks
 
-- Excluding `reconstructed` rows will make wide-window charts fall sharply (about 96% at 365 days). That is intended and must be annotated.
+- Excluding `reconstructed` rows will make wide-window charts fall sharply (about 96% at 365 days on the 2026-11-02 reading; the figure will differ on any other date). That is intended and must be annotated.
 - `unknown` attribution is large and will stay large unless cohorts are attested; dashboards will say so.
 - The 181 rows before the batch and the 2 rows with ids <= 8848 but a timestamp after the batch started cannot be classified further.
 - If the registry and `origin` ever disagree, the less trusted value wins and a consistency check fails.

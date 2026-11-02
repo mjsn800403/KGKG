@@ -45,5 +45,6 @@ All are for the product owner, who is the only person able to answer them. Until
 ## Handling until answered
 
 - Treat the superseded figures as potentially distributed.
+- Do not assume the figures stayed within the team, and equally do not assert that they left it: nothing here shows either.
 - Do not describe the situation as "not shared" in any document, issue or message.
 - Record each answer in GitHub #64 with the question number, the answerer and the date, and update this file in a reviewed PR.

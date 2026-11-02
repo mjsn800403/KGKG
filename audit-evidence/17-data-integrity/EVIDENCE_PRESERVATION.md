@@ -36,7 +36,7 @@ Record the answers in the authorization request. A missing input blocks the proc
   2. The **decryption custodians**: the named people who hold the matching private keys, and where each private key is kept (location only; never on the production host, never in git).
   3. A **key-loss and rotation plan**: who can add a recipient and re-encrypt, and how often the keys are re-confirmed.
   4. The **tool and version** (`age`, with the version recorded), installed on the operator's side, not assumed present on the host.
-- **Temporary working directory.** A directory on the host used only for this operation, mode `0700`, owned by the operator, with free space of at least the plaintext dump plus its ciphertext. Plaintext is sensitive (display names, usernames) and must not sit in a world-readable location or in a shared temp directory.
+- **Temporary working directory.** A directory on the host used only for this operation, mode `0700`, owned by the operator, with free space of at least the plaintext dump plus the ciphertexts of the dump and of the legacy backups (about 4.5 GB in total, since ciphertext is about the size of its input). Plaintext is sensitive (display names, usernames) and must not sit in a world-readable location or in a shared temp directory.
 - **Capacity.** Production host `/` on 2026-11-02: 290 GB total, 219 GB used, 71 GB free. A table-level dump is about the size of the existing full dumps (about 25 MB); seven legacy backups are about 4.4 GB in total. Neither is a capacity risk, but free space must be re-read at execution time.
 - **Operational impact.** A table-level `pg_dump` takes only an ACCESS SHARE lock, so it does not block reads or writes, but it does read the whole table; run off-peak (the 7-day traffic window is about 80 rows, so the system is lightly used). Checksumming the legacy backups reads about 4.4 GB once; run with `nice` and `ionice`.
 - **Authorization.** Written approval in GitHub #64 naming the destination, the recipient fingerprints, the custodians, the retention period and the restore-test location.
@@ -57,9 +57,13 @@ Run by a person with host access, never by an unattended job. Commands are templ
    age --encrypt -R <recipients-file> -o activitylog-<date>.dump.age activitylog-<date>.dump
    ```
    Then check that the ciphertext exists, is not empty, is close to the plaintext size, and record `sha256sum activitylog-<date>.dump.age`. **Do not delete the plaintext.** The host cannot prove the ciphertext decrypts to the dump; only a custodian's restore (step 7) can.
-5. **Copy the seven legacy SQLite backups and the 2026-08-05 pre-batch backups** to the destination, read-only at the source, naming each input file explicitly, then compare checksums (`sha256sum` at source and destination). Encrypt them the same way (explicit input file). These are copies; the originals stay in place.
+5. **Preserve the seven legacy SQLite backups and the 2026-08-05 pre-batch backups by encrypting at the source, never by copying plaintext.** For each original: record `sha256sum` and size in place (read-only), then encrypt it, naming the input file explicitly, into the temporary directory:
+   ```
+   age --encrypt -R <recipients-file> -o <name>.age <original-backup-file>
+   ```
+   Only the `.age` files are transferred. **No plaintext copy of any legacy backup is made, at the destination or anywhere else**: these files contain personal data (usernames, display names, phone numbers, password hashes) and must not exist unencrypted outside their current location. The originals stay exactly where they are.
 6. **Transfer** the ciphertexts over an authenticated, encrypted channel to the approved location. Confirm the destination checksum equals the host's ciphertext checksum.
-7. **Restore verification, by a custodian, off the production host**, in a scratch database that is not production (a staging container is acceptable): decrypt with the private key, restore, and compare total rows, marker count, id range, and a checksum of the ordered id list against step 1. Record pass or fail and the date. Do the same for at least one legacy backup (decrypt, open read-only, count the activity rows).
+7. **Restore verification, by a custodian, off the production host**, in a scratch database that is not production (a staging container is acceptable): decrypt with the private key, restore, and compare total rows, marker count, id range, and a checksum of the ordered id list against step 1. Record pass or fail and the date. For **every** legacy backup, decrypt and confirm that its SHA-256 equals the checksum of the original recorded in step 5, and open at least one read-only and count its activity rows.
 8. **Retention and custody.** Set the retention period and legal-hold flag at the destination; record custodians and key locations (locations only) outside GitHub.
 9. **Clean up the temporary plaintext, only if all of these hold:**
    - the ciphertext at the destination has the same checksum as the host's ciphertext (step 6);
@@ -67,7 +71,7 @@ Run by a person with host access, never by an unattended job. Commands are templ
    - a second person confirms both in writing;
    - the metadata for `CHECKSUMS.txt` is prepared (step 10).
 
-   Then delete the plaintext dump and any plaintext intermediates from the temporary directory and remove the directory. File deletion on journaling or copy-on-write filesystems does not guarantee the bytes are gone; the limit is recorded in the evidence entry, and is why the plaintext stays in a `0700` directory for as short a time as possible.
+   Then delete the plaintext dump and the temporary ciphertext copies (including those of the legacy backups, which are duplicates of what is now at the destination) from the temporary directory and remove the directory. The original legacy backups and every original file are never touched. File deletion on journaling or copy-on-write filesystems does not guarantee the bytes are gone; the limit is recorded in the evidence entry, and is why the plaintext stays in a `0700` directory for as short a time as possible.
 
    **If any condition fails**, the plaintext stays in the restricted directory, and the operation is repeated or the problem is resolved first. The plaintext is never deleted on the strength of the host's own checks. The production table remains the source, and nothing here changes it.
 10. **Publish only the metadata**: add a dated table of file names, sizes, SHA-256 (plaintext and ciphertext), row counts, the age version, recipient fingerprints and the restore-verification result to `CHECKSUMS.txt` via a normal reviewed PR.

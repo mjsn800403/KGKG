@@ -59,6 +59,8 @@ Shared fixture: one company with several seats, one demo company, and rows of ev
 | E3 | a window reaching into the registered range | qualification fields present; the UI shows the banner |
 | E4 | no response contains an unlabelled field called `genuine`; every aggregate carries its class composition | pass |
 | E5 | evaluator export | `strict` only; "no verified data" when empty |
+| E6 | determinism with a fixed `as_of` | with the same fixture and `as_of` set to a fixed timestamp, every window count is identical when the test runs at different wall-clock times and after further rows are inserted with later timestamps; the code never reads the current time when `as_of` is given |
+| E7 | the bound formula | for fixtures with chosen `R`, `B`, `D`, `A` and `O`, the measured `operational` count equals `W - R - B - (D + A - O)` and lies between the two stated bounds |
 
 ## F. Prevention of regression to unfiltered queries
 
@@ -102,6 +104,6 @@ Shared fixture: one company with several seats, one demo company, and rows of ev
 1. All tests above exist, were red before the change and are green after it.
 2. The backend coverage floor and lint ratchet do not drop.
 3. No `api_activitylog` row differs before and after migration on the original columns (D1).
-4. Staging shadow comparison, from one snapshot: every analytics endpoint equals its rule-based recomputation under the stated mode at 7, 30, 90, 180 and 365 days, and each window's `operational` count falls inside the range in `COMPATIBILITY_ASSESSMENT.md` section 2 (net of reconstructed, back-filled, demo-company and administrative rows). The measured exact figures are recorded in the evidence entry and replace the ranges; a value outside its range fails the criterion and is investigated before promotion.
+4. Staging shadow comparison on one fixed snapshot, as defined in `COMPATIBILITY_ASSESSMENT.md` ("Fixed boundaries for acceptance"): a single recorded cutoff `T`, windows `[T - N days, T]` for N in 7, 30, 90, 180 and 365, both code paths evaluated with `as_of = T` and no `now()` anywhere in the comparison. For every window the measured `operational` count equals `W - R - B - (D + A - O)` computed by a separate query on the same snapshot, and lies inside the bounds `W - R - B - (D + A)` to `W - R - B - max(D, A)`. `T`, the six counts per window and the measured values are recorded in the evidence entry. The 2026-11-02 reference table is informative only and is never an acceptance limit.
 5. `CHANGELOG` and `METRIC_DEFINITIONS.md` updated in the same commit; each metric states its denominator, the mode and the classes it includes.
 6. An independent reader reproduces the `FINDINGS.md` queries after promotion and the numbers match the registry.
