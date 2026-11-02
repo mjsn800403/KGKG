@@ -28,6 +28,7 @@ import sqlite3
 from .rag import config
 from . import cardb, cardb_pg
 from . import dataquality
+from .safepath import safe_join, split_year_suffix
 
 BUILDER_VERSION = 'v1'
 
@@ -87,7 +88,6 @@ CURATED_MODEL_FACTS = {
 # 'RAV4', 'GR Corolla' over 'Corolla', 'Crown Signia' over 'Crown'.
 _MODEL_NAMES = sorted(CURATED_MODEL_FACTS.keys(), key=len, reverse=True)
 
-_YEAR_SUFFIX_RE = re.compile(r'\s*\((\d{4})\)\s*$')
 _DISP_RE = re.compile(r'\b(\d\.\d)\s*L\b')
 _VIN_RE = re.compile(r'Eng\s+VIN\s+(\w+)', re.IGNORECASE)
 _TIRE_RE = re.compile(r'\b\d{3}/\d{2}\s?R\s?\d{2}[A-Z]{0,2}\b')
@@ -109,11 +109,9 @@ def parse_stem(stem):
     out = {'stem': stem, 'base': stem, 'year_suffix': None, 'model': None,
            'trim': '', 'displacement_l': None, 'engine_vin': None,
            'drivetrain': None, 'manual_trans': False}
-    m = _YEAR_SUFFIX_RE.search(stem)
-    base = stem
-    if m:
-        out['year_suffix'] = int(m.group(1))
-        base = stem[:m.start()].strip()
+    base, year = split_year_suffix(stem)
+    if year is not None:
+        out['year_suffix'] = year
     out['base'] = base
 
     parts = [p.strip() for p in base.split(',') if p.strip()]
@@ -262,7 +260,10 @@ def parse_manual_specs(stem):
     out = {'fluids': [], 'tires': [], 'auto_trans': False,
            'fuel_tank_l': None, 'sections': [], 'source': 'lemon',
            'displacement_l': None, 'engine_code': None, 'hybrid': False}
-    path = config.WAREHOUSE_DIR / f'{stem}.db'
+    try:
+        path = safe_join(config.WAREHOUSE_DIR, f'{stem}.db')
+    except ValueError:              # a stem that is not a plain file name is not a car
+        return out
     if cardb_pg.is_pg(path):
         try:
             con = cardb.connect(path)

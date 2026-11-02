@@ -11,6 +11,7 @@
 
 import { faTitle, faTitleBoth, collectPairs, faTermsSet } from '../../../lib/faTerms';
 import { contextualize } from '../../../lib/contextualize';
+import { isSafeSessionId, metisPath } from '../../../lib/safeUrl';
 import {
   sanitizeHistory, sanitizePrevSources, historyBlock,
   collectAllowedHrefs, collectAllowedHrefsDiag, sanitizeButtons,
@@ -115,7 +116,7 @@ async function translateQuery(q, enabled = MQ_TRANSLATE) {
     const session = await metis('session', {
       botId: BOT_ID, user: { id: 'mq-translate', name: '_' },
     });
-    const reply = await metis(`session/${session.id}/message`, {
+    const reply = await metis(metisPath('session', session.id), {
       message: { type: 'USER', content: TRANSLATE_PROMPT + key },
     });
     let out = (reply?.content ?? '').trim().split('\n')[0].replace(/^["'`]|["'`]$/g, '').trim();
@@ -715,7 +716,9 @@ export async function POST(request) {
     //    dependency, so any failure (unconfigured / down / timeout / over budget)
     //    degrades to a deterministic no-LLM digest of what we already retrieved,
     //    instead of failing the whole request.
-    let sid = sessionId;
+    // The browser sends this id back; it becomes a path segment of a request that
+    // carries our API key, so anything but a plain id starts a fresh session.
+    let sid = isSafeSessionId(sessionId) ? sessionId : null;
     let rawReply = null;
     let degraded = false;
 
@@ -772,7 +775,7 @@ export async function POST(request) {
               sid = session.id;
             }
             const tl = Date.now();
-            reply = await metisStream(`session/${sid}/message`, {
+            reply = await metisStream(metisPath('session', sid), {
               message: { type: 'USER', content: prompt },
             }, (d) => send({ t: 'delta', d }), fromFinancial);
             llm.ms = Date.now() - tl;
@@ -808,7 +811,7 @@ export async function POST(request) {
           sid = session.id;
         }
         const tl = Date.now();
-        const reply = await metis(`session/${sid}/message`, {
+        const reply = await metis(metisPath('session', sid), {
           message: { type: 'USER', content: prompt },
         });
         llm.ms = Date.now() - tl;

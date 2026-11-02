@@ -22,6 +22,7 @@ from pathlib import Path
 from django.conf import settings
 
 from . import partsouq_crawler
+from .safepath import safe_join
 from .partsingest import (CATEGORY_FA, CATEGORY_ORDER, SCHEMA_VERSION, VEHICLE_DB_SCHEMA,
                           load_fa_terms, nfkc, sha1)
 
@@ -68,12 +69,14 @@ def parse_diagram(path):
         pills = {H.unescape(k): H.unescape(v) for k, v in
                  re.findall(r'data-detail-label="([^"]*)" data-detail-value="([^"]*)"', b)}
         qd = pills.pop('Qty', '')
-        m = re.match(r'^0*(\d{1,3})$', qd)
+        # ASCII digits only, at most 999: the old `^0*(\d{1,3})$` backtracked
+        # quadratically on a long run of zeros.
+        qty = int(qd) if qd.isascii() and qd.isdigit() and int(qd) < 1000 else None
         date = pills.pop('Date', '').replace(' » ', ' - ')
         pills.pop('Code', None)
         note = '; '.join(f'{k}: {v}' for k, v in pills.items() if v)
         rows.append(dict(callout=a.get('callout', ''), pn=a.get('part-number') or pn_disp.replace('-', ''),
-                         pn_display=pn_disp, name_en=name, qty=int(m.group(1)) if m else None,
+                         pn_display=pn_disp, name_en=name, qty=qty,
                          qty_display=qd, note=note, date_range=date))
     labels = []
     for tag in re.findall(r'<div[^>]+class="hotspot"[^>]*>', h):
@@ -106,7 +109,10 @@ def build_db(crawl, car, grade, backend=None):
         raise BuildError('folder name is not <Model>_<year>_<frame>_<VIN>')
     frame, vin = m['frame'], m['vin']
     prefix = f'ps_{vin.lower()}_c_'        # shared asset dir: unique per VIN; _c_ = cleaned
-    out = backend / 'Database_warehouse' / '_parts' / f'{car}.db'
+    try:
+        out = safe_join(backend / 'Database_warehouse' / '_parts', f'{car}.db')
+    except ValueError as e:
+        raise BuildError('car name is not a plain file name') from e
     assets = backend / 'static_warehouse' / '_parts_assets'
     fi = frame_info(crawl)
     fa = load_fa_terms(backend)
@@ -198,12 +204,16 @@ def build_and_register(folder, car_name, grade=''):
     from . import cardb
     car_name = (car_name or '').strip()
     grade = (grade or '').strip()[:40]
-    m = FOLDER.fullmatch(folder or '')
+    folder = folder or ''
+    m = FOLDER.fullmatch(folder) if len(folder) <= 120 else None   # bound before matching
     if not m:
         return None, 'پوشهٔ خزش نامعتبر است.'
     if not CAR_NAME.fullmatch(car_name):
         return None, 'نام خودرو نامعتبر است (۳ تا ۸۰ حرف لاتین، عدد، فاصله یا پرانتز).'
-    crawl = partsouq_crawler.OUT_ROOT / folder
+    try:
+        crawl = safe_join(partsouq_crawler.OUT_ROOT, folder)
+    except ValueError:
+        return None, 'پوشهٔ خزش نامعتبر است.'
     if not (crawl / 'pages' / 'groups.html').is_file():
         return None, 'این خزش صفحهٔ گروه‌ها را ندارد.'
     if partsouq_crawler.status()['running']:

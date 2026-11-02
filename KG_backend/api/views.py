@@ -13,6 +13,7 @@ from .models import Car, PurchaseRequest
 from .access import car_db_ready, user_can_open_car
 from .portal import portal_user
 from .ratelimit import rate_limited, require_admin_token
+from .safepath import safe_join
 
 # Public catalog listings change only when the fleet changes; a short TTL keeps
 # them fresh enough while collapsing per-request table scans + fleet stat()s.
@@ -538,7 +539,10 @@ def get_car_db(db_address):
     main_dir = Path(settings.KG_DATA_DIR)
     # db_address may carry Windows separators (rows seeded on Windows); normalize
     # so it resolves on POSIX/macOS too.
-    abs_path = main_dir / db_address.replace('\\', '/')
+    try:
+        abs_path = safe_join(main_dir, db_address.replace('\\', '/'))
+    except ValueError:      # an address that leaves the data dir is not a car DB
+        raise FileNotFoundError(f"Database not found: {db_address}")
     try:
         return cardb.connect(abs_path)
     except FileNotFoundError:
