@@ -160,19 +160,21 @@ Which cohorts (if any) become `human_confirmed` is decided only through `ATTESTA
 
 | Gate | Who | Needed before |
 |---|---|---|
-| G0 | product owner | decision on #64 recorded (direction done; keep-or-remove open) |
+| G0 | product owner | **Decided (2026-11-02): retain every existing record; no deletion, rewrite, relocation or anonymization.** Removal is not proposed; any future removal needs a new explicit decision, taken only after G2 has produced a verified, restore-tested preservation |
 | G1 | reviewer | merge of the documentation-only PR #65, **after** the review findings are resolved |
 | G2 | product owner | any backup, checksum run or copy on the production host |
 | G3 | product owner | approval of this design; separately, of each attestation |
 | G4 | second reviewer | merge of the implementation PR (code, tests, migrations) |
-| G5 | engineer | green staging run; shadow comparison; dashboards compared at 7, 30, 90 and 365 days |
+| G5 | engineer | green staging run; shadow comparison; dashboards compared at 7, 30, 90, 180 and 365 days |
 | G6 | a person, via `kgkg-promote <sha>` | any production change; never automated |
 | G7 | independent reader | re-run of the `FINDINGS.md` queries and the metric contract tests on production |
 | G8 | product owner | closing #64, only after G7 |
 
-## 10. Deferred decision
+## 10. Retention decision and what it does and does not settle
 
-Whether the reconstructed rows stay (disclosed, excluded) or are removed later. Removal is a separate change with its own gate, uses the manifest's statements after a verified, restore-tested backup, and records before and after counts first.
+Decided by the product owner on 2026-11-02: **retain every existing record**. The reconstructed rows stay in production, identified and excluded from analytics, and no row is deleted, rewritten, relocated or anonymized. This design is built on that decision and contains no removal step.
+
+What it does not settle: if removal is ever proposed, it is a new decision, not a deferred step of this one. It would need its own approval, a verified and restore-tested preservation (`EVIDENCE_PRESERVATION.md`, completed through step 9) before anything is touched, a registry entry recording the before and after counts first, and the manifest's own statements as the only deletion criteria. Evidence preservation (G2) is a separate authorization and has not been requested or granted; retaining the rows in place does not make a backup unnecessary, because the rows are still exposed to the seat-deletion cascade described in section 7.5.
 
 ## 11. Risks
 
@@ -180,3 +182,21 @@ Whether the reconstructed rows stay (disclosed, excluded) or are removed later. 
 - `unknown` attribution is large and will stay large unless cohorts are attested; dashboards will say so.
 - The 181 rows before the batch and the 2 rows with ids <= 8848 but a timestamp after the batch started cannot be classified further.
 - If the registry and `origin` ever disagree, the less trusted value wins and a consistency check fails.
+
+## 12. Unresolved registry-supersession questions (to be decided at G3)
+
+Section 3.4 gives resolution rules, but the supersession model is not settled. These are recorded so G3 decides them explicitly rather than inheriting a default from the draft. None blocks G1.
+
+1. **One superseded entry or many.** `supersedes_id` is a single reference, but a new entry may need to replace several overlapping entries (the trigger rule in 3.4 says it must name *every* overlapped active entry). Options: a link table (entry, superseded entry), or one array column. Which?
+2. **Partial supersession.** If a new, narrower scope should replace only part of an older range (for example attesting one seat's rows inside a broad `unknown` range), is the older entry split, left active and out-ranked by specificity, or required to be superseded whole and re-issued as pieces? Splitting changes history; out-ranking relies on the specificity rule.
+3. **Specificity is under-defined.** Is "more constraining fields" a count of fields, or a fixed order (seat set narrower than action set narrower than time bound narrower than id range)? Two entries with different fields but equal count currently tie.
+4. **Chains and cycles.** May an already-superseded entry be superseded again? How are cycles and a supersession of a non-existent or later entry rejected?
+5. **Irrevocable provenance.** Can a `reconstructed` or `backfilled` provenance entry ever be superseded, and by whom? One position is that provenance is irrevocable except by a documented correction of a recording error with two approvers.
+6. **Cross-dimension conflicts.** If provenance is `reconstructed` and an attestation says `human_confirmed`, does the attestation fail validation, or is the conflict resolved by the trust order? The draft says the less trusted wins; G3 should say whether such an attestation may be written at all.
+7. **Attestation expiry (`review_by`).** When the date passes, do rows silently revert to `unknown` (metrics move without a change anyone made), or is the entry flagged and kept until renewed or withdrawn? A silent revert would change published figures on a calendar date.
+8. **Override of rule-based `not_human`.** May an attestation override a rule (a demo seat, an administrative action)? If so, with what extra evidence?
+9. **Deleted seats.** `seat_ids` in a scope may name a seat that is later deleted. The entry stays, but should a consistency check warn, and what does `rows_recorded` mean once the rows are gone?
+10. **Id reuse after restore.** Registry ranges are by `api_activitylog.id`. Restoring a dump or copying a table could reset the sequence and produce ids that fall inside an old range. How is a collision detected and prevented (a sequence-floor check in the migration and a periodic consistency test)?
+11. **Environments.** Staging and QA are built from copies of production. Are registry entries copied with the data, and who may write registry entries in staging without affecting production?
+12. **Approval identity.** How are `analyst` and `approver` established as two different people (application users, platform admins, or an external record), and is a platform admin who can also grant database access allowed to approve?
+13. **Retrospective writes.** May an entry be recorded with a `recorded_at` earlier than the present, and if not, how is the original decision date preserved?

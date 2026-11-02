@@ -20,21 +20,25 @@ That would trade a misleading chart for a broken product. `strict` is therefore 
 
 `operational` excludes `reconstructed`, `backfilled` and rule-based `not_human` rows and includes `unknown` rows, labelled.
 
-| Window | Rows today | Rows under `operational` | Change |
-|---|---:|---:|---|
-| 7 days | 82 | 82 | none |
-| 30 days | 670 | 670 | none |
-| 90 days | about 4,263 | about 2,300 | -46%; the 1,946 reconstructed and 17 back-filled rows leave |
-| 180 days | 28,910 | 2,705 | -91% |
-| 365 days | 73,949 | 2,705 | -96% |
+The table nets out **all** three exclusions. Two of them are exact; the third (demo-company and administrative rows) is bounded rather than exact, because its distribution across windows was not read and no production access was made for this revision.
 
-(Demo-company and administrative rows are also excluded under `operational`; they are a few dozen and are not netted out of the table above.)
+| Window | Rows today | Reconstructed and back-filled removed (exact) | Left before demo/administrative rule | `operational` after that rule (range) |
+|---|---:|---:|---:|---:|
+| 7 days | 82 | 0 | 82 | 55 to 82 |
+| 30 days | 670 | 0 | 670 | 643 to 670 |
+| 90 days | about 4,263 | 1,963 (1,946 + 17) | about 2,300 | 2,273 to 2,300 |
+| 180 days | 28,910 | 26,205 (26,184 + 21) | 2,705 | 2,678 to 2,687 |
+| 365 days | 73,949 | 71,244 (71,223 + 21) | 2,705 | 2,678 to 2,687 |
+
+How the last column is bounded. Among the 2,705 unmarked, non-back-filled rows, the rule-based `not_human` exclusions are the 9 rows of seats in demo companies and the 18 administrative rows (`account_created`, `team_add`, `role_add`, `role_apply`, `role_delete`, `password_reset`, not counting the 21 back-filled rows already removed). They can overlap, so between 18 and 27 rows are excluded in total (all-time, hence the 180 and 365-day ranges of 2,678 to 2,687). In a shorter window an unknown number of them, between 0 and 27 but never more than the window's rows, falls inside, which gives the wider lower bound. The 90-day base of about 2,300 is 27 pre-batch rows plus 181 plus 2,092; it drifts by a few rows with the clock.
+
+Change against today: 7 and 30 days, 0 to 27 rows (up to about 33% and 4%); 90 days, about -46% to -47%; 180 days, about -91%; 365 days, about -96%. **The exact figures are produced by the staging shadow comparison (section 5) from one snapshot and replace these ranges in the evidence entry.** The acceptance criterion in `TEST_PLAN.md` is that each measured value falls inside its range here and equals the rule-based recomputation from the same snapshot.
 
 Consequences to plan for:
 
-- **Wide-window charts fall off a cliff.** A 365-day engagement chart goes from tens of thousands of rows to a few thousand. Without annotation this reads as a collapse in usage. Each affected view needs a visible note: "N reconstructed rows are excluded; history before 2026-07-04 has no application data."
+- **Wide-window charts fall off a cliff.** A 365-day engagement chart goes from 73,949 rows to between 2,678 and 2,687. Without annotation this reads as a collapse in usage. Each affected view needs a visible note: "N reconstructed rows are excluded; history before 2026-07-04 has no application data."
 - **Feature discovery.** Seats with any manual view: 26 including reconstructed rows, 12 without. 14 seats would flip from "has read the manuals" to "has not", and their nudges would start to fire. That is the correct behaviour and it will look like a sudden change in onboarding traffic.
-- **Recommendations.** Peer history shrinks from 71,888 to about 1,354 manual views from 12 seats. Seats with no recent history fall back to non-personalised suggestions; this fallback must be tested (it is part of `TEST_PLAN.md`).
+- **Recommendations.** Peer history shrinks from 71,888 to at most 1,354 manual views from 12 seats (fewer by any made by demo-company seats). Seats with no recent history fall back to non-personalised suggestions; this fallback must be tested (it is part of `TEST_PLAN.md`).
 - **Operators.** Reads only; no write path changes. A search of `ops/` found no alert, watchdog, exporter or dashboard that reads `api_activitylog`; the only references are the staging sanitizer and the restore verifier. Anything outside the repository was not searched. Disk, locks and migrations are unaffected (nullable column, no rewrite).
 - **Concentrated use.** In the last 30 days five seats produced all activity and the top-manager role accounts for 302 of 670 rows. Dashboards built on such a small base will be volatile; the note on small samples belongs in the UI.
 

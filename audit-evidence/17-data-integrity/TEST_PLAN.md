@@ -102,6 +102,6 @@ Shared fixture: one company with several seats, one demo company, and rows of ev
 1. All tests above exist, were red before the change and are green after it.
 2. The backend coverage floor and lint ratchet do not drop.
 3. No `api_activitylog` row differs before and after migration on the original columns (D1).
-4. Staging shadow comparison: every analytics endpoint equals its recomputation under the stated mode at 7, 30, 90 and 365 days, and the differences equal the table in `COMPATIBILITY_ASSESSMENT.md` section 2.
+4. Staging shadow comparison, from one snapshot: every analytics endpoint equals its rule-based recomputation under the stated mode at 7, 30, 90, 180 and 365 days, and each window's `operational` count falls inside the range in `COMPATIBILITY_ASSESSMENT.md` section 2 (net of reconstructed, back-filled, demo-company and administrative rows). The measured exact figures are recorded in the evidence entry and replace the ranges; a value outside its range fails the criterion and is investigated before promotion.
 5. `CHANGELOG` and `METRIC_DEFINITIONS.md` updated in the same commit; each metric states its denominator, the mode and the classes it includes.
 6. An independent reader reproduces the `FINDINGS.md` queries after promotion and the numbers match the registry.

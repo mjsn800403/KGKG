@@ -22,6 +22,7 @@ Preserve all records. Do not delete, rewrite, relocate or anonymize activity row
 | `ATTESTATION_POLICY.md` | The evidence required before any rows may be treated as human activity |
 | `COMPATIBILITY_ASSESSMENT.md` | What the change does to dashboards, onboarding and recommendations, and how uncertain data is shown |
 | `TEST_PLAN.md` | Tests to write before any implementation, with acceptance criteria |
+| `DISTRIBUTION_STATUS.md` | External distribution of the superseded figures: status unknown, outstanding questions |
 | `CHECKSUMS.txt` | SHA-256 of the repository artifacts the findings depend on |
 
 ## Corrections made elsewhere (documentation only, originals preserved)
@@ -43,7 +44,7 @@ Each affected statement keeps its original text and gains a dated correction dir
 | **Not affected by the reconstruction, but not verified as human activity** | parts catalogue 6 seats / 314 uses; assistant 3 seats asked / 43 questions (the 43 rows also appear in `ChatLog`, same 3 seats) and 9 seats opened it; search 0; CSV export 3; team PDF 8 (by 1 seat). They may include demo, test, administrative or scripted use |
 | **Different source** | support-desk, knowledge-base, delivery (DORA), CI, coverage and security metrics were not examined for this issue |
 
-No evidence was found, in the repository or in team chat, that any external evaluator received figures derived from the reconstructed rows. Whether any audit pack, dashboard or screenshot was shared outside the team is not recorded and is an open question for the product owner.
+**External distribution is UNKNOWN.** Whether any audit pack, report, dashboard view or screenshot containing the superseded figures left the team is not recorded anywhere this work could see, and the lack of a record is not evidence that nothing was shared. The open questions (recipients, artifacts, versions, dates, channel, correction delivery) are in `DISTRIBUTION_STATUS.md`. No correction has been sent to anyone.
 
 ## What this directory deliberately does not contain
 
