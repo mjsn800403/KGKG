@@ -86,7 +86,7 @@ Never one unlabelled number called "genuine".
 
 1. Implement behind a flag per reader (`KG_ACTIVITY_PROVENANCE_<READER>`), default off.
 2. **Shadow mode** on staging against a sanitized copy: compute old and new values, log the difference, show nothing new.
-3. Compare dashboards at 7, 30, 90 and 365 days against the table in section 2.
+3. **Recompute and compare on the fixed staging snapshot**, as defined in "Fixed boundaries for acceptance" (section 2): use the recorded cutoff `T` and windows `[T - N days, T]` for 7, 30, 90, 180 and 365 days, recompute `W`, `R`, `B`, `D`, `A` and `O` from that snapshot, and compare each dashboard's measured `operational` count with `W - R - B - (D + A - O)`. The 2026-11-02 reference table is not used for this comparison.
 4. Enable readers one at a time; each with its annotation and its test.
 5. Production promotion only by a person (`kgkg-promote <sha>`).
 6. Rollback is the previous image tag plus turning the flag off; no data to restore.
