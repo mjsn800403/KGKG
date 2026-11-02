@@ -14,10 +14,27 @@ Everything lives in `/opt/KGKG` (git working copy = deployed copy). Python venv:
 | `kgkg-frontend.service` (retired; containers serve now — see 11.3) | `npm run start` (Next.js) on `:3000`; env from `kg_frontend/.env.production` |
 | `nginx` | Reverse proxy on `:80` (see 11.2) |
 | `kgkg-alerts.timer` → service | `manage.py check_alerts` every 5 min (alert sweep + retention pruning) |
+| `kgkg-outbox.timer` → service | `manage.py process_outbox` every minute. **Not installed**; unit templates in `ops/outbox/`. See "Notification outbox" below |
 | `kgkg-watchdog.timer` → service | `ops/observability/watchdog.py` every 5 min — watches the alert sweep itself and pages by SMS if nobody is watching |
 | `kgkg-pipeline.timer` → service | `manage.py pipeline_tick` every 5 min (watchdog / scheduler / autopilot) |
 | `kgkg-detect.timer` → service | `manage.py realtime_tick` every 30 s (change detector → events) |
 | `kgkg-pipeline-job<id>-a<n>` | Transient units for detached pipeline workers (systemd-run, Nice 15 / CPUWeight 25 / IO idle) |
+
+### Notification outbox
+
+Support SMS/email go through the `NotificationOutbox` table (`api/notifications/`), never straight
+to a provider. Rows are sent by `process_outbox` (and an opportunistic thread), retried at
+1/5/15/60/240 minutes, then marked `dead` and surfaced as the `notify:dead` alert.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `KG_NOTIFY_SMS`, `KG_NOTIFY_EMAIL` | `off` | `off` writes rows as `suppressed` and sends nothing; `dry_run` renders and logs only; `live` contacts the provider. Any other value is `off` |
+| `KG_NOTIFY_SMS_MAX_PER_HOUR` | `10` | Live SMS cap; rows over it are deferred 10 minutes, never dropped |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `KG_NOTIFY_FROM_EMAIL` | unset | SMTP settings; email fails closed (`email not configured`) without them |
+
+`sent` means the provider accepted the message, not that it was delivered. Activation order:
+install the timer (a person, on the server), set a channel to `dry_run`, review the rows, then
+get the owner's explicit approval before `live`.
 
 ### Environment files
 

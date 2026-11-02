@@ -147,6 +147,7 @@ parts expansion), `service.py` (TTL caches, embed lock, allowed_cars in cache ke
 | `optimize_index` | Index maintenance (FTS/vacuum) |
 | `eval_rag` | Offline retrieval evaluation harness |
 | `check_alerts` | Alert sweep + data retention (systemd timer, 5 min) |
+| `process_outbox [--limit N]` | Send due outbox notifications (SMS/email) with retry; no-op while `KG_NOTIFY_*` is `off` (timer, 1 min, not yet installed) |
 | `pipeline_tick` | Pipeline watchdog/scheduler/autopilot pass (timer, 5 min) |
 | `run_pipeline --job <id>` | Pipeline worker entry (spawned; not run manually) |
 | `realtime_tick` | Change detector → events (kgkg-detect.timer, 30s) |

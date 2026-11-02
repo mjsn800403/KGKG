@@ -4,6 +4,12 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Notification outbox (Phase 1 of the customer communication redesign).** `api/notifications/`:
+  a durable `NotificationOutbox` table, `enqueue()` with dedupe windows, a worker with retry
+  (1/5/15/60/240 min), an hourly SMS cap, stuck-row reclaim and a `notify:dead` alert, and
+  `manage.py process_outbox`. Delivery is `off` unless `KG_NOTIFY_SMS` / `KG_NOTIFY_EMAIL` say
+  otherwise; nothing triggers it yet and the timer unit in `ops/outbox/` is not installed.
+  Design: `docs/superpowers/specs/2026-11-02-customer-communication-design.md`. Refs #61.
 - **Jira tracking convention.** `CONTRIBUTING.md` §Work tracking and the PR template now ask
   for a Jira key (`KGTEC-<n>`) next to the GitHub issue; branch names carry it. Part of #45.
 - **Delivery metrics (DORA).** `ops/observability/delivery.py` reads the deploy logs and git

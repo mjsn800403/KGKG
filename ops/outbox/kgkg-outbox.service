@@ -1,0 +1,20 @@
+# Sends due notifications from the outbox (api/notifications/worker.py).
+#
+# NOT INSTALLED by any script. A person installs it on the server, after the
+# owner has approved activation (docs/11-operations-deployment.md, "Notification
+# outbox"). With KG_NOTIFY_SMS and KG_NOTIFY_EMAIL unset or `off` it contacts
+# nobody, so installing the timer alone is harmless.
+#
+# ExecStart is a TEMPLATE: copy the invocation style (container exec vs host
+# venv, env file) from the existing kgkg-alerts.service on the server, which
+# is not kept in this repository.
+[Unit]
+Description=KGKG notification outbox (send due SMS/email)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Same invocation as kgkg-alerts.service, with the command replaced:
+ExecStart=/bin/true # REPLACE: <kgkg-alerts.service ExecStart> process_outbox
+TimeoutStartSec=120
+Nice=10
