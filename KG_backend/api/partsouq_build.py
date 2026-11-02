@@ -81,6 +81,18 @@ def _attrs(tag):
     return {k: H.unescape(v) for k, v in re.findall(r'data-([a-z-]+)="([^"]*)"', tag)}
 
 
+def parse_qty(text):
+    """0-999 from ASCII digits (leading zeros allowed), else None.
+
+    Replaces `^0*(\\d{1,3})$`, which backtracked quadratically on a long run of
+    zeros. The zeros are stripped and the length bounded BEFORE int(), because
+    CPython refuses to convert more than 4,300 digits (ValueError)."""
+    if not (text.isascii() and text.isdigit()):
+        return None
+    sig = text.lstrip('0')
+    return int(sig or '0') if len(sig) <= 3 else None
+
+
 def parse_diagram(path):
     h = path.read_text(encoding='utf-8')
     title = _text((re.search(r'<h2 class="section-title diagram-title">(.*?)</h2>', h, re.S) or [None, ''])[1])
@@ -94,9 +106,7 @@ def parse_diagram(path):
         pills = {H.unescape(k): H.unescape(v) for k, v in
                  re.findall(r'data-detail-label="([^"]*)" data-detail-value="([^"]*)"', b)}
         qd = pills.pop('Qty', '')
-        # ASCII digits only, at most 999: the old `^0*(\d{1,3})$` backtracked
-        # quadratically on a long run of zeros.
-        qty = int(qd) if qd.isascii() and qd.isdigit() and int(qd) < 1000 else None
+        qty = parse_qty(qd)
         date = pills.pop('Date', '').replace(' » ', ' - ')
         pills.pop('Code', None)
         note = '; '.join(f'{k}: {v}' for k, v in pills.items() if v)

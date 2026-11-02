@@ -18,6 +18,21 @@ class ValidationTests(TestCase):
         self.assertIn('نام خودرو', pb.build_and_register(CRAWL.name, 'x')[1])
 
 
+class ParseQtyTests(TestCase):
+    def test_same_answers_as_the_old_regex(self):
+        for text, want in [('1', 1), ('007', 7), ('0', 0), ('000', 0), ('999', 999), ('0999', 999),
+                           ('1000', None), ('01000', None), ('', None), (' 5', None), ('5 ', None),
+                           ('1.5', None), ('-1', None), ('٥', None), ('x', None)]:
+            with self.subTest(text=text):
+                self.assertEqual(pb.parse_qty(text), want)
+
+    def test_very_long_digit_strings_do_not_raise(self):
+        # int() on more than 4,300 digits raises ValueError in CPython 3.12
+        self.assertEqual(pb.parse_qty('0' * 10_000 + '7'), 7)
+        self.assertEqual(pb.parse_qty('0' * 10_000), 0)
+        self.assertIsNone(pb.parse_qty('1' * 10_000))
+
+
 class ParseFolderTests(TestCase):
     """parse_folder replaced a regex CodeQL reported as polynomial; same accepted names."""
     OK = 'LandCruiser_2019_GRJ200L-GNTAKV_JTMHU01J6L5165492'
