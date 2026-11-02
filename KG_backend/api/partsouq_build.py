@@ -27,8 +27,33 @@ from .partsingest import (CATEGORY_FA, CATEGORY_ORDER, SCHEMA_VERSION, VEHICLE_D
                           load_fa_terms, nfkc, sha1)
 
 MEDIA = '/media/_parts_assets'
-FOLDER = re.compile(r'(?P<model>[A-Za-z0-9]+)_(?P<year>\d{4})_(?P<frame>[A-Za-z0-9-]+)_(?P<vin>[A-HJ-NPR-Z0-9]{17})')
 CAR_NAME = re.compile(r'[\w ()\-.]{3,80}')
+
+_ALNUM = frozenset('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789')
+_FRAME = _ALNUM | {'-'}
+_VIN = frozenset('ABCDEFGHJKLMNPRSTUVWXYZ0123456789')        # a VIN has no I, O or Q
+
+
+def parse_folder(name):
+    """``{'model', 'year', 'frame', 'vin'}`` for a crawl folder named
+    ``<Model>_<year>_<frame>_<VIN>``, else None.
+
+    A split and character sets rather than one regex: the regex form was
+    reported as polynomial (CodeQL py/polynomial-redos) on a name made of a
+    long run of one character, and none of the four parts may contain ``_``,
+    so the split is exact."""
+    if not isinstance(name, str) or len(name) > 120:
+        return None
+    parts = name.split('_')
+    if len(parts) != 4:
+        return None
+    model, year, frame, vin = parts
+    if (model and _ALNUM.issuperset(model)
+            and len(year) == 4 and year.isascii() and year.isdigit()
+            and frame and _FRAME.issuperset(frame)
+            and len(vin) == 17 and _VIN.issuperset(vin)):
+        return {'model': model, 'year': year, 'frame': frame, 'vin': vin}
+    return None
 
 
 class BuildError(Exception):
@@ -104,7 +129,7 @@ def frame_info(crawl):
 def build_db(crawl, car, grade, backend=None):
     """Write Database_warehouse/_parts/<car>.db from `crawl`. Returns the counts."""
     backend = Path(backend or settings.BASE_DIR)
-    m = FOLDER.fullmatch(crawl.name)
+    m = parse_folder(crawl.name)
     if not m:
         raise BuildError('folder name is not <Model>_<year>_<frame>_<VIN>')
     frame, vin = m['frame'], m['vin']
@@ -205,7 +230,7 @@ def build_and_register(folder, car_name, grade=''):
     car_name = (car_name or '').strip()
     grade = (grade or '').strip()[:40]
     folder = folder or ''
-    m = FOLDER.fullmatch(folder) if len(folder) <= 120 else None   # bound before matching
+    m = parse_folder(folder)
     if not m:
         return None, 'پوشهٔ خزش نامعتبر است.'
     if not CAR_NAME.fullmatch(car_name):

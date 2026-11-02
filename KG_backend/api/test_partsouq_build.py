@@ -18,6 +18,35 @@ class ValidationTests(TestCase):
         self.assertIn('نام خودرو', pb.build_and_register(CRAWL.name, 'x')[1])
 
 
+class ParseFolderTests(TestCase):
+    """parse_folder replaced a regex CodeQL reported as polynomial; same accepted names."""
+    OK = 'LandCruiser_2019_GRJ200L-GNTAKV_JTMHU01J6L5165492'
+
+    def test_accepts_a_real_crawl_folder(self):
+        self.assertEqual(pb.parse_folder(self.OK), {
+            'model': 'LandCruiser', 'year': '2019', 'frame': 'GRJ200L-GNTAKV',
+            'vin': 'JTMHU01J6L5165492'})
+
+    def test_rejects_malformed_names(self):
+        bad = ['', '../../etc', 'a_b_c', self.OK + '_x', 'LandCruiser_19_F_JTMHU01J6L5165492',
+               'LandCruiser_2019__JTMHU01J6L5165492', '_2019_F_JTMHU01J6L5165492',
+               'LandCruiser_2019_F_JTMHU01J6L516549',          # 16-char VIN
+               'LandCruiser_2019_F_JTMHU01J6L5165492X',        # 18-char VIN
+               'LandCruiser_2019_F_ITMHU01J6L5165492',         # I is not in a VIN
+               'Land Cruiser_2019_F_JTMHU01J6L5165492', 'Land/Cruiser_2019_F_JTMHU01J6L5165492',
+               'LandCruiser_٢٠١٩_F_JTMHU01J6L5165492', None, 42]
+        for name in bad:
+            with self.subTest(name=name):
+                self.assertIsNone(pb.parse_folder(name))
+
+    def test_long_runs_are_rejected_fast(self):
+        import time
+        t = time.perf_counter()
+        self.assertIsNone(pb.parse_folder('0' * 100_000))
+        self.assertIsNone(pb.parse_folder('0_' * 50_000))
+        self.assertLess(time.perf_counter() - t, 1.0)
+
+
 def _crawl_present():
     try:   # an unreadable /root (CI runners) means "not on this machine"
         return (CRAWL / 'pages' / 'groups.html').is_file()
