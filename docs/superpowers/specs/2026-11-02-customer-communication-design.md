@@ -324,3 +324,19 @@ The product owner replied "Approve defaults".
 | D12, D13 | **Still needed:** the other developer's branch and pending migrations; production DB engine. |
 
 Implementation has NOT started. Plan: `docs/superpowers/plans/2026-11-02-customer-communication-phases-1-2.md`.
+
+## 12. Corrections and naming (2026-11-02)
+
+Product direction confirmed: the support chat is human-operated; no AI, LLM, RAG or external inference
+dependency, and the existing assistant is untouched. The subsystem is pi/support_chat/
+(SupportThread, SupportMessage, SupportRating, SupportPresence), routes under
+/api/support-chat/ and /api/admin/support-chat/. Where this document says ChatThread,
+AgentPresence or /api/chat/..., read the new names. Changes against sections 5 and 6:
+
+* No fixed response-time promise: the status endpoint returns eply_target_minutes: null unless the owner sets one (section 5.4's cached 5 s status was dropped; one indexed query per request).
+* Staff availability is three facts (connected, declared, eligible); live needs an eligible person.
+* Limits are per thread and configurable; per-IP counters only for creation and for FAILED token checks.
+* Thread creation is idempotent through a client-generated token.
+* Reopening is explicit (staff any time; visitor within 14 days); ratings are kept per closure.
+* Customer messages, contact details and visitor IPs are kept out of AuditLog and Event; visitor-addressed outbox rows lose their text when final.
+* Retention periods remain PROPOSALS; purge_support_chat only reports until a policy is approved.

@@ -36,6 +36,23 @@ to a provider. Rows are sent by `process_outbox` (and an opportunistic thread), 
 install the timer (a person, on the server), set a channel to `dry_run`, review the rows, then
 get the owner's explicit approval before `live`.
 
+### Support chat (human-operated)
+
+`api/support_chat/` serves the landing-page and customer conversations with real staff. It has no AI, LLM
+or RAG dependency. Defaults below are initial values, changed by environment variable.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `KG_SC_POLL`, `KG_SC_SEND`, `KG_SC_SEND_HOUR`, `KG_SC_CONTACT`, `KG_SC_CSAT`, `KG_SC_REOPEN` | `30/60`, `20/60`, `30/3600`, `10/60`, `5/60`, `5/60` | per-thread limits as `count/seconds`; `0/0` switches one off. Poll windows are per gunicorn worker |
+| `KG_SC_CREATE_IP`, `KG_SC_BAD_TOKEN_IP`, `KG_SC_STATUS_IP` | `20/600`, `30/60`, `60/60` | per-IP: new threads, FAILED token checks only, status reads |
+| `KG_SUPPORT_REOPEN_DAYS` | `14` | how long a visitor may reopen their own closed thread |
+| `KG_SUPPORT_REPLY_TARGET_MINUTES` | unset | published reply target; unset means no promise is shown |
+| `KG_SUPPORT_PRESENCE_WINDOW_S` | `60` | how long a staff ping counts as connected |
+| `KG_SUPPORT_RETENTION_*_DAYS`, `KG_SUPPORT_RETENTION_ENABLED` | proposals / unset | `purge_support_chat` reports against proposed periods; deletion needs `ENABLED=1` and `--apply`, and no policy is approved yet |
+
+Chat routes are excluded from `AuditLog` request bodies (`api/audit.py` skip list); staff actions are
+audited by id only. Backups keep deleted data until their own retention expires.
+
 ### Environment files
 
 `KG_backend/.env.prod`: `DJANGO_SECRET_KEY` (required — refuses to boot without),

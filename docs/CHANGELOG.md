@@ -4,14 +4,18 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
-- **Anonymous chat backend and agent presence (Phase 2 of the customer communication redesign).**
-  `api/chat/`: `ChatThread` / `ChatMessage` / `AgentPresence` (additive migration `0041`), visitor
-  bearer tokens stored as hashes, `GET /api/chat/status/` (live only for an available agent seen in
-  the last 60 s), thread create/poll/send/contact/csat for visitors (Turnstile, honeypot, limits,
-  idempotent sends, visitors poll instead of holding SSE because the backend has 24 request
-  threads), a staff reply and internal-note endpoint, `purge_chat`, and a k6 poll check in
-  `qa/k6/chat_poll.js`. No UI yet and nothing notifies anyone. Routes are in `docs/openapi.yaml`.
-  Refs #61.
+- **Human support chat backend, Phase 2 (`api/support_chat/`).** `SupportThread` /
+  `SupportMessage` / `SupportRating` / `SupportPresence` (additive migration `0041`); visitor
+  bearer tokens stored as hashes, client-generated tokens make thread creation idempotent;
+  `GET /api/support-chat/status/` says `live` only when a staff member is connected AND declared
+  available, and makes no response-time promise unless `KG_SUPPORT_REPLY_TARGET_MINUTES` is set;
+  limits are per thread (a visitor's NAT neighbours do not share an allowance) and configurable
+  (`KG_SC_<NAME>`); staff reply/close/reopen/seen need a signed-in person; reopening is explicit
+  (visitors within 14 days) and a reply never reopens; ratings are kept per closure. Privacy: chat
+  routes are excluded from `AuditLog` bodies, `Event` carries ids only, `source_page`/`referrer`
+  lose query and fragment, and visitor-addressed outbox rows drop their text once final.
+  `purge_support_chat` only reports until a retention policy is approved. Human-operated: no AI,
+  LLM or RAG dependency (a test enforces it). Routes are in `docs/openapi.yaml`. Refs #61.
 - **Notification outbox (Phase 1 of the customer communication redesign).** `api/notifications/`:
   a durable `NotificationOutbox` table, `enqueue()` with dedupe windows, a worker with retry
   (1/5/15/60/240 min), an hourly SMS cap, stuck-row reclaim and a `notify:dead` alert, and
