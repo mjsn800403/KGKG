@@ -4,8 +4,10 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
-- **CodeQL critical/high findings.** One `safe_join` (`api/safepath.py`) now builds every path
-  from a name that came from a request, a row or a folder listing (20 path-injection alerts);
+- **CodeQL critical/high findings.** One `safe_join` (`api/safepath.py`) now builds the paths
+  from names that came from a request, a row or a folder listing (path-injection alerts); the
+  car-database address in `views.get_car_db` is deliberately unchanged, because stored addresses
+  may be absolute and outside the data dir (tests and possibly production rows);
   year-suffix regexes lose their quadratic `\s*` ends (7 ReDoS); the chat route only forwards a
   plain session id to Metis (2 request-forgery), assistant links reject control characters, the
   browser id uses `crypto.randomUUID`, `PartsViewer` no longer builds a selector from a code.
