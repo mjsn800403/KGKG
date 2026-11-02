@@ -12,6 +12,8 @@ short and point at the doc section that was updated.
   plain session id to Metis (2 request-forgery), assistant links reject control characters, the
   browser id uses `crypto.randomUUID`, `PartsViewer` no longer builds a selector from a code.
   Part of #45.
+- **Jira tracking convention.** `CONTRIBUTING.md` §Work tracking and the PR template now ask
+  for a Jira key (`KGTEC-<n>`) next to the GitHub issue; branch names carry it. Part of #45.
 - **Delivery metrics (DORA).** `ops/observability/delivery.py` reads the deploy logs and git
   history: deploys/week, lead time, change-failure rate, time to restore, and changes caught
   before production. Defined in `METRIC_DEFINITIONS.md` §Delivery, 9 tests, refreshed by

@@ -68,6 +68,21 @@ it moves in the same commit that adds the tests earning it. Lowering it to make
 CI pass, or excluding code from measurement to the same end, defeats the only
 purpose the file has.
 
+## Work tracking
+
+Jira (project `KGTEC`) is where work is planned and owned; GitHub issues stay the
+engineering record. Every change names both, so "which change closed which task" is
+answerable from either side.
+
+* Put the Jira key in the branch name, `<topic>/KGTEC-<n>-<slug>`, and on the first
+  line of the PR body (`Jira: KGTEC-<n>`). The PR must also reference a GitHub issue,
+  which `ops/governance/check_traceability.py` enforces.
+* Owner is the Jira assignee. At most two tasks In Progress per person.
+* Review state and blockers are Jira labels: `in-review`, `blocked`,
+  `needs-decision`, `needs-approval`.
+* Production is untouched by any of this: promotion stays a person running
+  `kgkg-promote <sha>`.
+
 ## Documentation
 
 `docs/` is the source of truth and ships with the change that affects it — this
