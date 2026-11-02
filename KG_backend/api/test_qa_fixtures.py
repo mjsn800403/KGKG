@@ -74,10 +74,21 @@ class SeedGuardTest(TestCase):
         self.assertFalse(UserCarAccess.objects.filter(
             user=users.get(username='qa_e2e_specialist')).exists())
         # Each printed token is a working session for its own account.
-        self.assertEqual(set(out['tokens']), {'manager', 'specialist', 'other', 'manager_logout'})
+        # `desk_admin` was added on 2026-10-31: a platform-side session, so an
+        # E2E can exercise the support desk's two-sided behaviour. A customer
+        # cannot create their own unread, so without it the unread test could
+        # not assert anything real.
+        self.assertEqual(set(out['tokens']),
+                         {'manager', 'specialist', 'other', 'manager_logout', 'desk_admin'})
         me = self.client.get('/api/auth/me/', HTTP_AUTHORIZATION=f"Bearer {out['tokens']['other']}")
         self.assertEqual(me.status_code, 200, me.content)
         self.assertIn('qa_e2e_other', me.content.decode())
+        # The desk account is a PlatformAdmin, not a fifth portal seat: the
+        # count above must stay at four, and its token must not pass as one.
+        self.assertEqual(users.count(), 4)
+        seat = self.client.get('/api/auth/me/',
+                               HTTP_AUTHORIZATION=f"Bearer {out['tokens']['desk_admin']}")
+        self.assertIn(seat.status_code, (401, 403))
 
     def test_refuses_a_postgres_database_that_is_not_a_qa_copy(self):
         # Since the PostgreSQL cutover the QA backend reads .env.prod, whose

@@ -518,7 +518,7 @@ def _search_like_fallback(brand, model, car, q, limit):
         FROM nodes
         WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')
               AND (href IS NULL OR href != '404.html')
-        ORDER BY rank, depth, sort_order
+        ORDER BY rank, depth, sort_order, rowid
         LIMIT ?
     """, (like, like, like, limit))
     results = []
@@ -855,7 +855,7 @@ def car_view(request, brand_name=None, year=None, model_name=None):
                     FROM nodes
                     WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')
                           AND (href IS NULL OR href != '404.html')
-                    ORDER BY rank, depth, sort_order
+                    ORDER BY rank, depth, sort_order, rowid
                     LIMIT ?
                 """, (like, like, like, limit))
 

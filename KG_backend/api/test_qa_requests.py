@@ -66,10 +66,18 @@ class ManagerRequestTests(CompanyRequestsBase):
         self.assertEqual(self.c.post(URL, '{}', content_type='application/json').status_code, 401)
         self.assertEqual(self.c.get(f'{URL}{r.id}/').status_code, 401)
 
-    def test_non_manager_is_403(self):
-        self.assertEqual(self.c.get(URL, **self.h_spec).status_code, 403)
-        self.assertEqual(self.post(URL, {'subject': 'x'}, self.h_spec).status_code, 403)
-        self.assertFalse(CompanyRequest.objects.exists())
+    def test_non_manager_may_use_the_support_channel_but_not_commercial_kinds(self):
+        """Changed 2026-10-30. This test used to assert 403 for every request a
+        non-manager made. That blanket gate was the root cause of the
+        "customer feedback is collected by telephone" finding: a specialist
+        with a problem could not file anything. A support ticket is now theirs
+        to open; the commercial kinds stay a manager's decision. The
+        per-kind rules are covered in api/test_helpdesk.py."""
+        self.assertEqual(self.c.get(URL, **self.h_spec).status_code, 200)
+        self.assertEqual(self.post(URL, {'subject': 'x', 'kind': 'support'},
+                                   self.h_spec).status_code, 200)
+        self.assertEqual(self.post(URL, {'subject': 'x', 'kind': 'seats'},
+                                   self.h_spec).status_code, 403)
 
     def test_wrong_method_is_405(self):
         self.assertEqual(self.c.put(URL, '{}', content_type='application/json',
@@ -254,8 +262,13 @@ class AdminRequestTests(CompanyRequestsBase):
         r = c.get(ADMIN_URL, {'company_id': 'abc'}, **self.h_admin)
         self.assertLess(r.status_code, 500)
 
-    def test_detail_requires_post_and_existing_id(self):
-        self.assertEqual(self.c.get(f'{ADMIN_URL}{self.ra.id}/', **self.h_admin).status_code, 405)
+    def test_detail_serves_get_and_404s_an_unknown_id(self):
+        # Changed 2026-10-30: the admin detail route now answers GET with the
+        # full ticket including internal notes (it used to be POST-only).
+        self.assertEqual(self.c.get(f'{ADMIN_URL}{self.ra.id}/', **self.h_admin).status_code, 200)
+        self.assertEqual(self.c.put(f'{ADMIN_URL}{self.ra.id}/', '{}',
+                                    content_type='application/json',
+                                    **self.h_admin).status_code, 405)
         self.assertEqual(self.post(f'{ADMIN_URL}999999/', {}, self.h_admin).status_code, 404)
 
     def test_invalid_status_rejected_without_change(self):
@@ -270,7 +283,10 @@ class AdminRequestTests(CompanyRequestsBase):
         self.assertEqual(out['status'], 'completed')
         self.assertIsNotNone(out['resolved_at'])
         self.assertEqual(out['admin_note'], 'done')
-        self.assertEqual(out['handled_by'], 'admin')            # defaulted
+        # Changed 2026-10-30: the acting admin is recorded, not the literal
+        # string 'admin' — ownership has to be a fact for workload and
+        # escalation to mean anything (see api/test_helpdesk.py AssignmentTests).
+        self.assertEqual(out['handled_by'], 'qa_req_admin')
         ev = Event.objects.filter(type='request.updated', audience='company').latest('id')
         self.assertEqual(ev.company_id, self.co_a.id)            # pushed to the owner only
         self.assertEqual(ev.payload['prev_status'], 'pending')

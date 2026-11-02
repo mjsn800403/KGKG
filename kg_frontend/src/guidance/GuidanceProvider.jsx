@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Icon from '../components/Icon';
-import { getPortalUser, getAdminToken } from '../utils/api';
+import { getPortalUser, getAdminToken, onboardingApi } from '../utils/api';
 import { resolveAudience, autoTourFor, tourById, TOURS, audienceMatches } from './content';
 import { tourSeen, markTourSeen, markHelpOpened } from './storage';
 import TourEngine from './TourEngine';
 import HelpCenter from './HelpCenter';
 import HintLayer from './HintLayer';
+import FeedbackWidget from '../components/FeedbackWidget';
 
 // The single client root for the whole guidance layer. Mounted once in the app
 // layout, it works across public, portal and admin surfaces. It:
@@ -33,6 +34,10 @@ export default function GuidanceProvider() {
   const [tour, setTour] = useState(null);             // active tour object
   const [pendingTour, setPendingTour] = useState(null);
   const [signals, setSignals] = useState({});
+  // What this seat is entitled to and has already found. Read once per
+  // session so a hint can say "you have never asked the assistant" without
+  // guessing — the server already knows, from what they actually did.
+  const [onboarding, setOnboarding] = useState(null);
 
   // Refs so the auto-start effect can read live "is something already open"
   // state without listing it as a dependency (which would re-trigger it).
@@ -54,6 +59,18 @@ export default function GuidanceProvider() {
       window.removeEventListener('storage', readSession);
     };
   }, []);
+
+  // Fetched for a signed-in seat only; a failure leaves it null and every
+  // rule that depends on it stays dormant, which is the documented behaviour
+  // for an un-wired signal.
+  useEffect(() => {
+    if (!portalUser) { setOnboarding(null); return; }
+    let cancelled = false;
+    onboardingApi.get()
+      .then((d) => { if (!cancelled) setOnboarding(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [portalUser]);
 
   // Admin section context: read the hash and listen for the explicit context
   // event the admin panel dispatches on section change (replaceState doesn't
@@ -215,9 +232,15 @@ export default function GuidanceProvider() {
         pathname={pathname}
         section={section}
         signals={signals}
+        onboarding={onboarding}
         onOpenHelp={openHelp}
         onStartTour={startTour}
       />
+      {/* The feedback button is for signed-in seats only: the endpoint is
+          portal-authenticated, and offering it to an anonymous visitor would
+          only produce a 401. Hidden while the help panel or a tour is open so
+          it never sits on top of them. */}
+      {portalUser && !helpOpen && !tour && <FeedbackWidget />}
     </>
   );
 }

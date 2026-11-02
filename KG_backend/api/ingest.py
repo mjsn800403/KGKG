@@ -251,7 +251,7 @@ def register_zip(path, normalize=False, dry_run=False):
     except OSError:
         return None, 'unrecognized'
 
-    stem_on_disk = (config.WAREHOUSE_DIR / f'{stem}.db').exists()
+    stem_on_disk = config.car_db_present(stem)
     queued_elsewhere = (ZipPackage.objects
                         .filter(stem=stem, status__in=('pending', 'parsing', 'done'))
                         .exclude(path=str(path)).exists())
@@ -314,7 +314,7 @@ def register_tis_vehicle(vdir, dry_run=False):
         mtime = max(mtime, st.st_mtime)
 
     stem = warehouse_stem(car_name, year)
-    stem_on_disk = (config.WAREHOUSE_DIR / f'{stem}.db').exists()
+    stem_on_disk = config.car_db_present(stem)
     queued_elsewhere = (ZipPackage.objects
                         .filter(stem=stem, status__in=('pending', 'parsing', 'done'))
                         .exclude(path=str(vdir)).exists())
@@ -494,7 +494,7 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
         return 'failed'
 
     # Duplicate re-check at execution time (state may have changed since scan).
-    if (config.WAREHOUSE_DIR / f'{pkg.stem}.db').exists():
+    if config.car_db_present(pkg.stem):
         pkg.status = 'skipped_duplicate'
         pkg.save(update_fields=['status', 'updated_at'])
         say(f'skip (stem already in warehouse): {pkg.stem}')

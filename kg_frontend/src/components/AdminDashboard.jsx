@@ -45,6 +45,10 @@ const EVENT_FA = {
   'pipeline.paused': 'پردازش موقتاً متوقف شد',
   'request.created': 'درخواست جدید شرکت',
   'request.updated': 'به‌روزرسانی درخواست',
+  'request.message': 'پیام تازه در تیکت',
+  'request.reopened': 'بازگشایی تیکت',
+  'request.escalated': 'ارجاع تیکت',
+  'request.rated': 'ثبت رضایت مشتری',
   'alert.opened': 'هشدار جدید',
   'alert.resolved': 'هشدار برطرف شد',
 };
@@ -111,14 +115,21 @@ export default function AdminDashboard({ go }) {
           const exists = cur.open_requests.some((r) => r.id === req.id);
           return {
             ...cur,
-            kpis: { ...cur.kpis, open_company_requests: (cur.kpis.open_company_requests || 0) + (exists ? 0 : 1) },
+            kpis: { ...cur.kpis, ...(p.counts || {}) },
             open_requests: exists ? cur.open_requests : [req, ...cur.open_requests].slice(0, 20),
           };
         });
         pulse('requests');
         pushFeed(evt, `${EVENT_FA[evt.type]} — ${p.request?.subject || ''}`);
         break;
+      // Every one of these changes the queue: a customer reply or a reopen is
+      // exactly what makes an answered ticket need attention again, and the
+      // dashboard holds its KPIs from these events alone between resyncs.
       case 'request.updated':
+      case 'request.message':
+      case 'request.reopened':
+      case 'request.escalated':
+      case 'request.rated':
         setD((cur) => {
           if (!cur) return cur;
           const req = p.request;
@@ -126,8 +137,11 @@ export default function AdminDashboard({ go }) {
           let list = cur.open_requests.filter((r) => r.id !== req.id);
           if (isOpen) list = [req, ...list];
           return {
+            // The counts come from the server with the event. They used to be
+            // read off `list`, which holds at most twenty rows, so a queue
+            // larger than that reported its own cap as the total.
             ...cur,
-            kpis: { ...cur.kpis, open_company_requests: list.length },
+            kpis: { ...cur.kpis, ...(p.counts || {}) },
             open_requests: list.slice(0, 20),
           };
         });
@@ -184,7 +198,10 @@ export default function AdminDashboard({ go }) {
     { label: 'کاربران فعال', value: k.users, icon: 'users', to: 'users' },
     { label: 'خودروها', value: k.vehicles, icon: 'car', to: 'catalog' },
     { label: 'فعالیت امروز', value: k.activities_today, icon: 'clock', to: 'activity' },
-    { label: 'درخواست‌های باز', value: k.open_company_requests, icon: 'cart', to: 'company-requests', hot: k.open_company_requests > 0 },
+    // "Open" never clears by itself — answering a ticket does not close it —
+    // so the tile that glows is the one the desk can actually act on.
+    { label: 'منتظر پاسخ ما', value: k.awaiting_reply_company_requests, icon: 'cart', to: 'company-requests', hot: (k.awaiting_reply_company_requests || 0) > 0 },
+    { label: 'تیکت‌های باز', value: k.open_company_requests, icon: 'mail', to: 'company-requests' },
     { label: 'هشدارها', value: k.open_alerts, icon: 'shield', to: 'system', hot: k.open_alerts > 0 },
   ];
 
@@ -210,7 +227,8 @@ export default function AdminDashboard({ go }) {
 
       <div className="rt-grid">
         <ProcessingPanel proc={proc} counts={counts} job={job} flash={flash.processing} go={go} />
-        <RequestsPanel requests={d.open_requests} flash={flash.requests} go={go} />
+        <RequestsPanel requests={d.open_requests} waiting={k.awaiting_reply_company_requests}
+          flash={flash.requests} go={go} />
         <AlertsPanel alerts={d.alerts} flash={flash.alerts} go={go} />
         <ActivityPanel activity={d.recent_activity} />
         <TrafficPanel spark={d.traffic_spark} />
@@ -299,9 +317,15 @@ function statusClass(s) {
   return { pending: 'warn', in_progress: 'info', completed: 'ok', rejected: 'bad' }[s] || 'warn';
 }
 
-function RequestsPanel({ requests, flash, go }) {
+function RequestsPanel({ requests, waiting, flash, go }) {
+  // `requests` is the newest fifteen rows, not the queue. Counting them would
+  // declare "all answered" whenever the one ticket still waiting is older than
+  // the preview, so the count and the glow come from the server's KPI.
+  const n = waiting || 0;
   return (
-    <Panel title="درخواست‌های شرکت‌ها" tag="در انتظار بررسی" hot={requests.length > 0} flash={flash}
+    <Panel title="درخواست‌های شرکت‌ها"
+      tag={n > 0 ? `${n.toLocaleString('fa-IR')} منتظر پاسخ ما` : 'همه پاسخ داده شده'}
+      hot={n > 0} flash={flash}
       action={<button className="rt-mini-btn" onClick={() => go?.('company-requests')}>همه</button>}>
       {requests.length === 0 ? (
         <div className="rt-idle">درخواست بازی وجود ندارد.</div>
@@ -314,7 +338,10 @@ function RequestsPanel({ requests, flash, go }) {
                 <span className={`rt-pill rt-pill-${statusClass(r.status)}`}>{r.status_label}</span>
                 <div className="rt-list-main">
                   <b>{r.subject}</b>
-                  <small>{r.company?.name} — {r.kind_label}</small>
+                  <small>
+                    {r.company?.name} — {r.kind_label}
+                    {r.awaiting_reply && <> — <b className="rt-awaiting">منتظر پاسخ ما</b></>}
+                  </small>
                 </div>
                 <span className="rt-when">{relTime(r.created_at)}</span>
               </motion.li>

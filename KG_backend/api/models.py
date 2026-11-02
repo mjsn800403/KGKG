@@ -218,6 +218,10 @@ class PortalUser(models.Model):
     notify_manual_update = models.BooleanField(default=True)
     notify_new_device = models.BooleanField(default=True)
     ai_assistant_enabled = models.BooleanField(default=False)
+    # Feature-discovery strip: one timestamp, set when the seat dismisses it.
+    # Server-side on purpose — `localStorage` loses it on a device change, and
+    # losing it is how a dismissed thing comes back and becomes a nag.
+    onboarding_dismissed_at = models.DateTimeField(null=True, blank=True)
     # Which car-content UI this user prefers: 'modern' (sidebar tree +
     # adaptive flatten) or 'classic' (the original card-by-card drill-down,
     # no sidebar). Source of truth for the per-user browsing-mode toggle.
@@ -490,6 +494,13 @@ class ActivityLog(models.Model):
             models.Index(fields=['user', 'created_at']),
             models.Index(fields=['category', 'created_at']),
             models.Index(fields=['created_at']),
+            # Feature discovery asks "has this seat ever done X" as an
+            # exists() probe (api/onboarding.py). Without this, the NEGATIVE
+            # answer — the common one, since it is the undiscovered features
+            # the checklist is about — walks every row the seat has, and the
+            # heaviest production seat has ~47,000 of them. It is paid
+            # synchronously on the page they land on.
+            models.Index(fields=['user', 'action']),
         ]
 
     def __str__(self):
@@ -885,6 +896,19 @@ class CompanyRequest(models.Model):
         ('rejected', 'رد شد'),
     ]
     PRIORITY_CHOICES = [('low', 'کم'), ('normal', 'عادی'), ('high', 'زیاد')]
+    # What the problem IS, as against `kind`, which is what the request is FOR.
+    # They are kept apart because `kind` carries permissions — MANAGER_ONLY_KINDS
+    # gates seats, vehicle access, the assistant and documents — and folding a
+    # problem taxonomy into it would tie who may file to what they may call it.
+    TOPIC_CHOICES = [
+        ('missing_document', 'مستند موجود نیست'),
+        ('content_wrong', 'محتوا نادرست یا نامفهوم است'),
+        ('access_problem', 'مشکل دسترسی'),
+        ('assistant_wrong', 'پاسخ دستیار نادرست بود'),
+        ('error_or_slow', 'خطا یا کندی سامانه'),
+        ('billing', 'مالی و اشتراک'),
+        ('other', 'سایر'),
+    ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='requests')
     created_by = models.ForeignKey(PortalUser, on_delete=models.SET_NULL, null=True,
@@ -896,11 +920,63 @@ class CompanyRequest(models.Model):
     payload = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending', db_index=True)
     priority = models.CharField(max_length=8, choices=PRIORITY_CHOICES, default='normal')
+    # Both optional: a ticket filed before this existed stays uncategorised
+    # rather than being back-filled with a guess.
+    topic = models.CharField(max_length=24, choices=TOPIC_CHOICES, blank=True,
+                             default='', db_default='', db_index=True)
+    # When anything last happened in public on this ticket. Denormalised on
+    # purpose: the worklist is ordered by activity, and the cursor pagination
+    # is a tuple over the ordering column, so that column has to be sortable
+    # in the database rather than computed per row in Python. Set to
+    # created_at on insert and moved by every public message.
+    last_activity_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # The vehicle the problem is about. SET_NULL because a retired vehicle must
+    # not take its tickets' history with it.
+    car = models.ForeignKey('Car', null=True, blank=True, on_delete=models.SET_NULL,
+                            related_name='requests', db_index=True)
     admin_note = models.TextField(blank=True, default='')     # admin's reply / resolution
     handled_by = models.CharField(max_length=100, blank=True, default='')   # admin username
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
+
+    # --- service-desk fields (2026-10-30) --------------------------------
+    # Which channel the ticket arrived through. 'portal' is the product
+    # itself; the rest exist so that a request taken by telephone or e-mail
+    # is recorded in the same place as a digital one, and so the shift away
+    # from the telephone is a number instead of an impression. Only an
+    # admin may set anything other than 'portal'.
+    SOURCE_CHOICES = [
+        ('portal', 'سامانه'),
+        ('phone', 'تلفن'),
+        ('email', 'ایمیل'),
+        ('sms', 'پیامک'),
+        ('in_person', 'حضوری'),
+    ]
+    # db_default as well as default: `default` is applied by Django in Python,
+    # so after this migration the column is NOT NULL with no database default.
+    # Roll the CODE back to a release that does not know the field — which is
+    # exactly what ops/deploy/deploy.sh --rollback does — and every INSERT from
+    # the old code fails. ops/deploy/check_migrations.py refuses it for that
+    # reason, and it is right to.
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default='portal',
+                              db_default='portal', db_index=True)
+    # Real ownership. `handled_by` stays as the free-text audit trail of who
+    # last touched the ticket; this is the queryable owner.
+    assignee = models.ForeignKey(PlatformAdmin, on_delete=models.SET_NULL, null=True,
+                                 blank=True, related_name='assigned_requests')
+    # First PUBLIC reply from the platform side; an internal note is not one.
+    first_response_at = models.DateTimeField(null=True, blank=True)
+    # Targets stamped at creation from api/sla.POLICY. The resolution target
+    # is restamped when a ticket is reopened; the response target is not.
+    sla_response_due_at = models.DateTimeField(null=True, blank=True)
+    sla_resolve_due_at = models.DateTimeField(null=True, blank=True)
+    escalated_at = models.DateTimeField(null=True, blank=True)
+    reopen_count = models.PositiveSmallIntegerField(default=0, db_default=0)
+    # Satisfaction, asked once, after closure, of the person who filed it.
+    csat_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    csat_comment = models.TextField(blank=True, default='', db_default='')
+    csat_at = models.DateTimeField(null=True, blank=True)
 
     OPEN_STATUSES = ('pending', 'in_progress')
     CLOSED_STATUSES = ('completed', 'rejected')
@@ -914,6 +990,45 @@ class CompanyRequest(models.Model):
 
     def __str__(self):
         return f'req #{self.id} {self.kind} [{self.status}]'
+
+
+class TicketMessage(models.Model):
+    """One turn in a support ticket's conversation.
+
+    Before this model a ticket had a single ``admin_note`` TextField, so any
+    back-and-forth either overwrote the resolution text or was concatenated
+    into it — which is why clarifying questions moved to the telephone and
+    were then lost. A message is written by exactly one side:
+
+      * ``author_user``  — the customer (a portal seat), or
+      * ``author_admin`` — the platform side.
+
+    ``internal`` marks an admin-only note: it is never serialised to the
+    customer and never counts as a first response.
+    """
+    request = models.ForeignKey(CompanyRequest, on_delete=models.CASCADE,
+                                related_name='messages')
+    author_user = models.ForeignKey(PortalUser, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name='ticket_messages')
+    author_admin = models.ForeignKey(PlatformAdmin, on_delete=models.SET_NULL, null=True,
+                                     blank=True, related_name='ticket_messages')
+    # Fallback label for a message with no resolvable author row: an admin
+    # acting through the loopback KG_ADMIN_TOKEN, or an author later deleted.
+    author_label = models.CharField(max_length=100, blank=True, default='')
+    body = models.TextField()
+    internal = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        indexes = [models.Index(fields=['request', 'created_at'])]
+
+    @property
+    def is_from_admin(self):
+        return self.author_user_id is None
+
+    def __str__(self):
+        return f'msg #{self.id} on req #{self.request_id}'
 
 # ---------------------------------------------------------------------------
 # Org-graph canvas (n8n-style). Replaces the OrgRole/rank/scope authoring model.
@@ -1398,3 +1513,201 @@ class FeatureFlag(models.Model):
 
     def __str__(self):
         return f'{self.key} ({"on" if self.enabled else "off"} {self.rollout_pct}%)'
+
+
+
+class TicketRead(models.Model):
+    """How far one viewer has read one ticket.
+
+    Every unread badge in the product is computed from these rows: the count
+    is `messages newer than last_read_at that this viewer did not write`. That
+    is deliberate. The alternative — a notification row per event, decremented
+    when somebody acts — is what leaves an indicator lit after the work is
+    done, which is exactly the complaint this model answers. There is nothing
+    stored here that can be stale: opening the conversation moves the mark and
+    the count recomputes to zero.
+
+    Exactly one of ``user`` / ``admin`` is set; the check constraint is not
+    decoration, since a row belonging to both viewers would be counted twice.
+    """
+    request = models.ForeignKey(CompanyRequest, on_delete=models.CASCADE,
+                                related_name='reads')
+    user = models.ForeignKey(PortalUser, on_delete=models.CASCADE, null=True, blank=True,
+                             related_name='ticket_reads')
+    admin = models.ForeignKey(PlatformAdmin, on_delete=models.CASCADE, null=True,
+                              blank=True, related_name='ticket_reads')
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['request', 'user'],
+                                    name='ticketread_one_per_user'),
+            models.UniqueConstraint(fields=['request', 'admin'],
+                                    name='ticketread_one_per_admin'),
+            models.CheckConstraint(
+                condition=models.Q(user__isnull=False, admin__isnull=True)
+                | models.Q(user__isnull=True, admin__isnull=False),
+                name='ticketread_exactly_one_viewer'),
+        ]
+
+    def __str__(self):
+        who = self.user_id and f'user {self.user_id}' or f'admin {self.admin_id}'
+        return f'read {self.request_id} by {who}'
+
+
+class Feedback(models.Model):
+    """Unsolicited product feedback from a signed-in seat.
+
+    A support ticket asks for something to be done; this does not. Before it
+    the only digital feedback in the product was the thumb on an assistant
+    answer (api/chatlog.py), so an opinion about any other page had nowhere
+    to go but a telephone call. Either a rating or a comment is required —
+    an empty submission is rejected rather than stored.
+    """
+    user = models.ForeignKey(PortalUser, on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='feedback')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='feedback')
+    page = models.CharField(max_length=200, blank=True, default='')
+    rating = models.PositiveSmallIntegerField(null=True, blank=True)   # 1..5
+    comment = models.TextField(blank=True, default='')
+    # Set when someone on the platform side has read and actioned it.
+    handled = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['created_at'])]
+
+    def __str__(self):
+        return f'feedback #{self.id} rating={self.rating}'
+
+
+# ---------------------------------------------------------------------------
+# Knowledge base
+#
+# docs/ holds the engineering knowledge and is read by engineers. It is no use
+# to a customer in the portal or to whoever is answering a ticket, so a
+# recurring question was answered from scratch every time and the answer died
+# in a ticket's admin_note. These three models are the transfer mechanism: an
+# article with a NAMED owner and a review interval (so staleness is a query,
+# not an impression), its revision history, and a log of what people looked
+# for — the misses being the list of articles that ought to exist.
+# ---------------------------------------------------------------------------
+
+class KnowledgeArticle(models.Model):
+    """One piece of durable knowledge, owned by a named person."""
+    AUDIENCE_CHOICES = [
+        ('customer', 'مشتری'),     # served to any signed-in seat
+        ('internal', 'داخلی'),     # platform side only
+    ]
+    STATUS_CHOICES = [
+        ('draft', 'پیش‌نویس'),
+        ('published', 'منتشرشده'),
+        ('archived', 'بایگانی'),
+    ]
+    DEFAULT_REVIEW_DAYS = 180
+
+    slug = models.SlugField(max_length=120, unique=True)
+    title = models.CharField(max_length=200)
+    category = models.CharField(max_length=60, blank=True, default='', db_index=True)
+    body = models.TextField()
+    audience = models.CharField(max_length=10, choices=AUDIENCE_CHOICES, default='customer',
+                                db_index=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft',
+                              db_index=True)
+    # Ownership by PERSON, not by role: the evaluation's knowledge finding is
+    # that unowned documents are not maintained.
+    owner = models.ForeignKey(PlatformAdmin, on_delete=models.SET_NULL, null=True,
+                              blank=True, related_name='owned_articles')
+    review_interval_days = models.PositiveSmallIntegerField(default=DEFAULT_REVIEW_DAYS)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    # Provenance when the article came out of a solved ticket.
+    source_request = models.ForeignKey(CompanyRequest, on_delete=models.SET_NULL, null=True,
+                                       blank=True, related_name='articles')
+    views = models.PositiveIntegerField(default=0)
+    helpful = models.PositiveIntegerField(default=0)
+    unhelpful = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [models.Index(fields=['audience', 'status'])]
+
+    @property
+    def is_stale(self):
+        """Never reviewed, or reviewed longer ago than its own interval."""
+        if self.reviewed_at is None:
+            return True
+        age = timezone.now() - self.reviewed_at
+        return age > datetime.timedelta(days=self.review_interval_days)
+
+    def __str__(self):
+        return f'kb:{self.slug} v{self.version} [{self.status}]'
+
+
+class KnowledgeRevision(models.Model):
+    """The text of an article at one version, with who changed it and why.
+
+    Append-only: an edit writes a new row rather than altering an old one, so
+    "what did this say in June" is answerable.
+    """
+    article = models.ForeignKey(KnowledgeArticle, on_delete=models.CASCADE,
+                                related_name='revisions')
+    version = models.PositiveIntegerField()
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    editor = models.ForeignKey(PlatformAdmin, on_delete=models.SET_NULL, null=True,
+                               blank=True, related_name='article_revisions')
+    note = models.CharField(max_length=300, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['article', 'version']
+        unique_together = [('article', 'version')]
+
+    def __str__(self):
+        return f'kb:{self.article_id} v{self.version}'
+
+
+class KbSearchLog(models.Model):
+    """What people asked the knowledge base for, and how many hits they got.
+
+    A search with no result is the most actionable knowledge signal there is:
+    it names an article that should exist. Same pattern as SearchLog for the
+    manuals (api/insights.py).
+    """
+    user = models.ForeignKey(PortalUser, on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='kb_searches')
+    company = models.ForeignKey(Company, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='kb_searches')
+    query = models.CharField(max_length=200)
+    query_norm = models.CharField(max_length=200, db_index=True)
+    results = models.PositiveIntegerField(default=0)
+    # Where the question was asked. 'compose' means it was typed into the
+    # ticket form, which is the only context where answering it instead of
+    # filing is a deflection worth counting.
+    context = models.CharField(max_length=16, blank=True, default='', db_default='',
+                               db_index=True)
+    # One id per opened ticket form, generated by the client. The unit of a
+    # deflection opportunity is a COMPOSE SESSION, not a search: the form is
+    # searched once per debounced pause while somebody types, so counting rows
+    # made the published rate move with typing speed. Blank on an older row,
+    # which is then counted as one session rather than dropped.
+    compose_id = models.CharField(max_length=36, blank=True, default='', db_default='',
+                                  db_index=True)
+    # Set only when somebody said an article answered them. Never inferred
+    # from "opened an article and did not file a ticket": that is a guess, and
+    # a deflection rate built on a guess is invented evidence.
+    deflected_article = models.ForeignKey('KnowledgeArticle', null=True, blank=True,
+                                          on_delete=models.SET_NULL,
+                                          related_name='deflections')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'kb-search {self.query_norm!r} -> {self.results}'

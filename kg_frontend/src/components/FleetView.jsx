@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import Skeleton from './Skeleton';
 import { fetchGrantedFleet, getPortalUser, logActivity, portalRefreshMe } from '../utils/api';
 import RecommendationsWidget from './RecommendationsWidget';
+import OnboardingStrip from './OnboardingStrip';
 import { useVehicleFilter } from './VehicleFilter';
 import VehicleGroupList from './VehicleGroupList';
 import { frmVehicleRows, FRM_TITLE } from '@/utils/frmSets';
@@ -91,6 +92,9 @@ export default function FleetView() {
 
   return (
     <div>
+      {/* Above the recommendations: this answers "what else is here",
+          which is a different question from "what should I read next". */}
+      <OnboardingStrip />
       {cars.length > 0 && <RecommendationsWidget />}
       {/* No bar on a small fleet — the tour engine skips steps whose target is
           absent, so the guided tour must not find an empty placeholder here. */}

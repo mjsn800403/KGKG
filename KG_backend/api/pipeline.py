@@ -131,6 +131,15 @@ def _schema_stale_stems():
         return []
 
 
+def pgcar_todo():
+    """Car SQLite files still on disk while serving reads every car from
+    PostgreSQL (KG_CARDB_PG=*): they move there in the pgcar stage."""
+    from . import cardb_pg
+    if '*' not in cardb_pg.pg_cars():
+        return []
+    return sorted(p.stem for p in config.car_db_files() if p.exists())
+
+
 def pending_work():
     """What still needs processing, fleet-wide. Fast enough for a GET."""
     from .models import Car
@@ -146,6 +155,7 @@ def pending_work():
     need_schema = _schema_stale_stems()
     need_ingest = sorted(s for s in stems if s not in occ)
     need_diag = sorted(s for s in stems if s not in diag_have)
+    need_pgcar = pgcar_todo()
     pages_to_embed = max(0, total_blobs - embedded)
     # Graph is stale when vectors were added after its last rebuild — e.g. a
     # run interrupted between the embed and graph phases.
@@ -162,9 +172,10 @@ def pending_work():
         'embed_done': embedded,
         'graph_pending': graph_pending,
         'need_diag': need_diag,
+        'need_pgcar': need_pgcar,
         'has_work': bool(need_parse or need_catalog
                          or need_schema or need_ingest or pages_to_embed
-                         or graph_pending or need_diag),
+                         or graph_pending or need_diag or need_pgcar),
     }
 
 
@@ -230,6 +241,8 @@ def stage_definitions():
                             + (1 if w.get('graph_pending') else 0))},
         {'key': 'diag', 'label': 'ساخت موتور عیب‌یابی خودروها',
          'plan': lambda w: len(w['need_diag'])},
+        {'key': 'pgcar', 'label': 'انتقال خودروهای جدید به PostgreSQL',
+         'plan': lambda w: len(w.get('need_pgcar', []))},
         {'key': 'audit', 'label': 'به‌روزرسانی گزارش سلامت داده‌ها',
          'plan': lambda w: 1},
     ]
