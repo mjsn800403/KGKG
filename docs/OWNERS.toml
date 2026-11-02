@@ -167,3 +167,18 @@ review_days = 90
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-02
 review_days = 90
+
+["16-parts-catalog.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-08-05
+review_days = 180
+
+["17-evaluation.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-08-05
+review_days = 180
+
+["18-security-hardening.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-08-05
+review_days = 180
