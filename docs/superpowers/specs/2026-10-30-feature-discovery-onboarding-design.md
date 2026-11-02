@@ -16,16 +16,26 @@ Production, 2026-10-30, four months of data, 34 seats with any activity:
 | CSV export, labour times / SST (`download_csv`) | 3 | — | — | — |
 | Team PDF report (`report_pdf`) | 8 | — | — | — |
 
-> **CORRECTION, dated 2026-11-02 (this record is kept as written; the manuals row
-> is superseded).** Of the 71,886 manual uses, 70,534 are rows generated for
-> evaluation/demo purposes (marked as reconstructed) and 1,352 are not marked,
-> not all independently verified. As of 2026-11-02 the seats with an unmarked
-> manual view number 12, so manuals "~94 %" discovery is not supported; the
-> corrected order of seats is manuals 12, assistant 9, parts catalogue 6,
-> search 0. The parts, assistant, search, CSV and PDF rows are unaffected, and
-> so is the direction of the argument below (manuals remain the most-used
-> feature), but not its magnitude. See `audit-evidence/17-data-integrity/`
-> (GitHub #64, Jira KGTEC-20).
+> **CORRECTION, dated 2026-11-02 (revised after review; this record is kept as
+> written).** The manuals row and the assistant row above are superseded, and the
+> conclusions drawn from them are **not established**.
+>
+> - *Manuals.* Of the 71,886 manual uses, 70,534 are rows generated for
+> evaluation/demo purposes (marked as reconstructed); 1,352 are not marked and are
+> **unverified as human activity**. As of 2026-11-02 the seats with an unmarked
+> manual view number 12, so "~34" seats and "~94 % discovery" are unsupported.
+> - *Assistant.* "9 seats, ~50 %" is wrong independently of the reconstruction: 9
+> seats opened the assistant and 3 seats asked it (43 questions). The metric below
+> is defined on asking, so the baseline is 3 seats.
+> - *Parts catalogue, search, CSV, PDF.* Not affected by the reconstructed rows;
+> not verified as human activity either.
+> - *The argument that follows* ("people found the manuals and very little else",
+> "asked 43 times in the platform's life") rests on these counts. With the
+> corrected and still-unverified figures it is neither confirmed nor refuted, and
+> should not be relied on until the activity is attested
+> (`audit-evidence/17-data-integrity/ATTESTATION_POLICY.md`).
+>
+> See `audit-evidence/17-data-integrity/` (GitHub #64, Jira KGTEC-20).
 
 The counts are exact (`api_activitylog`, `api_searchlog`). The *entitled*
 column is not: 36 is every active seat with a car grant, and ~18 is the number

@@ -194,11 +194,15 @@ they answer does not happen at minute one. Every seat saw an onboarding tour,
 and the parts catalogue was still unopened by 28 of 34 active seats four months
 later. The moment that matters is mid-task, three weeks in.
 
-> Clarification, 2026-11-02 (#64): "34 active seats" means 34 seats with any logged
-> activity, out of 36 active seats. The parts-catalogue figure (6 seats opened it)
-> is unaffected by the reconstructed activity described in
-> `audit-evidence/17-data-integrity/`, because no reconstructed row has that action.
-> The manual-view figure quoted elsewhere for the same date is superseded.
+> Clarification, 2026-11-02 (#64, revised after review): "34 active seats" means 34
+> seats with any logged activity, out of 36 active seats. The parts-catalogue count
+> (6 seats opened it) is not affected by the reconstructed activity described in
+> `audit-evidence/17-data-integrity/`, because no reconstructed row has that action,
+> but it is not verified as human activity: it may include demo, test or
+> administrative use. The "unopened by 28 of 34" statement and the premise that
+> every seat saw a tour and then stopped looking are therefore **unverified**. The
+> manual-view and assistant figures quoted elsewhere for the same date are
+> superseded.
 
 | Rule | Fires when | Why there |
 |---|---|---|

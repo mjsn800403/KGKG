@@ -7,10 +7,14 @@ short and point at the doc section that was updated.
 - **Correction, 2026-11-02 (data integrity, #64).** Production's activity log holds 83,486
   rows that were generated for evaluation/demo purposes and are marked as reconstructed
   (96.8% of 86,212). Figures built on it before this date are qualified in
-  `audit-evidence/17-data-integrity/`. Corrected: of the 71,886 manual views quoted below,
-  70,534 are reconstructed and 1,352 are not (not all independently verified); 12 seats have
-  an unmarked manual view, not ~34. Unaffected: parts catalogue 6 seats / 314 uses, assistant
-  9 / 43, search 0, CSV 3, PDF 8. Nothing was deleted or rewritten. Documentation only.
+  `audit-evidence/17-data-integrity/`. Of the 71,886 manual views quoted below, 70,534 are
+  reconstructed and 1,352 are not; the 1,352 are unverified as human activity (demo, test,
+  administrative or scripted use is not separated out), and 12 seats have one, not ~34. The
+  quoted "assistant asked by 9" is also wrong, independently of #64: 9 seats opened it and 3
+  asked it (43 questions). Parts catalogue (6 seats / 314 uses), search 0, CSV 3 and PDF 8 are
+  not affected by the reconstructed rows but are not verified as human activity either. The
+  conclusion drawn below ("people found the manuals and stopped looking") is not established.
+  Nothing was deleted or rewritten. Documentation only.
 - **Dependabot version updates.** `.github/dependabot.yml` adds weekly, grouped minor/patch
   update PRs for pip, npm, docker and GitHub Actions (monthly for `qa/e2e`), capped at 2-3 open
   per ecosystem, all targeting `work`. Security updates were already on. Part of #45.
@@ -23,8 +27,8 @@ short and point at the doc section that was updated.
 - **Engineer onboarding and runbooks.** `docs/19-onboarding.md` gives a new engineer a
   checked day-1/week-1/month-1 path and the hand-over rule; `docs/20-runbooks.md` holds nine
   incident runbooks (notice, confirm, do, fixed-when). Both registered in `OWNERS.toml`.
-- **Feature-discovery onboarding.** *[Manual-view figure superseded 2026-11-02, see the
-  Correction entry above.]* Measured first: over four months and 34 seats with any activity
+- **Feature-discovery onboarding.** *[Manual-view and assistant figures, and the
+  conclusion drawn from them, superseded 2026-11-02; see the Correction entry above.]* Measured first: over four months and 34 seats with any activity
   (of 36 active), production showed 71,886 manual views, the parts catalogue opened by 6 people, the assistant
   asked by 9, and the search box used by nobody. People found the manuals and stopped looking,
   and nobody knew because every piece of onboarding state lived in `localStorage`.
