@@ -7,6 +7,8 @@ short and point at the doc section that was updated.
 - **Dependabot version updates.** `.github/dependabot.yml` adds weekly, grouped minor/patch
   update PRs for pip, npm, docker and GitHub Actions (monthly for `qa/e2e`), capped at 2-3 open
   per ecosystem, all targeting `work`. Security updates were already on. Part of #45.
+- **Jira tracking convention.** `CONTRIBUTING.md` §Work tracking and the PR template now ask
+  for a Jira key (`KGTEC-<n>`) next to the GitHub issue; branch names carry it. Part of #45.
 - **Delivery metrics (DORA).** `ops/observability/delivery.py` reads the deploy logs and git
   history: deploys/week, lead time, change-failure rate, time to restore, and changes caught
   before production. Defined in `METRIC_DEFINITIONS.md` §Delivery, 9 tests, refreshed by
