@@ -101,6 +101,7 @@ Shared fixture: one company with several seats, one demo company, and rows of ev
 
 ## Acceptance criteria for the implementation PR
 
+0. **Prerequisite:** the staging-equivalence verification in `COMPATIBILITY_ASSESSMENT.md` section 2 has passed for the staging copy used: every activity, seat and company fingerprint equals its same-instant source fingerprint. Without it no shadow-comparison result counts.
 1. All tests above exist, were red before the change and are green after it.
 2. The backend coverage floor and lint ratchet do not drop.
 3. No `api_activitylog` row differs before and after migration on the original columns (D1).

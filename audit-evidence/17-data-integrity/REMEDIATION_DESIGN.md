@@ -143,7 +143,7 @@ Before M1: the evidence backup (`EVIDENCE_PRESERVATION.md`). Record row count, i
 
 ### 7.4 Performance
 
-The registry has single-digit to low-double-digit entries. The added predicates are `id BETWEEN` terms on the primary key plus the existing `created_at` indexes; at 86,212 rows the cost is negligible. A test records the query plan on 1,000,000 generated rows for bounded windows and fails on a full scan. A feature flag per reader (`KG_ACTIVITY_PROVENANCE_<READER>`) enables the new behaviour one reader at a time on staging, with a shadow comparison first (section 8 of `COMPATIBILITY_ASSESSMENT.md`).
+The registry has single-digit to low-double-digit entries. The added predicates are `id BETWEEN` terms on the primary key plus the existing `created_at` indexes; at 86,212 rows the cost is negligible. A test records the query plan on 1,000,000 generated rows for bounded windows and fails on a full scan. A feature flag per reader (`KG_ACTIVITY_PROVENANCE_<READER>`) enables the new behaviour one reader at a time on staging, with a shadow comparison first (section 5, Rollout, of `COMPATIBILITY_ASSESSMENT.md`), which may run only after that document's staging-equivalence prerequisite (section 2) has passed.
 
 ### 7.5 Deletion mechanism (verified)
 
