@@ -4,6 +4,8 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Jira tracking convention.** `CONTRIBUTING.md` §Work tracking and the PR template now ask
+  for a Jira key (`KGTEC-<n>`) next to the GitHub issue; branch names carry it. Part of #45.
 - **Delivery metrics (DORA).** `ops/observability/delivery.py` reads the deploy logs and git
   history: deploys/week, lead time, change-failure rate, time to restore, and changes caught
   before production. Defined in `METRIC_DEFINITIONS.md` §Delivery, 9 tests, refreshed by
