@@ -5,7 +5,6 @@ import unicodedata
 from api.models import normalize_phone
 
 MAX_BODY = 2000
-MAX_PER_THREAD_PER_HOUR = 30
 INTENTS = ('sales', 'demo', 'technical', 'other')
 
 _EMAIL = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
@@ -31,6 +30,23 @@ def clean_body(raw):
 def clean_client_id(raw):
     raw = raw if isinstance(raw, str) else ''
     return raw if _CLIENT_ID.match(raw) else ''
+
+
+def clean_page(raw):
+    """A site path with no query string or fragment: those can carry personal
+    data (a phone number in a form URL) and the page alone is what staff need."""
+    raw = str(raw or '').strip()
+    if not raw.startswith('/') or raw.startswith('//'):
+        return ''
+    return raw.split('?', 1)[0].split('#', 1)[0][:200]
+
+
+def clean_referrer(raw):
+    """scheme://host/path of an http(s) referrer, without query or fragment."""
+    raw = str(raw or '').strip()
+    if not re.match(r'^https?://[^/\s]+', raw, re.I):
+        return ''
+    return raw.split('?', 1)[0].split('#', 1)[0][:200]
 
 
 def clean_intent(raw):

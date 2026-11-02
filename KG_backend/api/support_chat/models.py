@@ -15,7 +15,7 @@ from django.db.models.functions import Now
 from django.utils import timezone
 
 
-class ChatThread(models.Model):
+class SupportThread(models.Model):
     INTENT_CHOICES = [('sales', 'sales'), ('demo', 'demo'),
                       ('technical', 'technical'), ('other', 'other')]
     STATUS_CHOICES = [('open', 'open'), ('waiting_staff', 'waiting_staff'),
@@ -35,7 +35,7 @@ class ChatThread(models.Model):
     referrer = models.CharField(max_length=200, blank=True, default='', db_default='')
     ua_hash = models.CharField(max_length=64, blank=True, default='', db_default='')
     assignee = models.ForeignKey('api.PlatformAdmin', null=True, blank=True,
-                                 on_delete=models.SET_NULL, related_name='chat_threads')
+                                 on_delete=models.SET_NULL, related_name='support_chat_threads')
     priority = models.CharField(max_length=8, default='normal', db_default='normal')
     last_activity_at = models.DateTimeField(default=timezone.now, db_default=Now(), db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_default=Now())
@@ -43,24 +43,46 @@ class ChatThread(models.Model):
     # Set when the visitor signs in (or staff decide) and the thread is copied
     # into a ticket. Points outward only; the ticket tables know nothing of it.
     promoted_request = models.ForeignKey('api.CompanyRequest', null=True, blank=True,
-                                         on_delete=models.SET_NULL, related_name='chat_origin')
-    csat_score = models.PositiveSmallIntegerField(null=True, blank=True)
-    csat_at = models.DateTimeField(null=True, blank=True)
+                                         on_delete=models.SET_NULL, related_name='support_chat_origin')
+    # When any staff member last opened the thread. Drives the visitor's
+    # "read" tick and the inbox unread dot (a visitor message newer than this
+    # is unread). One shared mark, not one per admin: see the corrections plan.
+    staff_seen_at = models.DateTimeField(null=True, blank=True)
+    # How many times a closed thread was reopened (CompanyRequest has the same).
+    reopen_count = models.PositiveSmallIntegerField(default=0, db_default=0)
 
     class Meta:
         ordering = ['-last_activity_at']
 
     def __str__(self):
-        return f'chat {self.id} [{self.status}]'
+        return f'support thread {self.id} [{self.status}]'
 
 
-class ChatMessage(models.Model):
+class SupportRating(models.Model):
+    """One satisfaction rating per closure of a thread.
+
+    A reopened thread can be rated again after its next closure; the earlier
+    rating is kept, not overwritten. ``closure`` is the thread's
+    ``reopen_count`` when it was rated, so the database allows exactly one
+    rating per closure."""
+    thread = models.ForeignKey(SupportThread, on_delete=models.CASCADE, related_name='ratings')
+    score = models.PositiveSmallIntegerField()
+    closure = models.PositiveSmallIntegerField(default=0, db_default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_default=Now())
+
+    class Meta:
+        ordering = ['id']
+        constraints = [models.UniqueConstraint(fields=['thread', 'closure'],
+                                               name='supportrating_one_per_closure')]
+
+
+class SupportMessage(models.Model):
     AUTHOR_CHOICES = [('visitor', 'visitor'), ('admin', 'admin'), ('system', 'system')]
 
-    thread = models.ForeignKey(ChatThread, on_delete=models.CASCADE, related_name='messages')
+    thread = models.ForeignKey(SupportThread, on_delete=models.CASCADE, related_name='messages')
     author_kind = models.CharField(max_length=8, choices=AUTHOR_CHOICES, db_default='visitor')
     author_admin = models.ForeignKey('api.PlatformAdmin', null=True, blank=True,
-                                     on_delete=models.SET_NULL, related_name='chat_messages')
+                                     on_delete=models.SET_NULL, related_name='support_chat_messages')
     body = models.TextField(db_default='')
     # Staff-only note: never serialised to the visitor.
     internal = models.BooleanField(default=False, db_default=False)
@@ -73,14 +95,14 @@ class ChatMessage(models.Model):
         indexes = [models.Index(fields=['thread', 'id'])]
         constraints = [models.UniqueConstraint(
             fields=['thread', 'client_id'], condition=~models.Q(client_id=''),
-            name='chatmessage_client_id_once_per_thread')]
+            name='supportmessage_client_id_once_per_thread')]
 
 
-class AgentPresence(models.Model):
+class SupportPresence(models.Model):
     STATUS_CHOICES = [('available', 'available'), ('away', 'away'), ('offline', 'offline')]
 
     admin = models.OneToOneField('api.PlatformAdmin', on_delete=models.CASCADE,
-                                 related_name='chat_presence')
+                                 related_name='support_chat_presence')
     manual_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='offline',
                                      db_default='offline')
     last_heartbeat_at = models.DateTimeField(null=True, blank=True)

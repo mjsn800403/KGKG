@@ -15,14 +15,14 @@ from . import grafanaauth
 from . import chatlog
 from . import flags
 from . import shield
-from .chat import urls as chat_urls
+from .support_chat import urls as support_chat_urls
 
 
 def _api_not_found(request, rest=None):
     return JsonResponse({'error': 'not found'}, status=404)
 
 urlpatterns = [
-    *chat_urls.urlpatterns,
+    *support_chat_urls.urlpatterns,
     # Liveness probe (public, cheap, no secrets) + operational admin API.
     path('api/health/', adminops.health_view, name='health'),
     # Prometheus scrape (KG_METRICS_TOKEN); nginx keeps it off the internet.

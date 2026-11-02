@@ -52,12 +52,21 @@ def _due_ids(now, limit):
     ).order_by('next_attempt_at', 'id').values_list('pk', flat=True)[:limit])
 
 
+def _scrub(row):
+    """Drop the text of a message addressed to a visitor or customer once it is
+    final (sent, dry-run, dead). The row keeps who/what/when/outcome for
+    investigations; a customer's words are not kept in a delivery log."""
+    if row.recipient_kind in ('visitor', 'customer'):
+        row.payload = {'scrubbed': True}
+
+
 def _fail(row, error, now, counts, *, permanent=False):
     row.attempts += 1
     row.last_error = (error or 'unknown error')[:300]
     row.claimed_at = None
     if permanent or row.attempts >= len(BACKOFF_MINUTES):
         row.status = 'dead'
+        _scrub(row)
         counts['dead'] += 1
         log.warning('notify %s dead after %s attempt(s): %s', row.pk, row.attempts, row.last_error)
     else:
@@ -128,6 +137,7 @@ def process_due(now=None, limit=50):
         row.provider_ref = result.provider_ref[:100]
         row.claimed_at = None
         row.last_error = ''
+        _scrub(row)
         if mode == 'dry_run':
             row.status = 'dry_run'
         else:
