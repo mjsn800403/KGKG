@@ -4,6 +4,10 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Delivery metrics (DORA).** `ops/observability/delivery.py` reads the deploy logs and git
+  history: deploys/week, lead time, change-failure rate, time to restore, and changes caught
+  before production. Defined in `METRIC_DEFINITIONS.md` §Delivery, 9 tests, refreshed by
+  `bizsnap.py`, shown on Grafana → business → Delivery. Closes the delivery part of #47.
 - **Engineer onboarding and runbooks.** `docs/19-onboarding.md` gives a new engineer a
   checked day-1/week-1/month-1 path and the hand-over rule; `docs/20-runbooks.md` holds nine
   incident runbooks (notice, confirm, do, fixed-when). Both registered in `OWNERS.toml`.

@@ -137,14 +137,29 @@ vehicle link and no compose-time suggestion before 2026-10-31, so the first
 reading will be the first window after the release, not a comparison. Stated
 here rather than back-filled.
 
+## Delivery (added 2026-11-02)
+
+Implementation: `ops/observability/delivery.py`, tests
+`ops/observability/test_delivery.py`. Source: the deploy logs in
+`/opt/KGKG_release/logs/deploy-*.log` and the production git history. Written
+to table `deploys` in the Grafana business snapshot every time the collector
+runs; Grafana → business → «Delivery». Window: the last 30 days on the deploy
+time.
+
+| Key | Definition | Source | Reproduce by hand | Test |
+|---|---|---|---|---|
+| `deploys` | Production releases in the window: logs that reached `PROMOTE` and either held (`DEPLOYED`) or were rolled back. Staging-only runs, status queries and reloads are not deploys. | `deploy-*.log` | `grep -l '^\[.*\] DEPLOYED' deploy-*.log` plus the rolled-back ones | `test_summary_definitions` |
+| `deploys_per_week` | `deploys / (window_days / 7)`. | derived | — | `test_summary_definitions` |
+| `lead_time_h_median` | For each release, the hours from each non-merge commit between the previous release and this one to the release time; the median per release, then the median across releases. | `git log --no-merges --format=%ct prev..sha` | that command against the two tags | `test_summary_definitions` |
+| `change_failure_rate` | Releases that were rolled back (automatically after a failed production smoke, or by a person running `--rollback` before the next release) ÷ `deploys`. `null` when there were no deploys. | `DEPLOY ABORTED … rolled back`, `ROLLBACK to` | count those logs | `test_auto_rollback_is_a_failure_with_restore_time_from_promote`, `test_manual_rollback_fails_the_deploy_it_undid` |
+| `time_to_restore_min_median` | For failed releases: automatic rollback = `PROMOTE` → `DEPLOY ABORTED`; manual = release → rollback (an upper bound). Median, minutes. | log timestamps | — | `test_auto_rollback_is_a_failure_with_restore_time_from_promote` |
+| `caught_before_production` | Runs that failed in the gate or staging, before `PROMOTE` — bad changes that never reached a user. Not counted in the failure rate, which is about production. | `DEPLOY FAILED` / `DEPLOY ABORTED` with no `PROMOTE` | — | `test_failure_before_promote_is_caught_not_failed` |
+
 ## Metrics deliberately NOT defined yet
 
 Named so that their absence is explicit rather than an oversight. Each belongs
 to a later phase in `ROADMAP.md`:
 
-* **Delivery** — deployment frequency, lead time for change, change failure
-  rate, MTTR. The data exists (deploy tags, CI run JSON, git history) but no
-  collector reads it.
 * **Onboarding completion over time** — the discovery rates above are a
   snapshot. Whether a cohort's rate improves after the strip ships needs a
   stored series, which belongs with the collector in phase 4.

@@ -77,3 +77,14 @@ mem.commit()
 dst = sqlite3.connect(DST)
 mem.backup(dst)
 dst.close()
+
+# Delivery metrics come from the deploy logs and git, not the portal DB;
+# a failure here must never cost Grafana the business snapshot above.
+try:
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import delivery
+    delivery.write(delivery.collect(delivery.LOGS, delivery.REPO), DST)
+except Exception as exc:  # noqa: BLE001
+    print('delivery metrics skipped:', exc)
