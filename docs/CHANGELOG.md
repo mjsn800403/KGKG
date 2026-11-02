@@ -4,6 +4,14 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **Anonymous chat backend and agent presence (Phase 2 of the customer communication redesign).**
+  `api/chat/`: `ChatThread` / `ChatMessage` / `AgentPresence` (additive migration `0041`), visitor
+  bearer tokens stored as hashes, `GET /api/chat/status/` (live only for an available agent seen in
+  the last 60 s), thread create/poll/send/contact/csat for visitors (Turnstile, honeypot, limits,
+  idempotent sends, visitors poll instead of holding SSE because the backend has 24 request
+  threads), a staff reply and internal-note endpoint, `purge_chat`, and a k6 poll check in
+  `qa/k6/chat_poll.js`. No UI yet and nothing notifies anyone. Routes are in `docs/openapi.yaml`.
+  Refs #61.
 - **Notification outbox (Phase 1 of the customer communication redesign).** `api/notifications/`:
   a durable `NotificationOutbox` table, `enqueue()` with dedupe windows, a worker with retry
   (1/5/15/60/240 min), an hourly SMS cap, stuck-row reclaim and a `notify:dead` alert, and

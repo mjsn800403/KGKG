@@ -112,6 +112,14 @@ response / 8 h resolution · normal 8 h / 48 h · low 24 h / 120 h. State per ti
 
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
+| `/api/chat/status/` | GET | public | `{mode: live\|async, expected_reply_minutes}`. `live` only if an active agent set themselves available and their console pinged in the last 60 s. Rate-limited `chat_status` 60/60s |
+| `/api/chat/threads/` | POST | public + Turnstile (action `chat`) | `{message, intent?, client_id?, contact?, page?, website?}` starts an anonymous thread; returns `{thread_id, token, mode, message}`. The token is shown once (stored as a hash). `website` is a honeypot. Rate-limited `chat_create` 5/600s |
+| `/api/chat/threads/<id>/messages/` | GET, POST | visitor token (`X-Chat-Token`) | GET `?after=<id>` polls (internal notes never returned); POST sends (2000 chars, 30/hour/thread, idempotent on `client_id`, 409 once closed). Wrong token = 404 |
+| `/api/chat/threads/<id>/contact/` | PATCH | visitor token | `{name?, phone?, email?}`, phone normalised |
+| `/api/chat/threads/<id>/csat/` | POST | visitor token | `{score 1..5}`, only after the thread is closed, once |
+| `/api/admin/chat/presence/heartbeat/` | POST | admin session | Agent console ping (~25 s) |
+| `/api/admin/chat/presence/` | PUT | admin session | `{status: available\|away\|offline}` |
+| `/api/admin/chat/threads/<id>/reply/` | POST | admin | `{message, internal?}` public reply (-> `waiting_customer`) or internal note |
 | `/api/feedback/submit/` | POST | portal | `{page?, rating? 1..5, comment?}` — either a rating or a comment is required. Rate-limited `feedback` 30/60s. Emits to the admin audience |
 | `/api/admin/feedback/` | GET | admin | `?days=30` — feed plus totals and a per-page breakdown |
 
