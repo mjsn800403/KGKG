@@ -111,11 +111,21 @@ class CheckTests(CommandCase):
         self.assertIn('role_table_missing', found)
         self.assertEqual(code, 1)
 
-    def test_unrecognised_mode_value_blocks_because_it_would_silently_mean_off(self):
-        self.env(KG_SUPPORT_RBAC='enforced', KG_SUPPORT_OWNERS='ann')
-        code, found, _ = self.codes('--for-enforce')
+    def test_unrecognised_mode_value_blocks_and_says_it_is_enforced_not_ignored(self):
+        self.env(KG_SUPPORT_RBAC='enforc', KG_SUPPORT_OWNERS='ann')
+        code, found, data = self.codes('--for-enforce')
         self.assertIn('mode_unrecognised', found)
         self.assertEqual(code, 1)
+        message = [f['message'] for f in data['findings'] if f['code'] == 'mode_unrecognised'][0]
+        self.assertIn('ENFORCED', message)
+        self.assertIn('fails closed', message)
+        self.assertNotIn('mode', found - {'mode_unrecognised'})   # no cheerful "mode is off" line beside it
+
+    def test_explicit_off_spellings_are_not_flagged(self):
+        for raw in ('', 'off', '0', 'false', 'no', 'disabled', 'none'):
+            self.env(KG_SUPPORT_RBAC=raw)
+            _, found, _ = self.codes()
+            self.assertNotIn('mode_unrecognised', found, raw)
 
     def test_coverage_warnings_do_not_block(self):
         self.env(KG_SUPPORT_OWNERS='ann')

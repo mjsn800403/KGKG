@@ -263,10 +263,17 @@ class ModeTransitionTests(RbacApiCase):
                 outcomes.append(self.act('aud', tid, 'priority', {'priority': 'low' if m != 'audit' else 'high'}).status_code)
         self.assertEqual(outcomes, [200, 200, 403])
 
-    def test_an_unrecognised_mode_never_enforces(self):
-        for raw in ('enforced', 'ON', 'true', '1', ' '):
+    def test_an_unrecognised_mode_fails_closed_over_http_and_names_the_cause(self):
+        for raw in ('enforc', 'enforced', 'ON', 'true', '1'):
             with mock.patch.dict(os.environ, {'KG_SUPPORT_RBAC': raw}):
-                self.assertEqual(self.listing('nobody').status_code, 200, raw)
+                r = self.listing('nobody')
+                self.assertEqual((r.status_code, r.json()['code']), (403, 'rbac_invalid_mode'), raw)
+                self.assertEqual(self.listing('owner').status_code, 200, raw)    # a real owner still works
+
+    def test_blank_and_explicit_off_spellings_keep_the_flat_model(self):
+        for raw in ('', ' ', '0', 'false', 'no', 'disabled', 'none', 'off'):
+            with mock.patch.dict(os.environ, {'KG_SUPPORT_RBAC': raw}):
+                self.assertEqual(self.listing('nobody').status_code, 200, repr(raw))
 
     def test_rollback_to_off_restores_access_instantly(self):
         with mock.patch.dict(os.environ, {'KG_SUPPORT_RBAC': 'enforce'}):

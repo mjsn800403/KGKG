@@ -2,7 +2,11 @@
 bootstrap owners and query scope. Design: docs/superpowers/specs/
 2026-11-03-phase3-migration-and-rbac-design.md (sections 3.1-3.3).
 
-Rollout mode (``KG_SUPPORT_RBAC``, default and fallback ``off``):
+Rollout mode (``KG_SUPPORT_RBAC``). Unset or blank is ``off``. A value that is not
+recognised is ENFORCED (fails closed, is logged and is reported by ``support_roles
+check``): a mistyped setting such as ``enforc`` must never silently turn enforcement
+off. The explicit off spellings in ``OFF_VALUES`` stay ``off``, so a deliberate "off"
+cannot lock support out:
 
 * ``off``     today's behaviour: every signed-in platform admin PERSON may do
               everything in support. Nothing changes until a person sets another mode.
@@ -21,6 +25,7 @@ Roles come from ``KG_SUPPORT_OWNERS`` (bootstrap owners, matched case-insensitiv
 against ACTIVE admins at call time) and, once migration B exists, the
 ``SupportStaffRole`` table. Until then the table contributes nothing.
 """
+import logging
 import os
 import re
 
@@ -82,6 +87,11 @@ MATRIX = {
 }
 
 MODES = ('off', 'audit', 'enforce')
+# Spellings of "off" a person might reasonably write; anything else unrecognised fails closed.
+OFF_VALUES = ('', 'off', '0', 'false', 'no', 'disabled', 'none')
+
+logger = logging.getLogger('kgkg.support.rbac')
+_WARNED_MODES = set()
 
 
 # --- mode and bootstrap owners ----------------------------------------------
@@ -90,9 +100,23 @@ def raw_mode():
 
 
 def mode():
-    """The rollout mode. An unrecognised value is ``off``, never ``enforce``."""
+    """The rollout mode: ``off``, ``audit`` or ``enforce``. An unrecognised value is
+    ``enforce`` (fail closed): a mistyped setting must never quietly disable RBAC."""
     value = raw_mode()
-    return value if value in MODES else 'off'
+    if value in OFF_VALUES:
+        return 'off'
+    if value in ('audit', 'enforce'):
+        return value
+    if value not in _WARNED_MODES:                    # once per distinct value per process
+        _WARNED_MODES.add(value)
+        logger.warning('KG_SUPPORT_RBAC=%r is not recognised; enforcing (fail closed). '
+                       'Use off, audit or enforce.', value)
+    return 'enforce'
+
+
+def mode_is_valid():
+    value = raw_mode()
+    return value in OFF_VALUES or value in ('audit', 'enforce')
 
 
 def bootstrap_owner_names():
@@ -141,6 +165,8 @@ def active_owner_exists():
 
 def denial_code():
     """The error code to send with a 403."""
+    if not mode_is_valid():
+        return 'rbac_invalid_mode'
     return 'rbac_no_owner' if mode() == 'enforce' and not active_owner_exists() else 'forbidden'
 
 

@@ -41,10 +41,10 @@ def blocking(findings):
 
 def _mode():
     raw = rbac.raw_mode()
-    if raw and raw not in rbac.MODES:
+    if not rbac.mode_is_valid():
         return [Finding('block', 'mode_unrecognised',
-                        f'KG_SUPPORT_RBAC={raw!r} is not one of off|audit|enforce; it is treated as off, '
-                        'never as enforce')]
+                        f'KG_SUPPORT_RBAC={raw!r} is not recognised; it is ENFORCED as enforce (fails '
+                        'closed, so a typo cannot silently turn enforcement off). Use off, audit or enforce')]
     return [Finding('info', 'mode', f'KG_SUPPORT_RBAC is {rbac.mode()}'
                     + (' (unset: the default)' if not raw else ''))]
 

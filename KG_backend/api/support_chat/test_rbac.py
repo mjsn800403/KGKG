@@ -119,12 +119,41 @@ class MatrixTests(RbacBase):
 
 
 class ModeTests(RbacBase):
-    def test_mode_parsing_and_unknown_values_never_mean_enforce(self):
+    def test_valid_values_parse_case_and_space_insensitively(self):
         for raw, want in (('', 'off'), ('off', 'off'), ('audit', 'audit'), ('enforce', 'enforce'),
-                          (' ENFORCE ', 'enforce'), ('Audit', 'audit'), ('on', 'off'),
-                          ('true', 'off'), ('1', 'off'), ('enforced', 'off')):
+                          (' ENFORCE ', 'enforce'), ('Audit', 'audit'), (' Off', 'off')):
             self.env(KG_SUPPORT_RBAC=raw)
             self.assertEqual(rbac.mode(), want, raw)
+            self.assertTrue(rbac.mode_is_valid(), raw)
+
+    def test_explicit_off_spellings_are_off_so_a_deliberate_off_cannot_lock_support_out(self):
+        for raw in ('0', 'false', 'FALSE', 'no', 'disabled', 'none'):
+            self.env(KG_SUPPORT_RBAC=raw)
+            self.assertEqual((rbac.mode(), rbac.mode_is_valid()), ('off', True), raw)
+
+    def test_an_unrecognised_value_FAILS_CLOSED_it_can_never_silently_turn_enforcement_off(self):
+        # Typos of every intent: enforcement, audit, even 'on'/'true'. All are enforced.
+        for raw in ('enforc', 'enforced', 'enfroce', 'ENFORCE!', 'audi', 'audit mode', 'on', 'true',
+                    '1', 'yes', 'strict', 'enforce,audit', 'off!'):
+            self.env(KG_SUPPORT_RBAC=raw)
+            self.assertEqual(rbac.mode(), 'enforce', raw)
+            self.assertFalse(rbac.mode_is_valid(), raw)
+
+    def test_an_invalid_value_denies_without_roles_and_says_why(self):
+        self.env(KG_SUPPORT_RBAC='enforc', KG_SUPPORT_OWNERS='me')
+        self.assertEqual(rbac.denial_code(), 'rbac_invalid_mode')
+        self.assertFalse(rbac.can(self.other, P.READ, self.thread('sales')))        # no role: denied
+        self.assertTrue(rbac.can(self.me, P.READ, self.thread('sales')))             # bootstrap owner still works
+
+    def test_an_invalid_value_is_logged_once_per_distinct_value(self):
+        rbac._WARNED_MODES.clear()
+        self.env(KG_SUPPORT_RBAC='enforc')
+        with self.assertLogs('kgkg.support.rbac', level='WARNING') as logs:
+            for _ in range(5):
+                rbac.mode()
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn('enforc', logs.output[0])
+        self.assertIn('enforce', logs.output[0])
 
     def test_off_keeps_todays_flat_model_for_every_active_person(self):
         self.env(KG_SUPPORT_RBAC='off')
@@ -167,6 +196,11 @@ class ModeTests(RbacBase):
         self.table = {'me': ['support_owner']}
         self.assertTrue(rbac.active_owner_exists())
         self.assertEqual(rbac.denial_code(), 'forbidden')
+
+    def test_a_valid_mode_never_reports_an_invalid_mode_code(self):
+        for m in ('off', 'audit', 'enforce'):
+            self.env(KG_SUPPORT_RBAC=m, KG_SUPPORT_OWNERS='')
+            self.assertNotEqual(rbac.denial_code(), 'rbac_invalid_mode')
 
     def test_audit_and_off_never_report_no_owner(self):
         for m in ('off', 'audit'):
