@@ -45,7 +45,7 @@ The shadow comparison is meaningful only if the staging copy holds the same rows
 **Verification.**
 
 1. **Identify the copy actually used**: database name, engine, build time and the commit of the deploy script that built it. A SQLite copy is not acceptable for this comparison.
-2. **Take the source fingerprints at the same instant as the copy.** Build the acceptance copy explicitly: open the held, read-only `REPEATABLE READ` exporter session described in `EVIDENCE_PRESERVATION.md` section 4.1, compute the source fingerprints inside it, run `pg_dump --snapshot=<id>` piped into `pg_restore` into the staging database, run the PostgreSQL sanitizer, then compute the same fingerprints on the staging copy. Record the transaction's timestamp as the cutoff `T`. This needs read-only access to production and is a separate authorization; it is not part of PR #65 and has not been requested or granted. If production access is not wanted, the alternative is a G2 decision to extend the evidence snapshot to the seat and company tables (classification inputs only; they hold personal data, so they follow the same encryption and custody rules) and to build the copy from that verified evidence.
+2. **Take the source fingerprints at the same instant as the copy.** Build the acceptance copy explicitly: open the held, read-only `REPEATABLE READ` exporter session described in `EVIDENCE_PRESERVATION.md` section 4.1, compute the source fingerprints inside it, run `pg_dump --snapshot=<id>` piped into `pg_restore` into the staging database, run the PostgreSQL sanitizer, then compute the same fingerprints on the staging copy. Record the cutoff `T` as defined below. This needs read-only access to production and is a separate authorization (scope and prerequisites below); it is not part of PR #65 and has not been requested or granted, and nothing in this document performs it. If production access is not wanted, the alternative is a G2 decision to extend the evidence snapshot to the seat and company tables (classification inputs only; they hold personal data, so they follow the same encryption and custody rules) and to build the copy from that verified evidence.
 3. **Fingerprints** (non-personal, classification-relevant columns only; each as row count, minimum and maximum id, and SHA-256 of the ordered aggregate):
    - `api_activitylog`: the ordered id list; and the tuple `(id, user_id, action, created_at, marker present)` per row in id order, where "marker present" is `detail LIKE '%بازسازی%'`; plus counts by `action`.
    - `api_portaluser`: the tuple `(id, company_id, role, active, created_at)`.
@@ -59,11 +59,32 @@ The shadow comparison is meaningful only if the staging copy holds the same rows
 
 The outcome (copy identity, `T`, every fingerprint pair) is recorded in the evidence entry.
 
+**Definition of the cutoff `T`.** `T` is the value of `transaction_timestamp()` (the same as `now()` inside that transaction) of the held exporter transaction, read in that transaction with a session `TimeZone` of UTC, written to a file with `\g` like the other snapshot values, and recorded to the microsecond with its time zone. Consequences that are stated rather than assumed:
+
+- It is the **start time of the transaction, not the instant of the snapshot**: the snapshot is taken at the first query after `BEGIN`, a moment later. `T` is therefore a window boundary, not a claim about which rows the snapshot contains.
+- It does not make the window complete or clean. `created_at` may be assigned by the application server's clock, not the database's, so a row visible in the snapshot can carry a `created_at` after `T` (it is outside every window and not counted in `W`), and a row stamped before `T` may have committed after the snapshot (it is absent from the snapshot and from the copy, which is correct for both sides).
+- Both sides of every comparison use the same `T` and the same snapshot, so these effects cancel; they would not cancel if `T` were taken from a different transaction, from `now()` at query time, or from the clone's finishing time, so none of those is allowed.
+- `T` is a recorded input of the evidence entry; when the copy is refreshed, a new `T` is taken in a new exporter transaction.
+
+**Scope and prerequisites of the separate production-read authorization.** Reading production for the staging-equivalence check is a different act from the evidence preservation (G2) and from the review of this PR (G1); an approval of either does not cover it. It is requested in GitHub #64 by the product owner, as a single-use authorization, and states all of:
+
+1. **What is read:** the read-only exporter transaction and the schema-and-data dump that builds the staging copy (`pg_clone_staging` takes the whole database, so personal data is read); the non-personal fingerprint queries of step 3. Nothing is written to production, no migration, no role or setting change, no change to any backup.
+2. **Who and with what:** a named operator using a database role that is read-only (no write privileges, verified before use); connection details outside the repository; no credentials in commands, logs or the evidence entry.
+3. **When and how long:** a stated window, off-peak, with a maximum life for the exporter transaction (the 15-minute idle timeout is a ceiling, section 4.1 of `EVIDENCE_PRESERVATION.md`), because a long transaction holds back vacuum on the whole database.
+4. **Destination:** the staging database that receives the copy, named in advance, on a host and with access control approved for **unsanitized personal data for the time between restore and sanitization**; nobody queries the copy before the sanitizer has run and its result is checked.
+5. **Sanitizer:** the commit of `ops/deploy/sanitize_staging_db.py` and `deploy.sh` that will be used, recorded; it is not changed for this purpose.
+6. **Capacity:** free space on the destination and on the production host for the transaction's side effects, read at execution time.
+7. **Prerequisites met first:** the rehearsal of the snapshot method on a non-production database (`EVIDENCE_PRESERVATION.md` section 4.1) has passed and its record is attached; the fingerprint queries have been run on a non-production copy; the staging copy used is not shared with other test work during the check.
+8. **Stop conditions:** any error, a fingerprint mismatch, an unexpected write or lock on production, or the window closing ends the operation; it is repeated only under a new authorization.
+9. **Afterwards:** the exporter transaction is committed or rolled back and confirmed gone, temporary files are removed, the outcome (copy identity, `T`, every fingerprint pair, pass or fail) is recorded, and the authorization lapses.
+
+Without this authorization, or the alternative in step 2 above, the staging-equivalence prerequisite stays **unverified** and no shadow comparison is run.
+
 ### Fixed boundaries for acceptance
 
 Acceptance is evaluated on one **staging snapshot** that has passed the prerequisite above, with the snapshot and the windows fixed in advance, so that normal activity cannot move the result.
 
-1. **One fixed cutoff `T`**: the timestamp recorded by the staging-equivalence verification when the copy was made. Every count uses the explicit window `created_at >= T - N days AND created_at <= T`, for N in 7, 30, 90, 180 and 365. No query in the shadow comparison uses `now()`.
+1. **One fixed cutoff `T`**: the cutoff defined above (the `transaction_timestamp()` of the exporter transaction that the copy was made from), recorded by the staging-equivalence verification. Every count uses the explicit window `created_at >= T - N days AND created_at <= T`, for N in 7, 30, 90, 180 and 365. No query in the shadow comparison uses `now()`.
 2. **Both code paths are evaluated at `T`.** The old behaviour and the new `operational` behaviour are run with the analytics code's `as_of` input set to `T` (the design adds an `as_of` parameter, default the current time, so the comparison is reproducible).
 3. **The bounds are recomputed from that snapshot**, not copied from this document. For each window, from the staging copy: `W` all rows, `R` reconstructed, `B` back-filled, `D` rows of demo-company seats and `A` administrative rows, each counted only if not already in `R` or `B`, and `O` rows in both `D` and `A`.
 4. **Bounds:** `W - R - B - (D + A) <= operational <= W - R - B - max(D, A)`. Once `O` is read the value is exact: `operational = W - R - B - (D + A - O)`.
