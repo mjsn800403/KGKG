@@ -7,6 +7,7 @@
 }
 .scx-tabs .is-on, .scx-filters .is-on, .scx-avail .is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .scx button:disabled { opacity: .5; cursor: not-allowed; }
+.scx-offline { margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); border-inline-start: 4px solid #d9a441; background: var(--surface-2); color: var(--text); font-size: 13px; }
 .scx-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 10px; }
 .scx-avail, .scx-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .scx-grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 12px; min-height: 480px; }

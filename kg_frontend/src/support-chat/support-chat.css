@@ -94,3 +94,4 @@
   .sc-panel { animation: scIn .18s ease-out; }
   @keyframes scIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 }
+.sc-panel:focus { outline: none; }

@@ -203,7 +203,7 @@ export default function SupportChatInbox({ me = null }) {
     return () => clearInterval(iv);
   }, [load]);
 
-  useEventStream({
+  const { status: liveStatus } = useEventStream({
     admin: true,
     onEvent: (evt) => {
       if (!isChatEvent(evt)) return;
@@ -211,6 +211,13 @@ export default function SupportChatInbox({ me = null }) {
       if (eventThreadId(evt)) window.dispatchEvent(new Event('kg-support-chat-refresh'));
     },
   });
+  // Tell staff when live updates are down (the slow refresh still runs), and catch up
+  // at once when the stream comes back instead of waiting for the next refresh.
+  const wasDown = useRef(false);
+  useEffect(() => {
+    if (liveStatus === 'reconnecting') wasDown.current = true;
+    else if (liveStatus === 'open' && wasDown.current) { wasDown.current = false; load({ background: true }); }
+  }, [liveStatus, load]);
 
   useEffect(() => {
     const base = document.title.replace(/^\(\d+\)\s*/, '');
@@ -221,6 +228,11 @@ export default function SupportChatInbox({ me = null }) {
 
   return (
     <section className="scx" aria-label="گفتگوهای زنده">
+      {liveStatus === 'reconnecting' && (
+        <div className="scx-offline" role="status">
+          اتصال زنده قطع است؛ فهرست هر چند ثانیه به‌روز می‌شود. در حال اتصال دوباره…
+        </div>
+      )}
       <div className="scx-top">
         <Availability />
         <div className="scx-filters" role="tablist">
