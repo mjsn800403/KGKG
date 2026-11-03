@@ -50,6 +50,10 @@ _SKIP_PREFIXES = (
     '/api/auth/me/prefs/', '/api/assist/', '/api/feedback/', '/api/diagnose/',
     '/api/search/', '/api/media-auth/', '/api/vnc-auth/', '/api/events/',
     '/api/health/',
+    # Support chat: bodies are customer messages and contact details, which must
+    # not persist in an append-only log. Staff actions are recorded explicitly,
+    # with ids only, by api/support_chat/views_admin.py.
+    '/api/support-chat/', '/api/admin/support-chat/',
 )
 
 _USER_ACCESS = re.compile(r'^/api/admin/users/(\d+)/access/$')

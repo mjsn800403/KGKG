@@ -1,0 +1,12 @@
+# Every minute; Persistent so a gap while the host was down is drained at boot.
+[Unit]
+Description=Run the KGKG notification outbox every minute
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=10s
+Persistent=true
+Unit=kgkg-outbox.service
+
+[Install]
+WantedBy=timers.target

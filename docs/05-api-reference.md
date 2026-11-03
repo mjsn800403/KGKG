@@ -112,6 +112,18 @@ response / 8 h resolution · normal 8 h / 48 h · low 24 h / 120 h. State per ti
 
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
+| `/api/support-chat/status/` | GET | public | `{mode: live\|async, reply_target_minutes}`. `live` only when a staff member is connected (pinged in the last 60 s) AND declared available. `reply_target_minutes` is `null` unless the owner sets `KG_SUPPORT_REPLY_TARGET_MINUTES`; the internal ticket SLA is never exposed. Limit `status_ip` |
+| `/api/support-chat/threads/` | POST | public + Turnstile (action `support_chat`) | `{message, intent?, client_id?, token?, contact?, page?, referrer?, website?}`. With a client-generated 43-char `token` the create is idempotent: a repeat returns the same thread (200) with no new message and no second Turnstile check. Without one the server returns a token once. `page`/`referrer` are stored without query or fragment. Limit `create_ip` (20 / 10 min per IP) |
+| `/api/support-chat/threads/<id>/messages/` | GET, POST | visitor token (`X-Support-Chat-Token`) | GET `?after=<id>`: messages (internal notes never; staff only as the label «پشتیبانی», system lines as «سامانه»), `status`, `mode`, `staff_seen_at`, `can_reopen`. POST: 2000 chars, idempotent on `client_id`, 409 `closed` on a closed thread. Limits per thread (`poll`, `send`, `send_hour`); malformed token = 404 with no query |
+| `/api/support-chat/threads/<id>/contact/` | PATCH | visitor token | `{name?, phone?, email?}`; phone normalised. Limit `contact` |
+| `/api/support-chat/threads/<id>/reopen/` | POST | visitor token | Continue a closed thread within `KG_SUPPORT_REOPEN_DAYS` (default 14); else 409 `reopen_window_expired`. Counted, system-annotated, audited without IP |
+| `/api/support-chat/threads/<id>/csat/` | POST | visitor token | `{score 1..5}`; closed threads only; one rating per closure, earlier ratings kept. Limit `csat` |
+| `/api/admin/support-chat/presence/heartbeat/` | POST | admin session (person) | Console ping (~20 s) |
+| `/api/admin/support-chat/presence/` | GET, PUT | admin (GET) / admin session (PUT) | GET: per staff `connected`, `declared`, `eligible`. PUT `{status: available\|away\|offline}` |
+| `/api/admin/support-chat/threads/<id>/reply/` | POST | admin session (person) | `{message, internal?}`. Public reply -> `waiting_customer`; a closed thread is refused (409), never reopened by a reply |
+| `/api/admin/support-chat/threads/<id>/close/` | POST | admin session (person) | Close; system message + audit row (ids only) |
+| `/api/admin/support-chat/threads/<id>/reopen/` | POST | admin session (person) | Explicit reopen; counted and audited |
+| `/api/admin/support-chat/threads/<id>/seen/` | POST | admin session (person) | Marks the thread seen by staff |
 | `/api/feedback/submit/` | POST | portal | `{page?, rating? 1..5, comment?}` — either a rating or a comment is required. Rate-limited `feedback` 30/60s. Emits to the admin audience |
 | `/api/admin/feedback/` | GET | admin | `?days=30` — feed plus totals and a per-page breakdown |
 
