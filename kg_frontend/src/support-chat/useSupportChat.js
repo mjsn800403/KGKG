@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createClient } from './client';
@@ -81,7 +81,8 @@ export default function useSupportChat() {
 
   /* ---------- availability ---------- */
   const refreshStatus = useCallback(async () => {
-    const r = await client.status();
+    const s = stateRef.current;
+    const r = await client.status(s.intentChosen ? s.intent : undefined);
     if (r.ok) {
       setAvail({ known: true, enabled: r.data.enabled !== false, mode: r.data.mode === 'live' ? 'live' : 'async',
         replyTarget: r.data.reply_target_minutes ?? null });
@@ -95,7 +96,7 @@ export default function useSupportChat() {
     const first = setTimeout(refreshStatus, 0);
     const iv = setInterval(refreshStatus, STATUS_EVERY_MS);
     return () => { clearTimeout(first); clearInterval(iv); };
-  }, [state.panelOpen, refreshStatus]);
+  }, [state.panelOpen, state.intentChosen, state.intent, refreshStatus]);
 
   /* ---------- polling ---------- */
   const pollOnce = useCallback(async () => {

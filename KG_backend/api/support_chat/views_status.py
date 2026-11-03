@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from api.admin_auth import acting_admin, require_admin_session_no_touch, require_admin_token
 from api.portal import _body
 
-from . import config, presence, throttle
+from . import config, permissions, presence, rbac, throttle
 
 
 def status_view(request):
@@ -20,7 +20,12 @@ def status_view(request):
     ok, retry = throttle.shared_ok('status_ip', throttle.client_ip(request))
     if not ok:
         return throttle.too_many(retry)
-    return JsonResponse({'enabled': config.enabled(), 'mode': presence.current_mode(),
+    # Optional ?intent=sales|demo|technical|other: live only when someone who can answer THAT
+    # intent is available (roles are consulted in `enforce` only).
+    intent = request.GET.get('intent')
+    if intent is not None and intent not in rbac.ALL_INTENTS:
+        return JsonResponse({'error': 'unknown intent'}, status=400)
+    return JsonResponse({'enabled': config.enabled(), 'mode': presence.current_mode(intent=intent),
                          'reply_target_minutes': config.reply_target_minutes()})
 
 
@@ -65,5 +70,8 @@ def presence_view(request):
     status = _body(request).get('status')
     if status not in presence.STATUSES:
         return JsonResponse({'error': 'وضعیت نامعتبر است.'}, status=400)
+    # Counting toward live needs the availability permission; stepping away never does.
+    if status == 'available' and not permissions.can(admin, permissions.AVAILABILITY):
+        return JsonResponse({'error': 'forbidden', 'code': permissions.denial_code()}, status=403)
     presence.set_status(admin, status)
     return JsonResponse({'ok': True, 'status': status})

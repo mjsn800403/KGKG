@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from api.admin_auth import acting_admin, require_admin_token
 
-from . import mask, permissions
+from . import mask, permissions, rbac
 from .models import SupportMessage, SupportThread
 from .views_admin import audit_action
 
@@ -31,6 +31,14 @@ DETAIL_CAP = 500
 
 def _deny():
     return JsonResponse({'error': 'a staff session is required'}, status=403)
+
+
+def _deny_for(request):
+    """403 for a non-person (the loopback token) or for a person without the permission;
+    the code says whether enforcement has no owner at all (see rbac.denial_code)."""
+    if acting_admin(request) is None:
+        return _deny()
+    return JsonResponse({'error': 'forbidden', 'code': permissions.denial_code()}, status=403)
 
 
 def _bad(msg):
@@ -151,10 +159,10 @@ def _hexish(term):
 
 
 def _counts(admin):
-    base = _annotated()
+    base = permissions.scoped_threads(admin, _annotated())
     unread = _unread_q()
     active = Q(status__in=ACTIVE)
-    rows = SupportThread.objects.aggregate(
+    rows = permissions.scoped_threads(admin, SupportThread.objects.all()).aggregate(
         all=Count('pk', filter=~Q(status='spam')),
         active=Count('pk', filter=active),
         closed=Count('pk', filter=Q(status='closed')),
@@ -173,7 +181,7 @@ def list_view(request):
         return JsonResponse({'error': 'GET only'}, status=405)
     admin = _admin(request, permissions.READ)
     if admin is None:
-        return _deny()
+        return _deny_for(request)
     try:
         limit = int(request.GET.get('limit', 30))
     except ValueError:
@@ -183,7 +191,7 @@ def list_view(request):
     flt, err = _filters(request, admin)
     if err:
         return _bad(err)
-    qs = _annotated().filter(flt)
+    qs = permissions.scoped_threads(admin, _annotated()).filter(flt)
     raw = request.GET.get('cursor')
     if raw:
         cur = _cursor_decode(raw)
@@ -200,6 +208,18 @@ def list_view(request):
                          'server_time': timezone.now().isoformat()})
 
 
+# What the caller may do to this thread, so the console offers only those actions. The server
+# re-checks every request; this is a convenience, never the control.
+_CAPS = {'reply': permissions.REPLY, 'take': permissions.TAKE, 'assign': permissions.ASSIGN,
+         'priority': permissions.PRIORITY, 'intent': permissions.INTENT, 'close': permissions.CLOSE,
+         'reopen': permissions.REOPEN, 'spam': permissions.SPAM,
+         'reveal_contact': permissions.REVEAL_CONTACT}
+
+
+def _capabilities(admin, thread):
+    return {name: rbac.allows(admin, perm, thread) for name, perm in _CAPS.items()}
+
+
 def _message(m):
     return {'id': m.id, 'author_kind': m.author_kind, 'internal': m.internal, 'body': m.body,
             'author': _person(m.author_admin), 'created_at': m.created_at.isoformat()}
@@ -212,18 +232,20 @@ def detail_view(request, thread_id):
         return JsonResponse({'error': 'GET only'}, status=405)
     admin = _admin(request, permissions.READ)
     if admin is None:
-        return _deny()
+        return _deny_for(request)
     try:
         key = uuid.UUID(str(thread_id))
     except ValueError:
         return JsonResponse({'error': 'not found'}, status=404)
-    thread = SupportThread.objects.select_related('assignee').filter(pk=key).first()
+    # Out-of-scope threads are filtered here, so they are a plain 404 (no existence oracle).
+    thread = (permissions.scoped_threads(admin, SupportThread.objects.select_related('assignee'))
+              .filter(pk=key).first())
     if thread is None:
         return JsonResponse({'error': 'not found'}, status=404)
     reveal = False
     if request.GET.get('reveal_contact') == '1' and (thread.contact_phone or thread.contact_email):
         if not permissions.can(admin, permissions.REVEAL_CONTACT, thread):
-            return _deny()
+            return _deny_for(request)
         reveal = True
         audit_action(request, admin, 'reveal_contact', thread)
     try:
@@ -234,6 +256,7 @@ def detail_view(request, thread_id):
                 .order_by('id')[:DETAIL_CAP])
     ratings = thread.ratings.order_by('closure', 'id')
     return JsonResponse({
+        'capabilities': _capabilities(admin, thread),
         'thread': {
             'id': str(thread.pk), 'intent': thread.intent, 'status': thread.status,
             'priority': thread.priority, 'assignee': _person(thread.assignee),

@@ -47,7 +47,9 @@ export function createClient({ fetch: doFetch, base = '/kg-api' } = {}) {
 
   const tid = (id) => encodeURIComponent(id);
   return {
-    status: (signal) => call('GET', '/api/support-chat/status/', { signal }),
+    // intent asks about one intent (sales|demo|technical|other); omitted asks about any.
+    status: (intent, signal) => call('GET',
+      `/api/support-chat/status/${intent ? `?intent=${encodeURIComponent(intent)}` : ''}`, { signal }),
     create: ({ token, message, clientId, intent, page, referrer, turnstileToken, contact }) =>
       call('POST', '/api/support-chat/threads/', {
         body: {

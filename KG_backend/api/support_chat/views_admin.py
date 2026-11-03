@@ -59,17 +59,26 @@ def _staff_action(method_name, permission=permissions.REPLY):
                 thread = SupportThread.objects.select_for_update().filter(pk=key).first()
                 if thread is None:
                     return JsonResponse({'error': 'not found'}, status=404)
+                if not permissions.visible(admin, thread):
+                    # Out of scope must look absent: no existence oracle.
+                    return JsonResponse({'error': 'not found'}, status=404)
                 if not permissions.can(admin, permission, thread):
-                    return JsonResponse({'error': 'forbidden'}, status=403)
+                    return _forbidden()
                 response = fn(request, admin, thread)
             kind = getattr(request, '_support_announce', None)
             if kind and response.status_code < 300:
-                events.emit('support_chat.updated', {'thread_id': str(thread.pk), 'kind': kind},
+                # intent lets the stream deliver this only to roles that cover it.
+                events.emit('support_chat.updated',
+                            {'thread_id': str(thread.pk), 'kind': kind, 'intent': thread.intent},
                             audience='admin')
             return response
         view.__name__ = method_name
         return view
     return deco
+
+
+def _forbidden():
+    return JsonResponse({'error': 'forbidden', 'code': permissions.denial_code()}, status=403)
 
 
 def _closed(thread):
@@ -100,7 +109,7 @@ def reply_view(request, admin, thread):
     return JsonResponse({'id': msg.id, 'internal': internal}, status=201)
 
 
-@_staff_action('close_view')
+@_staff_action('close_view', permissions.CLOSE)
 def close_view(request, admin, thread):
     if thread.status == 'closed':
         return JsonResponse({'error': 'این گفتگو از قبل بسته است.', 'code': 'closed'}, status=409)
@@ -110,7 +119,7 @@ def close_view(request, admin, thread):
     return JsonResponse({'ok': True, 'status': thread.status})
 
 
-@_staff_action('reopen_view')
+@_staff_action('reopen_view', permissions.REOPEN)
 def reopen_view(request, admin, thread):
     if thread.status != 'closed':
         return JsonResponse({'error': 'این گفتگو بسته نیست.', 'code': 'not_closed'}, status=409)
@@ -135,7 +144,7 @@ def _unchanged():
     return JsonResponse({'ok': True, 'changed': False})
 
 
-@_staff_action('assign_view', permissions.MANAGE)
+@_staff_action('assign_view', permissions.READ)
 def assign_view(request, admin, thread):
     """POST .../assign/ {admin: 'me' | <admin id> | null}. The target must be an
     active staff account. Moves no status and tells the visitor nothing."""
@@ -155,6 +164,11 @@ def assign_view(request, admin, thread):
         return JsonResponse({'error': 'admin must be an id, "me" or null'}, status=400)
     if (target.id if target else None) == thread.assignee_id:
         return _unchanged()
+    # Taking a thread (or releasing your own) is TAKE; moving it to or from anyone else is ASSIGN.
+    needed = (permissions.TAKE if target == admin or (target is None and thread.assignee_id == admin.id)
+              else permissions.ASSIGN)
+    if not permissions.can(admin, needed, thread):
+        return _forbidden()
     thread.assignee = target
     thread.save(update_fields=['assignee'])
     _audit(request, admin, 'assign', thread, assignee_id=target.id if target else None)
@@ -164,7 +178,7 @@ def assign_view(request, admin, thread):
                          if target else None})
 
 
-@_staff_action('priority_view', permissions.MANAGE)
+@_staff_action('priority_view', permissions.PRIORITY)
 def priority_view(request, admin, thread):
     value = _body(request).get('priority')
     if value not in PRIORITIES:
@@ -178,7 +192,7 @@ def priority_view(request, admin, thread):
     return JsonResponse({'ok': True, 'changed': True, 'priority': value})
 
 
-@_staff_action('intent_view', permissions.MANAGE)
+@_staff_action('intent_view', permissions.INTENT)
 def intent_view(request, admin, thread):
     value = _body(request).get('intent')
     if value not in dict(SupportThread.INTENT_CHOICES):
@@ -192,7 +206,7 @@ def intent_view(request, admin, thread):
     return JsonResponse({'ok': True, 'changed': True, 'intent': value})
 
 
-@_staff_action('spam_view', permissions.MANAGE)
+@_staff_action('spam_view', permissions.SPAM)
 def spam_view(request, admin, thread):
     """Mark as spam: the visitor's token stops working (404) and the thread
     leaves the default inbox. Reversible with ``restore``."""
@@ -205,7 +219,7 @@ def spam_view(request, admin, thread):
     return JsonResponse({'ok': True, 'status': 'spam'})
 
 
-@_staff_action('restore_view', permissions.MANAGE)
+@_staff_action('restore_view', permissions.SPAM)
 def restore_view(request, admin, thread):
     """Undo ``spam``: the thread returns to ``waiting_staff`` (the visitor's last
     word is unanswered). The earlier status is not remembered."""

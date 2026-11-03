@@ -3101,7 +3101,7 @@ paths:
       tags:
       - support-chat
       summary: 'Support availability'
-      description: 'Auth: public. enabled is the server kill switch (KG_SUPPORT_CHAT_ENABLED). mode is live only when a staff member is connected AND has declared themselves available; otherwise async. reply_target_minutes is null unless the owner publishes one (no response-time promise by default).'
+      description: 'Auth: public. enabled is the server kill switch (KG_SUPPORT_CHAT_ENABLED). mode is live only when a staff member is connected AND has declared themselves available (optional ?intent=sales|demo|technical|other: live only if someone who can answer that intent is available once roles are enforced; unknown intent is 400); otherwise async. reply_target_minutes is null unless the owner publishes one (no response-time promise by default).'
       x-kg-auth: public
       security: []
       responses:
@@ -3348,7 +3348,7 @@ paths:
       tags:
       - admin
       summary: 'Staff inbox: one thread with all messages'
-      description: 'Auth: admin session (a person). Includes internal notes and rating history. ?after=id for newer messages only. ?reveal_contact=1 returns full phone and email and writes an audit row with ids only.'
+      description: 'Auth: admin session (a person). Includes internal notes, rating history and capabilities (what the caller may do on this thread). Out-of-scope threads are 404 once roles are enforced. ?after=id for newer messages only. ?reveal_contact=1 returns full phone and email and writes an audit row with ids only.'
       x-kg-auth: admin
       security:
       - bearer: []

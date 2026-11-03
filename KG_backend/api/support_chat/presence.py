@@ -17,7 +17,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from . import config
+from . import config, rbac
 from .models import SupportPresence
 
 STATUSES = ('available', 'away', 'offline')
@@ -49,11 +49,22 @@ def snapshot(now=None):
             continue
         connected = _connected(row, now)
         declared = row.manual_status == 'available'
+        # Eligible also needs a role that can answer something (enforce only; off and
+        # audit keep today's rule).
+        eligible = connected and declared and rbac.can_reply_intent(row.admin, None)
         out.append({'username': row.admin.username, 'connected': connected,
-                    'declared': declared, 'eligible': connected and declared,
+                    'declared': declared, 'eligible': eligible,
                     'status': row.manual_status})
     return out
 
 
-def current_mode(now=None):
-    return 'live' if any(r['eligible'] for r in snapshot(now)) else 'async'
+def current_mode(now=None, intent=None):
+    """``live`` when someone connected AND declared available can answer ``intent``
+    (any intent when None); otherwise ``async``. A sales agent makes «قیمت و خرید»
+    live without making «مشکل فنی» live."""
+    now = now or timezone.now()
+    for row in SupportPresence.objects.select_related('admin').order_by('admin__username'):
+        if (row.admin.active and _connected(row, now) and row.manual_status == 'available'
+                and rbac.can_reply_intent(row.admin, intent)):
+            return 'live'
+    return 'async'
