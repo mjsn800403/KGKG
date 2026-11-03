@@ -19,6 +19,7 @@ from django.core.cache import cache
 from django.test import Client, TestCase
 
 from . import cardb, partsingest
+from .parts import get_parts_db, parts_db_ready
 from .models import (AuthToken, Car, Company, CompanyCarAccess, PortalUser,
                      UserCarAccess)
 
@@ -374,6 +375,20 @@ class PartsServingTests(TestCase):
         # no parts layer -> no parts entry point advertised (and no manual DB
         # either, so the vehicle drops out of the fleet entirely)
         self.assertTrue(all(not i['has_parts'] for i in rows))
+
+    def test_manual_car_loaded_in_postgres_has_no_parts(self):
+        """A manual DB loaded into PostgreSQL under the same file name as the
+        (absent) parts DB must not read as a parts catalog."""
+        from . import cardb_pg
+        name = f'{self.manual_car.car_name}.db'
+        with mock.patch.dict(os.environ, {'KG_CARDB_PG': '*'}), \
+                mock.patch.object(cardb_pg, 'loaded_files',
+                                  return_value=frozenset({name})):
+            cardb.invalidate_ready_cache()
+            self.assertFalse(parts_db_ready(self.manual_car))
+            self.assertTrue(parts_db_ready(self.parts_car))
+            # parts connections never route to the manual PostgreSQL schema
+            self.assertIsInstance(get_parts_db(self.parts_car), sqlite3.Connection)
 
     def test_other_company_user_403(self):
         r = self.c.get(self._url(), HTTP_AUTHORIZATION=f'Bearer {self.other_tok}')
