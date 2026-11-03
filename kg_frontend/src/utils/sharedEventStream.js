@@ -18,7 +18,7 @@ export function createSharedEventStream({ open, setTimer = setTimeout, clearTime
     const key = admin ? 'admin' : 'portal';
     let hub = hubs.get(key);
     if (!hub) {
-      hub = { subs: new Set(), status: 'idle', close: null, timer: null };
+      hub = { subs: new Set(), status: 'idle', close: null, timer: null, dead: false };
       hubs.set(key, hub);
     }
     return hub;
@@ -26,17 +26,29 @@ export function createSharedEventStream({ open, setTimer = setTimeout, clearTime
 
   function connect(admin, hub) {
     hub.status = 'connecting';
+    hub.dead = false;
     hub.close = open({
       admin,
       onStatus: (s) => {
         hub.status = s;
         hub.subs.forEach((sub) => sub.onStatus?.(s));
+        if (s === 'unauthorized') {
+          // The session is gone and the connector has stopped: forget this
+          // connection so the next subscriber (after signing in again) opens a
+          // fresh one with the new credentials instead of inheriting a dead one.
+          hub.dead = true;
+          const close = hub.close;
+          hub.close = null;
+          close?.();
+        }
       },
       onEvent: (evt) => {
         // A throwing subscriber must not stop delivery to the others.
         hub.subs.forEach((sub) => { try { sub.onEvent?.(evt); } catch { /* isolate */ } });
       },
     });
+    // The connector can report 'unauthorized' before it returns (no token at all).
+    if (hub.dead) hub.close = null;
   }
 
   return {

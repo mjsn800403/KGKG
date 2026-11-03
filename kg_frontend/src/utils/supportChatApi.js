@@ -8,12 +8,19 @@ import { buildQuery } from '../support-chat/admin/logic';
 const BASE = (process.env.NEXT_PUBLIC_API_BASE || '/kg-api').replace(/\/+$/, '');
 const ROOT = '/api/admin/support-chat';
 
-async function call(method, path, body) {
+// `background: true` marks an automatic call (timer or event-driven reload): the
+// server then does not slide the 12 h idle window for it, so only a person
+// acting keeps a console signed in.
+async function call(method, path, body, { background = false } = {}) {
   const token = getAdminToken();
   const res = await fetch(`${BASE}${ROOT}${path}`, {
     method,
     cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(background ? { 'X-Kg-Background': '1' } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
@@ -22,6 +29,8 @@ async function call(method, path, body) {
     err.status = res.status;
     err.code = data?.code;
     err.unauthorized = res.status === 401;
+    // Tell the console: the session is over, sign in again (see admin/page.jsx).
+    if (err.unauthorized) window.dispatchEvent(new Event('kg:admin-unauthorized'));
     throw err;
   }
   return data;
@@ -30,8 +39,8 @@ async function call(method, path, body) {
 const t = (id) => `/threads/${encodeURIComponent(id)}`;
 
 export const supportChatApi = {
-  list: (params) => call('GET', `/threads/${buildQuery(params)}`),
-  detail: (id, params) => call('GET', `${t(id)}/${buildQuery(params)}`),
+  list: (params, opts) => call('GET', `/threads/${buildQuery(params)}`, undefined, opts),
+  detail: (id, params, opts) => call('GET', `${t(id)}/${buildQuery(params)}`, undefined, opts),
   reply: (id, message, internal = false) => call('POST', `${t(id)}/reply/`, { message, internal }),
   seen: (id) => call('POST', `${t(id)}/seen/`, {}),
   assign: (id, admin) => call('POST', `${t(id)}/assign/`, { admin }),

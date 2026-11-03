@@ -10,6 +10,10 @@ short and point at the doc section that was updated.
   the 12 h idle limit); the browser keeps one shared stream per audience per tab instead of one
   per component. Regression tests in `api/test_sse_stream.py` and
   `utils/__tests__/sharedEventStream.test.mjs`. Polling stays as the inbox fallback.
+  The console's automatic refreshes (timer, event-driven) send `X-Kg-Background: 1`, which makes
+  `require_admin_token` validate the session without sliding it, so only a person acting keeps a
+  console signed in; a 401 (stream or any support-chat call) signs the console out and returns
+  to `/admin/login`, and the shared stream resets so a new login reconnects.
 - **2026-11-03: human support chat, Phase 3 M0+M1 (no migration).** Server kill switch
   `KG_SUPPORT_CHAT_ENABLED` (off by default; gates new visitor threads); staff inbox API (list,
   detail, assign, priority, intent, spam/restore) with masked contact, unread rule, cursor paging,

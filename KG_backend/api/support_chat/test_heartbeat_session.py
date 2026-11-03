@@ -46,6 +46,36 @@ class HeartbeatSessionTests(SupportCase):
         self.assertEqual(self.c.get(PRESENCE, **self.h).status_code, 200)
         self.assertNotEqual(self.state(), self.before)
 
+    def test_background_marked_calls_do_not_slide_the_window_but_human_calls_do(self):
+        bg = dict(self.h, HTTP_X_KG_BACKGROUND='1')
+        self.assertEqual(self.c.get('/api/admin/support-chat/threads/', **bg).status_code, 200)
+        self.assertEqual(self.state(), self.before)                 # automatic refresh: untouched
+        self.assertEqual(self.c.get('/api/admin/support-chat/threads/', **self.h).status_code, 200)
+        self.assertNotEqual(self.state(), self.before)              # a person's call: slides
+
+    def test_the_background_header_cannot_be_used_to_gain_access(self):
+        self.assertEqual(self.c.get('/api/admin/support-chat/threads/',
+                                    HTTP_X_KG_BACKGROUND='1').status_code, 401)
+        AdminAuthToken.objects.filter(pk=self.tok.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(self.c.get('/api/admin/support-chat/threads/',
+                                    **dict(self.h, HTTP_X_KG_BACKGROUND='1')).status_code, 401)
+
+    def test_an_idle_session_dies_at_its_expiry_even_with_only_background_traffic(self):
+        """12 h idle: automatic traffic never extends it, so it ends on schedule."""
+        bg = dict(self.h, HTTP_X_KG_BACKGROUND='1')
+        AdminAuthToken.objects.filter(pk=self.tok.pk).update(
+            expires_at=timezone.now() + timedelta(seconds=30))
+        for _ in range(3):
+            self.assertEqual(self.c.get('/api/admin/support-chat/threads/', **bg).status_code, 200)
+            self.beat()
+        self.tok.refresh_from_db()
+        self.assertLess(self.tok.expires_at, timezone.now() + timedelta(seconds=31))
+        AdminAuthToken.objects.filter(pk=self.tok.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(self.c.get('/api/admin/support-chat/threads/', **bg).status_code, 401)
+        self.assertEqual(self.beat().status_code, 401)
+
     def test_heartbeat_records_presence(self):
         self.beat()
         self.assertIsNotNone(SupportPresence.objects.get(admin=self.admin).last_heartbeat_at)

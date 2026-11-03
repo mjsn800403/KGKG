@@ -102,7 +102,12 @@ def require_admin_token(view):
         if (configured and presented and hmac.compare_digest(presented, configured)
                 and _from_server_itself(request)):
             return view(request, *args, **kwargs)
-        admin = _admin_session(presented)
+        # An automatic refresh (timer, event-driven reload) is not a person acting
+        # and must not keep the session alive: the console marks those calls with
+        # X-Kg-Background: 1. The header can only REDUCE session extension, never
+        # grant anything, so trusting the client on it is safe.
+        background = request.META.get('HTTP_X_KG_BACKGROUND') == '1'
+        admin = _admin_session(presented, touch=not background)
         if admin is not None:
             request.platform_admin = admin
             return view(request, *args, **kwargs)

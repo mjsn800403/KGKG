@@ -290,6 +290,50 @@ print(json.dumps([SupportThread.objects.count(), SupportMessage.objects.count()]
     await ctx.close();
   });
 
+  test('F6 an open but idle console does not extend its session (heartbeat and stream are read-only)', async ({ browser }) => {
+    const ctx = await staffContext(browser, 'staff2');
+    const page = await ctx.newPage();
+    await page.goto('/admin#company-requests');
+    await page.getByRole('button', { name: 'رد کردن راهنما' }).click({ timeout: 6000 }).catch(() => {});
+    await page.getByRole('tab', { name: 'گفتگوهای زنده' }).click();
+    await expect(page.getByRole('button', { name: 'آماده پاسخ' })).toBeVisible();
+    // Make the session look 3 h idle, then leave the console open and untouched.
+    const set = dj(`
+import json, datetime as d
+from django.utils import timezone as z
+from api.models import AdminAuthToken as T
+T.objects.filter(admin__username='e2e-staff-2').update(last_used_at=z.now()-d.timedelta(hours=3), expires_at=z.now()+d.timedelta(hours=9))
+t = T.objects.filter(admin__username='e2e-staff-2').first()
+print(json.dumps([t.last_used_at.isoformat(), t.expires_at.isoformat()]))`);
+    await page.waitForTimeout(23_000);                       // > one heartbeat (20 s) and the page's own traffic
+    const after = dj(`
+import json
+from api.models import AdminAuthToken as T
+t = T.objects.filter(admin__username='e2e-staff-2').first()
+print(json.dumps([t.last_used_at.isoformat(), t.expires_at.isoformat()]))`);
+    expect(after).toEqual(set);
+    await ctx.close();
+  });
+
+  test('F5 an expired session ends the console and requires signing in again', async ({ browser }) => {
+    const ctx = await staffContext(browser, 'staff2');
+    const page = await ctx.newPage();
+    await page.goto('/admin#company-requests');
+    await page.getByRole('button', { name: 'رد کردن راهنما' }).click({ timeout: 6000 }).catch(() => {});
+    await page.getByRole('tab', { name: 'گفتگوهای زنده' }).click();
+    await expect(page.getByRole('button', { name: 'بازخوانی' })).toBeVisible();
+    dj(`
+import json, datetime as d
+from django.utils import timezone as z
+from api.models import AdminAuthToken as T
+T.objects.filter(admin__username='e2e-staff-2').update(expires_at=z.now()-d.timedelta(seconds=1))
+print(json.dumps(1))`);
+    await page.getByRole('button', { name: 'بازخوانی' }).click();       // any call now answers 401
+    await expect(page).toHaveURL(/\/admin\/login/, { timeout: 10_000 });
+    expect(await page.evaluate(() => sessionStorage.getItem('kg_admin_token'))).toBeFalsy();
+    await ctx.close();
+  });
+
   test('F4 staff endpoints refuse anonymous callers', async ({ request }) => {
     expect((await request.get('/kg-api/api/admin/support-chat/threads/')).status()).toBe(401);
   });

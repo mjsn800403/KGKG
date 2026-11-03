@@ -86,7 +86,7 @@ function ThreadPane({ id, me, onChanged }) {
   // The pane is keyed by thread id, so it remounts per conversation and starts clean.
   const load = useCallback(async (opts = {}) => {
     try {
-      const d = await api.detail(id, opts.reveal ? { reveal_contact: 1 } : {});
+      const d = await api.detail(id, opts.reveal ? { reveal_contact: 1 } : {}, { background: !!opts.background });
       setData((cur) => (cur && !opts.reveal
         ? { ...d, messages: mergeMessages(cur.messages, d.messages) } : d));
       setErr('');
@@ -96,7 +96,7 @@ function ThreadPane({ id, me, onChanged }) {
   useEffect(() => { const t = setTimeout(load, 0); return () => clearTimeout(t); }, [load]);
   // Opening a thread marks it seen once (this drives the visitor's read tick).
   useEffect(() => { api.seen(id).then(() => onChanged?.()).catch(() => {}); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const h = () => load(); window.addEventListener('kg-support-chat-refresh', h); return () => window.removeEventListener('kg-support-chat-refresh', h); }, [load]);
+  useEffect(() => { const h = () => load({ background: true }); window.addEventListener('kg-support-chat-refresh', h); return () => window.removeEventListener('kg-support-chat-refresh', h); }, [load]);
 
   const act = async (fn) => {
     setBusy(true);
@@ -184,9 +184,9 @@ export default function SupportChatInbox({ me = null }) {
   const [err, setErr] = useState('');
   const [loaded, setLoaded] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts = {}) => {
     try {
-      const d = await api.list({ status: filter, unread: unreadOnly ? 1 : '' });
+      const d = await api.list({ status: filter, unread: unreadOnly ? 1 : '' }, { background: !!opts.background });
       setData(d);
       setErr('');
     } catch (e) { setErr(friendlyError(e)); }
@@ -196,7 +196,7 @@ export default function SupportChatInbox({ me = null }) {
   // The live stream can drop or be buffered by a proxy; a slow refresh keeps the
   // inbox correct without it, and only while someone is looking at the tab.
   useEffect(() => {
-    const iv = setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+    const iv = setInterval(() => { if (!document.hidden) load({ background: true }); }, REFRESH_MS);
     return () => clearInterval(iv);
   }, [load]);
 
@@ -204,7 +204,7 @@ export default function SupportChatInbox({ me = null }) {
     admin: true,
     onEvent: (evt) => {
       if (!isChatEvent(evt)) return;
-      load();
+      load({ background: true });
       if (eventThreadId(evt)) window.dispatchEvent(new Event('kg-support-chat-refresh'));
     },
   });
@@ -226,7 +226,7 @@ export default function SupportChatInbox({ me = null }) {
               {f.label} {data.counts?.[f.id] != null ? `(${Number(data.counts[f.id]).toLocaleString('fa-IR')})` : ''}
             </button>
           ))}
-          <button type="button" onClick={load}>بازخوانی</button>
+          <button type="button" onClick={() => load()}>بازخوانی</button>
           <label className="scx-unread"><input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} /> فقط خوانده‌نشده ({Number(data.counts?.unread || 0).toLocaleString('fa-IR')})</label>
         </div>
       </div>

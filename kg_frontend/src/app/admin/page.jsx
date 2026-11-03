@@ -306,11 +306,21 @@ export default function AdminPage() {
 
   // Real-time: any admin write (this tab, another tab, another admin) emits an
   // `admin_changed` event on the admin SSE stream — refetch the visible section.
-  useEventStream({
+  const { status: streamStatus } = useEventStream({
     admin: true,
     enabled: authReady,
     onEvent: (evt) => { if (evt?.type === 'admin_changed') bumpRefresh(); },
   });
+
+  // An expired or revoked session ends the console: whether the stream is
+  // refused (401) or any support-chat call comes back 401, sign out and go to
+  // the login page instead of leaving a dead screen.
+  useEffect(() => {
+    const expired = () => { adminLogout(); router.replace('/admin/login'); };
+    if (streamStatus === 'unauthorized') expired();
+    window.addEventListener('kg:admin-unauthorized', expired);
+    return () => window.removeEventListener('kg:admin-unauthorized', expired);
+  }, [streamStatus, router]);
 
   const go = useCallback((id) => {
     setSection(id);

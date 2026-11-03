@@ -89,6 +89,31 @@ test('after a full close a new subscriber opens a fresh connection', () => {
   assert.equal(opened[1].closed, false);
 });
 
+test('unauthorized reaches subscribers, stops the connector and the next subscriber reconnects fresh', () => {
+  const { hub, opened } = rig();
+  const seen = [];
+  hub.subscribe(true, { onStatus: (s) => seen.push(s) });
+  opened[0].o.onStatus('unauthorized');
+  assert.deepEqual(seen.slice(-1), ['unauthorized']);
+  assert.equal(opened[0].closed, true);
+  assert.equal(hub.stats().admin.open, false);
+  hub.subscribe(true, {});                         // after signing in again
+  assert.equal(opened.length, 2);
+  assert.equal(opened[1].closed, false);
+});
+
+test('unauthorized reported synchronously by the connector (no token) leaves no stale connection', () => {
+  const calls = [];
+  const hub = createSharedEventStream({
+    open: ({ onStatus }) => { onStatus('unauthorized'); calls.push('open'); return () => calls.push('close'); },
+    setTimer: () => ({}), clearTimer: () => {},
+  });
+  hub.subscribe(true, {});
+  assert.equal(hub.stats().admin.open, false);
+  hub.subscribe(true, {});
+  assert.deepEqual(calls.filter((c) => c === 'open').length, 2);   // retried, not stuck
+});
+
 test('calling unsubscribe twice is harmless', () => {
   const { hub, opened, flush } = rig();
   const keep = hub.subscribe(true, {});
