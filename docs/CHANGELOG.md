@@ -4,6 +4,12 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **2026-11-03: SSE corrections.** `/api/events/stream/` no longer sets the hop-by-hop
+  `Connection` header (it was a 500 on every request under `runserver`/wsgiref); opening or
+  reconnecting the stream no longer extends the admin idle session (an open console now follows
+  the 12 h idle limit); the browser keeps one shared stream per audience per tab instead of one
+  per component. Regression tests in `api/test_sse_stream.py` and
+  `utils/__tests__/sharedEventStream.test.mjs`. Polling stays as the inbox fallback.
 - **2026-11-03: human support chat, Phase 3 M0+M1 (no migration).** Server kill switch
   `KG_SUPPORT_CHAT_ENABLED` (off by default; gates new visitor threads); staff inbox API (list,
   detail, assign, priority, intent, spam/restore) with masked contact, unread rule, cursor paging,

@@ -38,7 +38,7 @@ Written only through `events_log.record()`, inside the caller's `transaction.ato
 Pseudonymous operational data, never described as anonymous: a thread id plus actor id plus time can identify indirectly. Access: staff with read permission for that intent (timeline) or metrics permission (aggregates), never the public API, never application logs. Retention is **not approved**: no period is fixed, purge stays report-only, rollup-to-aggregates and erasure-by-`thread_ref` are designed but not built. Backups keep erased data until their own expiry (unverified).
 
 ### 1.4 The exclusion marker (the "additional column")
-Requirement: QA/test conversations must be excludable from every metric and reversible. Two options:
+**DECIDED by the owner (2026-11-03): A1.** `SupportThread.excluded` is part of migration A; the events-only option A2 is dropped and kept below for the record only. Requirement: QA/test conversations must be excludable from every metric and reversible. Two options were considered:
 
 | Option | Schema | Effect |
 |---|---|---|
@@ -93,9 +93,17 @@ Unique pair enforced; FK cascade on admin delete; concurrent last-owner revocati
 
 **Bootstrap owners.** `KG_SUPPORT_OWNERS` is a comma-separated list of PlatformAdmin usernames set by a person on the server. Each name is matched case-insensitively against **active** admins at call time; matches hold `support_owner` regardless of the table.
 
-**Is it validated at startup? Not yet; here is the design.** (Nothing exists today.) A registered Django system check reports: *Warning* if `KG_SUPPORT_RBAC` is not one of `off|audit|enforce` (an invalid value is treated as `off`); *Warning* for each owner name that matches no active admin; *Warning* when mode is `enforce` and no active owner exists at all. It is deliberately a Warning, not an Error: an Error would make `migrate` and deploys fail over a role setting, which is itself a lockout.
+**Is it validated at startup? Not yet; here is the design.** (Nothing exists today.) A registered Django system check reports a *Warning* when `KG_SUPPORT_RBAC` is not one of `off|audit|enforce` (an unknown value is treated as `off`, never as `enforce`), for each owner name that matches no active admin, and when the mode is `enforce` with no resolvable owner. It is a Warning, not an Error, because an Error would make `migrate` and every deploy fail over a role setting. A read-only command `support_roles check` gives the same answer on demand and belongs in the pre-enable checklist.
 
-**Fail-open for administrators.** At runtime, if the mode is `enforce` but **no active support owner can be resolved** (env names match nobody and the table holds no owner for an active admin), enforcement degrades to `audit` behaviour (log a loud `rbac_no_owner` audit/warning, show the owner panel banner) so staff can still work and an owner can be fixed in. This is safe because every platform admin already has this access today. Missing or malformed configuration therefore cannot lock out support or any administrator.
+**Strict enforcement: never silently bypassed (owner decision 2026-11-03).** This replaces the earlier fail-open idea. In `enforce` there is no implicit allow, no degraded mode and no fallback to `audit`:
+- a request without a matching permission and scope is denied (403 for actions, 404 for out-of-scope threads), always;
+- if `enforce` is set but **no active support owner resolves**, support endpoints answer 403 with code `rbac_no_owner` and an audit row; nobody gets in by accident. This can lock out *support* (never any other admin feature) until a person recovers it, which is why the recovery paths below exist and why `support_roles check` is mandatory before switching to `enforce`;
+- `audit` mode is not enforcement: it allows and records would-be denials, is a deliberate staging step, and the response and logs say so.
+
+**Recovery (all are explicit actions by a person with server access; none is automatic):**
+1. Set or correct `KG_SUPPORT_OWNERS` in the server environment and reload: effective on the next request, independent of the table.
+2. Run `manage.py support_roles grant --admin <username> --role support_owner --apply` on the server (dry-run by default, audited, works in any mode because it is not an HTTP endpoint).
+3. As the last resort, set `KG_SUPPORT_RBAC=off` (documented emergency switch; reverts to today's flat model; the change is logged at startup).
 
 **Unrelated administration is untouched.** Permissions are read only by `permissions.can` called from `api/support_chat/*`. A test statically asserts no module outside `support_chat` imports it and that representative non-support admin endpoints behave identically under `enforce`. The loopback `KG_ADMIN_TOKEN` is never a person and keeps all non-support behaviour; it gets no support permission.
 
@@ -125,15 +133,20 @@ Scope: SA = support_agent (technical, other); SL = sales_agent (sales, demo); LD
 
 Contact is masked by default for everyone; "reveal" is a deliberate action with an audit row. Live-mode eligibility requires reply permission covering the thread's intent.
 
-### 3.2 Residual item found while specifying this
-`events.emit(..., audience='admin')` delivers `support_chat.*` events (thread id, intent) to **every** platform admin stream, so an out-of-scope admin learns that a thread exists and its intent, not its content. Acceptable for ids-only, but scoped delivery would need a new audience; listed as a decision (section 4).
+### 3.2 Role-scoped event visibility (owner decision 2026-11-03: required; design, built in M2)
+Today `events.emit(..., audience='admin')` delivers `support_chat.*` events (thread id, intent, kind) to **every** platform admin stream. In `enforce` that must narrow:
+- **Filter at the stream, not the client.** `events._scoped_qs` gains one rule for admin viewers: events whose type starts with `support_chat.` are returned only when the viewer holds a support permission, and only for intents inside that viewer's role scope (`payload.intent` in the allowed set; `support_auditor`, `support_lead`, `support_owner` see all intents). An admin with no support role receives none. No schema change: it filters the existing JSON payload.
+- **Payload gets `intent` on every `support_chat.*` event** (`updated` currently carries only `thread_id` and `kind`; `message` and `reopened` already carry `intent`). Still ids and enums only, never text or contact.
+- **Computed at connect time.** The viewer's allowed intents are resolved when the stream opens (and it reconnects at least every 300 s), so a role change takes effect within five minutes at most; documented, and a role revocation additionally closes nothing mid-stream (unmeasured limitation).
+- **Granularity limit, stated honestly:** events are scoped by intent only. An agent still receives the id/intent/kind of events for in-scope threads assigned to a colleague; message content, contact and the thread itself remain protected by the own-or-unassigned rule on the REST endpoints.
+- **Tests (PostgreSQL and SQLite):** a sales agent's stream never yields a technical-intent event; an admin without a role yields none in `enforce` and all in `off`/`audit`; auditor yields all; role change observed after reconnect; the payload schema test asserts no text/contact keys.
 
-## 4. Decisions for you (migration and RBAC)
-1. Exclusion marker: A1 column (recommended) or A2 events-only.
-2. Approve schema A and B as written, including `first_*` events and the `score` column.
-3. Approve the matrix in 3.1 (especially: agents reveal contact only for own threads; lead can reassign and spam; auditor never replies or reveals).
-4. Approve fail-open-to-audit when no owner resolves, and Warning-level startup checks.
-5. Scoped event delivery now (extra audience, extra code) or accept ids-only broadcast to all admins for now.
+## 4. Decisions
+**Settled by the owner (2026-11-03):** A1 (`SupportThread.excluded`) and the `SupportStaffRole` table; five roles; strict enforcement with no silent bypass; role-scoped event visibility; bootstrap owners with a recovery mechanism; migrations are generated only after the other developer confirms numbering and compatibility.
+**Still open:**
+1. Final sign-off on the exact schemas in sections 1 and 2 as written (including the `first_*` events and the `score` column).
+2. Final sign-off on the matrix in 3.1 (agents reveal contact only for own threads; lead can reassign and spam; auditor never replies or reveals).
+3. Whether `support_roles check` must pass (exit 0) as a gate in `ops/deploy/gate.sh` before `KG_SUPPORT_RBAC=enforce` may be set (recommended; touches deploy tooling, so it is your call).
 
 ## 5. Developer coordination (unresolved, cannot be verified from here)
 Visible state (verified): the highest migration on every remote branch and open PR except Phase 2 is `0039`; `rag-db-improvements` (86 commits behind `work`) adds none. **Unresolved:** the other developer's local, unpublished database work. Required before generating anything: written confirmation from them that they hold no pending `0040`-`0043` and which branch they will merge first; then `git fetch`, `check_migrations.py origin/work`, `makemigrations --check`. If they hold migrations, the later one is renumbered with its dependency line corrected before any merge, and never edited after merge.

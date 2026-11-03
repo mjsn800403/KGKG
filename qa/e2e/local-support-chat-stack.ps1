@@ -53,6 +53,8 @@ Pop-Location
 Push-Location (Join-Path $repo 'kg_frontend')
 $env:KG_DEV_API_PROXY = "http://127.0.0.1:$ApiPort"
 $env:API_BASE_INTERNAL = "http://127.0.0.1:$ApiPort"
+# Switch the inbox's fallback polling off so the spec proves SSE alone delivers.
+$env:NEXT_PUBLIC_SUPPORT_INBOX_REFRESH_S = '3600'
 npx next build | Out-Null
 Start-Process -FilePath (Join-Path $NodeDir 'npx.cmd') -ArgumentList "next start -p $WebPort" `
   -WorkingDirectory (Get-Location) -RedirectStandardOutput (Join-Path $StackDir 'next.out.log') `

@@ -61,7 +61,7 @@ const VISITOR_TEXT = 'سلام، قیمت اشتراک سالانه چند اس�
 const STAFF_TEXT = 'سلام، قیمت‌ها در صفحهٔ خرید است. SECRET-STAFF-TEXT-2';
 
 test.describe.serial('support chat: visitor to human to visitor', () => {
-  let staffCtx; let staff; let visitorCtx; let visitor; let threadId;
+  let staffCtx; let staff; let visitorCtx; let visitor; let threadId; let streamOpens = 0;
 
   test.beforeAll(async ({ browser }) => {
     dj(`
@@ -73,6 +73,7 @@ AuditLog.objects.filter(action__startswith='support_chat.').delete()
 print(json.dumps(1))`);
     staffCtx = await staffContext(browser);
     staff = await staffCtx.newPage();
+    staff.on('request', (r) => { if (r.url().includes('/api/events/stream/')) streamOpens += 1; });
     await staff.goto('/admin#company-requests');
     await staff.getByRole('button', { name: 'رد کردن راهنما' }).click({ timeout: 6000 }).catch(() => {});
     await staff.getByRole('tab', { name: 'گفتگوهای زنده' }).click();
@@ -128,14 +129,18 @@ print(json.dumps({'id': str(t.pk), 'intent': t.intent, 'status': t.status, 'page
   });
 
   test('S4 the staff inbox receives it as unread, masked, and opening it marks it seen', async () => {
-    // The live stream is not relied on here (a proxy may buffer it): refresh by hand.
-    await staff.getByRole('button', { name: 'بازخوانی' }).click();
+    // No manual refresh and (in this stack) the fallback poll is switched off, so
+    // only the event stream can have delivered it; 5 s is far under any poll.
     const row = staff.locator('.scx-row', { hasText: 'SECRET-VISITOR-TEXT-1' });
-    await expect(row).toBeVisible();
+    await expect(row).toBeVisible({ timeout: 5000 });
     await expect(row.locator('.scx-dot')).toBeVisible();
     await row.click();
     await expect(staff.locator('.scx-msg-body', { hasText: 'SECRET-VISITOR-TEXT-1' })).toBeVisible();
     await expect(row.locator('.scx-dot')).toHaveCount(0);
+  });
+
+  test('S4b the admin page holds exactly one event stream for the tab', async () => {
+    expect(streamOpens).toBe(1);
   });
 
   test('S5 the visitor sees the read receipt once staff opened the thread', async () => {

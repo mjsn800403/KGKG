@@ -10,7 +10,9 @@ import {
 import './support-chat-admin.css';
 
 const HEARTBEAT_MS = 20000;
-const REFRESH_MS = 20000;
+// Fallback refresh. Overridable at build time only so the E2E can switch it off
+// and prove the stream alone delivers.
+const REFRESH_MS = (Number(process.env.NEXT_PUBLIC_SUPPORT_INBOX_REFRESH_S) || 20) * 1000;
 const AWAY_AFTER_MS = 10 * 60 * 1000;
 const fmt = (at) => (at ? new Date(at).toLocaleString('fa-IR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 

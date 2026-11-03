@@ -50,10 +50,10 @@ def _admin_session(token, touch=True):
     return obj.admin
 
 
-def _admin_session_valid(token):
+def _admin_session_valid(token, touch=True):
     """Boolean form of :func:`_admin_session`, kept because api/events.py
     resolves a viewer without needing the admin row itself."""
-    return _admin_session(token) is not None
+    return _admin_session(token, touch=touch) is not None
 
 
 def acting_admin(request):
