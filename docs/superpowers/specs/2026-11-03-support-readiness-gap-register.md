@@ -73,9 +73,20 @@ code rows has been run against production.
 | Performance | Baseline p95 for create, poll, send, and SSE connection count, from an isolated load run | not measured |
 | Operations | Unanswered-visitor monitor wired to an alert and tested | **fail** (command exists, not wired) |
 | Operations | Runbook exists and was rehearsed on staging | written (R10), not rehearsed |
-| Privacy | Privacy notice reviewed and published; retention policy approved | draft only |
+| Privacy | Privacy notice reviewed and published; retention policy approved. **Launch blocker:** the notice must name everything the widget keeps in the visitor's browser, including the **half-typed draft** (sessionStorage `kg_sc_d_v1`, this tab only, up to 2000 characters, expires after 24 h, removed when the box is emptied or by "delete conversation"), the unsent-message queue (`kg_sc_q_v1`) and the thread id and token (`kg_sc_v1`, localStorage). The draft page does not mention the draft yet | **fail** (draft only, not approved, not updated for the draft) |
 | Staffing | Named staff on shift, hours, off-hours message, escalation path | not defined (owner decision) |
 | Infrastructure | Kill switch off by default and flips only by a person | pass (documented, tested) |
+
+### 4.1 `support_health` scalability (measured 2026-11-03, SQLite in memory, indicative only)
+
+| Waiting threads | Queries | Time |
+|---|---|---|
+| 1 / 10 / 100 | 2 / 11 / 101 | 2 / 4 / 25 ms |
+| 500 (cap) / 600 | 501 / 501 | 124 / 127 ms |
+
+* **N+1 confirmed:** one query for the candidate threads plus one per waiting thread to find when the current wait began. Harmless at the expected volume (tens of waiting visitors). On PostgreSQL each query costs more round-trip time, so the 500-thread worst case should be re-measured there before it runs on a timer; expect well under a few seconds, not milliseconds.
+* **The 500-thread cap** applies to the oldest-activity threads first. A waiting thread's last activity is its last visitor message, so those are the longest waits: `oldest_wait_s`, `level`, `over_warn` and `over_crit` stay correct when the cap is hit. `waiting` and `waiting_by_intent` are then **undercounts**, and `truncated` is true. Treat `truncated` as "the queue is far past any threshold".
+* **Monitoring implication:** run it by hand or from a timer no more often than every minute. It is read-only, so a slow run cannot damage data, but each run holds one database connection for its duration. It does not alert. Wiring it into `check_alerts` needs your approval and should come with the single-query rewrite (a correlated subquery for the wait start), which removes the N+1 and the practical need for the cap. Deferred to Batch 2 as non-critical.
 
 ## 5. Launch plan
 
