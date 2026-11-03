@@ -101,7 +101,7 @@ Shared fixture: one company with several seats, one demo company, and rows of ev
 
 ## Acceptance criteria for the implementation PR
 
-0. **Prerequisite:** the copy-equivalence verification (on the dedicated equivalence database, not the existing staging database) in `COMPATIBILITY_ASSESSMENT.md` section 2 (built by the named Method B, not the unmodified deploy path, and fingerprinted with the approved query files; it needs its own production-read authorization, not yet requested or granted) has passed for the staging copy used: every activity, seat and company fingerprint equals its same-instant source fingerprint. Without it no shadow-comparison result counts.
+0. **Prerequisite:** the copy-equivalence verification (on the dedicated equivalence database, not the existing staging database) in `COMPATIBILITY_ASSESSMENT.md` section 2 (built by the named Method B, not the unmodified deploy path, and fingerprinted with the approved query files; it needs both production-read authorizations, phase 1 (the read-only preflight) and phase 2 (the copy), neither requested or granted, and the records of both rehearsals, none executed) has passed for the equivalence copy used: every activity, seat and company fingerprint equals its same-instant source fingerprint. Without it no shadow-comparison result counts.
 1. All tests above exist, were red before the change and are green after it.
 2. The backend coverage floor and lint ratchet do not drop.
 3. No `api_activitylog` row differs before and after migration on the original columns (D1).

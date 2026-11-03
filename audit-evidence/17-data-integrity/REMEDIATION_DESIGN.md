@@ -163,11 +163,15 @@ Which cohorts (if any) become `human_confirmed` is decided only through `ATTESTA
 |---|---|---|
 | G0 | product owner | **Decided (2026-11-02): retain every existing record; no deletion, rewrite, relocation or anonymization.** Removal is not proposed; any future removal needs a new explicit decision, taken only after G2 has produced a verified, restore-tested preservation |
 | G1 | reviewer | merge of the documentation-only PR #65, **after** the review findings are resolved |
-| G2 | product owner | any backup, checksum run or copy on the production host |
+| G2 | product owner | any backup, checksum run or copy on the production host (`EVIDENCE_PRESERVATION.md`), after the evidence rehearsal record |
+| P1 | product owner, a second named person countersigning | the read-only preflight on production (catalog and settings only; no copy, dump, snapshot or business data), after rehearsal items 1 and 3 of `COMPATIBILITY_ASSESSMENT.md`; its result is the accepted envelope |
+| P2 | product owner | the equivalence copy (exporter, dump, restore, sanitizer, fingerprints, removal), after a P1 decision and the complete records of both rehearsals; its own authorization |
 | G3 | product owner | approval of this design; separately, of each attestation |
 | G4 | second reviewer | merge of the implementation PR (code, tests, migrations) |
 | G5 | engineer | green staging run; shadow comparison; dashboards compared at 7, 30, 90, 180 and 365 days |
 | G6 | a person, via `kgkg-promote <sha>` | any production change; never automated |
+
+G1 is a decision about the documents. Approving or merging them does not authorize G2, P1 or P2, does not approve the design (G3) or answer the open supersession questions, and does not perform or replace either non-production rehearsal. The two rehearsals need no production access, but their records are inputs to G2, P1 and P2, and nothing here claims they have been run.
 | G7 | independent reader | re-run of the `FINDINGS.md` queries and the metric contract tests on production |
 | G8 | product owner | closing #64, only after G7 |
 
