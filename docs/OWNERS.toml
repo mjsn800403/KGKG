@@ -168,6 +168,11 @@ owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-03
 review_days = 90
 
+["21-csrf-exempt-views.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-03
+review_days = 90
+
 ["16-parts-catalog.md"]
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-08-05

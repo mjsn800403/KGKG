@@ -84,6 +84,9 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    # Cookie-authenticated writes from a foreign Origin: 403 (#62, defence in
+    # depth on top of SameSite=Lax for the @csrf_exempt views).
+    'api.originguard.OriginGuardMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
