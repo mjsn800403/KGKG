@@ -4,6 +4,15 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **2026-11-03: human support chat, Phase 3 M0+M1 (no migration).** Server kill switch
+  `KG_SUPPORT_CHAT_ENABLED` (off by default; gates new visitor threads); staff inbox API (list,
+  detail, assign, priority, intent, spam/restore) with masked contact, unread rule, cursor paging,
+  id-only audit and `support_chat.updated` admin-feed events; the presence heartbeat now validates
+  the admin session read-only so it never extends the login (`{active:false}` = idle tab);
+  Persian RTL visitor widget (landing and purchase only, hidden unless the web server sets the same
+  flag) and a «گفتگوهای زنده» tab inside «میز پشتیبانی». Draft `/privacy` page behind
+  `KG_PRIVACY_DRAFT_PAGE`. Blocked on approval: event history table, role table, exclusion marker.
+  Docs: 05 (API), 11 (flags), `docs/superpowers/specs/2026-11-03-phase3-architecture-reconciliation.md`.
 - **Human support chat backend, Phase 2 (`api/support_chat/`).** `SupportThread` /
   `SupportMessage` / `SupportRating` / `SupportPresence` (additive migration `0041`); visitor
   bearer tokens stored as hashes, client-generated tokens make thread creation idempotent;

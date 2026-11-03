@@ -21,7 +21,7 @@ import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import Icon from '@/components/Icon';
 import AdminDashboard from '@/components/AdminDashboard';
 import JalaliDateTimeInput from '@/components/JalaliDateTimeInput';
-import RequestsInbox from '@/components/RequestsInbox';
+import SupportDesk from '@/support-chat/admin/SupportDesk';
 import { KnowledgeAdmin, ProductFeedbackPanel, SupportMetricsPanel } from '@/components/SupportAdmin';
 import ChatLogsView from '@/components/ChatLogsView';
 import { AiCostPanel, AssistantBehaviorPanel, AuditLogPanel, ExperimentsPanel, FunnelPanel, GrafanaPanel, SearchInsightsPanel } from '@/components/AdminInsights';
@@ -420,7 +420,7 @@ export default function AdminPage() {
             >
               {!section && <AdminHub guard={guard} go={go} adminUser={adminUser} />}
               {section === 'dashboard' && <AdminDashboard go={go} />}
-              {section === 'company-requests' && <RequestsInbox />}
+              {section === 'company-requests' && <SupportDesk me={adminUser?.id ?? null} />}
               {section === 'support-metrics' && <SupportMetricsPanel />}
               {section === 'product-feedback' && <ProductFeedbackPanel />}
               {section === 'knowledge' && <KnowledgeAdmin />}
