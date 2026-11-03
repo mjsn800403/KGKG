@@ -5,6 +5,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false \
     KG_LOG_DIR=/var/log/kgkg
 WORKDIR /app
+# Prefer IPv4. The container shares the host's network, and the host has a
+# global IPv6 address but no IPv6 route out, so glibc tried AAAA first and every
+# outbound call to a dual-stack host hung until the IPv6 attempt timed out: the
+# Turnstile check at login took 40 s instead of 0.04 s (2026-11-03).
+RUN echo "precedence ::ffff:0:0/96  100" >> /etc/gai.conf
 
 # CPU-only torch first (the default wheel pulls ~2 GB of CUDA libs);
 # graphify is a dev-only code-graph tool, not imported by the app.

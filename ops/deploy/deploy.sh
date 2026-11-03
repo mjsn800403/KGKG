@@ -322,8 +322,11 @@ fi
 if [[ $MODE == reload ]]; then
   load_state
   [[ -n $CURRENT ]] && have_images "$CURRENT" || die "no live release image recorded in $STATE"
-  say "reloading ${CURRENT:0:9} (new backend container beside the old one)"
+  say "reloading ${CURRENT:0:9} (new backend and frontend containers beside the old ones)"
   swap_backend "$CURRENT" || die "reloaded backend did not become healthy; the old one is still serving"
+  # The frontend reads kg_frontend/.env.production only when its container is
+  # created, so an env change there (e.g. METIS_BOT_ID) needs a new one too.
+  swap_frontend "$CURRENT" || die "reloaded frontend did not become healthy; the old one is still serving"
   KG_SMOKE_NGINX=${KG_SMOKE_NGINX:-http://127.0.0.1} bash "$PROD/ops/deploy/smoke.sh" http://127.0.0.1:8000 http://127.0.0.1:3000 || die "smoke failed after reload"
   say "RELOADED ${CURRENT:0:9}"
   exit 0
