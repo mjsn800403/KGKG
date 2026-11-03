@@ -577,6 +577,11 @@ def assist(query, brand=None, model=None, car_stem=None, k=None, qvec=None,
             out['evidence'] = ev
             if ev['title_absent_from_vehicle']:
                 out['out_of_scope'] = 'title_absent_from_vehicle'
+            elif ev['component_absent_from_vehicle']:
+                out['out_of_scope'] = 'component_absent_from_vehicle'
+            if out.get('out_of_scope') and config.ABSENT_REFUSES:
+                out['grounded'] = False
+                out['confidence_band'] = scoring.confidence_band(0.0, 0.0, 0.0)
     return out
 
 
