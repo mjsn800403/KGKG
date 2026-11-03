@@ -21,6 +21,8 @@
 
 GUARD_MESSAGE=
 
+# GUARD_MESSAGE is read by the sourcing script (die "$GUARD_MESSAGE"), not here.
+# shellcheck disable=SC2034
 require_on_work() {
   local prod=$1 sha=$2
   GUARD_MESSAGE=
