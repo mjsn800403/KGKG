@@ -113,6 +113,9 @@ function ThreadPane({ id, me, onChanged }) {
   const th = data.thread;
   const closed = th.status === 'closed';
   const spam = th.status === 'spam';
+  // What this person may do here (the server re-checks every request). Absent means offer all.
+  const caps = data.capabilities || {};
+  const can = (k) => caps[k] !== false;
   return (
     <div className="scx-pane">
       <header className="scx-pane-head">
@@ -124,24 +127,24 @@ function ThreadPane({ id, me, onChanged }) {
           <div className="scx-contact" dir="ltr">
             {th.contact.has_phone && <span>{th.contact.phone}</span>}
             {th.contact.has_email && <span>{th.contact.email}</span>}
-            {(th.contact.has_phone || th.contact.has_email) && !reveal && (
+            {(th.contact.has_phone || th.contact.has_email) && !reveal && can('reveal_contact') && (
               <button type="button" className="scx-link" onClick={() => { setReveal(true); load({ reveal: true }); }}>نمایش اطلاعات تماس</button>
             )}
           </div>
         </div>
         <div className="scx-actions">
-          <button type="button" disabled={busy || (th.assignee && th.assignee.id === me)} onClick={() => act(() => api.assign(id, 'me'))}>
+          <button type="button" disabled={busy || !can('take') || (th.assignee && th.assignee.id === me)} onClick={() => act(() => api.assign(id, 'me'))}>
             {th.assignee ? `مسئول: ${th.assignee.username}` : 'برداشتن گفتگو'}
           </button>
-          <select aria-label="اولویت" value={th.priority} disabled={busy} onChange={(e) => act(() => api.priority(id, e.target.value))}>
+          <select aria-label="اولویت" value={th.priority} disabled={busy || !can('priority')} onChange={(e) => act(() => api.priority(id, e.target.value))}>
             {Object.entries(PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           {closed
-            ? <button type="button" disabled={busy} onClick={() => act(() => api.reopen(id))}>بازگشایی</button>
-            : <button type="button" disabled={busy || spam} onClick={() => act(() => api.close(id))}>بستن</button>}
+            ? <button type="button" disabled={busy || !can('reopen')} onClick={() => act(() => api.reopen(id))}>بازگشایی</button>
+            : <button type="button" disabled={busy || spam || !can('close')} onClick={() => act(() => api.close(id))}>بستن</button>}
           {spam
-            ? <button type="button" disabled={busy} onClick={() => act(() => api.restore(id))}>بازگرداندن از اسپم</button>
-            : <button type="button" disabled={busy} onClick={() => act(() => api.spam(id))}>اسپم</button>}
+            ? <button type="button" disabled={busy || !can('spam')} onClick={() => act(() => api.restore(id))}>بازگرداندن از اسپم</button>
+            : <button type="button" disabled={busy || !can('spam')} onClick={() => act(() => api.spam(id))}>اسپم</button>}
         </div>
       </header>
 
@@ -158,7 +161,7 @@ function ThreadPane({ id, me, onChanged }) {
       </div>
 
       {err && <div className="scx-err" role="alert">{err}</div>}
-      {closed || spam ? null : (
+      {closed || spam || !can('reply') ? null : (
         <form className="scx-compose" onSubmit={(e) => { e.preventDefault(); send(); }}>
           <textarea
             value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={2000} dir="auto"

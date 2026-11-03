@@ -158,7 +158,7 @@ class CommonRulesTests(ActionBase):
         self.assertEqual(len(evs), 5)
         for e in evs:
             self.assertEqual(e.audience, 'admin')
-            self.assertEqual(set(e.payload), {'thread_id', 'kind'})
+            self.assertEqual(set(e.payload), {'thread_id', 'kind', 'intent'})
             self.assertNotIn('text must not travel', str(e.payload))
         self.assertEqual([e.payload['kind'] for e in evs],
                          ['assign', 'priority', 'reply', 'close', 'reopen'])

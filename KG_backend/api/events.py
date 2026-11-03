@@ -75,7 +75,7 @@ def _trim():
 # ---------------------------------------------------------------------------
 
 def _scoped_qs(after_id, *, is_admin, company_id=None, user_id=None,
-               can_see_company=False):
+               can_see_company=False, support_intents=None):
     """Events past ``after_id`` this viewer may receive.
 
     * admin        → every 'admin' and 'all' event (the platform view);
@@ -86,7 +86,13 @@ def _scoped_qs(after_id, *, is_admin, company_id=None, user_id=None,
     from django.db.models import Q
     qs = Event.objects.filter(id__gt=after_id)
     if is_admin:
-        return qs.filter(audience__in=('admin', 'all')).order_by('id')
+        qs = qs.filter(audience__in=('admin', 'all'))
+        if support_intents is not None:
+            # Role-scoped delivery (KG_SUPPORT_RBAC=enforce): support-chat events reach only
+            # a person whose role covers the thread's intent. Ids and enums only, never text.
+            qs = qs.filter(~Q(type__startswith='support_chat.')
+                           | Q(payload__intent__in=sorted(support_intents)))
+        return qs.order_by('id')
     scope = Q(audience='all')
     if user_id is not None:
         scope |= Q(audience='user', user_id=user_id)
@@ -96,9 +102,10 @@ def _scoped_qs(after_id, *, is_admin, company_id=None, user_id=None,
 
 
 def events_since(after_id, *, is_admin, company_id=None, user_id=None,
-                 can_see_company=False, limit=200):
+                 can_see_company=False, limit=200, support_intents=None):
     rows = list(_scoped_qs(after_id, is_admin=is_admin, company_id=company_id,
-                           user_id=user_id, can_see_company=can_see_company)[:limit])
+                           user_id=user_id, can_see_company=can_see_company,
+                           support_intents=support_intents)[:limit])
     return rows
 
 
@@ -117,18 +124,21 @@ def _resolve_viewer(request):
     Admin is checked first (a platform-admin session, or the KG_ADMIN_TOKEN env
     secret from the server itself only, as require_admin_token allows it).
     Otherwise a portal user (Bearer or cookie)."""
-    from .admin_auth import (_presented_token, _configured_token, _admin_session_valid,
+    from .admin_auth import (_presented_token, _configured_token, _admin_session,
                              _from_server_itself)
+    from .support_chat import rbac
     import hmac
     presented = _presented_token(request)
     configured = _configured_token()
     if (presented and configured and hmac.compare_digest(presented, configured)
             and _from_server_itself(request)):
-        return {'is_admin': True}
+        # A script, not a person: no support events once roles are enforced.
+        return {'is_admin': True, 'support_intents': rbac.event_intents(None)}
     # touch=False: the stream reconnects every few minutes, and a connection is
     # not a person acting, so it must not slide the admin idle window.
-    if _admin_session_valid(presented, touch=False):
-        return {'is_admin': True}
+    admin = _admin_session(presented, touch=False)
+    if admin is not None:
+        return {'is_admin': True, 'support_intents': rbac.event_intents(admin)}
     from .portal import portal_user
     from .portal_auth import user_can_view_company_stream
     u = portal_user(request)
@@ -195,7 +205,7 @@ def stream_view(request):
                     cursor, is_admin=viewer['is_admin'],
                     company_id=viewer.get('company_id'),
                     user_id=viewer.get('user_id'),
-                    can_see_company=viewer.get('can_see_company', False),
+                    can_see_company=viewer.get('can_see_company', False), support_intents=viewer.get('support_intents'),
                     limit=200)
             except Exception:
                 rows = []
@@ -247,13 +257,13 @@ def recent_view(request):
         qs = _scoped_qs(0, is_admin=viewer['is_admin'],
                         company_id=viewer.get('company_id'),
                         user_id=viewer.get('user_id'),
-                        can_see_company=viewer.get('can_see_company', False))
+                        can_see_company=viewer.get('can_see_company', False), support_intents=viewer.get('support_intents'))
         rows = list(qs.order_by('-id')[:limit])[::-1]
     else:
         rows = events_since(after, is_admin=viewer['is_admin'],
                             company_id=viewer.get('company_id'),
                             user_id=viewer.get('user_id'),
-                            can_see_company=viewer.get('can_see_company', False),
+                            can_see_company=viewer.get('can_see_company', False), support_intents=viewer.get('support_intents'),
                             limit=limit)
     return JsonResponse({'cursor': _latest_id(),
                          'events': [e.to_sse() for e in rows]})

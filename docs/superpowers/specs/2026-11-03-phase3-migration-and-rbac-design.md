@@ -168,3 +168,22 @@ Today `events.emit(..., audience='admin')` delivers `support_chat.*` events (thr
 
 ## 5. Developer coordination (unresolved, cannot be verified from here)
 Visible state (verified): the highest migration on every remote branch and open PR except Phase 2 is `0039`; `rag-db-improvements` (86 commits behind `work`) adds none. **Unresolved:** the other developer's local, unpublished database work. Required before generating anything: written confirmation from them that they hold no pending `0040`-`0043` and which branch they will merge first; then `git fetch`, `check_migrations.py origin/work`, `makemigrations --check`. If they hold migrations, the later one is renumbered with its dependency line corrected before any merge, and never edited after merge.
+## 6. Implementation status: M2 preparation (2026-11-03, branch `feat/support-rbac-m2`)
+
+**Built, migration-independent, enforcement OFF by default:** `rbac.py` (matrix exactly as 3.1, modes `off`/`audit`/`enforce`, bootstrap owners, intent and ownership scope); finer permissions wired into every staff action (take, assign, priority, intent, close, reopen, spam/restore, reveal, availability); backend query scope for list, counts, detail and search (out-of-scope threads are 404); `rbac_no_owner` 403; role-scoped delivery of `support_chat.*` events on the stream and on `/api/events/recent/`; availability needs the permission and `live` is per intent (`/status/?intent=`); `capabilities` in the thread detail and a console that offers only permitted actions; `manage.py support_roles check [--for-enforce] | report` (read-only, exit codes 0/1/2). Nothing changes in `off`, which is the default and the fallback for any unrecognised value.
+
+**Deferred because it needs migration B or A (not generated):**
+- the role table: until it exists, only bootstrap owners from `KG_SUPPORT_OWNERS` hold any role, so `check --for-enforce` correctly reports `role_table_missing` (blocking);
+- `support_roles grant|revoke` and the last-owner guard (they write the table), and role-change audit rows;
+- the `support.exclude` permission is defined and in the matrix but has nothing to act on until `SupportThread.excluded` exists;
+- metrics endpoints (`support.metrics`, `support.notify_health`) are permissions only; the endpoints are M4.
+
+**Known limits, stated plainly:**
+- **PostgreSQL is unverified for the event filter.** `payload__intent__in` on the JSON payload ran on SQLite locally; CI on PostgreSQL has not run these commits yet.
+- Event scope is intent-only and is resolved when a stream opens, so a role change reaches an open stream within one reconnect (at most 300 s); agents still receive id, intent and kind of colleagues' in-scope threads (content stays protected by the REST own-or-unassigned rule).
+- `audit` writes one id-only row per would-be denial, which can be many; the owner reads it through `support_roles check` (14-day summary by admin id and permission).
+- Each request resolves roles with a small query per call; fine at this staff size, not load-tested.
+- Intent change by an agent on their own thread can move it out of their own scope (allowed by the matrix; the event then carries the new intent).
+
+### 6.1 Migration coordination status (unresolved: blocker)
+Rechecked 2026-11-03 after PRs #66 and #67 merged: `work` is at `22341f5`; the highest migration anywhere on the remote is `0041_support_chat_core`; no branch or open PR has a higher one; `rag-db-improvements` has none. **No confirmation from the other developer exists**, and their local, unpublished database work cannot be seen from here, so `0042`/`0043` are **not** assumed free. Migrations A and B are therefore **not generated**. To unblock: the other developer states in writing which migration numbers they hold or plan (and the branch they will merge first); then `git fetch`, `check_migrations.py origin/work`, `makemigrations --check`, generate A and B with `dependencies` on the then-latest migration, renumber the later one if there is any clash, and never edit a migration after it is merged.

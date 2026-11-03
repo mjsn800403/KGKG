@@ -82,3 +82,15 @@ test('thread ids are URL-encoded', async () => {
   await c.reopen('a/b', TOKEN);
   assert.ok(calls[0].url.includes('a%2Fb'));
 });
+
+test('status asks about one intent only when given, and encodes it', async () => {
+  const { c, calls } = client(() => res(200, { mode: 'live' }));
+  await c.status();
+  await c.status('sales');
+  await c.status('a b');
+  assert.deepEqual(calls.map((x) => x.url), [
+    '/kg-api/api/support-chat/status/',
+    '/kg-api/api/support-chat/status/?intent=sales',
+    '/kg-api/api/support-chat/status/?intent=a%20b',
+  ]);
+});

@@ -22,6 +22,7 @@ export const initialState = () => ({
   unread: 0,                  // staff replies arrived while the panel was closed
   panelOpen: false,
   intent: 'other',
+  intentChosen: false,        // the visitor picked a starter (or a stored thread has an intent)
 });
 
 const kindOf = (authorKind) => (authorKind === 'admin' ? 'staff' : authorKind === 'system' ? 'system' : 'visitor');
@@ -67,13 +68,14 @@ export function deliveryOf(message, staffSeenAt) {
 export function reduce(state, event) {
   switch (event.type) {
     case 'restore':          // thread found in this browser
-      return { ...state, phase: 'chat', threadId: event.threadId, intent: event.intent || state.intent };
+      return { ...state, phase: 'chat', threadId: event.threadId, intent: event.intent || state.intent,
+        intentChosen: state.intentChosen || !!event.intent };
     case 'panel': {
       const open = !!event.open;
       return { ...state, panelOpen: open, unread: open ? 0 : state.unread };
     }
     case 'intent':
-      return { ...state, intent: event.intent };
+      return { ...state, intent: event.intent, intentChosen: true };
     case 'send_start': {
       if (state.messages.some((m) => m.clientId === event.clientId)) {
         return { ...state, messages: state.messages.map((m) => (m.clientId === event.clientId

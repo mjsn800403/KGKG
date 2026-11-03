@@ -133,3 +133,16 @@ test('fallback to async: only live, only unanswered, only after the delay, only 
   assert.equal(shouldFallBack({ ...args, messages: [{ kind: 'visitor' }, { kind: 'staff' }] }), false);
   assert.equal(shouldFallBack({ ...args, firstSentAt: null }), false);
 });
+
+test('availability is asked for the chosen intent only after the visitor chose one', () => {
+  let st = initialState();
+  assert.equal(st.intentChosen, false);
+  st = reduce(st, { type: 'intent', intent: 'technical' });
+  assert.deepEqual([st.intent, st.intentChosen], ['technical', true]);
+  st = reduce(st, { type: 'reset' });
+  assert.equal(st.intentChosen, false);                  // a new conversation asks about any intent again
+  st = reduce(initialState(), { type: 'restore', threadId: 't', intent: 'sales' });
+  assert.deepEqual([st.intent, st.intentChosen], ['sales', true]);
+  st = reduce(initialState(), { type: 'restore', threadId: 't' });
+  assert.equal(st.intentChosen, false);
+});
