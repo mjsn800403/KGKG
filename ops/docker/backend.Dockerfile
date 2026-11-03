@@ -23,6 +23,11 @@ RUN apt-get update -q && apt-get upgrade -yq \
 COPY ops/docker/backend-requirements.lock /tmp/req.lock
 RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu -r /tmp/req.lock && rm /tmp/req.lock
 
+# Prefer IPv4. Production runs with --network host, and the host has a global
+# IPv6 address but no IPv6 route out, so glibc tried AAAA first and outbound
+# calls to dual-stack hosts hung until the IPv6 attempt timed out: the Turnstile
+# check at login took 40 s instead of 0.04 s (2026-11-03).
+RUN echo "precedence ::ffff:0:0/96  100" >> /etc/gai.conf
 WORKDIR /opt/KGKG/KG_backend
 COPY KG_backend/ /opt/KGKG/KG_backend/
 
