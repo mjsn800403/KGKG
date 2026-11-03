@@ -44,3 +44,49 @@ class EmbedTextTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class EncodeConcurrencyTest(unittest.TestCase):
+    """A-06 (#30): at most config.EMBED_CONCURRENCY encodes run at once."""
+
+    def setUp(self):
+        import threading
+        self.lock = threading.Lock()
+        self.active = 0
+        self.peak = 0
+        test = self
+
+        class SlowModel:
+            def encode(self, texts, **kw):
+                import time
+                import numpy as np
+                with test.lock:
+                    test.active += 1
+                    test.peak = max(test.peak, test.active)
+                time.sleep(0.05)
+                with test.lock:
+                    test.active -= 1
+                return np.zeros((len(texts), 4), dtype=np.float32)
+
+        self._model, self._limit = embed._MODEL, config.EMBED_CONCURRENCY
+        embed._MODEL = SlowModel()
+
+    def tearDown(self):
+        embed._MODEL, config.EMBED_CONCURRENCY = self._model, self._limit
+
+    def _burst(self, limit, n=8):
+        import threading
+        config.EMBED_CONCURRENCY = limit
+        ts = [threading.Thread(target=embed.encode, args=(['q'],)) for _ in range(n)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        return self.peak
+
+    def test_bounded(self):
+        self.assertLessEqual(self._burst(2), 2)
+
+    def test_zero_is_unbounded(self):
+        self.assertGreater(self._burst(0), 2)
+
