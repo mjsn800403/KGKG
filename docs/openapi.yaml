@@ -3101,7 +3101,7 @@ paths:
       tags:
       - support-chat
       summary: 'Support availability'
-      description: 'Auth: public. mode is live only when a staff member is connected AND has declared themselves available; otherwise async. reply_target_minutes is null unless the owner publishes one (no response-time promise by default).'
+      description: 'Auth: public. enabled is the server kill switch (KG_SUPPORT_CHAT_ENABLED). mode is live only when a staff member is connected AND has declared themselves available; otherwise async. reply_target_minutes is null unless the owner publishes one (no response-time promise by default).'
       x-kg-auth: public
       security: []
       responses:
@@ -3210,7 +3210,7 @@ paths:
       tags:
       - admin
       summary: 'Staff console heartbeat'
-      description: 'Auth: admin session (a person; the loopback script token is 403). Send every ~20 s while the console is open.'
+      description: 'Auth: admin session (a person; the loopback script token is 403). Send every ~20 s while the console is open; body active:false means the tab is open but the person is idle (acknowledged, availability not refreshed). Validates the session read-only: it never extends the admin login.'
       x-kg-auth: admin
       security:
       - bearer: []
@@ -3316,6 +3316,139 @@ paths:
       - admin
       summary: 'Mark a thread seen by staff'
       description: 'Auth: admin session (a person). Drives the visitor read tick and the inbox unread dot.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+  /api/admin/support-chat/threads/:
+    get:
+      tags:
+      - admin
+      summary: 'Staff inbox: list visitor threads'
+      description: 'Auth: admin session (a person). Filters: status (active default, all, open, waiting_staff, waiting_customer, closed, spam), intent, priority, assignee (me, none, id), unread=1, q (id prefix or contact fields, never message text), limit 1-100, cursor. Returns counts and next_cursor. Phone and email are masked.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+  /api/admin/support-chat/threads/{thread_id}/:
+    parameters:
+    - name: thread_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      tags:
+      - admin
+      summary: 'Staff inbox: one thread with all messages'
+      description: 'Auth: admin session (a person). Includes internal notes and rating history. ?after=id for newer messages only. ?reveal_contact=1 returns full phone and email and writes an audit row with ids only.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+  /api/admin/support-chat/threads/{thread_id}/assign/:
+    parameters:
+    - name: thread_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      tags:
+      - admin
+      summary: 'Assign or unassign a thread'
+      description: 'Auth: admin session (a person). Body admin: an id, me, or null. Target must be an active staff account.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+  /api/admin/support-chat/threads/{thread_id}/priority/:
+    parameters:
+    - name: thread_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      tags:
+      - admin
+      summary: 'Set thread priority'
+      description: 'Auth: admin session (a person). Body priority: low, normal, high or urgent.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+  /api/admin/support-chat/threads/{thread_id}/intent/:
+    parameters:
+    - name: thread_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      tags:
+      - admin
+      summary: 'Change thread intent'
+      description: 'Auth: admin session (a person). Body intent: sales, demo, technical or other.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+  /api/admin/support-chat/threads/{thread_id}/spam/:
+    parameters:
+    - name: thread_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      tags:
+      - admin
+      summary: 'Mark a thread as spam'
+      description: 'Auth: admin session (a person). The visitor token stops working; reversible with restore.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+  /api/admin/support-chat/threads/{thread_id}/restore/:
+    parameters:
+    - name: thread_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      tags:
+      - admin
+      summary: 'Restore a spam thread'
+      description: 'Auth: admin session (a person). Returns the thread to waiting_staff.'
       x-kg-auth: admin
       security:
       - bearer: []

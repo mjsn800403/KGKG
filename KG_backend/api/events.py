@@ -125,7 +125,9 @@ def _resolve_viewer(request):
     if (presented and configured and hmac.compare_digest(presented, configured)
             and _from_server_itself(request)):
         return {'is_admin': True}
-    if _admin_session_valid(presented):
+    # touch=False: the stream reconnects every few minutes, and a connection is
+    # not a person acting, so it must not slide the admin idle window.
+    if _admin_session_valid(presented, touch=False):
         return {'is_admin': True}
     from .portal import portal_user
     from .portal_auth import user_can_view_company_stream
@@ -216,7 +218,9 @@ def stream_view(request):
     resp = StreamingHttpResponse(gen(), content_type='text/event-stream')
     resp['Cache-Control'] = 'no-cache, no-transform'
     resp['X-Accel-Buffering'] = 'no'     # belt-and-suspenders vs nginx buffering
-    resp['Connection'] = 'keep-alive'
+    # No 'Connection' header: it is hop-by-hop, PEP 3333 forbids a WSGI app from
+    # setting it, and wsgiref (Django's runserver) turns it into a 500 on every
+    # stream request. The server and nginx manage the connection themselves.
     return resp
 
 

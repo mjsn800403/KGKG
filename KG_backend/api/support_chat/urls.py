@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views_admin, views_public, views_status
+from . import views_admin, views_admin_inbox, views_public, views_status
 
 # Included at the top of api/urls.py: its final catch-all
 # '<brand>/<year>/<model>/' would otherwise swallow three-segment paths.
@@ -20,6 +20,10 @@ urlpatterns = [
          name='support_chat_presence_heartbeat'),
     path('api/admin/support-chat/presence/', views_status.presence_view,
          name='support_chat_presence'),
+    path('api/admin/support-chat/threads/', views_admin_inbox.list_view,
+         name='support_chat_admin_list'),
+    path('api/admin/support-chat/threads/<str:thread_id>/', views_admin_inbox.detail_view,
+         name='support_chat_admin_detail'),
     path('api/admin/support-chat/threads/<str:thread_id>/reply/', views_admin.reply_view,
          name='support_chat_admin_reply'),
     path('api/admin/support-chat/threads/<str:thread_id>/close/', views_admin.close_view,
@@ -28,4 +32,14 @@ urlpatterns = [
          name='support_chat_admin_reopen'),
     path('api/admin/support-chat/threads/<str:thread_id>/seen/', views_admin.seen_view,
          name='support_chat_admin_seen'),
+    path('api/admin/support-chat/threads/<str:thread_id>/assign/', views_admin.assign_view,
+         name='support_chat_admin_assign'),
+    path('api/admin/support-chat/threads/<str:thread_id>/priority/', views_admin.priority_view,
+         name='support_chat_admin_priority'),
+    path('api/admin/support-chat/threads/<str:thread_id>/intent/', views_admin.intent_view,
+         name='support_chat_admin_intent'),
+    path('api/admin/support-chat/threads/<str:thread_id>/spam/', views_admin.spam_view,
+         name='support_chat_admin_spam'),
+    path('api/admin/support-chat/threads/<str:thread_id>/restore/', views_admin.restore_view,
+         name='support_chat_admin_restore'),
 ]
