@@ -12,6 +12,24 @@ short and point at the doc section that was updated.
   plain session id to Metis (2 request-forgery), assistant links reject control characters, the
   browser id uses `crypto.randomUUID`, `PartsViewer` no longer builds a selector from a code.
   Part of #45.
+- **Human support chat backend, Phase 2 (`api/support_chat/`).** `SupportThread` /
+  `SupportMessage` / `SupportRating` / `SupportPresence` (additive migration `0041`); visitor
+  bearer tokens stored as hashes, client-generated tokens make thread creation idempotent;
+  `GET /api/support-chat/status/` says `live` only when a staff member is connected AND declared
+  available, and makes no response-time promise unless `KG_SUPPORT_REPLY_TARGET_MINUTES` is set;
+  limits are per thread (a visitor's NAT neighbours do not share an allowance) and configurable
+  (`KG_SC_<NAME>`); staff reply/close/reopen/seen need a signed-in person; reopening is explicit
+  (visitors within 14 days) and a reply never reopens; ratings are kept per closure. Privacy: chat
+  routes are excluded from `AuditLog` bodies, `Event` carries ids only, `source_page`/`referrer`
+  lose query and fragment, and visitor-addressed outbox rows drop their text once final.
+  `purge_support_chat` only reports until a retention policy is approved. Human-operated: no AI,
+  LLM or RAG dependency (a test enforces it). Routes are in `docs/openapi.yaml`. Refs #61.
+- **Notification outbox (Phase 1 of the customer communication redesign).** `api/notifications/`:
+  a durable `NotificationOutbox` table, `enqueue()` with dedupe windows, a worker with retry
+  (1/5/15/60/240 min), an hourly SMS cap, stuck-row reclaim and a `notify:dead` alert, and
+  `manage.py process_outbox`. Delivery is `off` unless `KG_NOTIFY_SMS` / `KG_NOTIFY_EMAIL` say
+  otherwise; nothing triggers it yet and the timer unit in `ops/outbox/` is not installed.
+  Design: `docs/superpowers/specs/2026-11-02-customer-communication-design.md`. Refs #61.
 - **Dependabot version updates.** `.github/dependabot.yml` adds weekly, grouped minor/patch
   update PRs for pip, npm, docker and GitHub Actions (monthly for `qa/e2e`), capped at 2-3 open
   per ecosystem, all targeting `work`. Security updates were already on. Part of #45.
