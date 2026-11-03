@@ -4,6 +4,25 @@ Living log of shipped changes, newest first. One dated block per deploy/commit; 
 short and point at the doc section that was updated.
 
 ## Unreleased
+- **2026-11-03: SSE corrections.** `/api/events/stream/` no longer sets the hop-by-hop
+  `Connection` header (it was a 500 on every request under `runserver`/wsgiref); opening or
+  reconnecting the stream no longer extends the admin idle session (an open console now follows
+  the 12 h idle limit); the browser keeps one shared stream per audience per tab instead of one
+  per component. Regression tests in `api/test_sse_stream.py` and
+  `utils/__tests__/sharedEventStream.test.mjs`. Polling stays as the inbox fallback.
+  The console's automatic refreshes (timer, event-driven) send `X-Kg-Background: 1`, which makes
+  `require_admin_token` validate the session without sliding it, so only a person acting keeps a
+  console signed in; a 401 (stream or any support-chat call) signs the console out and returns
+  to `/admin/login`, and the shared stream resets so a new login reconnects.
+- **2026-11-03: human support chat, Phase 3 M0+M1 (no migration).** Server kill switch
+  `KG_SUPPORT_CHAT_ENABLED` (off by default; gates new visitor threads); staff inbox API (list,
+  detail, assign, priority, intent, spam/restore) with masked contact, unread rule, cursor paging,
+  id-only audit and `support_chat.updated` admin-feed events; the presence heartbeat now validates
+  the admin session read-only so it never extends the login (`{active:false}` = idle tab);
+  Persian RTL visitor widget (landing and purchase only, hidden unless the web server sets the same
+  flag) and a «گفتگوهای زنده» tab inside «میز پشتیبانی». Draft `/privacy` page behind
+  `KG_PRIVACY_DRAFT_PAGE`. Blocked on approval: event history table, role table, exclusion marker.
+  Docs: 05 (API), 11 (flags), `docs/superpowers/specs/2026-11-03-phase3-architecture-reconciliation.md`.
 - **Human support chat backend, Phase 2 (`api/support_chat/`).** `SupportThread` /
   `SupportMessage` / `SupportRating` / `SupportPresence` (additive migration `0041`); visitor
   bearer tokens stored as hashes, client-generated tokens make thread creation idempotent;

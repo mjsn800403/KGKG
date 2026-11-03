@@ -7,6 +7,7 @@ import Modal from '@/components/Modal';
 import Guidance from '@/guidance';
 import Analytics from '@/components/Analytics';
 import ContentGuard from '@/components/ContentGuard';
+import SupportChat from '@/support-chat/SupportChat';
 
 export const metadata = {
   // Absolute base for the og:/twitter: image URLs Next derives from the
@@ -70,6 +71,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <Modal />
         <Guidance />
+        {/* Dark unless a person sets KG_SUPPORT_CHAT_ENABLED=1 for the web server
+            (the API has its own switch); when off no code or request is added. */}
+        {process.env.KG_SUPPORT_CHAT_ENABLED === '1' && <SupportChat />}
         <ContentGuard />
       </body>
     </html>

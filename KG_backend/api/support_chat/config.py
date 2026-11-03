@@ -44,6 +44,13 @@ def _int(name, default, minimum=1):
     return value if value >= minimum else default
 
 
+def enabled():
+    """The public kill switch. Off unless a person sets KG_SUPPORT_CHAT_ENABLED=1;
+    it only gates NEW visitor threads, so existing conversations and staff replies
+    keep working while the widget is dark."""
+    return os.environ.get('KG_SUPPORT_CHAT_ENABLED', '').strip() == '1'
+
+
 def reopen_days():
     """How long after closing a visitor may reopen their own thread."""
     return _int('KG_SUPPORT_REOPEN_DAYS', 14)

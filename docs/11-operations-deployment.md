@@ -45,6 +45,9 @@ or RAG dependency. Defaults below are initial values, changed by environment var
 |---|---|---|
 | `KG_SC_POLL`, `KG_SC_SEND`, `KG_SC_SEND_HOUR`, `KG_SC_CONTACT`, `KG_SC_CSAT`, `KG_SC_REOPEN` | `30/60`, `20/60`, `30/3600`, `10/60`, `5/60`, `5/60` | per-thread limits as `count/seconds`; `0/0` switches one off. Poll windows are per gunicorn worker |
 | `KG_SC_CREATE_IP`, `KG_SC_BAD_TOKEN_IP`, `KG_SC_STATUS_IP` | `20/600`, `30/60`, `60/60` | per-IP: new threads, FAILED token checks only, status reads |
+| `KG_SUPPORT_CHAT_ENABLED` | unset (off) | kill switch. Only `1` turns the public chat on: the API then accepts NEW visitor threads (existing threads and staff replies work either way) and, set for the web server too, the landing/purchase widget is rendered. A person flips it, never a deploy; do not set it before the launch gate (docs/superpowers/plans, G2) |
+| `NEXT_PUBLIC_SUPPORT_INBOX_REFRESH_S` | `20` | build-time only: the staff inbox's fallback refresh when the event stream is down. Leave at the default; the E2E stack sets it to 3600 to prove the stream alone delivers |
+| `KG_PRIVACY_DRAFT_PAGE` | unset (off) | web server only. `1` serves the DRAFT `/privacy` page (never indexed, banner says not approved); without it the route is a 404 |
 | `KG_SUPPORT_REOPEN_DAYS` | `14` | how long a visitor may reopen their own closed thread |
 | `KG_SUPPORT_REPLY_TARGET_MINUTES` | unset | published reply target; unset means no promise is shown |
 | `KG_SUPPORT_PRESENCE_WINDOW_S` | `60` | how long a staff ping counts as connected |

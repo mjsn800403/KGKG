@@ -74,6 +74,8 @@ def _insert_visitor_message(thread, text, client_id):
 def create_view(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST only'}, status=405)
+    if not config.enabled():
+        return _not_found()
     ok, retry = throttle.shared_ok('create_ip', throttle.client_ip(request))
     if not ok:
         return throttle.too_many(retry)
