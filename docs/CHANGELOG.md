@@ -180,6 +180,15 @@ short and point at the doc section that was updated.
   and the literal `handled_by='admin'` were updated, each with a comment recording why the
   behaviour changed. Nine new paths added to `docs/openapi.yaml`, caught by the spec gate.
   Migrations `0035_helpdesk_thread_sla_csat`, `0036_knowledge_base` — additive only.
+- **CodeQL critical/high findings.** One `safe_join` (`api/safepath.py`) now builds the paths
+  from names that came from a request, a row or a folder listing (path-injection alerts); the
+  car-database address in `views.get_car_db` is deliberately unchanged, because stored addresses
+  may be absolute and outside the data dir (tests and possibly production rows);
+  year-suffix regexes lose their quadratic `\s*` ends (7 ReDoS); the chat route only forwards a
+  plain session id to Metis (2 request-forgery), assistant links reject control characters, the
+  browser id uses `crypto.randomUUID`, `PartsViewer` no longer builds a selector from a code.
+  Part of #45.
+
 ## 1.1.0 — 2026-10-30 (`deploy-20261030-053247`, `8f6df94`)
 
 Infrastructure and governance. Nothing here changes what a customer sees; all

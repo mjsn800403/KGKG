@@ -311,8 +311,10 @@ function PartsSection({ group, section }) {
   // (block:'nearest' means an already-visible row never jumps).
   useEffect(() => {
     if (active == null || !bodyRef.current) return;
-    const esc = (window.CSS && CSS.escape) ? CSS.escape(active) : active.replace(/"/g, '\\"');
-    const row = bodyRef.current.querySelector(`tr[data-callout="${esc}"]`);
+    // Compare the attribute instead of building a selector from the code: nothing
+    // to escape, so a callout containing quotes or backslashes cannot break out.
+    const row = Array.from(bodyRef.current.querySelectorAll('tr[data-callout]'))
+      .find((tr) => tr.getAttribute('data-callout') === String(active));
     row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [active]);
 

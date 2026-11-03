@@ -26,6 +26,7 @@ from .access import user_car_documents
 from .models import Car
 from .portal import portal_user
 from .ratelimit import rate_limited, require_admin_token
+from .safepath import safe_join
 
 PARTS_DIRNAME = '_parts'
 
@@ -45,16 +46,26 @@ def parts_warehouse_dir():
 
 
 def parts_db_path(car):
-    """Absolute path of a car's parts DB (exists only for parts vehicles)."""
-    return parts_warehouse_dir() / f'{car.car_name}.db'
+    """Absolute path of a car's parts DB (exists only for parts vehicles).
+
+    A car name that is not a plain file name has no parts DB: FileNotFoundError,
+    the same answer as a name with no file."""
+    try:
+        return safe_join(parts_warehouse_dir(), f'{car.car_name}.db')
+    except ValueError as e:
+        raise FileNotFoundError(f'no parts DB for {car.car_name!r}') from e
 
 
 def parts_db_ready(car):
     """True when the car has a built parts DB on disk (TTL-cached stat).
 
     Parts DBs are plain SQLite files, never in PostgreSQL: a manual DB loaded
-    there under the same file name must not make a car look like it has parts."""
-    return cardb.ready_path(parts_db_path(car), pg=False)
+    there under the same file name must not make a car look like it has parts.
+    A car name that is not a plain file name has no parts DB (parts_db_path)."""
+    try:
+        return cardb.ready_path(parts_db_path(car), pg=False)
+    except FileNotFoundError:
+        return False
 
 
 def get_parts_db(car):
@@ -212,17 +223,20 @@ def parts_view(request, brand_name, year, model_name):
                              'detail': str(e)}, status=503)
 
 
-_PARTS_SUFFIX = re.compile(r'\s*\(Parts \d{4}\)\s*$', re.I)
-_YEAR_SUFFIX = re.compile(r'\s*\(\d{4}\)\s*$')
+# No leading/trailing `\s*` in these: they were quadratic on long whitespace
+# runs (CodeQL py/polynomial-redos). Trailing space is trimmed before matching.
+_PARTS_SUFFIX = re.compile(r'\(Parts \d{4}\)$', re.I)
+_YEAR_SUFFIX = re.compile(r'\(\d{4}\)$')
 
 
 def _is_parts_vehicle(car):
-    return bool(_PARTS_SUFFIX.search(car.car_name or ''))
+    return bool(_PARTS_SUFFIX.search((car.car_name or '').rstrip()))
 
 
 def _trim_base(name):
     """'Corolla Cross XLE, AWD (2023)' -> 'corolla cross xle'."""
-    name = _YEAR_SUFFIX.sub('', _PARTS_SUFFIX.sub('', name or ''))
+    name = _PARTS_SUFFIX.sub('', (name or '').rstrip()).rstrip()
+    name = _YEAR_SUFFIX.sub('', name)
     return name.split(',')[0].strip().lower()
 
 

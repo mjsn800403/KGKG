@@ -22,12 +22,38 @@ from pathlib import Path
 from django.conf import settings
 
 from . import partsouq_crawler
+from .safepath import safe_join
 from .partsingest import (CATEGORY_FA, CATEGORY_ORDER, SCHEMA_VERSION, VEHICLE_DB_SCHEMA,
                           load_fa_terms, nfkc, sha1)
 
 MEDIA = '/media/_parts_assets'
-FOLDER = re.compile(r'(?P<model>[A-Za-z0-9]+)_(?P<year>\d{4})_(?P<frame>[A-Za-z0-9-]+)_(?P<vin>[A-HJ-NPR-Z0-9]{17})')
 CAR_NAME = re.compile(r'[\w ()\-.]{3,80}')
+
+_ALNUM = frozenset('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789')
+_FRAME = _ALNUM | {'-'}
+_VIN = frozenset('ABCDEFGHJKLMNPRSTUVWXYZ0123456789')        # a VIN has no I, O or Q
+
+
+def parse_folder(name):
+    """``{'model', 'year', 'frame', 'vin'}`` for a crawl folder named
+    ``<Model>_<year>_<frame>_<VIN>``, else None.
+
+    A split and character sets rather than one regex: the regex form was
+    reported as polynomial (CodeQL py/polynomial-redos) on a name made of a
+    long run of one character, and none of the four parts may contain ``_``,
+    so the split is exact."""
+    if not isinstance(name, str) or len(name) > 120:
+        return None
+    parts = name.split('_')
+    if len(parts) != 4:
+        return None
+    model, year, frame, vin = parts
+    if (model and _ALNUM.issuperset(model)
+            and len(year) == 4 and year.isascii() and year.isdigit()
+            and frame and _FRAME.issuperset(frame)
+            and len(vin) == 17 and _VIN.issuperset(vin)):
+        return {'model': model, 'year': year, 'frame': frame, 'vin': vin}
+    return None
 
 
 class BuildError(Exception):
@@ -55,6 +81,18 @@ def _attrs(tag):
     return {k: H.unescape(v) for k, v in re.findall(r'data-([a-z-]+)="([^"]*)"', tag)}
 
 
+def parse_qty(text):
+    """0-999 from ASCII digits (leading zeros allowed), else None.
+
+    Replaces `^0*(\\d{1,3})$`, which backtracked quadratically on a long run of
+    zeros. The zeros are stripped and the length bounded BEFORE int(), because
+    CPython refuses to convert more than 4,300 digits (ValueError)."""
+    if not (text.isascii() and text.isdigit()):
+        return None
+    sig = text.lstrip('0')
+    return int(sig or '0') if len(sig) <= 3 else None
+
+
 def parse_diagram(path):
     h = path.read_text(encoding='utf-8')
     title = _text((re.search(r'<h2 class="section-title diagram-title">(.*?)</h2>', h, re.S) or [None, ''])[1])
@@ -68,12 +106,12 @@ def parse_diagram(path):
         pills = {H.unescape(k): H.unescape(v) for k, v in
                  re.findall(r'data-detail-label="([^"]*)" data-detail-value="([^"]*)"', b)}
         qd = pills.pop('Qty', '')
-        m = re.match(r'^0*(\d{1,3})$', qd)
+        qty = parse_qty(qd)
         date = pills.pop('Date', '').replace(' » ', ' - ')
         pills.pop('Code', None)
         note = '; '.join(f'{k}: {v}' for k, v in pills.items() if v)
         rows.append(dict(callout=a.get('callout', ''), pn=a.get('part-number') or pn_disp.replace('-', ''),
-                         pn_display=pn_disp, name_en=name, qty=int(m.group(1)) if m else None,
+                         pn_display=pn_disp, name_en=name, qty=qty,
                          qty_display=qd, note=note, date_range=date))
     labels = []
     for tag in re.findall(r'<div[^>]+class="hotspot"[^>]*>', h):
@@ -101,12 +139,15 @@ def frame_info(crawl):
 def build_db(crawl, car, grade, backend=None):
     """Write Database_warehouse/_parts/<car>.db from `crawl`. Returns the counts."""
     backend = Path(backend or settings.BASE_DIR)
-    m = FOLDER.fullmatch(crawl.name)
+    m = parse_folder(crawl.name)
     if not m:
         raise BuildError('folder name is not <Model>_<year>_<frame>_<VIN>')
     frame, vin = m['frame'], m['vin']
     prefix = f'ps_{vin.lower()}_c_'        # shared asset dir: unique per VIN; _c_ = cleaned
-    out = backend / 'Database_warehouse' / '_parts' / f'{car}.db'
+    try:
+        out = safe_join(backend / 'Database_warehouse' / '_parts', f'{car}.db')
+    except ValueError as e:
+        raise BuildError('car name is not a plain file name') from e
     assets = backend / 'static_warehouse' / '_parts_assets'
     fi = frame_info(crawl)
     fa = load_fa_terms(backend)
@@ -198,12 +239,16 @@ def build_and_register(folder, car_name, grade=''):
     from . import cardb
     car_name = (car_name or '').strip()
     grade = (grade or '').strip()[:40]
-    m = FOLDER.fullmatch(folder or '')
+    folder = folder or ''
+    m = parse_folder(folder)
     if not m:
         return None, 'پوشهٔ خزش نامعتبر است.'
     if not CAR_NAME.fullmatch(car_name):
         return None, 'نام خودرو نامعتبر است (۳ تا ۸۰ حرف لاتین، عدد، فاصله یا پرانتز).'
-    crawl = partsouq_crawler.OUT_ROOT / folder
+    try:
+        crawl = safe_join(partsouq_crawler.OUT_ROOT, folder)
+    except ValueError:
+        return None, 'پوشهٔ خزش نامعتبر است.'
     if not (crawl / 'pages' / 'groups.html').is_file():
         return None, 'این خزش صفحهٔ گروه‌ها را ندارد.'
     if partsouq_crawler.status()['running']:

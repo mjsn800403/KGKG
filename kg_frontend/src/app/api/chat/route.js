@@ -11,6 +11,7 @@
 
 import { faTitle, faTitleBoth, collectPairs, faTermsSet } from '../../../lib/faTerms';
 import { contextualize } from '../../../lib/contextualize';
+import { isSafeSessionId, metisPath } from '../../../lib/safeUrl';
 import {
   sanitizeHistory, sanitizePrevSources, historyBlock,
   collectAllowedHrefs, collectAllowedHrefsDiag, sanitizeButtons,
@@ -144,7 +145,7 @@ async function translateQuery(q, enabled = MQ_TRANSLATE) {
   if (_mqCache.has(key)) return _mqCache.get(key);
   try {
     const { out: reply } = await withFallback(null, { id: 'mq-translate', name: '_' },
-      (s) => metis(`session/${s}/message`, {
+      (s) => metis(metisPath('session', s), {
         message: { type: 'USER', content: TRANSLATE_PROMPT + key },
       }));
     let out = (reply?.content ?? '').trim().split('\n')[0].replace(/^["'`]|["'`]$/g, '').trim();
@@ -744,7 +745,9 @@ export async function POST(request) {
     //    dependency, so any failure (unconfigured / down / timeout / over budget)
     //    degrades to a deterministic no-LLM digest of what we already retrieved,
     //    instead of failing the whole request.
-    let sid = sessionId;
+    // The browser sends this id back; it becomes a path segment of a request that
+    // carries our API key, so anything but a plain id starts a fresh session.
+    let sid = isSafeSessionId(sessionId) ? sessionId : null;
     let rawReply = null;
     let degraded = false;
 
@@ -799,7 +802,7 @@ export async function POST(request) {
             let streamed = false;
             const r = await withFallback(sid,
               { id: userId || `web-${Date.now()}`, name: '_' },
-              (s) => metisStream(`session/${s}/message`, {
+              (s) => metisStream(metisPath('session', s), {
                 message: { type: 'USER', content: prompt },
               }, (d) => { streamed = true; send({ t: 'delta', d }); }, fromFinancial),
               () => !streamed);
@@ -833,7 +836,7 @@ export async function POST(request) {
         const tl = Date.now();
         const r = await withFallback(sid,
           { id: userId || `web-${Date.now()}`, name: '_' },
-          (s) => metis(`session/${s}/message`, {
+          (s) => metis(metisPath('session', s), {
             message: { type: 'USER', content: prompt },
           }));
         const reply = r.out;
