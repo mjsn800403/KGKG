@@ -71,6 +71,19 @@ if [[ -n $TOKEN ]]; then
         -d '{"query":"engine oil capacity","brand":"Toyota","model":"Corolla Cross"}' "$BE/api/assist/"
   contains "retrieval returns hits" '"hits"'
   check "car page (SSR, signed-in)" 200 -H "Cookie: kg_portal_token=$TOKEN" "$FE/toyota/2025/corolla-cross"
+
+  # Fleet flags against what the manual and parts endpoints actually do, for the
+  # vehicles this token is granted (GET only, token read from the environment).
+  # Checks the data behind the parts-catalog chip, not the rendered component.
+  # Required checks that find no vehicle to run on print SKIP, never ok;
+  # KG_SMOKE_STRICT=1 makes that a failure. See smoke_fleet.py.
+  echo "== fleet flags + parts catalog (staging token)"
+  if command -v python3 >/dev/null 2>&1; then
+    KG_SMOKE_TOKEN="$TOKEN" python3 -I "$(dirname "${BASH_SOURCE[0]}")/smoke_fleet.py" "$BE" \
+      || FAILS=$((FAILS+1))
+  else
+    printf '  FAIL  %-38s python3 is required\n' "fleet flags + parts catalog"; FAILS=$((FAILS+1))
+  fi
 fi
 
 if [[ -n ${KG_SMOKE_NGINX:-} ]]; then

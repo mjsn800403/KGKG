@@ -209,6 +209,13 @@ _DROP_CRUMB_TOKENS = ('other variant',)
 # fall back to the title-anchored guard alone without a deploy.
 NEARMISS_GUARD = os.environ.get('RAG_NEARMISS_GUARD', '1') != '0'
 
+# When the scope guard finds the asked-for component (or the cited page's
+# title) is not documented for the pinned vehicle, refuse instead of only
+# flagging it: the chat layer keeps just the pinned car's pages, so a flag
+# alone still let an unrelated page of that car be cited (A-05, #29). On by
+# default; RAG_ABSENT_REFUSES=0 restores flag-only.
+ABSENT_REFUSES = os.environ.get('RAG_ABSENT_REFUSES', '1') != '0'
+
 # comp_readable is a breadcrumb, not a component name: its last segments are
 # actions and page kinds ("... > Millimeter Wave Radar Sensor > Removal >
 # Procedure"). Walking back past those lands on the component itself. Shared by

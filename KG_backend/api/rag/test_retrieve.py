@@ -240,6 +240,60 @@ class CarNotIndexedGateTest(unittest.TestCase):
         self.assertIsNone(res.get('out_of_scope'))
 
 
+class AbsentComponentRefusalTest(unittest.TestCase):
+    """A-05 (#29): when the scope guard reports the asked-for component is not
+    documented for the pinned vehicle, the answer is refused, not grounded on
+    that vehicle's nearest unrelated page."""
+
+    def setUp(self):
+        self._h = RetrieveIntegrationTest()
+        self._h.setUp()
+        self._orig = retrieve._evidence_scope
+
+    def tearDown(self):
+        retrieve._evidence_scope = self._orig
+        self._h.tearDown()
+
+    def _with_evidence(self, **flags):
+        def fake(index, hits, car_stem, global_comp=None):
+            ev = {'scope': 'in_vehicle', 'source_car_stem': car_stem,
+                  'title_in_vehicle': None, 'hits_in_vehicle': len(hits),
+                  'hits_total': len(hits), 'title_absent_from_vehicle': False,
+                  'component_absent_from_vehicle': False}
+            ev.update(flags)
+            return ev
+        retrieve._evidence_scope = fake
+        return retrieve.assist('brake fluid', brand='Toyota', model='Corolla',
+                               car_stem='Corolla')
+
+    def test_component_absent_is_refused(self):
+        res = self._with_evidence(component_absent_from_vehicle=True)
+        self.assertFalse(res['grounded'])
+        self.assertEqual(res['out_of_scope'], 'component_absent_from_vehicle')
+        self.assertEqual(res['confidence_band']['band'], 'low')
+
+    def test_title_absent_is_refused(self):
+        res = self._with_evidence(scope='cross_vehicle',
+                                  title_absent_from_vehicle=True)
+        self.assertFalse(res['grounded'])
+        self.assertEqual(res['out_of_scope'], 'title_absent_from_vehicle')
+
+    def test_present_component_still_answers(self):
+        res = self._with_evidence()
+        self.assertTrue(res['grounded'])
+        self.assertIsNone(res.get('out_of_scope'))
+
+    def test_switch_off_restores_flag_only(self):
+        orig = config.ABSENT_REFUSES
+        config.ABSENT_REFUSES = False
+        try:
+            res = self._with_evidence(component_absent_from_vehicle=True)
+        finally:
+            config.ABSENT_REFUSES = orig
+        self.assertTrue(res['grounded'])
+        self.assertEqual(res['out_of_scope'], 'component_absent_from_vehicle')
+
+
 class AppUrlTest(unittest.TestCase):
     """The citation URL must round-trip through the frontend router: one
     breadcrumb title == one percent-encoded path segment, always with a
