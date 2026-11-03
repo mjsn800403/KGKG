@@ -359,6 +359,8 @@ class OtpLoginTests(_PortalBase):
         self.assertIsNotNone(AuthToken.resolve(r.json()['token']))
         self.assertFalse(OtpChallenge.objects.filter(user=self.user).exists())
         self.assertEqual(self.verify(sid, code).status_code, 401)
+        self.user.refresh_from_db()
+        self.assertIsNotNone(self.user.last_login_at)   # #49: OTP path moves it too
 
     def test_otp_disabled_account_logs_in_with_password_only(self):
         self.user.otp_enabled = False

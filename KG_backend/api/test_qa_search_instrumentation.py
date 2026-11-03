@@ -16,7 +16,6 @@ Run:  python manage.py test api.test_qa_search_instrumentation
 """
 import sys
 import types
-import unittest
 from unittest import mock
 
 from django.test import Client, TestCase
@@ -94,11 +93,8 @@ class SearchIsInstrumentedTests(QAUsersMixin, TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(SearchLog.objects.get(user_id=self.alice.id).results, 0)
 
-    @unittest.expectedFailure   # mjsn800403/KGKG#48 — fallback records nothing
     def test_a_search_served_by_the_keyword_fallback_is_recorded_too(self):
-        """KNOWN DEFECT, issue #48. Kept as an executable description of the
-        bug rather than deleted: when it starts passing, the marker fails the
-        build and whoever fixed it is told to remove it.
+        """Regression guard for #48.
 
         When the semantic index is missing the view degrades to the old SQL
         LIKE search. That is still a search the person performed: if it is not
