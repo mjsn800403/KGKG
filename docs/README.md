@@ -37,6 +37,7 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [18 — Security hardening](18-security-hardening.md) | Secret/token rotation, nginx rate limiting, ModSecurity+CRS WAF, GlitchTip error monitoring |
 | [19 — Engineer onboarding](19-onboarding.md) | Day 1 / week 1 / month 1 path for a new engineer, with a check per step; how knowledge is handed over |
 | [20 — Runbooks](20-runbooks.md) | Site down, false alerts, slowness, failed deploy, AI provider outage, disk, restore, adding a vehicle, SMS paging |
+| [21 — CSRF-exempt views](21-csrf-exempt-views.md) | Every @csrf_exempt view, how it authenticates, why it is safe; registry + Origin guard |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |
 | [CHANGELOG](CHANGELOG.md) | Dated log of shipped changes, newest first |
 
