@@ -492,7 +492,12 @@ def search_view(request):
         # LIKE fallback resolves a single car and is gated above, so it needs no
         # extra allow-list (a car-less LIKE search returns nothing).
         try:
-            return _search_like_fallback(brand, model, car, q, limit)
+            results = _search_like_fallback(brand, model, car, q, limit)
+            # Still a search the person performed: record it, or the content-gap
+            # reporting under-counts exactly where the index is broken (#48).
+            from .insights import record_search
+            record_search(_user, q, car or model, results, _t0)
+            return JsonResponse(results, safe=False)
         except Exception as e:
             return JsonResponse({'error': _log_err(e)}, status=500)
     except Exception as e:
@@ -501,14 +506,15 @@ def search_view(request):
 
 def _search_like_fallback(brand, model, car, q, limit):
     """Per-car SQL LIKE search (the previous behaviour), used only when the
-    semantic index is absent. Mirrors car_view's ?q branch."""
+    semantic index is absent. Mirrors car_view's ?q branch. Returns the result
+    rows; the caller records the search and builds the response."""
     stem = car or model
     qs = Car.objects.all()
     if brand:
         qs = qs.filter(brand_name__iexact=brand)
     car_obj = qs.filter(car_name__iexact=stem).first() if stem else None
     if car_obj is None:
-        return JsonResponse([], safe=False)
+        return []
     conn = get_car_db(car_obj.db_address)
     cur = conn.cursor()
     like = f'%{cardb.like_escape(q)}%'
@@ -529,7 +535,7 @@ def _search_like_fallback(brand, model, car, q, limit):
             'is_leaf': row['content'] is not None,
             'segments': cardb.breadcrumbs(conn, row['id']),
         })
-    return JsonResponse(results, safe=False)
+    return results
 
 def get_car_db(db_address):
     """Pooled, read-only connection to a car-specific database.
