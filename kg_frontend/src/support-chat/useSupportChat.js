@@ -285,6 +285,7 @@ export default function useSupportChat() {
     close: () => dispatch({ type: 'panel', open: false }),
     setIntent: (intent) => dispatch({ type: 'intent', intent }),
     send, retry, saveContact, reopen, rate, newChat, forget: newChat,
+    getDraft: store.draft, saveDraft: store.saveDraft,
     clearNotice: () => setNotice(null),
     retrySecurity: () => { setSecurity('idle'); setNotice(null); },
     ackGone: () => dispatch({ type: 'reset' }),

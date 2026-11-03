@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { makeToken, isToken, makeClientId } from '../token.js';
-import { createStore, QUEUE_MAX, QUEUE_TTL_MS, THREAD_KEY, QUEUE_KEY } from '../storage.js';
+import { createStore, QUEUE_MAX, QUEUE_TTL_MS, THREAD_KEY, QUEUE_KEY, DRAFT_KEY, DRAFT_MAX } from '../storage.js';
 
 const bytes = (fill) => () => new Uint8Array(32).fill(fill);
 
@@ -142,4 +142,45 @@ test('onChange fires on save, enqueue and forget and can be unsubscribed', () =>
   off();
   s.saveThread({ threadId: 't', token: 'k'.repeat(43) });
   assert.equal(n, 3);
+});
+
+test('a half-typed draft survives a reload in this tab only, never in localStorage', () => {
+  const local = fakeStorage();
+  const session = fakeStorage();
+  const s = createStore({ local, session });
+  s.saveDraft('قیمت اشتراک سالانه چند است');
+  assert.equal(createStore({ local, session }).draft(), 'قیمت اشتراک سالانه چند است');
+  assert.ok(![...local.raw.values()].some((v) => v.includes('اشتراک')));
+  assert.ok(session.raw.has(DRAFT_KEY));
+});
+
+test('an empty or whitespace draft clears the stored one; the draft is capped', () => {
+  const session = fakeStorage();
+  const s = createStore({ local: fakeStorage(), session });
+  s.saveDraft('x'.repeat(DRAFT_MAX + 50));
+  assert.equal(s.draft().length, DRAFT_MAX);
+  s.saveDraft('   ');
+  assert.equal(s.draft(), '');
+  assert.equal(session.raw.has(DRAFT_KEY), false);
+  s.saveDraft(undefined);
+  assert.equal(s.draft(), '');
+});
+
+test('a draft expires after a day and forget() removes it', () => {
+  let t = 1000;
+  const s = createStore({ local: fakeStorage(), session: fakeStorage(), now: () => t });
+  s.saveDraft('hello');
+  t += QUEUE_TTL_MS - 1;
+  assert.equal(s.draft(), 'hello');
+  t += 2;
+  assert.equal(s.draft(), '');
+  s.saveDraft('again');
+  s.forget();
+  assert.equal(s.draft(), '');
+});
+
+test('storage that throws never breaks draft saving or reading', () => {
+  const s = createStore({ local: throwing(), session: throwing() });
+  assert.doesNotThrow(() => s.saveDraft('still typing'));
+  assert.equal(s.draft(), 'still typing');
 });
