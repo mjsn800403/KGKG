@@ -47,7 +47,12 @@ activity beacons (portal), team changes (`team.member.added/updated`,
 
 `src/utils/useEventStream.js` — fetch-based SSE reader (native EventSource can't send the
 Bearer header): parses frames, tracks the cursor, auto-reconnects with backoff, exposes
-connection status. Consumers:
+connection status. The connector itself is `src/utils/eventStreamConnector.js` (environment
+injected, unit-tested): silence for 45 s (three missed heartbeats) tears the stream down and reopens
+it; failed attempts back off 3, 6, 12 s... capped at 60 s with +/-25% jitter and reset after a
+successful open; the browser's `online` event reconnects at once; a 401 reports `unauthorized`
+and stops. The support inbox shows a notice while live updates are down and keeps its 20 s refresh.
+Consumers:
 
 - **AdminDashboard** — KPIs, live processing progress bars, new requests, alerts, activity
   and event ticker.
