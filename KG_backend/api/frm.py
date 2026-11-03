@@ -11,6 +11,8 @@ import os
 
 from django.conf import settings
 
+from .safepath import safe_join
+
 # slug -> (brand, family prefix, years whose cars unlock it)
 FRM_SETS = {
     'toyota-corolla-cross': ('Toyota', 'Corolla Cross', (2025,)),
@@ -18,8 +20,10 @@ FRM_SETS = {
 
 
 def _path(slug):
+    """JSON file of one data set. Only the known slugs in FRM_SETS have one, and
+    the name is also checked to stay inside the folder."""
     base = os.path.join(str(settings.BASE_DIR), 'Database_warehouse', '_frm')
-    return os.path.join(base, '%s.json' % slug)
+    return str(safe_join(base, '%s.json' % slug))
 
 
 def frm_view(request, slug):

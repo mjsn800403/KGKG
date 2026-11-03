@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import hostjobs, tis_crawler
+from .safepath import safe_join
 
 OUT_ROOT = Path(os.environ.get('KG_PS_DIR', '/root/partsouq_crawl'))
 # On the host (the backend container has no ops/ tree; it asks the host to run it).
@@ -129,7 +130,7 @@ def spawn_crawl(unit, url, name):
         raise ValueError('bad crawl request')
     if not PYTHON.exists() or not SCRIPT.is_file():
         raise FileNotFoundError(f'crawler missing: {PYTHON} / {SCRIPT}')
-    out = OUT_ROOT / name
+    out = safe_join(OUT_ROOT, name)          # ValueError if name would leave OUT_ROOT
     out.mkdir(parents=True, exist_ok=True)
     subprocess.run(['systemd-run', '--unit', unit, '--collect', '--quiet',
                     '-p', 'StandardOutput=append:%s' % (out / 'run.log'),

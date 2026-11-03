@@ -17,9 +17,10 @@ Nothing here ever writes to the original car databases or db.sqlite3. Every
 artefact lives under Database_warehouse/_rag/ and can be deleted to fully revert.
 """
 import os
-import re
 from pathlib import Path
 from django.conf import settings
+
+from api.safepath import safe_join, split_year_suffix
 
 # ---------------------------------------------------------------------------
 # Filesystem layout
@@ -45,8 +46,10 @@ DIAG_DIR = RAG_DIR / 'diag'
 
 
 def diag_db_path(car_stem):
-    """Sidecar DB path for one car (keyed by the on-disk DB filename stem)."""
-    return DIAG_DIR / f'{car_stem}.diag.db'
+    """Sidecar DB path for one car (keyed by the on-disk DB filename stem).
+
+    ValueError when the stem would leave DIAG_DIR (it is user input upstream)."""
+    return safe_join(DIAG_DIR, f'{car_stem}.diag.db')
 
 # Folders / files inside the warehouse that are NOT cars (skip when globbing).
 _NON_CAR_PREFIXES = ('_rag', '_backup')
@@ -134,16 +137,10 @@ _LEXUS_PREFIXES = ('NX', 'RX', 'ES', 'IS', 'UX', 'GX', 'LX', 'LS', 'RC', 'LC')
 # Multi-year stems: the 2025 fleet keeps plain names; other model years carry
 # a " (YYYY)" suffix (e.g. 'Corolla Cross LE, FWD (2023)') so the same trim
 # can exist for several years as distinct cars. See htmlparser_logical.
-_STEM_YEAR_RE = re.compile(r'\s*\((\d{4})\)\s*$')
-
-
 def split_stem_year(car_stem):
     """('Corolla Cross LE, FWD', 2023) for a year-suffixed stem;
     (stem, None) for a plain one."""
-    m = _STEM_YEAR_RE.search(car_stem)
-    if m:
-        return car_stem[:m.start()].strip(), int(m.group(1))
-    return car_stem, None
+    return split_year_suffix(car_stem)
 
 
 def display_name(car_stem):

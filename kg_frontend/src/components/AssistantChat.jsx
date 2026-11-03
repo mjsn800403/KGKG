@@ -6,6 +6,7 @@ import EvidencePanel from './EvidencePanel';
 import FeedbackBar from './FeedbackBar';
 import { rateAnswer, chatFeedback } from '../utils/api';
 import { track } from '../utils/analytics';
+import { isInternalHref, newClientId } from '../lib/safeUrl';
 
 // Renders bot text and turns markdown links into clickable elements.
 // Supports both [label](href) and the instruction's [BUTTON](title="..", href="..")
@@ -81,7 +82,7 @@ function RenderReply({ text, streaming = false }) {
     // keeps the retrieved ones). So render ONLY internal "/..." hrefs as links;
     // anything else is a hallucinated/injected URL — show its label as plain
     // text, never an anchor. This also neutralises javascript:/data:/phishing.
-    if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/\\')) {
+    if (isInternalHref(href)) {
       nodes.push(
         <Link key={key++} href={href} className="chat-action-btn">
           {label} ←
@@ -144,7 +145,7 @@ export default function AssistantChat({ brand, year, model, car } = {}) {
     try {
       uid = localStorage.getItem('kg_assistant_uid');
       if (!uid) {
-        uid = `web-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+        uid = newClientId();
         localStorage.setItem('kg_assistant_uid', uid);
       }
     } catch {
