@@ -57,15 +57,19 @@ def parts_db_path(car):
 
 
 def parts_db_ready(car):
-    """True when the car has a built parts DB on disk (TTL-cached stat)."""
+    """True when the car has a built parts DB on disk (TTL-cached stat).
+
+    Parts DBs are plain SQLite files, never in PostgreSQL: a manual DB loaded
+    there under the same file name must not make a car look like it has parts.
+    A car name that is not a plain file name has no parts DB (parts_db_path)."""
     try:
-        return cardb.ready_path(parts_db_path(car))
+        return cardb.ready_path(parts_db_path(car), pg=False)
     except FileNotFoundError:
         return False
 
 
 def get_parts_db(car):
-    return cardb.connect(parts_db_path(car))
+    return cardb.connect(parts_db_path(car), pg=False)
 
 
 def _unauthorized():

@@ -50,13 +50,14 @@ def _pragmas(conn):
     cur.close()
 
 
-def connect(path):
+def connect(path, pg=True):
     """Read-only pooled connection to ``path`` for the current thread.
 
     Cars listed in KG_CARDB_PG are served from PostgreSQL (see cardb_pg); if
-    PostgreSQL is unreachable they fall back to their SQLite file."""
+    PostgreSQL is unreachable they fall back to their SQLite file. ``pg=False``
+    always opens the SQLite file (see ready_path)."""
     path = str(path)
-    if cardb_pg.pg_cars():
+    if pg and cardb_pg.pg_cars():
         try:
             pgc = cardb_pg.connect(path)
         except Exception:
@@ -128,18 +129,23 @@ _ready_cache = {}
 _ready_lock = threading.Lock()
 
 
-def ready_path(path):
-    """Does the car DB file exist? stat() at most once per READY_TTL_S."""
+def ready_path(path, pg=True):
+    """Does the car DB file exist? stat() at most once per READY_TTL_S.
+
+    ``pg=False`` is for warehouses that only ever hold SQLite files (parts):
+    PostgreSQL readiness is looked up by file *basename*, so a parts DB that
+    shares its name with a loaded manual DB would otherwise read as present."""
     path = str(path)
+    key = path if pg else ('file', path)
     now = time.monotonic()
     with _ready_lock:
-        hit = _ready_cache.get(path)
+        hit = _ready_cache.get(key)
         if hit is not None and now - hit[1] < READY_TTL_S:
             return hit[0]
     # a car served from PostgreSQL may no longer have its SQLite file
-    ok = os.path.isfile(path) or cardb_pg.is_pg(path)
+    ok = os.path.isfile(path) or (pg and cardb_pg.is_pg(path))
     with _ready_lock:
-        _ready_cache[path] = (ok, now)
+        _ready_cache[key] = (ok, now)
         if len(_ready_cache) > 4096:       # bound: prune expired entries
             for k in [k for k, v in _ready_cache.items() if now - v[1] >= READY_TTL_S]:
                 _ready_cache.pop(k, None)

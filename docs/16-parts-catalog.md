@@ -69,7 +69,13 @@ static_warehouse/_parts_assets/*.gif        shared diagram images (nginx /kg-api
 - `utils/api.jsx`: `fetchPartsRoot`, `fetchPartsNodes`.
 - Vehicle root page fetches manuals + parts in parallel and renders whichever
   exists (parts-only vehicles no longer dead-end); fleet tiles show a
-  «کاتالوگ قطعات» chip from `has_parts`.
+  «کاتالوگ قطعات» chip only for catalog-only vehicles
+  (`lib/vehicleContent.isPartsOnly`: `has_parts` true and `has_manual` false).
+- `has_parts` comes from `parts_db_ready`, which checks the SQLite file only
+  (`cardb.ready_path(..., pg=False)`): PostgreSQL readiness matches by file
+  basename, so a manual DB loaded there under the same name would otherwise
+  make every such car report a parts catalog. Parts DBs are never read from
+  PostgreSQL (`get_parts_db` uses `pg=False`).
 - Styles: `.parts-*` block appended to `globals.css`.
 - Activity: pages beacon `action='parts_view'` with an explicit canonical
   `category` (EPC category → engine/transmission/body/electrical).

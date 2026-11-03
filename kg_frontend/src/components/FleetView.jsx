@@ -11,10 +11,12 @@ import OnboardingStrip from './OnboardingStrip';
 import { useVehicleFilter } from './VehicleFilter';
 import VehicleGroupList from './VehicleGroupList';
 import { frmVehicleRows, FRM_TITLE } from '@/utils/frmSets';
+import { isPartsOnly } from '@/lib/vehicleContent';
 
 const MotionLink = motion.create(Link);
 
 function FleetCard({ c, i }) {
+  const partsOnly = isPartsOnly(c);
   return (
     <MotionLink
       href={c.frm ? `/frm/${c.frm}` : `/${encodeURIComponent(c.brand_name)}/${c.year}/${encodeURIComponent(c.car_name)}`}
@@ -26,14 +28,15 @@ function FleetCard({ c, i }) {
     >
       <div className="tag">{String(c.brand_name).toUpperCase()} / {c.year}</div>
       <h4>{c.car_name}</h4>
-      {/* has_parts is additive backend data — older payloads simply
-          render no chip. Parts-only vehicles say what they open into. */}
-      {c.has_parts && (
+      {/* The chip marks catalog-only vehicles (see lib/vehicleContent) — a
+          vehicle that also has manuals is not labelled. Older payloads
+          without has_manual render no chip. */}
+      {partsOnly && (
         <div className="fleet-parts-chip">کاتالوگ قطعات</div>
       )}
       {c.frm && <div className="frm-chip">{FRM_TITLE}</div>}
       <div className="yrs">
-        {c.has_parts && c.has_manual === false
+        {partsOnly
           ? 'مشاهده کاتالوگ قطعات ←'
           : 'مشاهده مستندات ←'}
       </div>
