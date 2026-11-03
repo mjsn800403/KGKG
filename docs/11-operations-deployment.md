@@ -14,10 +14,47 @@ Everything lives in `/opt/KGKG` (git working copy = deployed copy). Python venv:
 | `kgkg-frontend.service` (retired; containers serve now — see 11.3) | `npm run start` (Next.js) on `:3000`; env from `kg_frontend/.env.production` |
 | `nginx` | Reverse proxy on `:80` (see 11.2) |
 | `kgkg-alerts.timer` → service | `manage.py check_alerts` every 5 min (alert sweep + retention pruning) |
+| `kgkg-outbox.timer` → service | `manage.py process_outbox` every minute. **Not installed**; unit templates in `ops/outbox/`. See "Notification outbox" below |
 | `kgkg-watchdog.timer` → service | `ops/observability/watchdog.py` every 5 min — watches the alert sweep itself and pages by SMS if nobody is watching |
 | `kgkg-pipeline.timer` → service | `manage.py pipeline_tick` every 5 min (watchdog / scheduler / autopilot) |
 | `kgkg-detect.timer` → service | `manage.py realtime_tick` every 30 s (change detector → events) |
 | `kgkg-pipeline-job<id>-a<n>` | Transient units for detached pipeline workers (systemd-run, Nice 15 / CPUWeight 25 / IO idle) |
+
+### Notification outbox
+
+Support SMS/email go through the `NotificationOutbox` table (`api/notifications/`), never straight
+to a provider. Rows are sent by `process_outbox` (and an opportunistic thread), retried at
+1/5/15/60/240 minutes, then marked `dead` and surfaced as the `notify:dead` alert.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `KG_NOTIFY_SMS`, `KG_NOTIFY_EMAIL` | `off` | `off` writes rows as `suppressed` and sends nothing; `dry_run` renders and logs only; `live` contacts the provider. Any other value is `off` |
+| `KG_NOTIFY_SMS_MAX_PER_HOUR` | `10` | Live SMS cap; rows over it are deferred 10 minutes, never dropped |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `KG_NOTIFY_FROM_EMAIL` | unset | SMTP settings; email fails closed (`email not configured`) without them |
+
+`sent` means the provider accepted the message, not that it was delivered. Activation order:
+install the timer (a person, on the server), set a channel to `dry_run`, review the rows, then
+get the owner's explicit approval before `live`.
+
+### Support chat (human-operated)
+
+`api/support_chat/` serves the landing-page and customer conversations with real staff. It has no AI, LLM
+or RAG dependency. Defaults below are initial values, changed by environment variable.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `KG_SC_POLL`, `KG_SC_SEND`, `KG_SC_SEND_HOUR`, `KG_SC_CONTACT`, `KG_SC_CSAT`, `KG_SC_REOPEN` | `30/60`, `20/60`, `30/3600`, `10/60`, `5/60`, `5/60` | per-thread limits as `count/seconds`; `0/0` switches one off. Poll windows are per gunicorn worker |
+| `KG_SC_CREATE_IP`, `KG_SC_BAD_TOKEN_IP`, `KG_SC_STATUS_IP` | `20/600`, `30/60`, `60/60` | per-IP: new threads, FAILED token checks only, status reads |
+| `KG_SUPPORT_CHAT_ENABLED` | unset (off) | kill switch. Only `1` turns the public chat on: the API then accepts NEW visitor threads (existing threads and staff replies work either way) and, set for the web server too, the landing/purchase widget is rendered. A person flips it, never a deploy; do not set it before the launch gate (docs/superpowers/plans, G2) |
+| `NEXT_PUBLIC_SUPPORT_INBOX_REFRESH_S` | `20` | build-time only: the staff inbox's fallback refresh when the event stream is down. Leave at the default; the E2E stack sets it to 3600 to prove the stream alone delivers |
+| `KG_PRIVACY_DRAFT_PAGE` | unset (off) | web server only. `1` serves the DRAFT `/privacy` page (never indexed, banner says not approved); without it the route is a 404 |
+| `KG_SUPPORT_REOPEN_DAYS` | `14` | how long a visitor may reopen their own closed thread |
+| `KG_SUPPORT_REPLY_TARGET_MINUTES` | unset | published reply target; unset means no promise is shown |
+| `KG_SUPPORT_PRESENCE_WINDOW_S` | `60` | how long a staff ping counts as connected |
+| `KG_SUPPORT_RETENTION_*_DAYS`, `KG_SUPPORT_RETENTION_ENABLED` | proposals / unset | `purge_support_chat` reports against proposed periods; deletion needs `ENABLED=1` and `--apply`, and no policy is approved yet |
+
+Chat routes are excluded from `AuditLog` request bodies (`api/audit.py` skip list); staff actions are
+audited by id only. Backups keep deleted data until their own retention expires.
 
 ### Environment files
 

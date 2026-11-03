@@ -1,0 +1,42 @@
+/* Staff conversations tab. Theme tokens only; logical properties. */
+.scx-desk { display: flex; flex-direction: column; gap: 12px; }
+.scx-tabs { display: flex; gap: 6px; }
+.scx-tabs button, .scx-filters button, .scx-avail button, .scx-actions button, .scx-compose button {
+  min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit;
+}
+.scx-tabs .is-on, .scx-filters .is-on, .scx-avail .is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.scx button:disabled { opacity: .5; cursor: not-allowed; }
+.scx-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 10px; }
+.scx-avail, .scx-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.scx-grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 12px; min-height: 480px; }
+.scx-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+.scx-row { width: 100%; text-align: start; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+.scx-row.is-sel { border-color: var(--accent); }
+.scx-row-top, .scx-row-bot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.scx-snippet { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scx-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; }
+.scx-chip { padding: 1px 8px; border-radius: 999px; background: var(--surface-3); font-size: 12px; }
+.scx-chip-hot { background: var(--accent); color: #fff; }
+.scx-muted { color: var(--text-dim); font-size: 12.5px; }
+.scx-empty { color: var(--text-dim); padding: 24px; text-align: center; }
+.scx-err { color: var(--accent); padding: 6px 0; }
+.scx-pane { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); min-width: 0; }
+.scx-pane-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px; border-bottom: 1px solid var(--border-soft); }
+.scx-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
+.scx-actions select { min-height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); padding: 0 8px; font: inherit; }
+.scx-contact { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; margin-top: 4px; }
+.scx-link { border: 0; background: none; color: var(--accent); cursor: pointer; text-decoration: underline; font: inherit; }
+.scx-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; max-height: 50vh; }
+.scx-msg { max-width: 80%; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.scx-visitor { align-self: flex-start; }
+.scx-admin { align-self: flex-end; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.scx-system { align-self: center; font-size: 12.5px; color: var(--text-dim); }
+.scx-note { border-style: dashed; background: color-mix(in srgb, #d9a431 14%, var(--surface)); }
+.scx-msg-meta { font-size: 12px; color: var(--text-dim); margin-bottom: 2px; }
+.scx-msg-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.scx-compose { border-top: 1px solid var(--border-soft); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.scx-compose textarea { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text); font: inherit; resize: vertical; }
+.scx-compose-bar { display: flex; justify-content: space-between; align-items: center; }
+.scx-compose-bar button { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (max-width: 860px) { .scx-grid { grid-template-columns: minmax(0, 1fr); } .scx-log { max-height: 40vh; } }
