@@ -128,6 +128,16 @@ not by a setting in GitHub.
    a **sanitized copy** of the production database, migrate it, and smoke the
    signed-in paths with a QA token minted in the copy. Production is untouched.
    The result is recorded in `/opt/KGKG_release/staging.env`.
+
+   The signed-in smoke includes `ops/deploy/smoke_fleet.py` (read-only GETs):
+   for the vehicles the QA account is granted, the `/api/auth/fleet/` flags
+   `has_manual` / `has_parts` must agree with the manual and parts endpoints,
+   and a parts catalog must be walkable to a leaf with part rows. It sees only
+   what that account is granted, so a category with no vehicle prints `SKIP`
+   (the check did not run, it did not pass); `KG_SMOKE_STRICT=1` fails the run
+   on such a skip. Staging shares the production `kgkg_vec` and `_parts`, so
+   these checks are real-data evidence, and they prove the flags and endpoints,
+   not that the chip renders. Its own tests: `smoke_fleet.py --selftest`.
 4. **Promotion, by hand:**
 
    ```bash

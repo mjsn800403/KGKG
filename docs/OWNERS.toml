@@ -90,7 +90,7 @@ review_days = 180
 
 ["11-operations-deployment.md"]
 owner = ["mjsalimin", "Ali Sartipi"]
-reviewed = 2026-10-29
+reviewed = 2026-11-03
 review_days = 180
 
 ["12-security.md"]
