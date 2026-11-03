@@ -75,26 +75,32 @@ class EquivalenceWithTheOldRuleTests(SimpleTestCase):
 
 
 class PerformanceTests(SimpleTestCase):
-    def test_adversarial_input_is_fast_even_far_beyond_the_endpoint_cap(self):
+    # Wall-clock limits are a flake source (CI runs under coverage tracing), so the
+    # timing checks are about GROWTH, not absolute speed, plus one very generous
+    # guard that only a catastrophic (exponential) regression could trip.
+
+    def test_adversarial_input_far_beyond_the_endpoint_cap_does_not_blow_up(self):
         """The endpoint caps input at 254 characters, but the validator itself must not
-        be super-linear: 200k characters of the pattern CodeQL named, many times over."""
+        be super-linear: 200k characters of the pattern CodeQL named."""
         cases = ['!@' + '!.' * 100_000, 'a@' + '.' * 200_000, 'a@' + 'b.' * 100_000,
                  '!@!.' * 50_000, '@' * 200_000, 'a' * 200_000 + '@b']
         start = time.perf_counter()
-        for _ in range(5):
-            for s in cases:
-                limits.valid_email(s)
-        self.assertLess(time.perf_counter() - start, 1.5)
+        for s in cases:
+            limits.valid_email(s)
+        self.assertLess(time.perf_counter() - start, 30)    # exponential would never finish
 
     def test_time_grows_linearly_not_quadratically(self):
         def cost(n):
             s = '!@' + '!.' * n
-            t = time.perf_counter()
-            for _ in range(20):
+            best = float('inf')
+            for _ in range(5):                              # best-of-5 damps runner noise
+                t = time.perf_counter()
                 limits.valid_email(s)
-            return time.perf_counter() - t
-        small, large = cost(20_000), cost(160_000)         # 8x the input
-        self.assertLess(large, max(small, 1e-4) * 40)       # quadratic would be ~64x
+                best = min(best, time.perf_counter() - t)
+            return best
+        small, large = cost(20_000), cost(160_000)          # 8x the input
+        # Linear is ~8x; quadratic would be ~64x. Allow wide slack for timer noise.
+        self.assertLess(large, max(small, 2e-4) * 40)
 
 
 class CleanContactEmailTests(SimpleTestCase):

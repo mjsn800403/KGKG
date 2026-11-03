@@ -8,6 +8,9 @@ MAX_BODY = 2000
 INTENTS = ('sales', 'demo', 'technical', 'other')
 
 _CLIENT_ID = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
+# One character class and no repetition, so a search is a single linear pass in C
+# (unlike a Python-level loop, which coverage tracing slows several-fold).
+_WHITESPACE = re.compile(r'\s')
 
 
 def valid_email(value):
@@ -18,7 +21,7 @@ def valid_email(value):
     Same acceptance as the regex it replaced (``^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$``), which
     CodeQL flagged as polynomial on user input; this is a single linear scan with no
     backtracking. Shape only: it does not claim the address exists."""
-    if not isinstance(value, str) or any(ch.isspace() for ch in value):
+    if not isinstance(value, str) or _WHITESPACE.search(value):
         return False
     local, at, domain = value.partition('@')
     if not at or not local or not domain or '@' in domain:
