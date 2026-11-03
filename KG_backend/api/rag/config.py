@@ -209,6 +209,12 @@ _DROP_CRUMB_TOKENS = ('other variant',)
 # fall back to the title-anchored guard alone without a deploy.
 NEARMISS_GUARD = os.environ.get('RAG_NEARMISS_GUARD', '1') != '0'
 
+# Concurrent encode() calls allowed per process (A-06, #30). Embedding is CPU
+# work; gunicorn runs 8 threads per worker, so a burst of assistant questions
+# used to encode in parallel and slow each other and everything else on the
+# host. Extra callers wait their turn instead. 0 = unbounded (old behaviour).
+EMBED_CONCURRENCY = int(os.environ.get('RAG_EMBED_CONCURRENCY', '2'))
+
 # When the scope guard finds the asked-for component (or the cited page's
 # title) is not documented for the pinned vehicle, refuse instead of only
 # flagging it: the chat layer keeps just the pinned car's pages, so a flag

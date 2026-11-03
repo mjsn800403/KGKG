@@ -7,7 +7,9 @@ cosine ranking == nearest-neighbour search. For each blob we write:
     graph, then dropped.
 Resumable: blobs already present in vec_blobs are skipped.
 """
+import threading
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +20,20 @@ log = logging.getLogger(__name__)
 from . import config, store
 
 _MODEL = None
+_SLOTS = None
+
+
+def _slot():
+    """Context manager holding one of config.EMBED_CONCURRENCY encode slots
+    (a no-op when the limit is 0). Created lazily so a test can change the
+    limit; per process, so the host-wide bound is workers x limit."""
+    global _SLOTS
+    n = config.EMBED_CONCURRENCY
+    if n <= 0:
+        return nullcontext()
+    if _SLOTS is None or _SLOTS[0] != n:
+        _SLOTS = (n, threading.BoundedSemaphore(n))
+    return _SLOTS[1]
 
 
 def _empty_cache():
@@ -74,10 +90,11 @@ def encode(texts, batch_size=32, is_query=False, progress=False):
     prefix = config.QUERY_PREFIX if is_query else config.PASSAGE_PREFIX
     if prefix:
         texts = [prefix + t for t in texts]
-    vecs = model.encode(
-        texts, batch_size=batch_size, normalize_embeddings=True,
-        convert_to_numpy=True, show_progress_bar=progress,
-    ).astype(np.float32)
+    with _slot():
+        vecs = model.encode(
+            texts, batch_size=batch_size, normalize_embeddings=True,
+            convert_to_numpy=True, show_progress_bar=progress,
+        ).astype(np.float32)
     if is_query:
         ad = _adapter()
         if ad is not None:
