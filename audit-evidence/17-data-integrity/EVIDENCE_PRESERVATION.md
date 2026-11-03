@@ -59,7 +59,7 @@ Record the answers in the authorization request. A missing input blocks the proc
 
 ## 4. Procedure (when authorized)
 
-Run by a person with host access, never by an unattended job. Commands are templates; fill in the approved paths. `<date>`, `<recipients-file>` and the destination are the approved inputs from section 3.
+Run by a person with host access, never by an unattended job. **Every new shell** (the first, and any after a lost session or a restart) begins with `umask 077` and `set -o noclobber` and re-defines `A`, `L`, `USE_CONTENT` and every other variable the steps use; files created in a shell that skipped this have their modes checked and corrected (the directories are `0700`, which limits the exposure), and the lapse is recorded. Commands are templates; fill in the approved paths. `<date>`, `<recipients-file>` and the destination are the approved inputs from section 3.
 
 1. **Check earlier attempts, create the attempt directory, open the exporter session and take the reference state inside it.** The reference values and the dump must come from the **same** consistent snapshot, otherwise a row written between "count" and "dump" makes a correct restore look like a failure. One database session exports a snapshot and stays open; the reference queries run inside it and their results are written to files while it is open; the dump imports the snapshot (section 4.1 explains why, and the failure handling). Every file of one attempt lives in that attempt's own directory.
 
@@ -105,6 +105,8 @@ Run by a person with host access, never by an unattended job. Commands are templ
    ```
    That is: `snapshot.id` is exactly one line made only of hexadecimal digits and hyphens (the PostgreSQL documentation does not specify the identifier's format; the rehearsal records the observed shape and this pattern is tightened to it); `reference.txt` is exactly one line of five `|`-separated fields, the first four digits only and the fifth 64 hexadecimal characters; `content.txt`, if used, is one line of 64 hexadecimal characters. Any extra line (such as a status line), an empty file or a different shape fails the check. **If a file is not present and valid in that time, the attempt has failed** (apply the failed-attempt action in section 4.1), and the procedure is not to be executed until the rehearsal has shown a method that works. Ending the session to look at its output is not allowed, because that ends the snapshot.
 
+   `USE_CONTENT` is `yes` only when the G2 authorization names an approved content query, and `no` when it says `NOT_USED`; the operator sets it from the authorization and it is never inferred from whether a file exists. If it is `yes` and `content-query.sql` or `content.txt` is missing or fails its checks, the attempt has failed; it is never recorded as `NOT_USED`.
+
    Then write the attempt's **record**. Every value is produced by a command, none is typed, so values cannot be mistyped or mixed (the placeholders `<NN>`, `<tmpdir>` and the approved file names are part of the command line, not of the data):
    ```
    {
@@ -115,7 +117,7 @@ Run by a person with host access, never by an unattended job. Commands are templ
      echo "snapshot_id=$(cat "$A/snapshot.id")"
      echo "reference=$(cat "$A/reference.txt")"     # count|min id|max id|marker count|sha256 of ordered ids
      echo "columns_sha256=$(sha256sum < "$A/columns.txt" | cut -d' ' -f1)"
-     if [ -s "$A/content.txt" ]; then
+     if [ "$USE_CONTENT" = yes ]; then
        echo "content_query_sha256=$(sha256sum < "$A/content-query.sql" | cut -d' ' -f1)"
        echo "content_checksum=$(cat "$A/content.txt")"
        echo "columns_hashed=$(paste -sd, approved-hashed-columns.txt)"
@@ -138,6 +140,7 @@ Run by a person with host access, never by an unattended job. Commands are templ
 3. **Checksum the plaintext dump and close the host gate for this attempt.** Append the dump's file name, size and SHA-256 to `record.txt` as `dump_file=`, `dump_size=` and `dump_sha256=`, each produced by command (`basename`, `stat -c %s`, `sha256sum < file | cut -d' ' -f1`), then make the dump read-only (`chmod 0400`). **What the record does and does not establish:** it associates, **by procedure and not by any property of the dump**, the snapshot identifier, the reference values, the dump file name, size and SHA-256 and the exporter's exit status. A custom-format archive carries no snapshot identifier that could be checked afterwards, so nothing in the file proves which snapshot it came from. The evidence that the dump matches the values is the restore comparison in step 7, not the record. **Host gate:** before steps 4, 6 and 9 the operator checks, in this attempt directory, that (a) no `FAILED` marker exists, (b) exactly one `*.dump` file exists and its name equals the one in the record, (c) a fresh `sha256sum` of it equals the recorded value, (d) the record shows `exporter_exit=0`, and (e) the format checks of step 1 still pass on the stored `snapshot.id`, `reference.txt` (and `content.txt`). A directory that fails any check is not used. The plaintext SHA-256 recorded here is the value that the decrypted dump is compared with in step 7.
 3a. **Preserve the legacy backups: record, encrypt at the source, re-check.** This is done once, **before any attempt is sealed**, so that the legacy record is sealed and bundled with the attempt's evidence (step 4). The approved list of originals (the seven `db.sqlite3.pre-*` files and the 2026-08-05 pre-batch backups; the exact names are fixed in the G2 authorization) is processed one file at a time into a new directory. Nothing is ever copied in plaintext, the originals are only read, and every value in the record is produced by command:
    ```
+   umask 077                                      # every new shell
    L=<tmpdir>/legacy ; mkdir "$L"                 # new directory; no -p
    # for each original <f> in the approved list, one at a time (run with nice and ionice):
    n=$(basename "<f>")
@@ -191,7 +194,7 @@ Run by a person with host access, never by an unattended job. Commands are templ
      2. Decrypt the evidence bundle into the VSL (it is small and contains no dump or backup) and compute the SHA-256 of `manifest.sha256`: it must equal the independently recorded **seal hash**.
      3. Run `sha256sum -c manifest.sha256` in the VSL: every listed file must match.
      4. Re-run the format checks of step 1 on `snapshot.id`, `reference.txt` (and `content.txt`), and check the record: `attempt` equals the attempt number designated in the evidence entry, `exporter_exit=0`, `dump_file` equals the received `.age` name without its suffix, `ciphertext_sha256` equals the received dump `.age` hash, and `dump_sha256` is present.
-     5. Check the content-checksum keys against the **G2 authorization**, not against the rehearsal record: `content_query_sha256` and `columns_sha256` equal the approved query hash and the hash of the approved column list, or all of `content_query_sha256`, `content_checksum` are `NOT_USED` and the authorization says `NOT_USED`.
+     5. Check the content-checksum keys against the **G2 authorization**, not against the rehearsal record. If the authorization names an approved query: `content_query_sha256` equals its hash, `columns_sha256` equals the hash of the approved column list, and `content_checksum` is a 64-hexadecimal value (not `NOT_USED`). If the authorization says `NOT_USED`: `content_query_sha256=NOT_USED`, `content_checksum=NOT_USED`, `columns_hashed=NONE` and `columns_not_covered=ALL`; `columns_sha256` is still present, because it is always recorded, but in this case it is **informational and is not compared with any approved value**. Any other combination (for example a `NOT_USED` record against an approved query, or the reverse) fails the gate.
      6. Check the legacy record: for every file of the approved list, the last block is complete, `original_sha256` equals `original_sha256_after_encrypt` and equals the original's hash in the independent record, `ciphertext_file` names a received file, and `ciphertext_sha256` equals that received file's hash.
      7. Any failure: stop, record it, the verification has failed, nothing is deleted anywhere and step 9 does not run.
 
