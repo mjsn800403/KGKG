@@ -212,6 +212,45 @@ OWN_TARGETS = ('https://kgtechvault.com/', 'https://kgtechvault.com/kg-api/api/h
 LOCAL_HEALTH = os.environ.get('KG_LOCAL_HEALTH_URL', 'http://127.0.0.1:8000/api/health/')
 
 
+# Error-budget burn (A-14, #20). SLA_AND_ONCALL.md commits to 99.5% a month;
+# every other availability rule asks "is it down right now", so a month could
+# be lost in short slices without a page. Month to date, per own target: the
+# share of the budget used divided by the share of the month gone. Above 1 the
+# budget runs out before the month does. Not judged in the first
+# BUDGET_MIN_H hours, where one short blip reads as a huge burn.
+SLO_MONTHLY = _env_num('KG_ALERT_SLO_MONTHLY', 0.995, float)
+BUDGET_MIN_H = _env_num('KG_ALERT_BUDGET_MIN_H', 24)
+
+
+def _month_elapsed_h():
+    """Whole hours since the start of the current UTC month."""
+    now = timezone.now()
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return int((now - start).total_seconds() // 3600)
+
+
+def _budget():
+    out = {}
+    h = _month_elapsed_h()
+    if h < BUDGET_MIN_H:
+        return out
+    budget = 1.0 - SLO_MONTHLY
+    fa = lambda n: str(n).translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
+    for r in _prom(f'avg_over_time(probe_success[{h}h])'):
+        t = r['metric'].get('target', '')
+        if t not in OWN_TARGETS:
+            continue
+        avail = float(r['value'][1])
+        burn = (1.0 - avail) / budget
+        if burn > 1.0:
+            out[f'infra:budget:{t}'] = (
+                'warning',
+                f'{PROBE_NAMES[t]} بودجهٔ خطای ماهانه را سریع‌تر از گذر ماه مصرف می‌کند: '
+                f'دسترس‌پذیری این ماه {fa(f"{avail * 100:.2f}")}٪، هدف {fa(f"{SLO_MONTHLY * 100:.1f}")}٪.',
+                {'target': t, 'availability': round(avail, 5), 'burn': round(burn, 2), 'hours': h})
+    return out
+
+
 def _local_ok():
     import urllib.request
     try:
@@ -307,6 +346,7 @@ def _infra():
         if t in PROBE_NAMES and d < TLS_DAYS:
             out[f'infra:tls:{t}'] = ('critical' if d < 3 else 'warning',
                                      f'گواهی امنیتی {PROBE_NAMES[t]} {max(d, 0):.0f} روز دیگر منقضی می‌شود.', {'target': t, 'days': round(d, 1)})
+    out.update(_budget())
     return out
 
 

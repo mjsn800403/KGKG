@@ -167,6 +167,44 @@ class AppSignalTests(SimpleTestCase):
                       _queries_made(fake_prom()))
 
 
+class BudgetBurnTests(SimpleTestCase):
+    """#20: a month can be lost in slices without any "down now" rule firing."""
+    SITE = 'https://kgtechvault.com/'
+
+    def run_at(self, hours, avail, target=None):
+        prom = fake_prom(**{'avg_over_time(probe_success[': series(
+            avail, target=target or self.SITE)})
+        with mock.patch.object(ar, '_month_elapsed_h', return_value=hours):
+            return run_infra(prom)
+
+    def test_burning_faster_than_the_month_warns(self):
+        out = self.run_at(240, 0.9880)        # the 98.80% probe of the week to 10-29
+        key = f'infra:budget:{self.SITE}'
+        self.assertEqual(out[key][0], 'warning')
+        self.assertGreater(out[key][2]['burn'], 1)
+
+    def test_within_budget_is_silent(self):
+        self.assertEqual(self.run_at(240, 0.9990), {})
+
+    def test_exactly_on_budget_is_silent(self):
+        self.assertEqual(self.run_at(240, ar.SLO_MONTHLY), {})
+
+    def test_too_early_in_the_month_is_not_judged(self):
+        self.assertEqual(self.run_at(ar.BUDGET_MIN_H - 1, 0.5), {})
+
+    def test_third_party_targets_have_no_budget_of_ours(self):
+        self.assertEqual(self.run_at(240, 0.9, target='https://api.metisai.ir/'), {})
+
+    def test_window_is_month_to_date(self):
+        queries = []
+        def prom(q):
+            queries.append(q)
+            return []
+        with mock.patch.object(ar, '_month_elapsed_h', return_value=100):
+            run_infra(prom)
+        self.assertIn('avg_over_time(probe_success[100h])', queries)
+
+
 class ResolutionTests(SimpleTestCase):
     """monitoring.evaluate_alerts auto-resolves keys under OWNED_PREFIXES. A
     key outside them would stay open for ever once raised."""
