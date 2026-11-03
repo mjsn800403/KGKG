@@ -136,12 +136,9 @@ class LogPrivacy(SupportCase):
             self.assertNotIn(secret, dump)
 
     def test_the_collector_would_catch_a_leak(self):
+        # Hand-built record, not a logger call: proves the collector reads message args.
         collector = _Collector()
-        log = logging.getLogger('kgkg.support.selfcheck')
-        log.addHandler(collector)
-        log.setLevel(logging.DEBUG)
-        try:
-            log.warning('visitor said %s', self.SECRETS[0])
-        finally:
-            log.removeHandler(collector)
-        self.assertIn(self.SECRETS[0], '\n'.join(collector.text))
+        marker = 'marker-for-the-collector-selfcheck'
+        collector.emit(logging.LogRecord('selfcheck', logging.WARNING, __file__, 1,
+                                         'visitor said %s', (marker,), None))
+        self.assertIn(marker, ' '.join(collector.text))
