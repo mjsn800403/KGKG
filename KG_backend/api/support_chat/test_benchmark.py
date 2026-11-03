@@ -78,6 +78,10 @@ class Baseline(SupportCase):
         admin = self.h or bearer('x')
         staff_list_q = self.measure('staff list (500 live)',
                                     lambda: self.c.get('/api/admin/support-chat/threads/', **admin), 800)
+        from . import views_admin_inbox as inbox
+        self.measure('  list rows (page of 30)', lambda: list(inbox._annotated().filter(
+            inbox.Q(status__in=inbox.ACTIVE)).order_by('-last_activity_at', '-pk')[:31]), 800)
+        self.measure('  list counts', lambda: inbox._counts(self.admin), 800)
         self.measure('staff thread detail',
                      lambda: self.c.get(f'/api/admin/support-chat/threads/{tid}/', **admin), 400)
         from . import health

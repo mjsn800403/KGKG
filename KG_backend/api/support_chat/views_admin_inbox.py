@@ -12,7 +12,8 @@ fields, never message text.
 import base64
 import uuid
 
-from django.db.models import Count, F, OuterRef, Q, Subquery
+from django.db.models import Count, F, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -72,7 +73,12 @@ def _annotated():
         last_body=Subquery(msgs.order_by('-id').values('body')[:1]),
         last_internal=Subquery(msgs.order_by('-id').values('internal')[:1]),
         last_at=Subquery(msgs.order_by('-id').values('created_at')[:1]),
-        message_count=Count('messages'),
+        # A correlated count, not Count('messages'): the join and GROUP BY made PostgreSQL
+        # compute every subquery above for every thread before sorting (192 ms at 500 live
+        # threads for 4 queries); without them it sorts on the indexed last_activity_at and
+        # reads the subqueries for the page only.
+        message_count=Coalesce(Subquery(msgs.order_by().values('thread').annotate(n=Count('pk')).values('n')[:1]),
+                               Value(0)),
     )
 
 
