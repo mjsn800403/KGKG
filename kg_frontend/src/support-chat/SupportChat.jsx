@@ -73,7 +73,9 @@ function Availability({ chat }) {
 
 function Panel({ chat }) {
   const { state } = chat;
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => chat.getDraft());
+  const { saveDraft } = chat;
+  useEffect(() => { saveDraft(draft); }, [draft, saveDraft]);
   const [placeholder, setPlaceholder] = useState('');
   const [menu, setMenu] = useState(false);
   const [contactDone, setContactDone] = useState(false);

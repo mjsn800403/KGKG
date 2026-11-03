@@ -1,12 +1,15 @@
 // What the widget keeps in the visitor's browser, and nothing else:
 //   localStorage   kg_sc_v1    thread id, token, intent  (survives the tab)
 //   sessionStorage kg_sc_q_v1  unsent messages           (this tab, 24 h cap)
+//   sessionStorage kg_sc_d_v1  the half-typed draft      (this tab, 24 h cap)
 // Both can be unavailable, full or throw (private windows, blocked storage):
 // every access is guarded and the store falls back to memory, so the chat still
 // works for the current page view. Message text is never written to localStorage.
 
 export const THREAD_KEY = 'kg_sc_v1';
 export const QUEUE_KEY = 'kg_sc_q_v1';
+export const DRAFT_KEY = 'kg_sc_d_v1';
+export const DRAFT_MAX = 2000;
 export const QUEUE_MAX = 20;
 export const QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -58,8 +61,21 @@ export function createStore({ local, session, now = () => Date.now() } = {}) {
     return fresh;
   }
 
+  function draft() {
+    const d = parse(ses.get(DRAFT_KEY), null);
+    if (!d || typeof d.text !== 'string' || !(now() - d.at < QUEUE_TTL_MS)) return '';
+    return d.text.slice(0, DRAFT_MAX);
+  }
+
   return {
     thread,
+    draft,
+    /** Keeps what the visitor is typing across a closed panel or a reload; empty text clears it. */
+    saveDraft(text) {
+      const t = typeof text === 'string' ? text.slice(0, DRAFT_MAX) : '';
+      if (t.trim()) ses.set(DRAFT_KEY, JSON.stringify({ text: t, at: now() }));
+      else ses.remove(DRAFT_KEY);
+    },
     saveThread(t) {
       loc.set(THREAD_KEY, JSON.stringify({
         threadId: t.threadId, token: t.token, intent: t.intent || 'other', savedAt: now(),
@@ -85,7 +101,7 @@ export function createStore({ local, session, now = () => Date.now() } = {}) {
       emit();
     },
     /** "Delete this conversation from this browser". */
-    forget() { loc.remove(THREAD_KEY); ses.remove(QUEUE_KEY); emit(); },
+    forget() { loc.remove(THREAD_KEY); ses.remove(QUEUE_KEY); ses.remove(DRAFT_KEY); emit(); },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 }

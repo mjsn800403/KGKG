@@ -53,6 +53,7 @@ or RAG dependency. Defaults below are initial values, changed by environment var
 | `KG_SUPPORT_REOPEN_DAYS` | `14` | how long a visitor may reopen their own closed thread |
 | `KG_SUPPORT_REPLY_TARGET_MINUTES` | unset | published reply target; unset means no promise is shown |
 | `KG_SUPPORT_PRESENCE_WINDOW_S` | `60` | how long a staff ping counts as connected |
+| `KG_SUPPORT_WAIT_WARN_S`, `KG_SUPPORT_WAIT_CRIT_S` | `300` / `900` | thresholds for `manage.py support_health` (visitors waiting for a human reply); invalid or non-positive values fall back to the defaults; nothing alerts on them yet |
 | `KG_SUPPORT_RETENTION_*_DAYS`, `KG_SUPPORT_RETENTION_ENABLED` | proposals / unset | `purge_support_chat` reports against proposed periods; deletion needs `ENABLED=1` and `--apply`, and no policy is approved yet |
 
 Chat routes are excluded from `AuditLog` request bodies (`api/audit.py` skip list); staff actions are

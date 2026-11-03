@@ -93,3 +93,27 @@ After any SEV1/SEV2: a short postmortem and a regression test.
   percentage. Use the envelope in `api/alert_rules.deliver`.
 * **Confirm:** `python3 -I ops/observability/watchdog.py --dry-run`; a real send
   returns a long record id — anything else means nobody was paged.
+
+## R10 — Human support chat: incident, shutdown and rollback
+
+The chat is human-only (no AI). Everything here is a person's decision; none of it is a deploy.
+
+* **Notice:** `manage.py support_health --fail-on warn` exits 1, staff report waiting visitors, or a
+  privacy/abuse report arrives. (Not wired to alerts yet, so check it by hand during opening hours.)
+* **Confirm:** `python manage.py support_health` (waiting count, oldest wait, by intent; read-only),
+  `curl -s https://<site>/kg-api/api/support-chat/status/` (`enabled`, `mode`).
+* **Emergency shutdown:** remove `KG_SUPPORT_CHAT_ENABLED` (or set it to anything but `1`) in
+  `.env.prod` and in the web server environment, then `ops/deploy/deploy.sh --reload` (the widget also needs the web container to see the change, see the row in 11). New visitor
+  threads stop immediately; existing threads and staff replies keep working; the widget disappears
+  after the web server picks up the change. Rollback of the shutdown is setting it back to `1`.
+* **Staff cannot sign in or see threads:** check `KG_SUPPORT_RBAC` first. Unset or `off` means flat
+  admin access. A typo is enforced (403 `rbac_invalid_mode`): fix the value, reload. In `enforce` with no
+  owner (403 `rbac_no_owner`) set `KG_SUPPORT_OWNERS` to an active admin username. Run
+  `python manage.py support_roles check` (read-only) to see exactly why.
+* **Inbox not updating:** the console falls back to polling every 20 s. If the stream is the problem,
+  check nginx `/kg-api/api/events/stream/` (`proxy_buffering off`, `limit_conn kg_sse 8`) and R1.
+* **Abuse or spam wave:** raise nothing blindly; read `KG_SC_*` limits in 11, mark threads spam from
+  the console, and shut down per above if limits do not contain it.
+* **Never** run `purge_support_chat --apply`, enable notifications, or promote from this runbook.
+* **Fixed when:** `support_health` reports `ok`, the status endpoint reports the intended state, and the
+  incident is noted in the CHANGELOG or issue with ids only (never message text or contact details).
