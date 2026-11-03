@@ -141,6 +141,24 @@ Today `events.emit(..., audience='admin')` delivers `support_chat.*` events (thr
 - **Granularity limit, stated honestly:** events are scoped by intent only. An agent still receives the id/intent/kind of events for in-scope threads assigned to a colleague; message content, contact and the thread itself remain protected by the own-or-unassigned rule on the REST endpoints.
 - **Tests (PostgreSQL and SQLite):** a sales agent's stream never yields a technical-intent event; an admin without a role yields none in `enforce` and all in `off`/`audit`; auditor yields all; role change observed after reconnect; the payload schema test asserts no text/contact keys.
 
+### 3.3 The `support_roles check` safety gate (design only; approved in principle 2026-11-03; no tooling changed yet)
+
+**Purpose:** make it impossible to *knowingly* switch to `enforce` with a configuration that would lock support out, without ever making an ordinary deploy depend on role data.
+
+**Shape.** A read-only management command `manage.py support_roles check [--for-enforce]`. It changes nothing, calls no network service, and runs against whatever database the environment points at.
+- Exit `0` = pass, `1` = a blocking problem under `--for-enforce`, `2` = unexpected error (never treated as a pass).
+- **Without `--for-enforce`** it only reports and always exits `0` (warnings printed). With `--for-enforce` it exits `1` if any blocking check fails.
+
+**Checks.** *Blocking under `--for-enforce`:* at least one **active** support owner resolves (from `KG_SUPPORT_OWNERS` or a `support_owner` row for an active admin); every name in `KG_SUPPORT_OWNERS` is spelled as an existing admin username (typos are the main lockout cause); the role table exists and is readable (migration B applied); `KG_SUPPORT_RBAC` is a recognised value. *Warnings only:* no sales agent or support agent exists (live mode would never trigger for that intent); an active admin has no role while in `audit` (they would be denied after `enforce`); recent `audit` would-be-denials exist for named people (listed by admin id and permission, no content).
+
+**Where it runs, so it never blocks ordinary work:**
+1. Always available by hand for a person: `support_roles check --for-enforce` before they set `KG_SUPPORT_RBAC=enforce`.
+2. Later, an **opt-in** gate step: `ops/deploy/gate.sh` would run it *only when the target environment's `KG_SUPPORT_RBAC` is `enforce`* (that is, when a person has already chosen enforcement). With `off` or `audit` (the default) the step is skipped, so ordinary deployments, CI, local development and the loopback `KG_ADMIN_TOKEN` are unaffected. If the check fails in an `enforce` environment, the gate refuses *that deploy* and names the missing owner; it never edits roles or flips the mode.
+3. CI never runs it against a real database (CI has an empty throwaway DB); CI only runs the command's own unit tests.
+
+**Why it cannot lock out developers or administrators:** it is read-only, never invoked by an HTTP request, and inert when the mode is `off`/`audit`; the emergency recovery path (`KG_SUPPORT_RBAC=off`, or `support_roles grant` on the server) does not go through the gate. **Tests (when built):** exit codes for each failing check, pass with env-only owner, pass with table-only owner, typo detection, skipped when mode is `off`/`audit`, never writes (database snapshot equal before/after).
+**Not done:** the command, the gate step, any change to `ops/deploy/*`. It is design only until you approve building it.
+
 ## 4. Decisions
 **Settled by the owner (2026-11-03):** A1 (`SupportThread.excluded`) and the `SupportStaffRole` table; five roles; strict enforcement with no silent bypass; role-scoped event visibility; bootstrap owners with a recovery mechanism; migrations are generated only after the other developer confirms numbering and compatibility.
 **Still open:**
