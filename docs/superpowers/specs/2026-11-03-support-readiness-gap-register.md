@@ -77,16 +77,32 @@ code rows has been run against production.
 | Staffing | Named staff on shift, hours, off-hours message, escalation path | not defined (owner decision) |
 | Infrastructure | Kill switch off by default and flips only by a person | pass (documented, tested) |
 
-### 4.1 `support_health` scalability (measured 2026-11-03, SQLite in memory, indicative only)
+### 4.1 Measured baselines (batch 2)
 
-| Waiting threads | Queries | Time |
-|---|---|---|
-| 1 / 10 / 100 | 2 / 11 / 101 | 2 / 4 / 25 ms |
-| 500 (cap) / 600 | 501 / 501 | 124 / 127 ms |
+Handler-level latency through Django (URL routing, middleware, view, database), with the test client:
+no network, TLS or proxy, so it is a baseline for regressions and for finding slow queries, **not a
+capacity claim**. Isolated PostgreSQL service in CI (`test_benchmark.py`, 500 live threads with 3 messages
+each, 60 samples, rate limits off); the run's log carries the `BENCH` lines.
 
-* **N+1 confirmed:** one query for the candidate threads plus one per waiting thread to find when the current wait began. Harmless at the expected volume (tens of waiting visitors). On PostgreSQL each query costs more round-trip time, so the 500-thread worst case should be re-measured there before it runs on a timer; expect well under a few seconds, not milliseconds.
-* **The 500-thread cap** applies to the oldest-activity threads first. A waiting thread's last activity is its last visitor message, so those are the longest waits: `oldest_wait_s`, `level`, `over_warn` and `over_crit` stay correct when the cap is hit. `waiting` and `waiting_by_intent` are then **undercounts**, and `truncated` is true. Treat `truncated` as "the queue is far past any threshold".
-* **Monitoring implication:** run it by hand or from a timer no more often than every minute. It is read-only, so a slow run cannot damage data, but each run holds one database connection for its duration. It does not alert. Wiring it into `check_alerts` needs your approval and should come with the single-query rewrite (a correlated subquery for the wait start), which removes the N+1 and the practical need for the cap. Deferred to Batch 2 as non-critical.
+| Endpoint | p50 ms | p95 ms | Queries |
+|---|---|---|---|
+| visitor create | 6.1 | 8.2 | 7 |
+| visitor poll | 4.7 | 5.5 | 3 |
+| visitor send | 8.4 | 9.5 | 10 |
+| **staff list (500 live)** | **22.6** (was **192.4**) | 24.8 (was 208.5) | 4 |
+| staff thread detail | 10.1 | 12.5 | 4 |
+| `support_health` report | 16.6 | 19.8 | **1** (was 501 at 500 waiting) |
+| `support_health`, 2000 waiting | 55 | n/a | 1 |
+
+* **Bottleneck found and fixed:** the staff list was 192 ms for four queries on PostgreSQL (11 ms on SQLite, which hid it).
+  The cause was the join plus aggregate behind `message_count`: PostgreSQL computed five correlated subqueries for every
+  thread before sorting. A correlated count removes the join, so it sorts on the indexed `last_activity_at` and reads
+  the subqueries for the page only. Remaining cost is the counts query (about 10 ms) and the 30-row page (about 8 ms).
+* **`support_health`:** one query, no 500-thread cap (`SCAN_LIMIT` is now a 20000-row safety valve); `waiting` and the
+  per-intent counts are exact. Cost grows with the number of waiting threads (about 55 ms at 2000), so run it on a timer
+  of a minute or more, not per request. It still does not alert.
+* **Not measured:** concurrency (many simultaneous polls and open SSE streams), real network latency, Nginx and
+  gunicorn behaviour, and a long soak. A load test of those needs a deployed isolated stack and is the next performance step.
 
 ## 5. Launch plan
 
