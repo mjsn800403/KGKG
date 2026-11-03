@@ -131,6 +131,9 @@ test.describe('support desk — the customer side', () => {
       await page.getByRole('button', { name: 'راهنما' }).click();
       const panel = page.getByRole('dialog', { name: /راهنمای سامانه/ });
       await expect(panel).toBeVisible();
+      // The panel opens on the article for the current page (/browse has one),
+      // and the search box exists only on the list view: go back to it first.
+      await panel.getByRole('button', { name: /همهٔ مقاله‌ها/ }).click();
       // A query with no match anywhere must say so rather than hang; the miss
       // is what the knowledge metrics count.
       await panel.getByRole('textbox', { name: /جستجو در راهنما/ })

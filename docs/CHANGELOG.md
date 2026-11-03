@@ -41,6 +41,9 @@ short and point at the doc section that was updated.
   `manage.py process_outbox`. Delivery is `off` unless `KG_NOTIFY_SMS` / `KG_NOTIFY_EMAIL` say
   otherwise; nothing triggers it yet and the timer unit in `ops/outbox/` is not installed.
   Design: `docs/superpowers/specs/2026-11-02-customer-communication-design.md`. Refs #61.
+- **Dependabot version updates.** `.github/dependabot.yml` adds weekly, grouped minor/patch
+  update PRs for pip, npm, docker and GitHub Actions (monthly for `qa/e2e`), capped at 2-3 open
+  per ecosystem, all targeting `work`. Security updates were already on. Part of #45.
 - **Jira tracking convention.** `CONTRIBUTING.md` §Work tracking and the PR template now ask
   for a Jira key (`KGTEC-<n>`) next to the GitHub issue; branch names carry it. Part of #45.
 - **Delivery metrics (DORA).** `ops/observability/delivery.py` reads the deploy logs and git
