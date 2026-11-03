@@ -32,11 +32,12 @@ def _from_server_itself(request):
     return not any(request.META.get(h) for h in _PROXY_HEADERS)
 
 
-def _admin_session(token):
+def _admin_session(token, touch=True):
     """The live session's PlatformAdmin, or None.
 
     Resolution is by sha256 (the raw key is never stored) and rejects anything
-    past ``expires_at``; a hit slides the idle window forward.
+    past ``expires_at``; a hit slides the idle window forward unless ``touch``
+    is False (background pings that must not keep a session alive).
     """
     if not token:
         return None
@@ -44,7 +45,8 @@ def _admin_session(token):
     obj = AdminAuthToken.resolve(token, select_related=('admin',))
     if not obj or not obj.admin.active:
         return None
-    obj.touch()
+    if touch:
+        obj.touch()
     return obj.admin
 
 
@@ -60,6 +62,28 @@ def acting_admin(request):
     person). Views that record ownership use this instead of inventing the
     literal string 'admin'."""
     return getattr(request, 'platform_admin', None)
+
+
+def require_admin_session_no_touch(view):
+    """Like :func:`require_admin_token` for a signed-in PERSON only, but the
+    session is validated read-only: its idle window is not extended. For
+    background pings (the support console heartbeat). The loopback script token
+    is not a person and is not accepted here."""
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if not _configured_token() and not getattr(settings, 'DEBUG', False):
+            return JsonResponse({'error': 'admin_disabled'}, status=503)
+        presented = _presented_token(request)
+        admin = _admin_session(presented, touch=False)
+        if admin is not None:
+            request.platform_admin = admin
+            return view(request, *args, **kwargs)
+        configured = _configured_token()
+        if (configured and presented and hmac.compare_digest(presented, configured)
+                and _from_server_itself(request)):
+            return JsonResponse({'error': 'a staff session is required'}, status=403)
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+    return wrapped
 
 
 def require_admin_token(view):

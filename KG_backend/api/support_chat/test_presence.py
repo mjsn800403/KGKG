@@ -121,7 +121,7 @@ class EndpointTests(TestCase):
 
     def test_status_makes_no_response_time_promise_by_default(self):
         body = self.c.get(STATUS).json()
-        self.assertEqual(set(body), {'mode', 'reply_target_minutes'})
+        self.assertEqual(set(body), {'enabled', 'mode', 'reply_target_minutes'})
         self.assertEqual(body['mode'], 'async')
         self.assertIsNone(body['reply_target_minutes'])
 

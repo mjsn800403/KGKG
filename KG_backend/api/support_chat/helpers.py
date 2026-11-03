@@ -35,6 +35,9 @@ class SupportCase(TestCase):
     def setUp(self):
         ratelimit._HITS.clear()
         throttle.reset()
+        on = mock.patch.dict('os.environ', {'KG_SUPPORT_CHAT_ENABLED': '1'})
+        on.start()
+        self.addCleanup(on.stop)
         self.c = Client()
         p = mock.patch('api.support_chat.views_public._verify_turnstile', return_value=True)
         self.turnstile = p.start()
@@ -74,7 +77,8 @@ class SupportTxCase(TransactionTestCase):
         ratelimit._HITS.clear()
         throttle.reset()
         env = mock.patch.dict('os.environ', {'KG_SC_SEND': '0/0', 'KG_SC_CREATE_IP': '0/0',
-                                             'KG_SC_CSAT': '0/0'})
+                                             'KG_SC_CSAT': '0/0',
+                                             'KG_SUPPORT_CHAT_ENABLED': '1'})
         env.start()
         self.addCleanup(env.stop)
         p = mock.patch('api.support_chat.views_public._verify_turnstile', return_value=True)
