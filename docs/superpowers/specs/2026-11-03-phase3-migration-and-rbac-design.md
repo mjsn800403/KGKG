@@ -174,7 +174,7 @@ Visible state (verified): the highest migration on every remote branch and open 
 
 **Deferred because it needs migration B or A (not generated):**
 - the role table: until it exists, only bootstrap owners from `KG_SUPPORT_OWNERS` hold any role, so `check --for-enforce` correctly reports `role_table_missing` (blocking);
-- `support_roles grant|revoke` and the last-owner guard (they write the table), and role-change audit rows;
+- the table-backed adapter for `support_roles grant|revoke` (`rbac_admin.TableStore`). **Update (branch `feat/support-roles-admin`):** the rules are built and tested against a store interface with an in-memory fake (validation, dry-run default, idempotence, last-active-owner guard that ignores inactive admins and misspelt bootstrap names, id-only audit rows `role_granted`/`role_revoked`, refusal with `table_missing` until migration B exists). `TableStore` itself is ~25 lines over `SupportStaffRole` and is **untested until the table exists**; its `owner_ids()` takes `select_for_update` so two simultaneous revocations cannot both pass the last-owner check, which needs a PostgreSQL concurrency test after migration B;
 - the `support.exclude` permission is defined and in the matrix but has nothing to act on until `SupportThread.excluded` exists;
 - metrics endpoints (`support.metrics`, `support.notify_health`) are permissions only; the endpoints are M4.
 
