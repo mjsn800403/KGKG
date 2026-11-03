@@ -438,7 +438,13 @@ function lookupBlock(rag) {
 function diagUsable(d) {
   if (!d || d.error) return false;
   if (d.intent === 'dtc') return true;     // always answer (even "not found")
-  if (d.intent === 'symptom') return (d.candidates?.length || d.procedures?.length) > 0;
+  // A symptom match the engine itself calls ungrounded (best match under the
+  // similarity floor) would be shown as "no basis in our data" even when the
+  // assist retrieval has grounded pages for the same question; let assist
+  // answer instead.
+  if (d.intent === 'symptom') {
+    return d.grounded !== false && (d.candidates?.length || d.procedures?.length) > 0;
+  }
   return false;
 }
 
