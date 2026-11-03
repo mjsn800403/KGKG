@@ -20,6 +20,37 @@ import {
 const METIS_BASE = 'https://api.metisai.ir/api/v1/chat';
 const API_KEY = process.env.METIS_API_KEY;
 const BOT_ID = process.env.METIS_BOT_ID;
+// Fallback bots, tried in order when the primary fails (an error status, a
+// timeout, or a model the provider has withdrawn). Each is a Metis bot with
+// the same instructions on a different model; the order is the operator's
+// preference. Comma-separated ids in METIS_FALLBACK_BOT_IDS.
+const BOT_CHAIN = [BOT_ID, ...(process.env.METIS_FALLBACK_BOT_IDS || '').split(',')]
+  .map((b) => (b || '').trim()).filter(Boolean);
+
+// Run `fn(sessionId)` on the first bot in BOT_CHAIN that answers. `sid` is the
+// caller's existing session, reused for the first attempt only: a session
+// belongs to one bot, so a fallback always opens a fresh one. `canRetry` lets a
+// streaming caller stop falling back once text has reached the user.
+async function withFallback(sid, user, fn, canRetry = () => true) {
+  let last;
+  for (let i = 0; i < BOT_CHAIN.length; i++) {
+    try {
+      const s = (i === 0 && sid) ? sid
+        : (await metis('session', { botId: BOT_CHAIN[i], user })).id;
+      const out = await fn(s);
+      if (i > 0) console.warn(`Metis answered on fallback bot #${i}`);
+      return { out, sid: s };
+    } catch (e) {
+      last = e;
+      if (i + 1 < BOT_CHAIN.length && canRetry()) {
+        console.error(`Metis bot #${i} failed, trying fallback #${i + 1}:`, e.message || e);
+        continue;
+      }
+      break;
+    }
+  }
+  throw last;
+}
 const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
 async function metis(path, body) {
@@ -112,12 +143,10 @@ async function translateQuery(q, enabled = MQ_TRANSLATE) {
   const key = q.trim();
   if (_mqCache.has(key)) return _mqCache.get(key);
   try {
-    const session = await metis('session', {
-      botId: BOT_ID, user: { id: 'mq-translate', name: '_' },
-    });
-    const reply = await metis(`session/${session.id}/message`, {
-      message: { type: 'USER', content: TRANSLATE_PROMPT + key },
-    });
+    const { out: reply } = await withFallback(null, { id: 'mq-translate', name: '_' },
+      (s) => metis(`session/${s}/message`, {
+        message: { type: 'USER', content: TRANSLATE_PROMPT + key },
+      }));
     let out = (reply?.content ?? '').trim().split('\n')[0].replace(/^["'`]|["'`]$/g, '').trim();
     // Refuse anything that came back still Persian, empty, or implausibly long
     // -- a bad translation is worse than no translation.
@@ -764,17 +793,18 @@ export async function POST(request) {
           let reply = null;
           let deg = false;
           try {
-            if (!sid) {
-              const session = await metis('session', {
-                botId: BOT_ID,
-                user: { id: userId || `web-${Date.now()}`, name: '_' },
-              });
-              sid = session.id;
-            }
             const tl = Date.now();
-            reply = await metisStream(`session/${sid}/message`, {
-              message: { type: 'USER', content: prompt },
-            }, (d) => send({ t: 'delta', d }), fromFinancial);
+            // Once a delta has been shown, a fallback would restart the text
+            // on screen; from then on a failure degrades instead.
+            let streamed = false;
+            const r = await withFallback(sid,
+              { id: userId || `web-${Date.now()}`, name: '_' },
+              (s) => metisStream(`session/${s}/message`, {
+                message: { type: 'USER', content: prompt },
+              }, (d) => { streamed = true; send({ t: 'delta', d }); }, fromFinancial),
+              () => !streamed);
+            reply = r.out;
+            sid = r.sid;
             llm.ms = Date.now() - tl;
           } catch (e) {
             console.error('Metis stream failed -> serving no-LLM fallback:', e);
@@ -800,17 +830,14 @@ export async function POST(request) {
 
     if (metisConfigured) {
       try {
-        if (!sid) {
-          const session = await metis('session', {
-            botId: BOT_ID,
-            user: { id: userId || `web-${Date.now()}`, name: '_' },
-          });
-          sid = session.id;
-        }
         const tl = Date.now();
-        const reply = await metis(`session/${sid}/message`, {
-          message: { type: 'USER', content: prompt },
-        });
+        const r = await withFallback(sid,
+          { id: userId || `web-${Date.now()}`, name: '_' },
+          (s) => metis(`session/${s}/message`, {
+            message: { type: 'USER', content: prompt },
+          }));
+        const reply = r.out;
+        sid = r.sid;
         llm.ms = Date.now() - tl;
         llm.cost = reply?.billing?.cost ?? null;
         if (reply?.billing) llm.usage = { billing: reply.billing };
