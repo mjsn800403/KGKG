@@ -7,8 +7,24 @@ from api.models import normalize_phone
 MAX_BODY = 2000
 INTENTS = ('sales', 'demo', 'technical', 'other')
 
-_EMAIL = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 _CLIENT_ID = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
+
+
+def valid_email(value):
+    """True for ``local@domain.tld``-shaped text: exactly one '@', a non-empty local
+    part, no whitespace anywhere, and a domain containing a dot with at least one
+    character on each side.
+
+    Same acceptance as the regex it replaced (``^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$``), which
+    CodeQL flagged as polynomial on user input; this is a single linear scan with no
+    backtracking. Shape only: it does not claim the address exists."""
+    if not isinstance(value, str) or any(ch.isspace() for ch in value):
+        return False
+    local, at, domain = value.partition('@')
+    if not at or not local or not domain or '@' in domain:
+        return False
+    # A dot at index 1..len-2 of the domain: something before it and after it.
+    return domain.find('.', 1, len(domain) - 1) != -1
 
 
 def clean_body(raw):
@@ -68,7 +84,7 @@ def clean_contact(raw):
         out['contact_phone'] = phone
     if raw.get('email'):
         email = str(raw['email']).strip()
-        if len(email) > 254 or not _EMAIL.match(email):
+        if len(email) > 254 or not valid_email(email):
             return {}, 'ایمیل معتبر نیست.'
         out['contact_email'] = email
     return out, None
