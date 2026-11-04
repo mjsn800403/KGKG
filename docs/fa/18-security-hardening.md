@@ -1,4 +1,4 @@
-<!-- i18n-source: 18-security-hardening.md sha256:712a95038449 -->
+<!-- i18n-source: 18-security-hardening.md sha256:3856cdb33cd5 -->
 <div dir="rtl" lang="fa">
 
 # ۱۸ — سخت‌سازی امنیت: رازها، محدودسازی نرخ، WAF، پایش خطا
@@ -208,7 +208,7 @@ ssh -L 8010:127.0.0.1:8010 root@103.75.197.155
 
 ### لاگ‌های ساختاریافته
 
-`KG_backend/jsonlog.py` — یک شیء JSON در هر خط، زمان UTC.
+`KG_backend/KG_backend/jsonlog.py` — یک شیء JSON در هر خط، زمان UTC.
 
 * `/var/log/kgkg/app.jsonl` — همه‌چیز در `KG_LOG_LEVEL` (پیش‌فرض INFO)
 * `/var/log/kgkg/error.jsonl` — WARNING و بالاتر

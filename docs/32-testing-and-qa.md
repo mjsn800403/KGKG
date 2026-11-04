@@ -11,7 +11,7 @@ where it comes from; the live numbers are in the CI run summaries. Persian versi
 
 | # | Mechanism | Where it runs | Trigger | Blocks merge? |
 |---|---|---|---|---|
-| 1 | Backend Django test suite (110 `test_*`/`tests*.py` modules under `KG_backend/`) with branch coverage | CI job `backend` (PostgreSQL 16 service) | every push and PR | yes |
+| 1 | Backend Django test suite (112 `test_*`/`tests*.py` modules under `KG_backend/`) with branch coverage | CI job `backend` (PostgreSQL 16 service) | every push and PR | yes |
 | 2 | Migration checks (`makemigrations --check`, additive-only, `ops/deploy/check_migrations.py`) | `backend` job; deploy gate | push/PR; deploy | yes |
 | 3 | Coverage ratchet (`ops/deploy/coverage_min`, currently **59**) | `backend` job | push/PR | yes |
 | 4 | Frontend lint ratchet (`ops/deploy/lint_max_warnings`, currently **116**), unit tests (`node --test`, 21 files), production build | CI job `frontend` | push/PR | yes |
@@ -29,7 +29,7 @@ where it comes from; the live numbers are in the CI run summaries. Persian versi
 ## 32.2 Backend tests
 
 - **Layout:** Django `TestCase`/`SimpleTestCase` modules named `test_*.py` next to the code (`api/`, `api/rag/`, `api/support_chat/`, `api/evalsuite/`, etc.)
-  plus `tests.py` and `tests_parts.py`. 110 files at the revision above **[C]**.
+  plus `tests.py` and `tests_parts.py`. 112 files at the revision above **[C]**.
 - **Database:** PostgreSQL 16 in CI (`KG_DB_ENGINE=postgres`, service container with CI-only credentials); a per-run test database name is possible via
   `KG_PG_TEST_NAME`. The deploy gate uses the host's PostgreSQL over the local socket with a per-run name (`test_kgkg_gate_$$`).
 - **Offline by design:** `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `KG_WARMUP=0`, dummy `KG_ADMIN_TOKEN`/`KG_ENV_FILE` in CI: no model downloads, no external calls.

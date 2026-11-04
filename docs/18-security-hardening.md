@@ -283,7 +283,7 @@ respective `.env` files. Retention 30 days; container logs capped at 20 MB × 3.
 
 ### Structured logs
 
-`KG_backend/jsonlog.py` — one JSON object per line, UTC timestamps.
+`KG_backend/KG_backend/jsonlog.py` — one JSON object per line, UTC timestamps.
 
 * `/var/log/kgkg/app.jsonl` — everything at `KG_LOG_LEVEL` (default INFO)
 * `/var/log/kgkg/error.jsonl` — WARNING and above

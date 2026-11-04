@@ -1,4 +1,4 @@
-<!-- i18n-source: 23-data-layer.md sha256:79cd24f1dc4a -->
+<!-- i18n-source: 23-data-layer.md sha256:235690a53dee -->
 <div dir="rtl" lang="fa">
 
 # ۲۳ — لایهٔ داده: چه چیزی کجا ذخیره می‌شود
@@ -9,7 +9,7 @@
 
 | مخزن | موتور | چه نگه می‌دارد | پیکربندی با | کد |
 |---|---|---|---|---|
-| پایگاه پرتال `kgkg` | PostgreSQL 16 روی میزبان (`KG_DB_ENGINE=postgres`؛ در توسعه SQLite با نام `db.sqlite3`) | حساب‌ها، شرکت‌ها، اعطاها، نشست‌ها، لاگ‌ها، rollupها، درخواست‌ها، چت پشتیبانی، پایگاه دانش، پرچم‌ها | `KG_PG_NAME/USER/PASSWORD/HOST/PORT`، `KG_PG_CONN_MAX_AGE` | `KG_backend/settings.py`، `api/models.py` |
+| پایگاه پرتال `kgkg` | PostgreSQL 16 روی میزبان (`KG_DB_ENGINE=postgres`؛ در توسعه SQLite با نام `db.sqlite3`) | حساب‌ها، شرکت‌ها، اعطاها، نشست‌ها، لاگ‌ها، rollupها، درخواست‌ها، چت پشتیبانی، پایگاه دانش، پرچم‌ها | `KG_PG_NAME/USER/PASSWORD/HOST/PORT`، `KG_PG_CONN_MAX_AGE` | `KG_backend/KG_backend/settings.py`، `api/models.py` |
 | محتوای خودرو، خودروهای دارای دفترچه | پایگاه PostgreSQL با نام `kgkg_vec`، یک schema با نام `car_<md5(نام فایل)>` برای هر خودرو، جدول رجیستری `public.car_dbs(filename, schema, nodes, loaded_at)` | درخت دفترچه (`nodes`، HTML، hrefها، مسیرها) با دوقلوهای ذخیره‌شدهٔ lowercase با پسوند `_lc` برای جست‌وجوی LIKE | `KG_CARDB_PG` (مقدار `*` = هر خودروی بارگذاری‌شده؛ یا نام فایل‌های جداشده با `|`)، `KG_CARDB_PG_DSN` (پیش‌فرض DSN مربوط به PG در RAG) | `api/cardb_pg.py` (کلاس `PgCarConn` سطح کوچک sqlite3 مورد استفادهٔ viewها را پشتیبانی می‌کند)، `api/cardb.py` |
 | محتوای خودرو، خودروهای فقط‌قطعات | یک فایل SQLite برای هر خودرو زیر `Database_warehouse/_parts/` | درخت کاتالوگ قطعات | مسیرهای `KG_PARTS_*` در `api/parts.py` | `api/parts.py`، `api/partsingest.py` |
 | ایندکس RAG | به‌صورت پیش‌فرض `_rag/index.rag.db` (SQLite + FTS5 + `sqlite-vec`)؛ بردارها/FTS می‌توانند در `kgkg_vec` آینه شوند (`blob_vec` با pgvector HNSW) | chunkها، embeddingهای int8[1024]، گراف، قواعد عیب‌یابی | `RAG_VEC_BACKEND`، `RAG_FTS_BACKEND` (پیش‌فرض `sqlite`)، `RAG_PGVEC_DSN/DB`، `RAG_PGVEC_EF_SEARCH` | `api/rag/config.py`، `ops/rag/pgvec_load.py`، `ops/rag/pgfts_load.py` |

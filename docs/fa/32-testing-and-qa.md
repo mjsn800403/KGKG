@@ -1,4 +1,4 @@
-<!-- i18n-source: 32-testing-and-qa.md sha256:7179aad3e98b -->
+<!-- i18n-source: 32-testing-and-qa.md sha256:ff5172aca331 -->
 <div dir="rtl" lang="fa">
 
 # ۳۲ — تست، تضمین کیفیت و راستی‌آزمایی
@@ -9,7 +9,7 @@
 
 | # | سازوکار | محل اجرا | محرک | مانع merge؟ |
 |---|---|---|---|---|
-| ۱ | مجموعهٔ تست Django بک‌اند (۱۱۰ ماژول `test_*`/`tests*.py` زیر `KG_backend/`) با پوشش شاخه | job با نام `backend` در CI (سرویس PostgreSQL 16) | هر push و PR | بله |
+| ۱ | مجموعهٔ تست Django بک‌اند (۱۱۲ ماژول `test_*`/`tests*.py` زیر `KG_backend/`) با پوشش شاخه | job با نام `backend` در CI (سرویس PostgreSQL 16) | هر push و PR | بله |
 | ۲ | بررسی migrationها (`makemigrations --check`، فقط‌افزایشی، `ops/deploy/check_migrations.py`) | job بک‌اند؛ گیت دیپلوی | push/PR؛ دیپلوی | بله |
 | ۳ | کفِ پوشش (`ops/deploy/coverage_min`، اکنون **۵۹**) | job بک‌اند | push/PR | بله |
 | ۴ | کفِ هشدارهای lint فرانت‌اند (`ops/deploy/lint_max_warnings`، اکنون **۱۱۶**)، تست‌های واحد (`node --test`، ۲۱ فایل) و build تولید | job با نام `frontend` | push/PR | بله |
@@ -26,7 +26,7 @@
 
 ## ۳۲٫۲ تست‌های بک‌اند
 
-- **ساختار:** ماژول‌های `TestCase`/`SimpleTestCase` جنگو با نام `test_*.py` کنار کد (`api/`، `api/rag/`، `api/support_chat/`، `api/evalsuite/` و ...) به‌علاوهٔ `tests.py` و `tests_parts.py`. در نسخهٔ بالا ۱۱۰ فایل **[C]**.
+- **ساختار:** ماژول‌های `TestCase`/`SimpleTestCase` جنگو با نام `test_*.py` کنار کد (`api/`، `api/rag/`، `api/support_chat/`، `api/evalsuite/` و ...) به‌علاوهٔ `tests.py` و `tests_parts.py`. در نسخهٔ بالا ۱۱۲ فایل **[C]**.
 - **پایگاه داده:** در CI، PostgreSQL 16 (`KG_DB_ENGINE=postgres`، کانتینر سرویس با اعتبارنامهٔ مخصوص CI)؛ نام پایگاه تست در هر اجرا از طریق `KG_PG_TEST_NAME` قابل تعیین است. گیت دیپلوی از PostgreSQL میزبان روی سوکت محلی و با نام جدا در هر اجرا (`test_kgkg_gate_$$`) استفاده می‌کند.
 - **آفلاین از ریشه:** `HF_HUB_OFFLINE=1`، `TRANSFORMERS_OFFLINE=1`، `KG_WARMUP=0`، و `KG_ADMIN_TOKEN`/`KG_ENV_FILE` ساختگی در CI: بدون دانلود مدل و بدون فراخوانی خارجی.
 - **تصادفی‌سازی ترتیب:** `--shuffle`؛ لاگ `Using shuffle seed: N` را چاپ می‌کند. بازتولید: `python manage.py test --shuffle N`.

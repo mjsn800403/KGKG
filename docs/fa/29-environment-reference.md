@@ -1,4 +1,4 @@
-<!-- i18n-source: 29-environment-reference.md sha256:06be6a870b65 -->
+<!-- i18n-source: 29-environment-reference.md sha256:afa5615b04bf -->
 <div dir="rtl" lang="fa">
 
 # ۲۹ — مرجع متغیرهای محیطی (متغیرهای عملیاتی و تنظیمی)
@@ -13,13 +13,13 @@
 
 | متغیر | پیش‌فرض | مصرف‌کننده | معنا و پیامد |
 |---|---|---|---|
-| `DJANGO_CORS_ALLOW_ALL` | مقدار `DEBUG` | `KG_backend/settings.py:104` | مقدار `true` همهٔ originها را مجاز می‌کند. در تولید باید خاموش بماند؛ در غیر این صورت فهرست مجازِ `DJANGO_CORS_*` اعمال می‌شود. |
+| `DJANGO_CORS_ALLOW_ALL` | مقدار `DEBUG` | `KG_backend/KG_backend/settings.py:104` | مقدار `true` همهٔ originها را مجاز می‌کند. در تولید باید خاموش بماند؛ در غیر این صورت فهرست مجازِ `DJANGO_CORS_*` اعمال می‌شود. |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | فهرست خالی | `settings.py:277` | originهای جداشده با کاما که برای بررسی CSRF در POSTهای میان‌مبدأ مورد اعتماد هستند. |
 | `DJANGO_SSL_REDIRECT` | `false` | `settings.py:267` | ریدایرکت HTTP→HTTPS در سطح Django. پشت پراکسی Next.js **خاموش بماند**: در ۲۰۲۶‑۰۹‑۰۷ روشن شد، رندر سمت سرور را به `https://127.0.0.1:8000` کشاند و شکست خورد، و دوباره خاموش شد (کامنتِ `settings.py`). TLS را nginx پایان می‌دهد. |
 | `ADMIN_REQUIRE_2FA` | تنظیم‌نشده (خاموش) | `api/portal.py:958` | مقدار `1` عامل دوم (OTP) را برای ورود ادمین اجباری می‌کند. ← [26-auth-and-sessions.md](../26-auth-and-sessions.md). |
 | `RUN_MAIN` | توسط autoreload جنگو تنظیم می‌شود | `api/apps.py:21` | در توسعه فقط فرایند فرزندِ autoreload کش‌ها را گرم می‌کند؛ مقدار `false` یعنی فرایند ناظر. تنظیم اپراتور نیست. |
 | `KG_RELEASE` | `dev` (متریک‌ها) / تنظیم‌نشده (Sentry) | `settings.py:361`، `api/metrics_exposition.py:221` | شناسهٔ انتشار (SHA کامیت) که به رویدادهای GlitchTip/Sentry چسبانده می‌شود و برچسب `release` متریک build-info است. توسط دیپلوی تنظیم می‌شود. |
-| `KG_TESTING` | تنظیم‌نشده | `KG_backend/jsonlog.py:166` | اگر تنظیم باشد، لاگ ساختاریافتهٔ JSON نصب نمی‌شود (تست‌ها خروجی ساده دارند). وقتی `test` در `argv[:2]` باشد هم نصب نمی‌شود. |
+| `KG_TESTING` | تنظیم‌نشده | `KG_backend/KG_backend/jsonlog.py:166` | اگر تنظیم باشد، لاگ ساختاریافتهٔ JSON نصب نمی‌شود (تست‌ها خروجی ساده دارند). وقتی `test` در `argv[:2]` باشد هم نصب نمی‌شود. |
 | `API_BASE_INTERNAL` | `http://backend:8000` در `docker-compose.yml` | `kg_frontend/src/utils/api.jsx` | نشانی پایه‌ای که سرور Next.js برای فراخوانی‌های سمت سرور به Django استفاده می‌کند (`docker-compose.yml:31`). اگر بک‌اند جابه‌جا شد override شود. |
 | `KG_MEDIA_ROOT` | `/media` در compose | `kg_frontend/src/app/[brand]/[year]/[model]/[...path]/page.jsx:27` | پوشه‌ای که فرانت‌اند هنگام رندر نمایشگر دفترچه، رسانهٔ خودرو را از آن می‌خواند. |
 | `KG_PUBLIC_MEDIA_PREFIX` | `/kg-api/media` | `api/sst.py:74` | پیشوند URL عمومی که nginx مخزن رسانه را زیر آن سرو می‌کند. یک واقعیتِ استقرار است، پس قابل override است. |

@@ -158,7 +158,7 @@ parts expansion), `service.py` (TTL caches, embed lock, allowed_cars in cache ke
 
 ## Tests
 
-There are 110 test modules under `KG_backend/` at `origin/work` `07f3ab5` (`api/tests.py`, `api/test_*.py`, `api/rag/test_*.py`, `api/support_chat/test_*.py`,
+There are 112 test modules under `KG_backend/` at `origin/work` `07f3ab5` (`api/tests.py`, `api/test_*.py`, `api/rag/test_*.py`, `api/support_chat/test_*.py`,
 `api/notifications/test_*.py`); the full map, commands, coverage floor and CI behaviour are in [32-testing-and-qa.md](32-testing-and-qa.md). (This section once
 quoted "~193 tests green as of 2026-07-14"; that number is historical.) Quick run:
 
