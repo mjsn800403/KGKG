@@ -44,6 +44,9 @@
 | [۳۵ — سامانهٔ پشتیبانی مشتری (چت بازدیدکننده، صندوق ورودی کارکنان، تیکت، اعلان‌ها)](35-support-system.md) | [35-support-system.md](../35-support-system.md) |
 | [۳۶ — CI/CD، انتشار و استقرار (از ابتدا تا انتها)](36-cicd-and-deployment.md) | [36-cicd-and-deployment.md](../36-cicd-and-deployment.md) |
 | [۳۷ — ردیابی نیازمندی تا پیاده‌سازی](37-requirements-traceability.md) | [37-requirements-traceability.md](../37-requirements-traceability.md) |
+| [۳۸ — ماتریس وضعیت پیاده‌سازی و بهره‌برداری](38-implementation-status-matrix.md) | [38-implementation-status-matrix.md](../38-implementation-status-matrix.md) |
+| [۳۹ — راهنمای شواهد ارزیابی](39-evaluation-evidence-guide.md) | [39-evaluation-evidence-guide.md](../39-evaluation-evidence-guide.md) |
+| [۴۰ — راهنمای دسترسی به مستندات](40-documentation-access-guide.md) | [40-documentation-access-guide.md](../40-documentation-access-guide.md) |
 
 قواعد ترجمه: شناسه‌ها، مسیر فایل‌ها، دستورات، نام جدول‌ها و کلیدهای پیکربندی عیناً حفظ می‌شوند؛ متن توضیحی فارسی است؛ برچسب‌های شواهد (`[C]`، `[S]`، `[D]`، `[H]`، `[U]`) ترجمه نمی‌شوند. اسناد تاریخی (ADRها و CHANGELOG) به‌عنوان سابقه می‌مانند و ترجمه یا بازنویسی نمی‌شوند. سندهای تولیدشده (`docs/generated/`) فقط انگلیسی هستند چون از کد ساخته می‌شوند.
 

@@ -472,3 +472,33 @@ review_days = 45
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-04
 review_days = 45
+
+["38-implementation-status-matrix.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/38-implementation-status-matrix.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["39-evaluation-evidence-guide.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/39-evaluation-evidence-guide.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["40-documentation-access-guide.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/40-documentation-access-guide.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45

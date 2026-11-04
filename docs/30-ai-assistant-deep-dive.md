@@ -94,7 +94,7 @@ Facts behind the steps [C]:
    otherwise a stale partial float table silently loses edges. [C] doc 08.
 9. **Storage backends:** default vectors and FTS are SQLite (`RAG_VEC_BACKEND`, `RAG_FTS_BACKEND` = `sqlite`). Mirroring into `kgkg_vec`
    (pgvector HNSW and PG FTS) exists (`rag/pgvec.py`, `rag/pgfts.py`, `ops/rag/pgvec_load.py`, `pgfts_load.py`, benchmark
-   `pgvec_bench.py`) but is **opt-in**; whether production uses it is **[U]**.
+   `pgvec_bench.py`) but is **opt-in** in code; production **does** use it (`RAG_VEC_BACKEND=pgvector`, `RAG_FTS_BACKEND=pg`, observed 2026-11-04 **[P]**).
 
 ## 30.5 Retrieval pipeline (`retrieve.assist`)
 
@@ -260,7 +260,7 @@ them (`buildDiagnosisPrompt`).
 | Link sanitising | **Operational** | [C] |
 | Cross-encoder rerank | **Opt-in** (`RAG_RERANK=1`, default off) | [C]; production **[U]** |
 | FA→EN query translation | **Opt-in / A/B** (`RAG_MQ_TRANSLATE`, flag `mq_translate`) | [C]; production **[U]** |
-| pgvector/PG-FTS retrieval backends | **Opt-in**, code + loaders + benchmark exist (default `sqlite`) | [C]; production **[U]** |
+| pgvector/PG-FTS retrieval backends | **Opt-in** in code (default `sqlite`); **enabled in production**: `RAG_VEC_BACKEND=pgvector`, `RAG_FTS_BACKEND=pg` (observed 2026-11-04, see [38](38-implementation-status-matrix.md)) | [C]; [P] |
 | Scoped FTS for the assistant | **Rejected after measurement** (site search only) | [H] |
 | Feedback boosts and expert pins | **Operational** mechanics; volume of real ratings **[U]** | [C] |
 | Streaming answers | **Operational** (SSE deltas from the Node route) | [C] |

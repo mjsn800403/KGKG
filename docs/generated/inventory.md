@@ -484,6 +484,7 @@ Timers and services installed on the host from `ops/`. The host also runs units 
 | `ops/docker/backend.Dockerfile` | yes |
 | `ops/docker/containers.sh` | yes |
 | `ops/docker/frontend.Dockerfile` | yes |
+| `ops/governance/build_docs_package.py` | yes |
 | `ops/governance/check_docs_freshness.py` | yes |
 | `ops/governance/check_i18n.py` | yes |
 | `ops/governance/check_srs_trace.py` | yes |

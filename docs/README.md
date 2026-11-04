@@ -55,6 +55,9 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [35 — Support system](35-support-system.md) · [fa](fa/35-support-system.md) | Visitor chat, staff inbox, tickets, RBAC, outbox, retention, capability status |
 | [36 — CI/CD and deployment](36-cicd-and-deployment.md) · [fa](fa/36-cicd-and-deployment.md) | Branch protection, workflows, promotion pipeline, environments, rollback |
 | [37 — Requirements traceability](37-requirements-traceability.md) · [fa](fa/37-requirements-traceability.md) | FR/NFR to routes, modules, models, tests; checked by CI |
+| [38 — Implementation and operational status matrix](38-implementation-status-matrix.md) · [fa](fa/38-implementation-status-matrix.md) | Per capability: code / deployed / enabled / operating evidence / tests / observed on production (2026-11-04) |
+| [39 — Evaluation evidence guide](39-evaluation-evidence-guide.md) · [fa](fa/39-evaluation-evidence-guide.md) | Per subsystem: demonstrable capability, limits and reporting-ready wording |
+| [40 — Documentation access guide](40-documentation-access-guide.md) · [fa](fa/40-documentation-access-guide.md) | GitHub links, directory map by category, which document for which report, downloadable package |
 | [Persian index](fa/README.md) | Persian twins of the documents above and how they are kept in sync |
 | [Generated inventory](generated/inventory.md) | Machine-generated list of modules, models, commands, env var names, routes, units; CI-checked |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |

@@ -1,4 +1,4 @@
-<!-- i18n-source: 30-ai-assistant-deep-dive.md sha256:1b490f701045 -->
+<!-- i18n-source: 30-ai-assistant-deep-dive.md sha256:ba7030e7dab6 -->
 <div dir="rtl" lang="fa">
 
 # ۳۰ — دستیار هوش مصنوعی تخصصی: بررسی عمیق از ابتدا تا انتها
@@ -73,7 +73,7 @@ Browser ──POST /api/chat──► Next route
 6. **sidecarهای عیب‌یابی:** `diag_build.py` از جدول‌های `dtc`، `symptom`، `symptom_link` خود دفترچه‌ها sidecar هر خودرو را می‌سازد.
 7. **اصطلاح‌نامه:** `glossary.py` / `terms.py` واژه‌نامهٔ EN↔FA نام قطعات را می‌دهند (تولیدشده از مخزن اصطلاحات `terms.db`، [14-terminology.md](../14-terminology.md))؛ با بارگذاری داغ.
 8. **قاعدهٔ ازسرگیری:** پس از embed ناقص، `embed.embed_index` را صدا بزنید و سپس `store.drop_build_vec` را **پیش از** `graph.build_all`؛ وگرنه جدول float ناقصِ کهنه بی‌صدا یال‌ها را از بین می‌برد. [C] سند ۰۸.
-9. **پشتیبان‌های ذخیره‌سازی:** پیش‌فرض بردار و FTS هر دو SQLite است (`RAG_VEC_BACKEND` و `RAG_FTS_BACKEND` برابر `sqlite`). آینه‌کردن در `kgkg_vec` (pgvector HNSW و FTS روی PG) وجود دارد (`rag/pgvec.py`، `rag/pgfts.py`، `ops/rag/pgvec_load.py`، `pgfts_load.py` و benchmark با نام `pgvec_bench.py`) اما **اختیاری** است؛ استفادهٔ تولید از آن **[U]** است.
+9. **پشتیبان‌های ذخیره‌سازی:** پیش‌فرض بردار و FTS هر دو SQLite است (`RAG_VEC_BACKEND` و `RAG_FTS_BACKEND` برابر `sqlite`). آینه‌کردن در `kgkg_vec` (pgvector HNSW و FTS روی PG) وجود دارد (`rag/pgvec.py`، `rag/pgfts.py`، `ops/rag/pgvec_load.py`، `pgfts_load.py` و benchmark با نام `pgvec_bench.py`) اما در کد **اختیاری** است؛ تولید **از آن استفاده می‌کند** (`RAG_VEC_BACKEND=pgvector` و `RAG_FTS_BACKEND=pg`، مشاهده‌شده ۲۰۲۶-۱۱-۰۴ **[P]**).
 
 ## ۳۰٫۵ خط لولهٔ بازیابی (`retrieve.assist`)
 
@@ -178,7 +178,7 @@ Browser ──POST /api/chat──► Next route
 | پاک‌سازی پیوند | **عملیاتی** | [C] |
 | rerank با cross-encoder | **اختیاری** (`RAG_RERANK=1`، پیش‌فرض خاموش) | [C]؛ تولید **[U]** |
 | ترجمهٔ پرسش FA→EN | **اختیاری / A/B** (`RAG_MQ_TRANSLATE`، پرچم `mq_translate`) | [C]؛ تولید **[U]** |
-| پشتیبان‌های بازیابی pgvector/PG-FTS | **اختیاری**، کد و بارگذار و benchmark موجود (پیش‌فرض `sqlite`) | [C]؛ تولید **[U]** |
+| پشتیبان‌های بازیابی pgvector/PG-FTS | **اختیاری** در کد (پیش‌فرض `sqlite`)؛ **در تولید فعال است**: `RAG_VEC_BACKEND=pgvector` و `RAG_FTS_BACKEND=pg` (مشاهده‌شده ۲۰۲۶-۱۱-۰۴، نگاه کنید به [۳۸](38-implementation-status-matrix.md)) | [C]؛ [P] |
 | scoped FTS برای دستیار | **پس از اندازه‌گیری رد شد** (فقط جست‌وجوی سایت) | [H] |
 | boostهای بازخورد و pinهای کارشناسی | سازوکار **عملیاتی**؛ حجم امتیازهای واقعی **[U]** | [C] |
 | پاسخ streaming | **عملیاتی** (deltaهای SSE از route Node) | [C] |
