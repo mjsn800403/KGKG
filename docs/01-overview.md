@@ -2,8 +2,8 @@
 
 ## What KGtechvault is
 
-KGtechvault sells **access to official automotive service documentation** (Toyota / Lexus,
-currently 38 vehicles) to Iranian legal entities (dealership networks, after-sales service
+KGtechvault sells **access to official automotive service documentation** (Toyota / Lexus;
+38 vehicles when this overview was written on 2026-07-15, 237 catalog cars on 2026-11-03 **[S]** — see [23-data-layer.md](23-data-layer.md)) to Iranian legal entities (dealership networks, after-sales service
 companies). Buyers get a Persian, RTL web portal where their technicians browse the original
 English manual content, plus an **AI assistant** that answers repair questions and diagnostic
 trouble codes (DTCs) in Persian, grounded *exclusively* in the purchased manuals.
@@ -16,8 +16,9 @@ grants access, processes purchase/feature requests, and operates the data platfo
 ## Why it is built the way it is
 
 - **Content is immutable and sharded per vehicle.** Manuals arrive as crawled HTML, parsed
-  once into one self-contained SQLite DB per vehicle. Serving code opens them read-only.
-  Adding vehicle #4,000 is a file copy + catalog sync — no migrations, no downtime.
+  once into one self-contained store per vehicle. *Original design:* one SQLite file per vehicle, opened read-only.
+  *Today:* the content of 222 manual cars lives in per-car PostgreSQL schemas in database `kgkg_vec`, and 15 parts-only cars remain
+  read-only SQLite files ([23-data-layer.md](23-data-layer.md), ADR-0007, Proposed). Adding a vehicle needs no schema migration and no downtime.
 - **Everything else lives in one relational DB**: companies, users, grants, analytics
   rollups, events, jobs. The Django ORM is engine-agnostic, and the PostgreSQL move this
   sentence used to describe as future **happened on 2026-10-29** (`8fa94dd`,
@@ -28,14 +29,14 @@ grants access, processes purchase/feature requests, and operates the data platfo
   as a Persian *phraser* over already-retrieved context, with a no-LLM fallback. Access
   control is enforced *inside* retrieval (per-user car allow-list), not just at the UI.
 - **Dependency-light by policy.** No DRF, Redis, Celery, or external queue until a measured
-  need exists. The hand-rolled pieces (rate limiter, metrics aggregator, SSE-over-SQLite,
+  need exists. The hand-rolled pieces (rate limiter, metrics aggregator, SSE over a database table,
   pipeline supervisor) each document their scale envelope.
 
 ## The four actors
 
 | Actor | Where they work | What they can do |
 |---|---|---|
-| **Visitor** (public) | Landing `/`, `/login`, `/purchase` | Read marketing content, check VIN coverage, submit a purchase request (lead form) |
+| **Visitor** (public) | Landing `/`, `/login`, `/purchase`, `/recover` | Read marketing content, check VIN coverage, submit a purchase request (lead form); when enabled, chat with support anonymously ([35](35-support-system.md)) |
 | **Portal user** (company seat) | `/browse`, content pages, `/assistant`, `/settings` | Browse manuals for granted cars/layers, semantic search, AI assistant (if eligible), log activity |
 | **Company manager** (portal user with capabilities) | + `/team`, `/team/analytics`, `/requests` | Create/invite/deactivate employees, define org roles & hierarchy, delegate car grants, view team analytics + PDF reports, file requests to the platform admin |
 | **Platform admin** (vendor) | `/admin` (separate login) | Everything: companies, users, grants, purchase & company requests, platform analytics, data quality, processing pipeline, system monitoring |
@@ -104,7 +105,10 @@ guide (doc 13).
 | **Event** | Append-only `Event` row tailed by the SSE endpoint — the real-time backbone. |
 | **Category** | Canonical technical area (engine, brakes, electrical, …) resolved from manual section titles; the analytics dimension. |
 
-## Current production state (2026-07-15)
+## Production state on 2026-07-15 (historical snapshot)
+
+> This section is dated and was **not** refreshed. Later observations: 237 catalog cars on 2026-11-03 (222 manual cars in `kgkg_vec`, 15 parts-only) **[S]**;
+> the portal database is PostgreSQL 16 `kgkg` since 2026-10-29; current company and user counts are **[U]**. Use [23](23-data-layer.md) and [27](27-open-risks-and-decisions.md) for current state.
 
 - 1 active company (شرکت خدمات گستر سپهر گیتی), 5 portal users (manager `gostar_te_01`,
   head `yar_mohammadi`, supervisor `Behnam_hosienpour`, specialists incl. custom role

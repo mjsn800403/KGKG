@@ -35,13 +35,13 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 
 ## Stack
 
-| Layer | Tech | Notes |
+| Layer | Tech (versions from `package.json` and `ops/docker/backend-requirements.lock`, 2026-11-04) | Notes |
 |---|---|---|
-| Frontend | Next.js 16.2.9, React 19.2.4, `motion` 12 | App Router; JS + a few TS files; Tailwind v4 present but styling is hand-written `globals.css` (~1500 lines, CSS variables + `data-theme`) |
-| Backend | Django 5.2.15, gunicorn gthread | No DRF — plain `JsonResponse` views, `@csrf_exempt` + token auth |
+| Frontend | Next.js 16.4.3, React 19.2.4, `motion` ^12.42 | App Router; JS + a few TS files; Tailwind v4 present but styling is hand-written `globals.css` (~2650 lines, CSS variables + `data-theme`) |
+| Backend | Django 5.2.17, gunicorn 26 (gthread) | No DRF — plain `JsonResponse` views, `@csrf_exempt` + token auth |
 | DBs | PostgreSQL 16 (portal data `kgkg`; manual vehicle content `kgkg_vec`, one schema per car) + SQLite (parts-only car catalogs, RAG index via `sqlite-vec`, small side DBs) | Portal data: `KG_DB_ENGINE=postgres` since 2026-10-29. Car content: `api/cardb.py` hands back a SQLite file connection or, for cars in `KG_CARDB_PG`/`public.car_dbs`, a PostgreSQL connection (`api/cardb_pg.py`). Full map: [23-data-layer.md](23-data-layer.md); decision record: ADR-0007 (Proposed) |
-| Embeddings | bge-m3 (sentence-transformers 5.6, torch 2.12 CPU) | Fully offline: HF cache at `/root/.cache/huggingface`, `HF_HUB_OFFLINE=1` |
-| PDF | WeasyPrint 69 + bundled Vazirmatn TTFs | fa/RTL team reports |
+| Embeddings | bge-m3 (sentence-transformers 5.6.0, torch 2.12.1 CPU) | Fully offline: HF cache at `/root/.cache/huggingface`, `HF_HUB_OFFLINE=1` |
+| PDF | WeasyPrint 70 + bundled Vazirmatn TTFs | fa/RTL team reports |
 | LLM | Metis (api.metisai.ir, paid, external) | Phrasing only; key lives in frontend server env |
 | Proxy | nginx 1.24 | gzip, media alias, SSE passthrough |
 

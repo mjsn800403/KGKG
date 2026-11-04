@@ -11,4 +11,7 @@ files = [
   "35-support-system.md",
   "36-cicd-and-deployment.md",
   "37-requirements-traceability.md",
+  "00-srs.md",
+  "01-overview.md",
+  "02-architecture.md",
 ]
