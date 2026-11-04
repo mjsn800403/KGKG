@@ -90,9 +90,12 @@ release's images are retained for exactly this.
 * Two people, no rota, no follow-the-sun coverage. If both are unreachable,
   nobody responds. This is the single largest gap in this document.
 * Paging is SMS only, to a single Iranian provider. If that provider is down,
-  paging is down. The watchdog detects a dead alert engine but cannot detect a
-  dead SMS path end-to-end; `_sms_failures()` only sees failures the provider
-  reports.
+  paging is down. The watchdog detects a dead alert engine; since 2026-11-04 a
+  weekly canary (`_sms_canary()`, #24) sends a test SMS to the on-call numbers
+  and reads its delivery receipt back, so a provider that silently drops
+  messages opens `infra:sms_canary` within about two hours of the weekly send.
+  That alert is itself an SMS: it is guaranteed on the dashboard, not on a
+  phone. A second paging channel is still missing.
 * There is no Alertmanager and no Prometheus `rule_files` — by design.
   `api/alert_rules.py` *is* the rule evaluator, so a metric reaches a phone
   only if a rule is written there. Anything not in that file is unmonitored
@@ -112,6 +115,7 @@ In order, each with the finding it answers:
 3. Move staging and the QA stack off the production host, so a test run cannot
    consume the service's own CPU (§7).
 4. End-to-end verification of the SMS path, so a dead provider is detectable.
+   *Weekly canary in place (#24); a second channel is not.*
 5. Second host or managed failover. Until then 99.9 % is not a target this
    architecture can honestly hold.
 
