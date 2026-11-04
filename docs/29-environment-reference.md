@@ -107,6 +107,8 @@ All numeric, import-time, overridable from `.env.prod` without code change. Aler
 | `KG_ALERT_WATCHDOG_STALE_S` | 1800 | s | Watchdog heartbeat older than this (its timer runs every 5 min; 30 min = six misses). |
 | `KG_ALERT_5XX` | 5 | per hour | 5xx responses; chosen because the 7-day max before 2026-10-29 was 0. |
 | `KG_ALERT_BUDGET_MIN_H` | 24 | hours | Minimum observed window before a budget-burn alert is judged. |
+| `KG_ALERT_CANARY_DAYS` | 7 | days | Days between SMS paging canaries (one test SMS to every `KG_ALERT_PHONES` number, 10:00-12:00 Tehran); `0` turns the canary off. |
+| `KG_ALERT_CANARY_WAIT_H` | 2 | hours | How long a canary may go without a delivered receipt before `infra:sms_canary` opens. |
 | `KG_ALERT_QA_STALE_H` | 36 | hours | Nightly QA result older than this. |
 | `KG_LOCAL_HEALTH_URL` | `http://127.0.0.1:8000/api/health/` | URL | Local health probe used by both the rule engine and the watchdog. |
 | `KG_ALERT_DISK_WARN` / `KG_ALERT_DISK_CRIT` | 85 / 93 | % | Admin monitoring page colour thresholds (`monitoring.py:283-284`). |
