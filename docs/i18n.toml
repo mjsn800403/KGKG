@@ -25,4 +25,8 @@ files = [
   "12-security.md",
   "14-terminology.md",
   "19-onboarding.md",
+  "21-csrf-exempt-views.md",
+  "22-support-chat.md",
+  "23-data-layer.md",
+  "24-integrations.md",
 ]
