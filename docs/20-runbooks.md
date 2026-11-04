@@ -98,6 +98,13 @@ After any SEV1/SEV2: a short postmortem and a regression test.
 
 The chat is human-only (no AI). Everything here is a person's decision; none of it is a deploy.
 
+* **Before enabling it in production:** the CI job `support-chat-e2e` must be green for the commit
+  being enabled: every browser test in `support-chat.spec.js` (21 on 2026-11-04: S1-S10, F1-F10) runs on a throwaway stack
+  (`qa/e2e/support-chat-stack.sh`, own SQLite, no env file, no production data) and
+  `qa/e2e/support_chat_guard.py` fails the job if any is skipped, failed or missing. Its
+  `results/` are kept as the artifact `support-chat-e2e-<sha>` (90 days). The shared QA stack
+  (`qa/run_e2e.sh`) still skips them; that is intended, the chat is not enabled there (#78).
+
 * **Notice:** `manage.py support_health --fail-on warn` exits 1, staff report waiting visitors, or a
   privacy/abuse report arrives. (Not wired to alerts yet, so check it by hand during opening hours.)
 * **Confirm:** `python manage.py support_health` (waiting count, oldest wait, by intent; read-only),
