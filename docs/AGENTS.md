@@ -59,6 +59,7 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
 | Find which code/tests implement a requirement | `37-requirements-traceability.md`, `00-srs.md` | `ops/governance/check_srs_trace.py` |
 | Know what is really implemented / enabled in production (before any external claim) | `38-implementation-status-matrix.md`, `39-evaluation-evidence-guide.md` | evidence tags [P] dated 2026-11-04 |
 | Find a document by category, or get the downloadable package | `40-documentation-access-guide.md` | `ops/governance/build_docs_package.py` |
+| Know what is still undocumented / what to write next | `41-documentation-coverage-and-backlog.md` | gap IDs G1-G18 |
 | Add an env var, command, model, module, ops file | `docs/generated/inventory.md` rules in section 5 | run `python3 ops/governance/gen_inventory.py` |
 
 ## 4. Rules that are easy to break

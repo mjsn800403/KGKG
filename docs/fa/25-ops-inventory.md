@@ -1,4 +1,4 @@
-<!-- i18n-source: 25-ops-inventory.md sha256:4e59d7b7b3b5 -->
+<!-- i18n-source: 25-ops-inventory.md sha256:8ad1060007dc -->
 <div dir="rtl" lang="fa">
 
 # ۲۵ — موجودی عملیات: میزبان، واحدها، کانتینرها، پوشه‌ها
@@ -74,7 +74,7 @@
 | `ops/umami/*` | تحلیل بدون کوکی؛ nginx فقط اسکریپت tracker و نقطهٔ collect را زیر `/stats/` منتشر می‌کند |
 | `ops/qa/*` | سرویس و timer مربوط به QA شبانه (ساعت ۰۱:۳۰ UTC) |
 | `ops/outbox/*` | قالب‌های واحد برای صندوق خروجی اعلان (نصب‌نشده؛ `ExecStart` جایگزین است) |
-| `ops/rag/*` | آزمایش‌های آفلاین: بارگذارها و benchmarkهای pgvector/FTS، جاروب آمیزش، معناداری زوجی، dump کاندیدها. در مسیرهای تولید اجرا نمی‌شود |
+| `ops/rag/*` | آزمایش‌های آفلاین: بارگذارها و benchmarkهای pgvector/FTS، جاروب آمیزش، معناداری زوجی، dump کاندیدها. بارگذارهای pgvector/FTS ذخیره‌گاهی را پر می‌کنند که تولید از آن می‌خواند (`RAG_VEC_BACKEND=pgvector` و `RAG_FTS_BACKEND=pg`، مشاهده‌شده ۲۰۲۶-۱۱-۰۴)؛ benchmarkها و جاروب‌ها آفلاین‌اند |
 | `ops/cardb/*` | بارگذار خودرو در PostgreSQL و بررسی تطابق ([23](23-data-layer.md)) |
 | `ops/partsouq/partsouq_vin_crawl.py` | خزش مؤدبانهٔ Partsouq برای یک خودرو؛ روی چالش پایدار Cloudflare متوقف می‌شود |
 | `ops/security/*` | baseline مربوط به bandit، فهرست مجاز npm audit و گیت (`npm_audit_gate.mjs`: فقط روی advisoryهای خارج از فهرست مجاز در شدت مشخص یا بالاتر شکست می‌خورد) |

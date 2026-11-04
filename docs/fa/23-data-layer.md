@@ -1,4 +1,4 @@
-<!-- i18n-source: 23-data-layer.md sha256:235690a53dee -->
+<!-- i18n-source: 23-data-layer.md sha256:fd4a31383464 -->
 <div dir="rtl" lang="fa">
 
 # ۲۳ — لایهٔ داده: چه چیزی کجا ذخیره می‌شود
@@ -12,7 +12,7 @@
 | پایگاه پرتال `kgkg` | PostgreSQL 16 روی میزبان (`KG_DB_ENGINE=postgres`؛ در توسعه SQLite با نام `db.sqlite3`) | حساب‌ها، شرکت‌ها، اعطاها، نشست‌ها، لاگ‌ها، rollupها، درخواست‌ها، چت پشتیبانی، پایگاه دانش، پرچم‌ها | `KG_PG_NAME/USER/PASSWORD/HOST/PORT`، `KG_PG_CONN_MAX_AGE` | `KG_backend/KG_backend/settings.py`، `api/models.py` |
 | محتوای خودرو، خودروهای دارای دفترچه | پایگاه PostgreSQL با نام `kgkg_vec`، یک schema با نام `car_<md5(نام فایل)>` برای هر خودرو، جدول رجیستری `public.car_dbs(filename, schema, nodes, loaded_at)` | درخت دفترچه (`nodes`، HTML، hrefها، مسیرها) با دوقلوهای ذخیره‌شدهٔ lowercase با پسوند `_lc` برای جست‌وجوی LIKE | `KG_CARDB_PG` (مقدار `*` = هر خودروی بارگذاری‌شده؛ یا نام فایل‌های جداشده با `|`)، `KG_CARDB_PG_DSN` (پیش‌فرض DSN مربوط به PG در RAG) | `api/cardb_pg.py` (کلاس `PgCarConn` سطح کوچک sqlite3 مورد استفادهٔ viewها را پشتیبانی می‌کند)، `api/cardb.py` |
 | محتوای خودرو، خودروهای فقط‌قطعات | یک فایل SQLite برای هر خودرو زیر `Database_warehouse/_parts/` | درخت کاتالوگ قطعات | مسیرهای `KG_PARTS_*` در `api/parts.py` | `api/parts.py`، `api/partsingest.py` |
-| ایندکس RAG | به‌صورت پیش‌فرض `_rag/index.rag.db` (SQLite + FTS5 + `sqlite-vec`)؛ بردارها/FTS می‌توانند در `kgkg_vec` آینه شوند (`blob_vec` با pgvector HNSW) | chunkها، embeddingهای int8[1024]، گراف، قواعد عیب‌یابی | `RAG_VEC_BACKEND`، `RAG_FTS_BACKEND` (پیش‌فرض `sqlite`)، `RAG_PGVEC_DSN/DB`، `RAG_PGVEC_EF_SEARCH` | `api/rag/config.py`، `ops/rag/pgvec_load.py`، `ops/rag/pgfts_load.py` |
+| ایندکس RAG | پیش‌فرض کد `_rag/index.rag.db` (SQLite + FTS5 + `sqlite-vec`)؛ **تولید بردار و FTS را از `kgkg_vec` سرویس می‌دهد** (`RAG_VEC_BACKEND=pgvector` و `RAG_FTS_BACKEND=pg`، مشاهده‌شده ۲۰۲۶-۱۱-۰۴، [۳۸](38-implementation-status-matrix.md))؛ فایل SQLite هنوز موجود است (`blob_vec` با pgvector HNSW) | chunkها، embeddingهای int8[1024]، گراف، قواعد عیب‌یابی | `RAG_VEC_BACKEND`، `RAG_FTS_BACKEND` (پیش‌فرض `sqlite`)، `RAG_PGVEC_DSN/DB`، `RAG_PGVEC_EF_SEARCH` | `api/rag/config.py`، `ops/rag/pgvec_load.py`، `ops/rag/pgfts_load.py` |
 
 فایل‌های دیگر: `terms.db` (اصطلاحات، سند ۱۴)، `feedback.db` (بازخورد دستیار)، رسانهٔ استاتیک زیر `static_warehouse` که از طریق nginx با subrequest احراز هویت سرو می‌شود (`api/mediaauth.py`).
 

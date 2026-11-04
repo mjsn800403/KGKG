@@ -58,6 +58,7 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [38 — Implementation and operational status matrix](38-implementation-status-matrix.md) · [fa](fa/38-implementation-status-matrix.md) | Per capability: code / deployed / enabled / operating evidence / tests / observed on production (2026-11-04) |
 | [39 — Evaluation evidence guide](39-evaluation-evidence-guide.md) · [fa](fa/39-evaluation-evidence-guide.md) | Per subsystem: demonstrable capability, limits and reporting-ready wording |
 | [40 — Documentation access guide](40-documentation-access-guide.md) · [fa](fa/40-documentation-access-guide.md) | GitHub links, directory map by category, which document for which report, downloadable package |
+| [41 — Documentation coverage and backlog](41-documentation-coverage-and-backlog.md) · [fa](fa/41-documentation-coverage-and-backlog.md) | Honest coverage assessment, gaps G1-G18, further documents worth writing, owner questions |
 | [Persian index](fa/README.md) | Persian twins of the documents above and how they are kept in sync |
 | [Generated inventory](generated/inventory.md) | Machine-generated list of modules, models, commands, env var names, routes, units; CI-checked |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |

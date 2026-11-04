@@ -1,4 +1,4 @@
-<!-- i18n-source: 29-environment-reference.md sha256:afa5615b04bf -->
+<!-- i18n-source: 29-environment-reference.md sha256:f3807f7c55c6 -->
 <div dir="rtl" lang="fa">
 
 # ۲۹ — مرجع متغیرهای محیطی (متغیرهای عملیاتی و تنظیمی)
@@ -38,7 +38,7 @@
 | `KG_PG_PORT` | `5432` | `settings.py:151`؛ همچنین `api/rag/config.py:688` | پورت؛ به DSN مربوط به pgvector هم منتقل می‌شود. |
 | `KG_PG_TEST_NAME` | تنظیم‌نشده | `settings.py:157` | نام پایگاه تستِ جنگو. گیت برای هر اجرا نامی جدا می‌گذارد (`test_kgkg_gate_$$`) تا گیت CI و گیت دیپلوی پایگاه یکدیگر را حذف نکنند. |
 | `KG_CARDB_ADMIN_DSN` | `dbname=kgkg_vec` | `api/cardb_pg.py:203` | DSN از نوع libpq که `adopt()` و بارگذارها برای ساخت و پرکردن schemaهای هر خودرو در `kgkg_vec` به کار می‌برند. نیازمند اجازهٔ ساخت schema است. ← [23-data-layer.md](../23-data-layer.md). |
-| `RAG_PGVEC_DB` | `kgkg_vec` | `api/rag/config.py:686` | نام پایگاهِ آینهٔ اختیاریِ pgvector. فقط وقتی فعال است که `RAG_VEC_BACKEND`/`RAG_FTS_BACKEND` به PostgreSQL اشاره کنند. |
+| `RAG_PGVEC_DB` | `kgkg_vec` | `api/rag/config.py:686` | نام پایگاهِ pgvector. **در تولید روی PostgreSQL تنظیم است** (`RAG_VEC_BACKEND=pgvector` و `RAG_FTS_BACKEND=pg`، مشاهده‌شده ۲۰۲۶-۱۱-۰۴)؛ فقط وقتی فعال است که `RAG_VEC_BACKEND`/`RAG_FTS_BACKEND` به PostgreSQL اشاره کنند. |
 | `RAG_INDEX_DB` | `_rag/index.rag.db` | `api/rag/config.py:33` | فایل ایندکس جایگزین برای آزمایش‌های آفلاین. در تولید تنظیم نیست. |
 | `RAG_PARTS_DB` | محاسبه در `config.py:66` | `api/rag/config.py:66` | override برای پایگاه کاتالوگ قطعاتی که دستیار استفاده می‌کند. |
 | `RAG_FEEDBACK_DB` | `_rag/feedback.db` | `api/rag/config.py:654` | SQLite جانبی برای لاگ پرسش‌ها و امتیازها. **پشته‌های staging/QA پوشهٔ `_rag/` تولید را mount می‌کنند و باید این را تنظیم کنند**؛ وگرنه پرسش‌ها و امتیازهایشان در مخزن تولید می‌نشیند و نتایج زندهٔ جست‌وجو را بازرتبه‌بندی می‌کند. |
