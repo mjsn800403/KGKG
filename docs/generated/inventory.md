@@ -222,220 +222,220 @@ Names only; values live in `.env.prod` on the server and are never recorded here
 
 | Variable | Read in | Documented |
 |---|---|---|
-| `ADMIN_REQUIRE_2FA` | `KG_backend/api/portal.py` | no |
-| `API_BASE_INTERNAL` | `kg_frontend/src/utils/api.jsx` | no |
+| `ADMIN_REQUIRE_2FA` | `KG_backend/api/portal.py` | yes |
+| `API_BASE_INTERNAL` | `kg_frontend/src/utils/api.jsx` | yes |
 | `BACKEND_URL` | `kg_frontend/src/app/api/chat/route.js`, `kg_frontend/src/app/assistant/page.jsx` | yes |
 | `CHAT_RL_LIMIT` | `kg_frontend/src/app/api/chat/route.js` | yes |
 | `CHAT_RL_WINDOW` | `kg_frontend/src/app/api/chat/route.js` | yes |
 | `DJANGO_ALLOWED_HOSTS` | `KG_backend/KG_backend/settings.py` | yes |
-| `DJANGO_CORS_ALLOW_ALL` | `KG_backend/KG_backend/settings.py` | no |
+| `DJANGO_CORS_ALLOW_ALL` | `KG_backend/KG_backend/settings.py` | yes |
 | `DJANGO_CORS_ORIGINS` | `KG_backend/KG_backend/settings.py` | yes |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | `KG_backend/KG_backend/settings.py` | no |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | `KG_backend/KG_backend/settings.py` | yes |
 | `DJANGO_DEBUG` | `KG_backend/KG_backend/settings.py` | yes |
 | `DJANGO_SECRET_KEY` | `KG_backend/KG_backend/settings.py` | yes |
 | `DJANGO_SECRET_KEY_FALLBACKS` | `KG_backend/KG_backend/settings.py` | yes |
 | `DJANGO_SECURE_SSL` | `KG_backend/KG_backend/settings.py` | yes |
-| `DJANGO_SSL_REDIRECT` | `KG_backend/KG_backend/settings.py` | no |
+| `DJANGO_SSL_REDIRECT` | `KG_backend/KG_backend/settings.py` | yes |
 | `EMAIL_HOST` | `KG_backend/api/notifications/providers.py` | yes |
 | `EMAIL_HOST_PASSWORD` | `KG_backend/api/notifications/providers.py` | yes |
 | `EMAIL_HOST_USER` | `KG_backend/api/notifications/providers.py` | yes |
 | `EMAIL_PORT` | `KG_backend/api/notifications/providers.py` | yes |
 | `EMAIL_USE_TLS` | `KG_backend/api/notifications/providers.py` | yes |
-| `GITHUB_EVENT_PATH` | `ops/governance/check_traceability.py` | no |
+| `GITHUB_EVENT_PATH` | `ops/governance/check_traceability.py` | yes |
 | `KG_ADMIN_TOKEN` | `KG_backend/api/admin_auth.py` | yes |
-| `KG_ALERT_5XX` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_ADMIN_FAILS` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_ADMIN_NO2FA` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_AI_COST_FLOOR` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_AI_COST_X` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_AI_DEGRADED` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_AI_MIN_N` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_BUDGET_MIN_H` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_DISK_CRIT` | `KG_backend/api/monitoring.py` | no |
-| `KG_ALERT_DISK_PCT` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_DISK_WARN` | `KG_backend/api/monitoring.py` | no |
-| `KG_ALERT_ERR_MIN_N` | `KG_backend/api/monitoring.py` | no |
-| `KG_ALERT_ERR_RATE` | `KG_backend/api/monitoring.py` | no |
-| `KG_ALERT_LATENCY_MS` | `KG_backend/api/monitoring.py` | no |
-| `KG_ALERT_LOGIN_FAIL_ACCOUNT` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_LOGIN_FAIL_IP` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_MEM_FREE_PCT` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_MEM_WARN` | `KG_backend/api/monitoring.py` | no |
-| `KG_ALERT_NETWORK_DOWN_MIN` | `KG_backend/api/alert_rules.py` | no |
+| `KG_ALERT_5XX` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_ADMIN_FAILS` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_ADMIN_NO2FA` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_AI_COST_FLOOR` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_AI_COST_X` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_AI_DEGRADED` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_AI_MIN_N` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_BUDGET_MIN_H` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_DISK_CRIT` | `KG_backend/api/monitoring.py` | yes |
+| `KG_ALERT_DISK_PCT` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_DISK_WARN` | `KG_backend/api/monitoring.py` | yes |
+| `KG_ALERT_ERR_MIN_N` | `KG_backend/api/monitoring.py` | yes |
+| `KG_ALERT_ERR_RATE` | `KG_backend/api/monitoring.py` | yes |
+| `KG_ALERT_LATENCY_MS` | `KG_backend/api/monitoring.py` | yes |
+| `KG_ALERT_LOGIN_FAIL_ACCOUNT` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_LOGIN_FAIL_IP` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_MEM_FREE_PCT` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_MEM_WARN` | `KG_backend/api/monitoring.py` | yes |
+| `KG_ALERT_NETWORK_DOWN_MIN` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_ALERT_PHONES` | `KG_backend/api/alert_rules.py`, `ops/observability/watchdog.py` | yes |
 | `KG_ALERT_PROBE_DOWN_MIN` | `KG_backend/api/alert_rules.py` | yes |
-| `KG_ALERT_QA_STALE_H` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_RESTARTS` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_SCRAPE_DOWN_MIN` | `KG_backend/api/alert_rules.py` | no |
+| `KG_ALERT_QA_STALE_H` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_RESTARTS` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_SCRAPE_DOWN_MIN` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_ALERT_SLO_MONTHLY` | `KG_backend/api/alert_rules.py` | yes |
-| `KG_ALERT_SMS_COOLDOWN_H` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_SMS_FAILS` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_TLS_DAYS` | `KG_backend/api/alert_rules.py` | no |
-| `KG_ALERT_WATCHDOG_STALE_S` | `KG_backend/api/alert_rules.py` | no |
-| `KG_BACKEND_DIR` | `ops/hostjobs/hostjobs_daemon.py` | no |
-| `KG_BE_DIR` | `ops/deploy/deploy.sh`, `ops/docker/containers.sh` | no |
-| `KG_BIND` | `ops/docker/backend.Dockerfile`, `ops/docker/frontend.Dockerfile` | no |
-| `KG_BIN_DIR` | `ops/deploy/setup_ci_access.sh` | no |
-| `KG_CARDB_ADMIN_DSN` | `KG_backend/api/cardb_pg.py` | no |
+| `KG_ALERT_SMS_COOLDOWN_H` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_SMS_FAILS` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_TLS_DAYS` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_WATCHDOG_STALE_S` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_BACKEND_DIR` | `ops/hostjobs/hostjobs_daemon.py` | yes |
+| `KG_BE_DIR` | `ops/deploy/deploy.sh`, `ops/docker/containers.sh` | yes |
+| `KG_BIND` | `ops/docker/backend.Dockerfile`, `ops/docker/frontend.Dockerfile` | yes |
+| `KG_BIN_DIR` | `ops/deploy/setup_ci_access.sh` | yes |
+| `KG_CARDB_ADMIN_DSN` | `KG_backend/api/cardb_pg.py` | yes |
 | `KG_CARDB_PG` | `KG_backend/api/cardb_pg.py`, `ops/cardb/car_parity.py` | yes |
 | `KG_CARDB_PG_DSN` | `KG_backend/api/cardb_pg.py` | yes |
 | `KG_CARDB_POOL` | `KG_backend/api/cardb.py` | yes |
-| `KG_CG_MEDIA_BLOCK` | `KG_backend/api/contentguard.py` | no |
+| `KG_CG_MEDIA_BLOCK` | `KG_backend/api/contentguard.py` | yes |
 | `KG_CG_MEDIA_WARN` | `KG_backend/api/contentguard.py` | yes |
-| `KG_CG_PAGE_BLOCK` | `KG_backend/api/contentguard.py` | no |
+| `KG_CG_PAGE_BLOCK` | `KG_backend/api/contentguard.py` | yes |
 | `KG_CG_PAGE_WARN` | `KG_backend/api/contentguard.py` | yes |
-| `KG_CI_FETCH` | `ops/deploy/ci_evidence.sh` | no |
-| `KG_CI_REPO` | `ops/deploy/ci_evidence.sh` | no |
-| `KG_CI_REQUIRED` | `ops/deploy/ci_evidence.sh` | no |
-| `KG_CI_REQUIRED_ARG` | `ops/deploy/ci_evidence.sh` | no |
-| `KG_CI_SSH_DIR` | `ops/deploy/ci_ssh.sh` | no |
-| `KG_CI_TIMEOUT` | `ops/deploy/ci_evidence.sh` | no |
-| `KG_DATA_DIR` | `KG_backend/KG_backend/settings.py` | no |
+| `KG_CI_FETCH` | `ops/deploy/ci_evidence.sh` | yes |
+| `KG_CI_REPO` | `ops/deploy/ci_evidence.sh` | yes |
+| `KG_CI_REQUIRED` | `ops/deploy/ci_evidence.sh` | yes |
+| `KG_CI_REQUIRED_ARG` | `ops/deploy/ci_evidence.sh` | yes |
+| `KG_CI_SSH_DIR` | `ops/deploy/ci_ssh.sh` | yes |
+| `KG_CI_TIMEOUT` | `ops/deploy/ci_evidence.sh` | yes |
+| `KG_DATA_DIR` | `KG_backend/KG_backend/settings.py` | yes |
 | `KG_DB_ENGINE` | `KG_backend/KG_backend/settings.py` | yes |
-| `KG_DB_PATH` | `KG_backend/KG_backend/settings.py` | no |
-| `KG_DEPLOY_LOCK_WAIT` | `ops/deploy/deploy.sh` | no |
-| `KG_DOCKER` | `ops/deploy/prune_images.sh` | no |
+| `KG_DB_PATH` | `KG_backend/KG_backend/settings.py` | yes |
+| `KG_DEPLOY_LOCK_WAIT` | `ops/deploy/deploy.sh` | yes |
+| `KG_DOCKER` | `ops/deploy/prune_images.sh` | yes |
 | `KG_DOC_BASE_REF` | `ops/governance/gen_inventory.py` | yes |
-| `KG_ENV_FILE` | `KG_backend/api/management/commands/rotate_secrets.py` | no |
-| `KG_ENV_FILE_WATCHDOG` | `ops/observability/watchdog.py` | no |
-| `KG_FE_ENV` | `ops/docker/containers.sh` | no |
+| `KG_ENV_FILE` | `KG_backend/api/management/commands/rotate_secrets.py` | yes |
+| `KG_ENV_FILE_WATCHDOG` | `ops/observability/watchdog.py` | yes |
+| `KG_FE_ENV` | `ops/docker/containers.sh` | yes |
 | `KG_FRONTEND_BASE_URL` | `KG_backend/api/team.py` | yes |
-| `KG_GATE_LOGS` | `ops/deploy/gate.sh` | no |
-| `KG_HEALTH_PORT` | `ops/docker/backend.Dockerfile` | no |
-| `KG_HOSTJOBS_DIR` | `KG_backend/api/hostjobs.py` | no |
-| `KG_HOST_KEY` | `ops/deploy/setup_ci_access.sh` | no |
-| `KG_IMAGE_REPOS` | `ops/deploy/prune_images.sh` | no |
+| `KG_GATE_LOGS` | `ops/deploy/gate.sh` | yes |
+| `KG_HEALTH_PORT` | `ops/docker/backend.Dockerfile` | yes |
+| `KG_HOSTJOBS_DIR` | `KG_backend/api/hostjobs.py` | yes |
+| `KG_HOST_KEY` | `ops/deploy/setup_ci_access.sh` | yes |
+| `KG_IMAGE_REPOS` | `ops/deploy/prune_images.sh` | yes |
 | `KG_INVITE_EMAIL` | `KG_backend/api/team.py` | yes |
-| `KG_KEEP_STAGING` | `ops/deploy/deploy.sh` | no |
+| `KG_KEEP_STAGING` | `ops/deploy/deploy.sh` | yes |
 | `KG_LLM_MODEL` | `KG_backend/api/insights.py` | yes |
-| `KG_LOCAL_HEALTH_URL` | `KG_backend/api/alert_rules.py`, `ops/observability/watchdog.py` | no |
-| `KG_LOG_DIR` | `KG_backend/KG_backend/settings.py` | no |
+| `KG_LOCAL_HEALTH_URL` | `KG_backend/api/alert_rules.py`, `ops/observability/watchdog.py` | yes |
+| `KG_LOG_DIR` | `KG_backend/KG_backend/settings.py` | yes |
 | `KG_LOG_LEVEL` | `KG_backend/KG_backend/settings.py` | yes |
-| `KG_MEDIA_ROOT` | `kg_frontend/src/app/[brand]/[year]/[model]/[...path]/page.jsx` | no |
+| `KG_MEDIA_ROOT` | `kg_frontend/src/app/[brand]/[year]/[model]/[...path]/page.jsx` | yes |
 | `KG_METRICS_FLUSH_S` | `KG_backend/api/monitoring.py` | yes |
 | `KG_METRICS_TOKEN` | `KG_backend/api/metrics_exposition.py` | yes |
-| `KG_MIGRATION_BASE` | `ops/deploy/gate.sh` | no |
-| `KG_NGINX_BACKUPS` | `ops/deploy/deploy.sh` | no |
-| `KG_NGINX_CONFD` | `ops/deploy/deploy.sh` | no |
-| `KG_NGINX_SITE` | `ops/deploy/deploy.sh` | no |
+| `KG_MIGRATION_BASE` | `ops/deploy/gate.sh` | yes |
+| `KG_NGINX_BACKUPS` | `ops/deploy/deploy.sh` | yes |
+| `KG_NGINX_CONFD` | `ops/deploy/deploy.sh` | yes |
+| `KG_NGINX_SITE` | `ops/deploy/deploy.sh` | yes |
 | `KG_NOTIFY_FROM_EMAIL` | `KG_backend/api/notifications/providers.py` | yes |
 | `KG_NOTIFY_SMS_MAX_PER_HOUR` | `KG_backend/api/notifications/worker.py` | yes |
 | `KG_ORIGIN_GUARD` | `KG_backend/api/originguard.py` | yes |
-| `KG_PARSER_PATH` | `KG_backend/api/ingest.py` | no |
+| `KG_PARSER_PATH` | `KG_backend/api/ingest.py` | yes |
 | `KG_PARSE_WORKERS` | `KG_backend/api/management/commands/run_pipeline.py`, `KG_backend/api/pipeline.py` | yes |
 | `KG_PARTS_DIR` | `KG_backend/api/parts.py` | yes |
 | `KG_PG_CONN_MAX_AGE` | `KG_backend/KG_backend/settings.py` | yes |
-| `KG_PG_HOST` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | no |
+| `KG_PG_HOST` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
 | `KG_PG_NAME` | `KG_backend/KG_backend/settings.py` | yes |
-| `KG_PG_PASSWORD` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | no |
-| `KG_PG_PORT` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | no |
-| `KG_PG_TEST_NAME` | `KG_backend/KG_backend/settings.py` | no |
-| `KG_PG_USER` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | no |
-| `KG_PIPELINE_BATCH` | `KG_backend/api/management/commands/run_pipeline.py` | no |
-| `KG_PIPELINE_DISK_RECOVERY_MARGIN` | `KG_backend/api/ingest.py` | no |
+| `KG_PG_PASSWORD` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
+| `KG_PG_PORT` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
+| `KG_PG_TEST_NAME` | `KG_backend/KG_backend/settings.py` | yes |
+| `KG_PG_USER` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
+| `KG_PIPELINE_BATCH` | `KG_backend/api/management/commands/run_pipeline.py` | yes |
+| `KG_PIPELINE_DISK_RECOVERY_MARGIN` | `KG_backend/api/ingest.py` | yes |
 | `KG_PIPELINE_MIN_FREE_GB` | `KG_backend/api/ingest.py` | yes |
-| `KG_PIPELINE_THREADS` | `KG_backend/api/pipeline.py` | no |
-| `KG_PORT` | `ops/docker/backend.Dockerfile` | no |
+| `KG_PIPELINE_THREADS` | `KG_backend/api/pipeline.py` | yes |
+| `KG_PORT` | `ops/docker/backend.Dockerfile` | yes |
 | `KG_PRIVACY_DRAFT_PAGE` | `kg_frontend/src/app/privacy/page.tsx` | yes |
-| `KG_PROD_DIR` | `ops/deploy/ci_evidence.sh`, `ops/deploy/setup_ci_access.sh` | no |
-| `KG_PROD_ENV` | `ops/deploy/gate.sh` | no |
+| `KG_PROD_DIR` | `ops/deploy/ci_evidence.sh`, `ops/deploy/setup_ci_access.sh` | yes |
+| `KG_PROD_ENV` | `ops/deploy/gate.sh` | yes |
 | `KG_PROMETHEUS_URL` | `KG_backend/api/alert_rules.py`, `ops/observability/watchdog.py` | yes |
-| `KG_PS_DIR` | `KG_backend/api/partsouq_crawler.py` | no |
-| `KG_PS_SCRIPT` | `KG_backend/api/partsouq_crawler.py` | no |
-| `KG_PUBLIC_MEDIA_PREFIX` | `KG_backend/api/sst.py` | no |
-| `KG_QA_PASSWORD` | `KG_backend/api/management/commands/seed_qa_fixtures.py` | no |
-| `KG_QA_STACK` | `KG_backend/api/management/commands/seed_qa_fixtures.py` | no |
-| `KG_RELEASE` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/metrics_exposition.py` +3 | no |
+| `KG_PS_DIR` | `KG_backend/api/partsouq_crawler.py` | yes |
+| `KG_PS_SCRIPT` | `KG_backend/api/partsouq_crawler.py` | yes |
+| `KG_PUBLIC_MEDIA_PREFIX` | `KG_backend/api/sst.py` | yes |
+| `KG_QA_PASSWORD` | `KG_backend/api/management/commands/seed_qa_fixtures.py` | yes |
+| `KG_QA_STACK` | `KG_backend/api/management/commands/seed_qa_fixtures.py` | yes |
+| `KG_RELEASE` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/metrics_exposition.py` +3 | yes |
 | `KG_RL_DISABLE` | `KG_backend/api/ratelimit.py`, `KG_backend/api/support_chat/throttle.py` | yes |
 | `KG_RL_STORE` | `KG_backend/api/ratelimit.py` | yes |
-| `KG_SECTOOLS` | `ops/deploy/gate.sh` | no |
-| `KG_SECTOOLS_BIN` | `ops/security/scan.sh` | no |
+| `KG_SECTOOLS` | `ops/deploy/gate.sh` | yes |
+| `KG_SECTOOLS_BIN` | `ops/security/scan.sh` | yes |
 | `KG_SHIELD` | `KG_backend/api/shield.py`, `kg_frontend/src/utils/shieldServer.js` | yes |
 | `KG_SHIELD_SECRET` | `KG_backend/api/shield.py`, `kg_frontend/src/utils/shieldServer.js` | yes |
 | `KG_SINGLE_SESSION` | `KG_backend/api/portal.py` | yes |
-| `KG_SMOKE_HOST` | `ops/deploy/smoke.sh` | no |
+| `KG_SMOKE_HOST` | `ops/deploy/smoke.sh` | yes |
 | `KG_SMOKE_NGINX` | `ops/deploy/deploy.sh`, `ops/deploy/smoke.sh` | yes |
-| `KG_SMOKE_SAMPLE` | `ops/deploy/smoke_fleet.py` | no |
-| `KG_SMOKE_SCRAPE` | `ops/deploy/smoke.sh` | no |
+| `KG_SMOKE_SAMPLE` | `ops/deploy/smoke_fleet.py` | yes |
+| `KG_SMOKE_SCRAPE` | `ops/deploy/smoke.sh` | yes |
 | `KG_SMOKE_STRICT` | `ops/deploy/smoke_fleet.py` | yes |
-| `KG_SMOKE_TOKEN` | `ops/deploy/smoke_fleet.py` | no |
-| `KG_SNAPSHOT_STAMP` | `ops/observability/watchdog.py` | no |
-| `KG_SPOOL` | `ops/docker/containers.sh` | no |
-| `KG_SSH_DIR` | `ops/deploy/setup_ci_access.sh` | no |
-| `KG_STAGING_QA_USER` | `ops/deploy/deploy.sh` | no |
+| `KG_SMOKE_TOKEN` | `ops/deploy/smoke_fleet.py` | yes |
+| `KG_SNAPSHOT_STAMP` | `ops/observability/watchdog.py` | yes |
+| `KG_SPOOL` | `ops/docker/containers.sh` | yes |
+| `KG_SSH_DIR` | `ops/deploy/setup_ci_access.sh` | yes |
+| `KG_STAGING_QA_USER` | `ops/deploy/deploy.sh` | yes |
 | `KG_SUPPORT_ALERTS` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_SUPPORT_CHAT_ENABLED` | `KG_backend/api/support_chat/config.py`, `kg_frontend/src/app/layout.tsx` | yes |
 | `KG_SUPPORT_OWNERS` | `KG_backend/api/support_chat/rbac.py` | yes |
 | `KG_SUPPORT_RBAC` | `KG_backend/api/support_chat/rbac.py` | yes |
 | `KG_SUPPORT_REPLY_TARGET_MINUTES` | `KG_backend/api/support_chat/config.py` | yes |
 | `KG_SUPPORT_RETENTION_ENABLED` | `KG_backend/api/support_chat/config.py` | yes |
-| `KG_TESTING` | `KG_backend/KG_backend/jsonlog.py` | no |
-| `KG_TEXTFILE_DIR` | `ops/deploy/deploy.sh`, `ops/observability/watchdog.py` | no |
-| `KG_THREADS` | `ops/docker/backend.Dockerfile` | no |
-| `KG_TIP_CMD` | `ops/deploy/ci_is_tip.sh` | no |
-| `KG_TIS_CHROME_PROFILE` | `KG_backend/api/tis_crawler.py` | no |
-| `KG_TIS_DIR` | `KG_backend/api/tis_crawler.py` | no |
-| `KG_TIS_DISPLAY` | `KG_backend/api/tis_crawler.py` | no |
+| `KG_TESTING` | `KG_backend/KG_backend/jsonlog.py` | yes |
+| `KG_TEXTFILE_DIR` | `ops/deploy/deploy.sh`, `ops/observability/watchdog.py` | yes |
+| `KG_THREADS` | `ops/docker/backend.Dockerfile` | yes |
+| `KG_TIP_CMD` | `ops/deploy/ci_is_tip.sh` | yes |
+| `KG_TIS_CHROME_PROFILE` | `KG_backend/api/tis_crawler.py` | yes |
+| `KG_TIS_DIR` | `KG_backend/api/tis_crawler.py` | yes |
+| `KG_TIS_DISPLAY` | `KG_backend/api/tis_crawler.py` | yes |
 | `KG_TIS_INBOX` | `KG_backend/api/ingest.py` | yes |
-| `KG_TIS_PARSER_PATH` | `KG_backend/api/ingest.py` | no |
+| `KG_TIS_PARSER_PATH` | `KG_backend/api/ingest.py` | yes |
 | `KG_TRUST_PROXY` | `KG_backend/api/ratelimit.py` | yes |
 | `KG_TRUST_XFF` | `KG_backend/api/ratelimit.py` | yes |
-| `KG_VENV` | `ops/deploy/gate.sh` | no |
-| `KG_WAREHOUSE` | `KG_backend/scripts/wal_checkpoint.py` | no |
+| `KG_VENV` | `ops/deploy/gate.sh` | yes |
+| `KG_WAREHOUSE` | `KG_backend/scripts/wal_checkpoint.py` | yes |
 | `KG_WARMUP` | `KG_backend/api/apps.py`, `ops/docker/containers.sh` | yes |
-| `KG_WATCHDOG_COOLDOWN_H` | `ops/observability/watchdog.py` | no |
-| `KG_WATCHDOG_IGNORE_UNITS` | `ops/observability/watchdog.py` | no |
-| `KG_WATCHDOG_PAGE_AFTER` | `ops/observability/watchdog.py` | no |
+| `KG_WATCHDOG_COOLDOWN_H` | `ops/observability/watchdog.py` | yes |
+| `KG_WATCHDOG_IGNORE_UNITS` | `ops/observability/watchdog.py` | yes |
+| `KG_WATCHDOG_PAGE_AFTER` | `ops/observability/watchdog.py` | yes |
 | `KG_WATCHDOG_SNAPSHOT_MAX_H` | `ops/observability/watchdog.py` | yes |
-| `KG_WATCHDOG_STALE_S` | `ops/observability/watchdog.py` | no |
-| `KG_WATCHDOG_STATE` | `ops/observability/watchdog.py` | no |
-| `KG_WATCHDOG_UNITS_COOLDOWN_H` | `ops/observability/watchdog.py` | no |
-| `KG_WORKERS` | `ops/docker/backend.Dockerfile` | no |
+| `KG_WATCHDOG_STALE_S` | `ops/observability/watchdog.py` | yes |
+| `KG_WATCHDOG_STATE` | `ops/observability/watchdog.py` | yes |
+| `KG_WATCHDOG_UNITS_COOLDOWN_H` | `ops/observability/watchdog.py` | yes |
+| `KG_WORKERS` | `ops/docker/backend.Dockerfile` | yes |
 | `KG_ZIP_INBOX` | `KG_backend/api/ingest.py` | yes |
 | `METIS_API_KEY` | `kg_frontend/src/app/api/chat/route.js` | yes |
 | `METIS_BOT_ID` | `kg_frontend/src/app/api/chat/route.js` | yes |
 | `METIS_FALLBACK_BOT_IDS` | `kg_frontend/src/app/api/chat/route.js` | yes |
 | `RAG_ABSENT_REFUSES` | `KG_backend/api/rag/config.py` | yes |
-| `RAG_CACHE_MAX` | `KG_backend/api/rag/config.py` | no |
-| `RAG_CACHE_TTL` | `KG_backend/api/rag/config.py` | no |
-| `RAG_CAR_BLOBS_CACHE` | `KG_backend/api/rag/config.py` | no |
-| `RAG_CAR_VEC_K` | `KG_backend/api/rag/config.py` | no |
-| `RAG_DIAG_CACHE_TTL` | `KG_backend/api/rag/config.py` | no |
+| `RAG_CACHE_MAX` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_CACHE_TTL` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_CAR_BLOBS_CACHE` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_CAR_VEC_K` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_DIAG_CACHE_TTL` | `KG_backend/api/rag/config.py` | yes |
 | `RAG_EMBED_CONCURRENCY` | `KG_backend/api/rag/config.py` | yes |
-| `RAG_EMBED_FP16` | `KG_backend/api/rag/config.py` | no |
-| `RAG_EMBED_MODEL` | `KG_backend/api/pipeline.py`, `KG_backend/api/rag/config.py` | no |
-| `RAG_FB_CACHE_TTL` | `KG_backend/api/rag/config.py` | no |
-| `RAG_FEEDBACK_BOOST` | `KG_backend/api/rag/config.py` | no |
-| `RAG_FEEDBACK_DB` | `KG_backend/api/rag/config.py` | no |
+| `RAG_EMBED_FP16` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_EMBED_MODEL` | `KG_backend/api/pipeline.py`, `KG_backend/api/rag/config.py` | yes |
+| `RAG_FB_CACHE_TTL` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_FEEDBACK_BOOST` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_FEEDBACK_DB` | `KG_backend/api/rag/config.py` | yes |
 | `RAG_FTS_BACKEND` | `KG_backend/api/rag/config.py` | yes |
-| `RAG_FTS_CLEAN` | `KG_backend/api/rag/config.py` | no |
-| `RAG_FTS_W_COMP` | `KG_backend/api/rag/config.py` | no |
-| `RAG_FTS_W_TEXT` | `KG_backend/api/rag/config.py` | no |
-| `RAG_FTS_W_TITLE` | `KG_backend/api/rag/config.py` | no |
-| `RAG_GRAPH_WORKERS` | `KG_backend/api/rag/graph.py` | no |
+| `RAG_FTS_CLEAN` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_FTS_W_COMP` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_FTS_W_TEXT` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_FTS_W_TITLE` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_GRAPH_WORKERS` | `KG_backend/api/rag/graph.py` | yes |
 | `RAG_GROUND_SIM_FLOOR` | `KG_backend/api/rag/config.py` | yes |
-| `RAG_INDEX_DB` | `KG_backend/api/rag/config.py` | no |
-| `RAG_LOG_QUERIES` | `KG_backend/api/rag/config.py` | no |
-| `RAG_MQ_CACHE` | `KG_backend/api/evalsuite/baselines.py` | no |
+| `RAG_INDEX_DB` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_LOG_QUERIES` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_MQ_CACHE` | `KG_backend/api/evalsuite/baselines.py` | yes |
 | `RAG_MQ_TRANSLATE` | `kg_frontend/src/app/api/chat/route.js` | yes |
-| `RAG_NEARMISS_GUARD` | `KG_backend/api/rag/config.py` | no |
-| `RAG_PARTS_DB` | `KG_backend/api/rag/config.py` | no |
-| `RAG_PGVEC_DB` | `KG_backend/api/rag/config.py` | no |
+| `RAG_NEARMISS_GUARD` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_PARTS_DB` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_PGVEC_DB` | `KG_backend/api/rag/config.py` | yes |
 | `RAG_PGVEC_DSN` | `KG_backend/api/rag/config.py` | yes |
 | `RAG_PGVEC_EF_SEARCH` | `KG_backend/api/rag/config.py` | yes |
 | `RAG_QUERY_ADAPTER` | `KG_backend/api/rag/config.py` | yes |
 | `RAG_RERANK` | `KG_backend/api/rag/config.py` | yes |
-| `RAG_RERANK_FUSE` | `KG_backend/api/rag/config.py` | no |
-| `RAG_RERANK_MODEL` | `KG_backend/api/rag/config.py`, `ops/rag/dump_cands.py` | no |
-| `RAG_SCOPE_FTS_K` | `KG_backend/api/rag/config.py` | no |
-| `RAG_SCOPE_FTS_SCAN` | `KG_backend/api/rag/config.py` | no |
-| `RAG_SEARCH_MAX_DEPTH` | `KG_backend/api/rag/config.py` | no |
-| `RAG_SEARCH_OVERFETCH` | `KG_backend/api/rag/config.py` | no |
-| `RAG_SEARCH_SIM_FLOOR` | `KG_backend/api/rag/config.py` | no |
-| `RAG_SEM_CACHE` | `KG_backend/api/rag/config.py` | no |
-| `RAG_SEM_CACHE_SIM` | `KG_backend/api/rag/config.py` | no |
+| `RAG_RERANK_FUSE` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_RERANK_MODEL` | `KG_backend/api/rag/config.py`, `ops/rag/dump_cands.py` | yes |
+| `RAG_SCOPE_FTS_K` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_SCOPE_FTS_SCAN` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_SEARCH_MAX_DEPTH` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_SEARCH_OVERFETCH` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_SEARCH_SIM_FLOOR` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_SEM_CACHE` | `KG_backend/api/rag/config.py` | yes |
+| `RAG_SEM_CACHE_SIM` | `KG_backend/api/rag/config.py` | yes |
 | `RAG_VEC_BACKEND` | `KG_backend/api/rag/config.py` | yes |
-| `RUN_MAIN` | `KG_backend/api/apps.py` | no |
+| `RUN_MAIN` | `KG_backend/api/apps.py` | yes |
 | `SENTRY_DSN` | `KG_backend/KG_backend/settings.py`, `kg_frontend/src/instrumentation.ts` | yes |
 | `SENTRY_ENVIRONMENT` | `KG_backend/KG_backend/settings.py`, `kg_frontend/src/instrumentation.ts` | yes |
 | `SENTRY_TRACES_RATE` | `KG_backend/KG_backend/settings.py`, `kg_frontend/src/instrumentation.ts` | yes |
@@ -454,11 +454,11 @@ Timers and services installed on the host from `ops/`. The host also runs units 
 | Unit file | Description | Documented |
 |---|---|---|
 | `ops/hostjobs/kgkg-hostjobs.service` | KGKG host-job bridge for the backend container (ops/hostjobs) | yes |
-| `ops/observability/kgkg-watchdog.service` | KGKG watchdog over the alerting engine (pages if nobody is watching) | no |
+| `ops/observability/kgkg-watchdog.service` | KGKG watchdog over the alerting engine (pages if nobody is watching) | yes |
 | `ops/observability/kgkg-watchdog.timer` | Run the KGKG alerting watchdog every 5 minutes | yes |
 | `ops/outbox/kgkg-outbox.service` | KGKG notification outbox (send due SMS/email) | yes |
 | `ops/outbox/kgkg-outbox.timer` | Run the KGKG notification outbox every minute | yes |
-| `ops/qa/kgkg-qa-nightly.service` | KGKG nightly QA (E2E, DAST baseline, performance baseline) | no |
+| `ops/qa/kgkg-qa-nightly.service` | KGKG nightly QA (E2E, DAST baseline, performance baseline) | yes |
 | `ops/qa/kgkg-qa-nightly.timer` | Run the KGKG nightly QA suite | yes |
 
 ## Other files under `ops/`
@@ -483,38 +483,39 @@ Timers and services installed on the host from `ops/`. The host also runs units 
 | `ops/docker/backend-requirements.lock` | yes |
 | `ops/docker/backend.Dockerfile` | yes |
 | `ops/docker/containers.sh` | yes |
-| `ops/docker/frontend.Dockerfile` | no |
+| `ops/docker/frontend.Dockerfile` | yes |
 | `ops/governance/check_docs_freshness.py` | yes |
+| `ops/governance/check_i18n.py` | yes |
 | `ops/governance/check_traceability.py` | yes |
 | `ops/governance/gen_inventory.py` | yes |
 | `ops/hostjobs/hostjobs_daemon.py` | yes |
 | `ops/nginx/kgkg-limits.conf` | yes |
 | `ops/nginx/kgkg-mediaauth.conf` | yes |
 | `ops/nginx/kgkg.conf` | yes |
-| `ops/nginx/logrotate-modsecurity.conf` | no |
-| `ops/nginx/logrotate-nginx.conf` | no |
+| `ops/nginx/logrotate-modsecurity.conf` | yes |
+| `ops/nginx/logrotate-nginx.conf` | yes |
 | `ops/observability/bizsnap.py` | yes |
-| `ops/observability/blackbox.yml` | no |
-| `ops/observability/config.alloy` | no |
+| `ops/observability/blackbox.yml` | yes |
+| `ops/observability/config.alloy` | yes |
 | `ops/observability/delivery.py` | yes |
-| `ops/observability/docker-compose.yml` | no |
-| `ops/observability/loki.yml` | no |
-| `ops/observability/prometheus.yml` | no |
+| `ops/observability/docker-compose.yml` | yes |
+| `ops/observability/loki.yml` | yes |
+| `ops/observability/prometheus.yml` | yes |
 | `ops/observability/verify_restore.py` | yes |
 | `ops/observability/watchdog.py` | yes |
 | `ops/partsouq/partsouq_vin_crawl.py` | yes |
-| `ops/rag/dump_cands.py` | no |
-| `ops/rag/fusion_sweep.py` | no |
-| `ops/rag/paired_significance.py` | no |
+| `ops/rag/dump_cands.py` | yes |
+| `ops/rag/fusion_sweep.py` | yes |
+| `ops/rag/paired_significance.py` | yes |
 | `ops/rag/pgfts_load.py` | yes |
 | `ops/rag/pgvec_bench.py` | yes |
 | `ops/rag/pgvec_load.py` | yes |
-| `ops/security/bandit-baseline.json` | no |
-| `ops/security/npm-audit-allow.json` | no |
+| `ops/security/bandit-baseline.json` | yes |
+| `ops/security/npm-audit-allow.json` | yes |
 | `ops/security/npm_audit_gate.mjs` | yes |
 | `ops/security/scan.sh` | yes |
-| `ops/umami/docker-compose.yml` | no |
-| `ops/umami/setup.sh` | no |
+| `ops/umami/docker-compose.yml` | yes |
+| `ops/umami/setup.sh` | yes |
 
 ## Frontend routes (`kg_frontend/src/app`)
 

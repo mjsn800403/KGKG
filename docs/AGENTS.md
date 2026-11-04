@@ -48,6 +48,10 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
 | Add an alert or touch monitoring | `11-operations-deployment.md` (alerts), `25-ops-inventory.md` | `api/alert_rules.py`, `ops/observability/` |
 | Backups, restore, data loss questions | `27-open-risks-and-decisions.md` first, then `11` section 11.6 | do not assume a backup exists; see risk R1 |
 | Work with Jira, Slack, Trello, issue closing | `28-team-workflow.md` | `.github/pull_request_template.md` |
+| Look up any environment variable (meaning, default, consumer) | `29-environment-reference.md` | the `os.environ`/`_env_*` line it cites |
+| Understand or change the assistant end to end (retrieval, scoring, prompts, Metis, fallbacks, evaluation) | `30-ai-assistant-deep-dive.md`, then `08`, `17` | `api/rag/retrieve.py`, `api/rag/service.py`, `kg_frontend/src/app/api/chat/route.js` |
+| Touch observability, log rotation, Umami, systemd units, offline RAG tools, security baselines | `31-ops-files-reference.md` | the file it cites under `ops/` |
+| Decide how to verify a change; understand CI, QA stack, E2E, load, mutation tests | `32-testing-and-qa.md` | `.github/workflows/ci.yml`, `qa/` |
 | Add an env var, command, model, module, ops file | `docs/generated/inventory.md` rules in section 5 | run `python3 ops/governance/gen_inventory.py` |
 
 ## 4. Rules that are easy to break
@@ -78,6 +82,7 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
   date is not a verification. Move it only after the document's facts were re-checked against the code.
 - When you change behaviour, update (a) the reference doc named in section 3, (b) the CHANGELOG line, and
   (c) any `[S]`/`[D]` claim your change makes false. If you cannot verify a claim, write **[U]**, do not delete the doubt.
+- **Persian twins.** Documents listed in `docs/i18n.toml` have a Persian twin in `docs/fa/` whose first line stamps the English revision it matches. Change the English file and CI fails until you update the twin and run `python3 ops/governance/check_i18n.py --stamp <file>`. Do not stamp without actually updating the Persian text.
 - At the end of any session that made a decision, write it down in the PR (ADR if it sets a standing
   rule). Chat history and memory files are not a place of record.
 
@@ -88,6 +93,7 @@ git fetch && git log origin/work -5 --oneline          # what is current
 gh pr list -R mjsn800403/KGKG; gh issue list -R mjsn800403/KGKG
 python3 ops/governance/gen_inventory.py --check --base-ref origin/work --require-base   # docs vs code drift (env KG_DOC_BASE_REF sets the default base ref)
 python3 ops/governance/check_docs_freshness.py --docs docs
+python3 ops/governance/check_i18n.py               # Persian twins vs English sources (list: docs/i18n.toml)
 ```
 
 Production checks go through the saved `kgtechvault` SSH connection (host in `11-operations-deployment.md`):

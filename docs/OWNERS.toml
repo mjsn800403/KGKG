@@ -232,3 +232,48 @@ review_days = 90
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-04
 review_days = 180
+
+["29-environment-reference.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/29-environment-reference.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["30-ai-assistant-deep-dive.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/30-ai-assistant-deep-dive.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["31-ops-files-reference.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/31-ops-files-reference.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["32-testing-and-qa.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/32-testing-and-qa.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/README.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 90

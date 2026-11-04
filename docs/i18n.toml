@@ -1,0 +1,9 @@
+# Documents that must have a Persian twin in docs/fa/ with a matching source stamp.
+# Enforced by ops/governance/check_i18n.py (CI job `governance`). Add a name here when
+# you add its Persian twin; remove it only together with the twin.
+files = [
+  "29-environment-reference.md",
+  "30-ai-assistant-deep-dive.md",
+  "31-ops-files-reference.md",
+  "32-testing-and-qa.md",
+]

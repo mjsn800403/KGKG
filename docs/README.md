@@ -46,6 +46,11 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [26 — Authentication and sessions](26-auth-and-sessions.md) | Token lifetimes, login/OTP flow, single-session rule, admin gate, content protection |
 | [27 — Open risks and decisions](27-open-risks-and-decisions.md) | Register of known risks (backups, shared staging data, ...) with evidence and tracking |
 | [28 — Team workflow](28-team-workflow.md) | GitHub/Jira/Trello/Slack roles, labels, issue-closing rule, daily reconcile |
+| [29 — Environment variable reference](29-environment-reference.md) · [fa](fa/29-environment-reference.md) | Operational and tuning variables: default, consumer, meaning (no values) |
+| [30 — AI assistant deep dive](30-ai-assistant-deep-dive.md) · [fa](fa/30-ai-assistant-deep-dive.md) | Request lifecycle, retrieval, scoring, scope gates, prompts, Metis, fallbacks, feedback, evaluation, capability status |
+| [31 — Ops files and units reference](31-ops-files-reference.md) · [fa](fa/31-ops-files-reference.md) | Observability stack, log rotation, Umami, systemd units, offline RAG tools, security baselines |
+| [32 — Testing, QA and verification](32-testing-and-qa.md) · [fa](fa/32-testing-and-qa.md) | Every test and gate: purpose, commands, CI, QA stack, gaps |
+| [Persian index](fa/README.md) | Persian twins of the documents above and how they are kept in sync |
 | [Generated inventory](generated/inventory.md) | Machine-generated list of modules, models, commands, env var names, routes, units; CI-checked |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |
 | [CHANGELOG](CHANGELOG.md) | Dated log of shipped changes, newest first |
