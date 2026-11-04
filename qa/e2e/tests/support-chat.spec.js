@@ -338,3 +338,92 @@ print(json.dumps(1))`);
     expect((await request.get('/kg-api/api/admin/support-chat/threads/')).status()).toBe(401);
   });
 });
+
+test.describe('support chat reliability (batch 2)', () => {
+  test('F7 the console says live updates are down, keeps refreshing, and recovers when the stream returns', async ({ browser }) => {
+    const ctx = await staffContext(browser);
+    const page = await ctx.newPage();
+    await ctx.route('**/api/events/stream/**', (route) => route.abort('failed'));
+    await page.goto('/admin#company-requests');
+    await page.getByRole('button', { name: 'رد کردن راهنما' }).click({ timeout: 6000 }).catch(() => {});
+    await page.getByRole('tab', { name: 'گفتگوهای زنده' }).click();
+    await expect(page.locator('.scx-offline')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'بازخوانی' })).toBeEnabled();      // manual refresh still works
+    await ctx.unroute('**/api/events/stream/**');
+    await expect(page.locator('.scx-offline')).toBeHidden({ timeout: 30_000 });      // backoff then reconnect
+    await ctx.close();
+  });
+
+  test('F8 a half-typed message survives closing the panel and a reload, and is gone after "delete"', async ({ browser }) => {
+    const ctx = await browser.newContext({ locale: 'fa-IR' });
+    await fakeTurnstile(ctx);
+    const page = await ctx.newPage();
+    await openChat(page);
+    await page.getByRole('button', { name: 'سایر' }).click();
+    await page.locator('.sc-composer textarea').fill('هنوز تمام نشده');
+    await page.getByRole('button', { name: 'بستن' }).click();
+    await page.locator('button.sc-launcher').click();
+    await expect(page.locator('.sc-composer textarea')).toHaveValue('هنوز تمام نشده');
+    await page.reload();
+    await page.getByRole('button', { name: 'رد کردن راهنما' }).click({ timeout: 6000 }).catch(() => {});
+    await page.locator('button.sc-launcher').click();
+    await page.getByRole('button', { name: 'سایر' }).click().catch(() => {});
+    await expect(page.locator('.sc-composer textarea')).toHaveValue('هنوز تمام نشده');
+    const stored = await page.evaluate(() => ({ local: Object.keys(localStorage).filter((k) => /kg_sc/.test(k)),
+      inLocal: Object.values(localStorage).some((v) => String(v).includes('هنوز')) }));
+    expect(stored.inLocal).toBe(false);                                              // never in localStorage
+    await ctx.close();
+  });
+
+  test('F9 offline: the message is marked failed with its text kept, resends once when the network returns, and the box is cleared', async ({ browser }) => {
+    dj(`
+import json
+from api.support_chat.models import SupportThread
+SupportThread.objects.all().delete()
+print(json.dumps(1))`);
+    const ctx = await browser.newContext({ locale: 'fa-IR' });
+    await fakeTurnstile(ctx);
+    const page = await ctx.newPage();
+    await openChat(page);
+    await page.getByRole('button', { name: 'سایر' }).click();
+    await page.locator('.sc-composer textarea').fill('پیام اول');
+    await page.locator('.sc-send').click();
+    await expect(page.locator('.sc-meta[data-delivery="sent"]').first()).toBeVisible({ timeout: 20_000 });
+    await ctx.setOffline(true);
+    await page.locator('.sc-composer textarea').fill('پیام دوم');
+    await page.locator('.sc-send').click();
+    await expect(page.getByText('ارسال نشد').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.sc-composer textarea')).toHaveValue('پیام دوم');   // kept while failed
+    await ctx.setOffline(false);
+    await expect(page.locator('.sc-meta[data-delivery="failed"]')).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.locator('.sc-composer textarea')).toHaveValue('');           // delivered: nothing left to resend
+    expect(dj(`
+import json
+from api.support_chat.models import SupportMessage
+print(json.dumps(sorted(SupportMessage.objects.filter(author_kind='visitor').values_list('body', flat=True))))`))
+      .toEqual(['پیام اول', 'پیام دوم'].sort());
+    await ctx.close();
+  });
+
+  test('F10 on a phone the chat works by keyboard: open, reach the box, Escape closes and focus returns', async ({ browser }) => {
+    const ctx = await browser.newContext({ locale: 'fa-IR', viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+    await fakeTurnstile(ctx);
+    const page = await ctx.newPage();
+    await page.goto('/');
+    await page.getByRole('button', { name: 'رد کردن راهنما' }).click({ timeout: 6000 }).catch(() => {});
+    await page.locator('button.sc-launcher').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.sc-panel')).toBeVisible();
+    expect(await page.locator('.sc-panel').getAttribute('dir')).toBe('rtl');
+    await page.getByRole('button', { name: 'سایر' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.sc-composer textarea')).toBeVisible();
+    await page.locator('.sc-composer textarea').focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.sc-panel')).toBeHidden();
+    await expect(page.locator('button.sc-launcher')).toBeFocused();
+    const results = await new AxeBuilder({ page }).include('.sc-root').withTags(['wcag2a', 'wcag2aa']).analyze();
+    expect(results.violations.map((v) => v.id)).toEqual([]);
+    await ctx.close();
+  });
+});

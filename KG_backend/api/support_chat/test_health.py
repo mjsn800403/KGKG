@@ -5,6 +5,8 @@ from datetime import timedelta
 from unittest import mock
 
 from django.core.management import call_command
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from . import health
@@ -100,3 +102,40 @@ class CommandTests(SupportCase):
     def test_a_failing_report_exits_2_not_0(self):
         with mock.patch.object(health, 'report', side_effect=RuntimeError('db down')):
             self.assertEqual(self.run_cmd('--fail-on', 'warn')[0], 2)
+
+
+class ScaleTests(SupportCase):
+    def bulk(self, n):
+        now = timezone.now()
+        threads = SupportThread.objects.bulk_create(
+            [SupportThread(token_hash=f'{i:064d}', intent='sales' if i % 2 else 'technical') for i in range(n)])
+        SupportMessage.objects.bulk_create(
+            [SupportMessage(thread=t, author_kind='visitor', body='x') for t in threads])
+        SupportMessage.objects.all().update(created_at=now - timedelta(seconds=1000))
+        return threads
+
+    def test_the_report_is_one_query_however_many_visitors_wait(self):
+        self.bulk(60)
+        with CaptureQueriesContext(connection) as q:
+            r = health.report()
+        self.assertEqual(len(q), 1)
+        self.assertEqual((r['waiting'], r['over_crit'], r['level']), (60, 60, 'crit'))
+
+    def test_more_than_the_old_500_cap_is_counted_exactly(self):
+        self.bulk(650)
+        r = health.report()
+        self.assertEqual((r['waiting'], r['truncated']), (650, False))
+        self.assertEqual(sum(r['waiting_by_intent'].values()), 650)
+
+    def test_benchmark_prints_timings_for_the_ci_log(self):
+        import time
+        self.bulk(2000)
+        health.report()
+        runs = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            health.report()
+            runs.append((time.perf_counter() - t0) * 1000)
+        print(f'BENCH support_health vendor={connection.vendor} waiting=2000 queries=1 '
+              f'median_ms={sorted(runs)[2]:.0f} max_ms={max(runs):.0f}', flush=True)
+        self.assertLess(sorted(runs)[2], 2000)

@@ -7,6 +7,7 @@
 // so requests ride the current https origin through Cloudflare/nginx and never
 // trip mixed-content. Inlined into the client bundle (NEXT_PUBLIC_ prefix).
 import { track } from './analytics';
+import { connectEventStream } from './eventStreamConnector';
 import { shieldFetch } from '@/lib/shield';
 
 const CLIENT_BASE = (process.env.NEXT_PUBLIC_API_BASE || '/kg-api').replace(/\/+$/, '');
@@ -1194,86 +1195,22 @@ export async function fetchRecentFeedback(limit = 50) {
 // Last-Event-ID so no events are missed across the server's periodic recycle.
 
 export function openEventStream({ admin = false, onEvent, onStatus } = {}) {
-  let closed = false;
-  let controller = null;
-  let cursor = 0;
-  let retry = 3000;
-
   // Admin still uses sessionStorage; the portal rides its HttpOnly cookie.
   const token = admin ? getAdminToken() : getPortalToken();
   if (admin && !token) {
     onStatus?.('unauthorized');
     return () => {};
   }
-
-  async function connect() {
-    if (closed) return;
-    controller = new AbortController();
-    onStatus?.('connecting');
-    try {
-      const res = await fetch(`${API_BASE}/api/events/stream/`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          Accept: 'text/event-stream',
-          ...(cursor ? { 'Last-Event-ID': String(cursor) } : {}),
-        },
-        signal: controller.signal,
-        cache: 'no-store',
-      });
-      if (res.status === 401) { onStatus?.('unauthorized'); return; }
-      if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
-      onStatus?.('open');
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      while (!closed) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let sep;
-        while ((sep = buf.indexOf('\n\n')) !== -1) {
-          const raw = buf.slice(0, sep);
-          buf = buf.slice(sep + 2);
-          parseFrame(raw);
-        }
-      }
-    } catch (e) {
-      if (closed) return;
-      onStatus?.('reconnecting');
-    }
-    if (!closed) {
-      setTimeout(connect, retry);   // server recycles ~5min; reconnect with cursor
-    }
-  }
-
-  function parseFrame(raw) {
-    let ev = 'message';
-    let data = '';
-    let id = null;
-    for (const line of raw.split('\n')) {
-      if (line.startsWith(':')) continue;             // comment / heartbeat
-      if (line.startsWith('event:')) ev = line.slice(6).trim();
-      else if (line.startsWith('data:')) data += line.slice(5).trim();
-      else if (line.startsWith('id:')) id = line.slice(3).trim();
-      else if (line.startsWith('retry:')) {
-        const n = parseInt(line.slice(6).trim(), 10);
-        if (!Number.isNaN(n)) retry = n;
-      }
-    }
-    if (id) cursor = parseInt(id, 10) || cursor;
-    if (ev === 'ready') {
-      try { const d = JSON.parse(data || '{}'); if (d.cursor) cursor = d.cursor; } catch {}
-      return;
-    }
-    if (ev === 'reconnect') return;                    // graceful server recycle
-    if (!data) return;
-    let payload = {};
-    try { payload = JSON.parse(data); } catch { return; }
-    onEvent?.({ type: ev, ...payload });
-  }
-
-  connect();
-  return () => { closed = true; try { controller?.abort(); } catch {} };
+  return connectEventStream({
+    url: `${API_BASE}/api/events/stream/`,
+    // Read per attempt, so a reconnect after sign-in never replays a stale token.
+    headers: () => {
+      const t = admin ? getAdminToken() : getPortalToken();
+      return t ? { Authorization: `Bearer ${t}` } : {};
+    },
+    onEvent,
+    onStatus,
+  });
 }
 
 
