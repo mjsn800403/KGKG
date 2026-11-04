@@ -104,6 +104,28 @@ who knows the feature exists, which is what a discovery item asks.
 parts catalogue opened by 6 seats, the assistant asked by 9, the search box
 used by 0, against 71,886 manual views across 34 active seats.
 
+> **CORRECTION, dated 2026-11-02 (revised after review). Two figures above are
+> superseded and must not be used.**
+>
+> 1. **"71,886 manual views across 34 active seats."** Of the 71,886 manual views
+> counted on 2026-10-30, **70,534 are rows generated for evaluation/demo purposes**
+> (they carry the reconstruction marker and are not user behaviour) and **1,352 do
+> not carry it**. Those 1,352 are **unverified as human activity**: they have not
+> been separated from demo-account, test, administrative or scripted use. As of
+> 2026-11-02, 12 seats have at least one unmarked manual view, not "~34". "34" was
+> the number of seats with any logged activity out of 36 active seats (two seats
+> created on 2026-09-29 and 2026-10-01 have none), not a count of seats that read
+> manuals.
+> 2. **"The assistant asked by 9."** This is wrong independently of the
+> reconstruction: 9 seats *opened* the assistant (62 opens) and 3 seats *asked* it
+> (43 questions, which are also the 43 rows in `ChatLog`). The discovery metric
+> below is defined on `ask_assistant`, so its baseline is 3 seats, not 9.
+>
+> The parts catalogue (6 seats, 314 uses), search (0), CSV export (3) and team PDF
+> (8) figures are not affected by the reconstructed rows, but they are not verified
+> as human activity either. Evidence and method:
+> `audit-evidence/17-data-integrity/` (GitHub #64, Jira KGTEC-20).
+
 ## Desk categorisation and deflection (added 2026-10-31)
 
 Spec: `docs/superpowers/specs/2026-10-31-conversational-helpdesk-design.md`.

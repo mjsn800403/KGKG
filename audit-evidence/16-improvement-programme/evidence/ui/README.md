@@ -89,6 +89,19 @@ production database; nothing was changed.
 | CSV export (`download_csv`) | — | 3 |
 | Team PDF report (`report_pdf`) | — | 8 |
 
+> **CORRECTION, dated 2026-11-02 (revised after review): the "Manuals" and
+> "Assistant" rows above are superseded and must not be read as adoption.**
+> *Manuals:* of the 71,886 uses, 70,534 are rows generated for evaluation/demo
+> purposes (marked as reconstructed, not user behaviour); 1,352 are not marked and
+> are **unverified as human activity** (demo, test, administrative or scripted use
+> is not separated out). As of 2026-11-02, 12 seats (not "~34 of 34") have an
+> unmarked manual view; "34" counted seats with any logged activity, out of 36
+> active seats. *Assistant:* "9" is wrong independently of the reconstruction: 9
+> seats opened the assistant, **3 seats asked it** (the 43 uses). The parts, search,
+> CSV and PDF rows are not affected by the reconstructed rows but are not verified
+> as human activity either. See `audit-evidence/17-data-integrity/` (GitHub #64,
+> Jira KGTEC-20).
+
 Entitlement denominators are computed by `api/onboarding.py` rather than
 assumed; the floor established while writing the spec was 18 or fewer seats
 AI-entitled, and 36 with a car grant.
