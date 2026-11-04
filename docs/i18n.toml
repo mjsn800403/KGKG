@@ -2,6 +2,9 @@
 # Enforced by ops/governance/check_i18n.py (CI job `governance`). Add a name here when
 # you add its Persian twin; remove it only together with the twin.
 files = [
+  "38-implementation-status-matrix.md",
+  "39-evaluation-evidence-guide.md",
+  "40-documentation-access-guide.md",
   "29-environment-reference.md",
   "30-ai-assistant-deep-dive.md",
   "31-ops-files-reference.md",

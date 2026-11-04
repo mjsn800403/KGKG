@@ -53,3 +53,11 @@ ADR-0007 ratification (retrospective; does not settle R1 or R5) · enabling the 
 - **F4 Timer units not in the repository.** Docs 02/11 name `kgkg-alerts.timer`, `kgkg-pipeline.timer`, `kgkg-detect.timer` and `kgkg-coverage.timer`, but no unit file
   for them exists under `ops/` (only `kgkg-watchdog`, `kgkg-outbox`, `kgkg-qa-nightly` and `kgkg-hostjobs` do). They are therefore hand-installed on the host
   or defined elsewhere **[U]**; rebuilding the host from the repository would not recreate them (compare the PR checklist item "nothing needs a hand-install").
+
+## Production observations of 2026-11-04 (read-only; details in [38](38-implementation-status-matrix.md))
+
+- **R1 confirmed:** `kgkg_vec` (58 GB) is in no backup path found; PostgreSQL `archive_mode` is off; the hourly off-host snapshot covers only the portal dump.
+- **R17 (new): `xrdp` is active** on the production host; reachability of its port was not checked **[U]**.
+- **Nightly QA is failing:** e2e 51 passed / 6 failed / 17 skipped on an older commit (`cedcb79b3`); five failures are in `support.spec.js`, one in `session.spec.js`; causes not analysed.
+- **Staging isolation (R5) still unverified:** no staging container was running; whether staging reads production `kgkg_vec` could not be checked. A newer commit (`135aa78b7`) passed gate and smoke on staging and was not promoted.
+- **Documentation corrections:** the production retrieval backend is pgvector/PG-FTS (doc 30); support chat is deployed but disabled (doc 35); legacy `kgkg-backend/frontend.service` units are retired, production runs containers.

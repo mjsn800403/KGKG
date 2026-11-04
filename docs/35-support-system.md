@@ -139,3 +139,5 @@ Coverage percentages are not recorded here ([32](32-testing-and-qa.md) §32.2).
 
 No thread event timeline; retention periods not approved and purge disabled; reply-time promise unset; delivery receipts unobserved; production activation state and `SupportStaffRole` migration state unverified;
 per-worker poll limiter; privacy notice unpublished.
+
+Production observation (2026-11-04, read-only, commit `8a380f6`): migration `0041_support_chat_core` is applied, the public status endpoint reports `enabled=false`, no `KG_SUPPORT_*` or `KG_NOTIFY_*` variable is set, the chat and outbox tables hold 0 rows and `kgkg-outbox.timer` is not installed. So the activation state is now **known: deployed, disabled, unused** ([38](38-implementation-status-matrix.md) §38.4); `SupportStaffRole` enforcement is off (`KG_SUPPORT_RBAC` unset).

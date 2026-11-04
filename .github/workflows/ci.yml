@@ -345,6 +345,14 @@ jobs:
       - name: This change references the work it serves
         # Skipped on push builds, where there is no pull request to judge.
         run: python3 ops/governance/check_traceability.py
+      - name: Build the documentation package (reproducible snapshot of Git; refuses secret-like content)
+        run: python3 ops/governance/build_docs_package.py --out dist
+      - name: Upload the documentation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: kgkg-docs-package
+          path: dist/kgkg-docs-*.zip
+          retention-days: 90
 
   images:
     # The production images (ops/docker/) must build from every commit, boot,
