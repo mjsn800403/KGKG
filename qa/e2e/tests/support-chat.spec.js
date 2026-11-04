@@ -1,5 +1,6 @@
 // Visitor -> human -> visitor journey for the support chat (gate G1), run against
-// the LOCAL throwaway stack from qa/e2e/local-support-chat-stack.ps1. It never
+// a throwaway stack: qa/e2e/support-chat-stack.sh (Linux, the CI job
+// support-chat-e2e) or qa/e2e/local-support-chat-stack.ps1 (Windows). It never
 // targets production. Turnstile's browser script is faked here (the backend runs
 // in DEBUG, which skips verification); everything else is the real stack: the
 // Next build, the proxy, Django, the database and a real staff session.
@@ -10,17 +11,24 @@ const { test, expect } = require('@playwright/test');
 const AxeBuilder = require('@axe-core/playwright').default;
 
 const FIX = process.env.SUPPORT_E2E_FIXTURES;
+// In CI a missing stack is a failure, not a skip (#78): a skipped journey is a
+// green run that tested nothing. qa/e2e/support_chat_guard.py checks the count.
+if (process.env.SUPPORT_E2E_REQUIRED === '1' && (!FIX || !fs.existsSync(FIX))) {
+  throw new Error(`SUPPORT_E2E_REQUIRED=1 but the stack fixtures are missing (SUPPORT_E2E_FIXTURES=${FIX || 'unset'})`);
+}
 test.skip(!FIX || !fs.existsSync(FIX), 'needs the local support-chat stack (SUPPORT_E2E_FIXTURES)');
 const fixtures = FIX && fs.existsSync(FIX) ? JSON.parse(fs.readFileSync(FIX, 'utf8')) : {};
 const STACK = FIX ? path.dirname(FIX) : '';
 const BACKEND = path.resolve(__dirname, '../../../KG_backend');
-const PY = path.join(BACKEND, '.venv', 'Scripts', 'python.exe');
+const PY = process.env.KG_E2E_PYTHON || (process.platform === 'win32'
+  ? path.join(BACKEND, '.venv', 'Scripts', 'python.exe')
+  : path.join(BACKEND, '.venv', 'bin', 'python'));
 
 /** Run Python inside Django against the stack's database; returns parsed JSON. */
 function dj(code) {
   const out = execFileSync(PY, ['manage.py', 'shell', '-c', code], {
     cwd: BACKEND,
-    env: { ...process.env, DJANGO_DEBUG: 'true', KG_ADMIN_TOKEN: 'x', KG_DB_PATH: path.join(STACK, 'e2e.sqlite3'), KG_DATA_DIR: STACK },
+    env: { ...process.env, DJANGO_DEBUG: 'true', KG_ADMIN_TOKEN: 'x', KG_DB_ENGINE: 'sqlite', KG_WARMUP: '0', KG_DB_PATH: path.join(STACK, 'e2e.sqlite3'), KG_DATA_DIR: STACK },
     encoding: 'utf8',
   });
   return JSON.parse(out.trim().split('\n').pop());
