@@ -57,6 +57,6 @@ production is **[U]** (environment not read).
 
 ## 26.6 Known gaps
 
-- No password change/reset route exists in `api/urls.py` for portal users or admins [C: no `password` route]. Doc 12 lists it.
+- SMS-verified account **recovery** exists for portal users (`api/auth/recover/start|reset`, rate limited, tested in `api/test_recover.py`). There is **no route for a signed-in user to change their own password**, and none for platform admins at all [C: no change-password entry in `api/urls.py`]. Doc 12 lists recovery as closed.
 - No CSRF tokens; mitigations are `SameSite=Lax` and `OriginGuardMiddleware` (`KG_ORIGIN_GUARD=0` disables). Doc 21.
 - `KG_TRUST_XFF` controls whether `X-Forwarded-For` is trusted for client IPs; correct only behind the Cloudflare/nginx chain [C `ratelimit.py`; production value **U**].

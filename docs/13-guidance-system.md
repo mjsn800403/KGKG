@@ -66,7 +66,8 @@ accept a comma-list so both work). Anchors currently placed:
 - Landing: `login-btn`, `doc-layers`, `vin-box`, `support` (pre-existing `data-tour`).
 - Portal sidebar: `nav-fleet`, `nav-assistant`, `nav-team`, `nav-requests`,
   `nav-analytics`, `nav-settings`; `model-filter`; `recs` (RecommendationsWidget).
-- Team: `team-tabs`, `team-add`, `team-search` (TeamView).
+- Team: `team-tabs`, `team-add`, `team-search` were placed on `TeamView`, which no longer exists (replaced by the org-graph canvas); **no component renders these anchors now**, so the team tour steps are skipped and have no target (finding F1, [27](27-open-risks-and-decisions.md)).
+- Anchors found in the code on 2026-11-04 **[C]**: `data-guide` = `admin-hub`, `desk-new`, `parts-config`, `recs`; `data-tour` = `coverage`, `doc-layers`, `login-btn`, `model-filter`, `nav-analytics`, `nav-assistant`, `nav-fleet`, `nav-purchase`, `nav-requests`, `nav-settings`, `nav-team`, `support`, `vehicle-filter`, `vin-box`. The per-group admin anchors named above (`admin-group-*`) were not found as literal attributes and may be generated dynamically **[U]**.
 - Admin: `admin-hub`, `admin-group-realtime/customers/insights/operations` (AdminHub);
   the FAB (`.guide-fab`).
 
@@ -112,8 +113,8 @@ positive). Wired signals today:
 
 | Signal | Emitted by | Enables hint |
 |---|---|---|
-| `team.memberCount` | TeamView (on load) | `team-empty` — "add your first employee" |
-| `team.drawer='invite-no-email'` | TeamView member drawer | `team-invite-no-email` — suggest credentials mode (no SMTP configured) |
+| `team.memberCount` | *(was TeamView; no emitter now)* | `team-empty` — dormant |
+| `team.drawer='invite-no-email'` | *(was TeamView member drawer; no emitter now)* | `team-invite-no-email` — dormant |
 | `admin.pendingWork` | AdminDashboard | `admin-new-data` — "run data processing" |
 | *(none — data-driven)* | portal user eligibility | `ai-not-eligible` — why the assistant is off + how to fix |
 | *(none — route/once)* | route | `assistant-precision` — mention the vehicle + exact DTC |

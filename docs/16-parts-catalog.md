@@ -102,10 +102,10 @@ static_warehouse/_parts_assets/*.gif        shared diagram images (nginx /kg-api
   `parts` from a company's purchase does NOT revoke it from seats that hold it
   explicitly. To revoke, re-apply the seats' grants (or drop the car from the
   company scope entirely, which prunes user rows).
-- **Diagram images are served unauthenticated** from `/kg-api/media/_parts_assets/`,
-  exactly like manual images from `/kg-api/media/<car>/`. The JSON around them is
-  grant-gated; the image bytes are not. This matches the platform's existing
-  posture — change both together if that ever needs to tighten.
+- **Diagram images are login-gated since the `auth_request` media gate** (`api/mediaauth.py`, nginx `/_kg_media_auth`; [33](33-system-design.md) §33.2):
+  `/kg-api/media/_parts_assets/...` needs a signed-in session (folders that belong to no single car only need a login; a car's own folder also
+  needs access to that car). The cache header is `private, max-age=30 days, immutable`. *Historical:* when this chapter was written (2026-08) image
+  bytes were served without any check, matching manual images of that time.
 
 ## Isolation / rollout
 

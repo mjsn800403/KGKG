@@ -29,8 +29,7 @@ One Django app holds everything. Modules, what they own, and what to know before
   `activity_view` (the activity beacon sink; resolves category from segments).
 - Admin: `admin_login_view` (PlatformAdmin + AdminAuthToken), `admin_overview_view`,
   `admin_packages_view`, `admin_requests_view` (+status), `admin_cars_view`,
-  `admin_companies_view` (+detail: create/update companies, `seed_default_org_roles` on
-  create), `admin_company_access_view` (purchase scope; prunes user grants on re-scope),
+  `admin_companies_view` (+detail: create/update companies), `admin_company_access_view` (purchase scope; prunes user grants on re-scope),
   `admin_users_view` (+detail +access), `admin_activity_view`, `admin_analytics_view`
   (cross-company analytics). Admin user-update runs `enforce_org_consistency`.
 - `_user_dict` is THE user payload shape shared by login/me/team — grep it before changing.
@@ -42,28 +41,31 @@ One Django app holds everything. Modules, what they own, and what to know before
 - `user_can_view_company_stream` — company SSE audience rule (manage OR analytics).
 
 ### `access.py` — the RBAC spine (doc 06 covers semantics)
-Roles/levels, packages, capability seeding, org-role helpers, rank/scope resolution,
+Roles/levels, packages, capability seeding, legacy rank/scope helpers (still used when a user has no seat), seat-based reach through `orggraph`,
 `manageable_user_ids` / `subtree_user_ids` / `manager_can_target`,
 `find_valid_supervisor` / `enforce_org_consistency`,
 grant writers `apply_user_access` / `apply_managed_access` / `manager_grantable_cars`,
 AI eligibility (`user_ai_eligible`), per-car docs resolution (`user_car_documents`),
 content-category taxonomy + `resolve_category`.
 
-### `team.py` — company self-service team management
-Member CRUD (`team_members_view`, `team_member_detail_view`), invite-vs-credentials
-provisioning (`provision:'invite'|'credentials'`, `_gen_password`, `_unique_username`),
-per-member access (`team_member_access_view` → `apply_managed_access`), org chart
-(`team_org_view`: nodes+edges+me), role editor (`team_roles_view`,
-`team_role_detail_view` — update/delete+reassign_to/apply_defaults,
-`team_roles_reorder_view`), analytics (`build_team_analytics`, `team_analytics_view`),
-PDF (`team_report_pdf_view`), invite acceptance (`invite_view` GET validate / POST
-accept+auto-login). Emits `team.*` events for live sync. **Boundary rule:** form ids arrive
-as strings — coerce with `_as_id` before comparing to int sets (the 2026-07-14 bug class).
+### `team.py` — invite acceptance, team analytics, PDF report
+The member/role CRUD that used to live here (`team_members_view`, `team_roles_view`, `team_org_view` ...) was **removed** when the org-graph canvas replaced it
+(`orggraph_api.py`, `api/org/*`; see [06](06-permissions-rbac.md) section 6.6). What remains: invite acceptance (`invite_view`: GET validates, POST sets the
+password, activates and auto-logs-in), company usage analytics (`build_team_analytics`, `team_analytics_view`) and the Persian PDF (`team_report_pdf_view`).
+`_emit_team` (the old `team.*` live-sync emitter) is still defined but has no caller at this revision **[C]**. **Boundary rule:** form ids arrive
+as strings; coerce with `_as_id` before comparing to int sets (the 2026-07-14 bug class).
 
-### `ratelimit.py` — fixed-window in-memory limiter
+### `orggraph_api.py` / `orggraph.py` — org-graph canvas
+`api/org/graph|nodes|nodes/<id>|nodes/<id>/permission|nodes/<id>/create-user` (root-only writes via `require_root`; any company member may read) and
+`api/admin/org/reassign-root/`. `orggraph.py` compiles a seat's `NodePermission` into the real enforcement state (`sync_node_to_user`), mirrors the canvas
+parent edge onto `reports_to`, decides who sees the team page (`user_can_view_team`) and seeds graphs for new companies. Semantics: [06](06-permissions-rbac.md) section 6.6.
+
+### `ratelimit.py` — sliding-window limiter with a shared store
 `@rate_limited(name, limit, window)`; per-IP via `X-Real-IP`/last-XFF-hop when
-`KG_TRUST_PROXY=1` (nginx sets it). Per-process buckets (3 workers ⇒ ~3× nominal limit;
-documented envelope). `KG_RL_DISABLE=1` for tests. Rules overridable via env `KG_RL_<NAME>`.
+`KG_TRUST_PROXY=1` (nginx sets it). Counters live in a SQLite file (`KG_RL_STORE`, default `/tmp/kg_ratelimit.sqlite3`) shared by all gunicorn workers of one
+container, so the cap is not multiplied by the worker count; if the file cannot be used the limiter falls back to an in-process window (then ≈ workers × nominal) and
+never blocks on its own fault. The file is container-local and ephemeral (reset by a deploy). The support chat's per-thread *poll* limiter is deliberately in-process
+(see [35](35-support-system.md)); its other limits use this shared store. `KG_RL_DISABLE=1` for tests. Rules overridable via env `KG_RL_<NAME>`.
 
 ## Real-time & requests
 
@@ -147,18 +149,18 @@ parts expansion), `service.py` (TTL caches, embed lock, allowed_cars in cache ke
 | `optimize_index` | Index maintenance (FTS/vacuum) |
 | `eval_rag` | Offline retrieval evaluation harness |
 | `check_alerts` | Alert sweep + data retention (systemd timer, 5 min) |
-| `process_outbox [--limit N]` | Send due outbox notifications (SMS/email) with retry; no-op while `KG_NOTIFY_*` is `off` (timer, 1 min, not yet installed) |
+| `process_outbox [--limit N]` | Send due outbox notifications (SMS/email) with retry; no-op while `KG_NOTIFY_*` is `off`. Unit and timer (every minute) are in `ops/outbox/`; whether they are installed and enabled on the host is **[U]** |
 | `purge_support_chat [--apply]` | Reports support threads past the PROPOSED retention periods. Deletes nothing unless `KG_SUPPORT_RETENTION_ENABLED=1` and `--apply` (no policy is approved yet) |
 | `pipeline_tick` | Pipeline watchdog/scheduler/autopilot pass (timer, 5 min) |
 | `run_pipeline --job <id>` | Pipeline worker entry (spawned; not run manually) |
 | `realtime_tick` | Change detector → events (kgkg-detect.timer, 30s) |
-| `backfill_team` | One-time: promoted top-role user per company to manager |
+| `backfill_team` | One-time: promoted top-role user per company to manager (historical, from the rank-based model) |
 
 ## Tests
 
-`api/tests.py` (core + team + hardening), `test_org_consistency.py`,
-`test_events.py`, `test_recommend.py`, `test_ops.py`, `test_pipeline.py`, plus
-`api/rag/test_*.py`. **~193 tests green** as of 2026-07-14. Run:
+There are 110 test modules under `KG_backend/` at `origin/work` `07f3ab5` (`api/tests.py`, `api/test_*.py`, `api/rag/test_*.py`, `api/support_chat/test_*.py`,
+`api/notifications/test_*.py`); the full map, commands, coverage floor and CI behaviour are in [32-testing-and-qa.md](32-testing-and-qa.md). (This section once
+quoted "~193 tests green as of 2026-07-14"; that number is historical.) Quick run:
 
 ```bash
 cd /opt/KGKG/KG_backend

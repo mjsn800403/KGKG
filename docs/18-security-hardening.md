@@ -3,6 +3,10 @@
 Built 2026-08-05. Covers three gaps: secrets that had never been rotated and
 sat world-readable, no edge rate limiting, and no WAF or error monitoring.
 
+> **Historical document.** Written 2026-08-05 when the site was served over plain HTTP by IP. Since then the site is served
+> over TLS (Cloudflare origin certificate; [12-security.md](12-security.md) item 1 closed, [33-system-design.md](33-system-design.md)), so statements
+> below such as "no TLS" or the site being published as `http://103.75.197.155/` describe that date, not today.
+
 Related: [05-api-reference](05-api-reference.md), [12-security](12-security.md) (auth endpoints),
 [11-operations-deployment](11-operations-deployment.md) (systemd units, timers).
 
@@ -98,6 +102,9 @@ only — turning them on without a certificate would redirect-loop the site.
 
 `/etc/nginx/conf.d/kgkg-limits.conf` defines the zones; the site config applies
 them per location.
+
+> **Values as of 2026-08-05.** The zones now live in the repository (`ops/nginx/kgkg-limits.conf`) and have been tuned since; on 2026-11-04 the file defines
+> `kg_general` 30 r/s, `kg_static` 100 r/s, `kg_api` 20 r/s, `kg_auth` 30 r/min, `kg_chat` 60 r/min and `kg_admin` 20 r/s (status 429). Read that file, not this table, for current numbers.
 
 | zone | rate | burst | applies to |
 |---|---|---|---|

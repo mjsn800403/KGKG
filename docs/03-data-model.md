@@ -36,20 +36,17 @@ contact fields, `seats_count`, `is_demo`, `ai_assistant_enabled` (company-level 
 **`CompanyCarAccess`** — what a company purchased: `(company, car)` unique + `documents`
 (JSON subset of package ids; **empty list = all layers**).
 
-**`OrgRole`** — company-defined position: `name` (unique per company), `rank`
-(1 = top, smaller outranks), `manage_scope` (`org` | `subtree` | `none`), capability
-defaults (`can_manage_team`, `can_view_analytics`, `ai_assistant_enabled`), `color`
-(org-chart accent), `default_accesses` (JSON access template `[{car_id, documents}]`
-auto-applied to new members). Four canonical roles are seeded per company
-(`access.seed_default_org_roles`).
+**`OrgRole`**: *removed* (migration `0016_remove_portaluser_org_role_delete_orgrole`). It was the company-defined position with `rank` and
+`manage_scope`. Its successors: `CompanyRole` (selectable role *label* per company, unique `(company, value)`, four built-ins seeded on first use) and the
+org-graph models `OrgGraph` / `OrgNode` / `NodePermission` / `NodeInvite` (section 3.6, [06](06-permissions-rbac.md) section 6.6).
 
 **`PortalUser`** — a company seat: `username` (unique), `email` (unique, alternate login
-id), `phone`, `personnel_code`, `password_hash`, `display_name`, legacy `role` charfield
-(kept in sync with `org_role` via `legacy_role_for_rank`), `org_role` FK, `reports_to`
-self-FK (explicit org edge; invariant: supervisor strictly outranks report), capability
-flags (`can_manage_team`, `can_view_analytics`, `ai_assistant_enabled`), `active`, `locked`,
+id), `phone`, `personnel_code`, `password_hash`, `display_name`, `role` charfield (label), `reports_to`
+self-FK (mirror of the canvas parent edge, see section 6.6), capability
+flags (`can_manage_team`, `can_view_analytics`, `ai_assistant_enabled`), `otp_enabled`, notification preferences (`notify_manual_update`, `notify_new_device`),
+`onboarding_dismissed_at`, `browse_mode`, `active`, `locked`,
 invite lifecycle (`invite_status` active/invited/disabled, `password_set`, `invited_by`),
-`access_expires_at`, `last_login_at`.
+`access_expires_at`, `last_login_at`. (The `org_role` FK of the original design was removed with `OrgRole`.) Complete field list: [generated/schema.md](generated/schema.md).
 
 **`UserCarAccess`** — per-user grant: `(user, car)` unique, `documents` (subset of the
 company scope), `admin_granted` (bypasses purchase clamps; survives company re-scopes).
@@ -119,6 +116,18 @@ Every transition emits events to both company and admin audiences.
 | 0010 | OrgRole (+ seeding) |
 | 0011 | CompanyRequest, Event, SystemState |
 | 0012 | ActivityLog.app_url |
+| 0013-0014 | download/ZIP package queue, pipeline `max_power` |
+| 0015-0016 | org-graph models (`OrgGraph`, `OrgNode`, `NodePermission`, `NodeInvite`); `OrgRole` and `PortalUser.org_role` removed |
+| 0017-0018 | session tokens hashed at rest; `PortalUser.browse_mode` |
+| 0019-0022, 0025-0028 | SMS second factor (`OtpChallenge`, `OtpEvent`, purpose, admin OTP), `otp_enabled`, notification prefs, `RetiredDevice` |
+| 0023-0024 | `CompanyRole`; `Company.plan` |
+| 0029-0033 | `ChatLog` (+ usage, behaviour), `AuditLog`, `SearchLog` |
+| 0034-0039 | `FeatureFlag`; helpdesk thread/SLA/CSAT; knowledge base; onboarding dismissal; activity index; helpdesk topic/car/read |
+| 0040 | `NotificationOutbox` |
+| 0041 | support chat core (`SupportThread`, `SupportMessage`, `SupportRating`, `SupportPresence`) |
+
+The list above is read from the migration file names (41 files at `origin/work` `07f3ab5`); the description of each is inferred from the name and the model
+docstrings, not from reading every migration **[C, inferred]**.
 
 ## 3.3 Per-vehicle warehouse DB (`Database_warehouse/<car_stem>.db`)
 
@@ -182,8 +191,8 @@ silently lose edges). The pipeline encodes this correctly; don't hand-roll it.
 2. `UserCarAccess.documents ⊆ CompanyCarAccess.documents` unless `admin_granted`.
    Enforced by `access.apply_user_access` / `apply_managed_access` — never write grants
    around them.
-3. Org edge invariant: `rank(reports_to) < rank(user)` — enforced at every write and
-   auto-repaired by `access.enforce_org_consistency`.
+3. Org structure: at most one root seat per org graph (database constraint); a seat has at most one occupant; `reports_to` mirrors the canvas parent edge.
+   (The old invariant `rank(reports_to) < rank(user)` belonged to the removed `OrgRole` model; `access.enforce_org_consistency` remains for the legacy path.)
 4. Empty `documents` on a **company** grant means "all layers", but user grants are always
    stored explicit (never empty) to avoid accidental ceiling lifts.
 5. `Event.id` ordering is the SSE resume contract — never reuse/renumber ids.

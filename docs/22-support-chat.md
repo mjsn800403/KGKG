@@ -32,7 +32,7 @@ the AI assistant (`/api/chat/`, doc 08) and from the in-portal request desk (`re
 `priority`, `assignee` (PlatformAdmin), `contact_name/phone/email` (optional, visitor-supplied),
 `source_page`, `referrer`, `ua_hash` (hash, not the agent string), `token_hash`, `promoted_request`
 (link to a `CompanyRequest` when a thread becomes a desk request), `staff_seen_at`, `closed_at`.
-`SupportMessage.author_kind` (visitor/staff/system), `internal` (staff-only note), `client_id`
+`SupportMessage.author_kind` (`visitor` / `admin` / `system`; staff are `admin` rows), `internal` (staff-only note), `client_id`
 (visitor-side id for de-duplicating resends). Ratings (CSAT) are one row per rating event.
 
 ## 22.3 Security properties [C, tested in `support_chat/test_security_sweep.py`]
@@ -75,6 +75,6 @@ that the numbers are free. [D Slack #kg-dev 2026-11-03; answer **[U]**]. Verify 
 - No `SupportThreadEvent` timeline until migration `0042`; traceability uses `AuditLog` (ids only).
 - Retention periods are not chosen; purge is disabled.
 - Reply-target promise is unset by design (`KG_SUPPORT_REPLY_TARGET_MINUTES`).
-- Not documented elsewhere: customer-communication outbox (`api/notifications/`, `manage.py process_outbox`,
-  migration `0040_notification_outbox`, unit `ops/outbox/kgkg-outbox.service`). SMS/e-mail are off by default;
-  providers in `notifications/providers.py` (SMTP via `EMAIL_*` and `KG_NOTIFY_FROM_EMAIL`). See doc 24.
+- The customer-communication outbox (`api/notifications/`, `manage.py process_outbox`, migration `0040_notification_outbox`, unit `ops/outbox/kgkg-outbox.service`)
+  is documented in [35-support-system.md](35-support-system.md) §35.9 (SMS/e-mail are off by default; providers in `notifications/providers.py`; SMTP via `EMAIL_*` and
+  `KG_NOTIFY_FROM_EMAIL`, see also doc 24). This chapter is the code map; [35](35-support-system.md) is the deep reference.

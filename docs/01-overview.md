@@ -2,8 +2,8 @@
 
 ## What KGtechvault is
 
-KGtechvault sells **access to official automotive service documentation** (Toyota / Lexus,
-currently 38 vehicles) to Iranian legal entities (dealership networks, after-sales service
+KGtechvault sells **access to official automotive service documentation** (Toyota / Lexus;
+38 vehicles when this overview was written on 2026-07-15, 237 catalog cars on 2026-11-03 **[S]** — see [23-data-layer.md](23-data-layer.md)) to Iranian legal entities (dealership networks, after-sales service
 companies). Buyers get a Persian, RTL web portal where their technicians browse the original
 English manual content, plus an **AI assistant** that answers repair questions and diagnostic
 trouble codes (DTCs) in Persian, grounded *exclusively* in the purchased manuals.
@@ -16,8 +16,9 @@ grants access, processes purchase/feature requests, and operates the data platfo
 ## Why it is built the way it is
 
 - **Content is immutable and sharded per vehicle.** Manuals arrive as crawled HTML, parsed
-  once into one self-contained SQLite DB per vehicle. Serving code opens them read-only.
-  Adding vehicle #4,000 is a file copy + catalog sync — no migrations, no downtime.
+  once into one self-contained store per vehicle. *Original design:* one SQLite file per vehicle, opened read-only.
+  *Today:* the content of 222 manual cars lives in per-car PostgreSQL schemas in database `kgkg_vec`, and 15 parts-only cars remain
+  read-only SQLite files ([23-data-layer.md](23-data-layer.md), ADR-0007, Proposed). Adding a vehicle needs no schema migration and no downtime.
 - **Everything else lives in one relational DB**: companies, users, grants, analytics
   rollups, events, jobs. The Django ORM is engine-agnostic, and the PostgreSQL move this
   sentence used to describe as future **happened on 2026-10-29** (`8fa94dd`,
@@ -28,16 +29,16 @@ grants access, processes purchase/feature requests, and operates the data platfo
   as a Persian *phraser* over already-retrieved context, with a no-LLM fallback. Access
   control is enforced *inside* retrieval (per-user car allow-list), not just at the UI.
 - **Dependency-light by policy.** No DRF, Redis, Celery, or external queue until a measured
-  need exists. The hand-rolled pieces (rate limiter, metrics aggregator, SSE-over-SQLite,
+  need exists. The hand-rolled pieces (rate limiter, metrics aggregator, SSE over a database table,
   pipeline supervisor) each document their scale envelope.
 
 ## The four actors
 
 | Actor | Where they work | What they can do |
 |---|---|---|
-| **Visitor** (public) | Landing `/`, `/login`, `/purchase` | Read marketing content, check VIN coverage, submit a purchase request (lead form) |
+| **Visitor** (public) | Landing `/`, `/login`, `/purchase`, `/recover` | Read marketing content, check VIN coverage, submit a purchase request (lead form); when enabled, chat with support anonymously ([35](35-support-system.md)) |
 | **Portal user** (company seat) | `/browse`, content pages, `/assistant`, `/settings` | Browse manuals for granted cars/layers, semantic search, AI assistant (if eligible), log activity |
-| **Company manager** (portal user with capabilities) | + `/team`, `/team/analytics`, `/requests` | Create/invite/deactivate employees, define org roles & hierarchy, delegate car grants, view team analytics + PDF reports, file requests to the platform admin |
+| **Company manager** (portal user with capabilities) | + `/team`, `/team/analytics`, `/requests` | Root-seat manager: build the org-graph structure, create/seat employees, set each seat's car grants, AI eligibility and admin panels; other managers: read their branch, view team analytics + PDF reports, file requests to the platform admin |
 | **Platform admin** (vendor) | `/admin` (separate login) | Everything: companies, users, grants, purchase & company requests, platform analytics, data quality, processing pipeline, system monitoring |
 
 "Manager" is not a fixed role: any portal user whose `can_manage_team` /
@@ -72,12 +73,11 @@ the user's org-role but individually editable (see doc 06).
    content. Every answer's links resolve to real in-app pages the user may open.
 
 ### Managing a team (manager)
-1. `/team` — three tabs: **اعضا** (member cards + add/edit drawer), **چارت سازمانی**
-   (interactive org chart, click-to-move reporting lines), **نقش‌ها** (role editor: create,
-   rename, drag-to-re-rank, scope, capability defaults, access templates).
-2. New employee: invite by email link (7-day single-use token) **or** direct
-   username/password provisioning. Car/document grants are delegated "give only what you
-   have" — clamped to the manager's own effective scope.
+1. `/team`: the **org-graph canvas**, the company's structure drawn as seats joined to parents. The root-seat occupant (the company super-admin) builds the
+   structure, creates users into seats and sets each seat's car/document access, AI eligibility and admin panels; everyone else with a seat that has children
+   sees it read-only ([06](06-permissions-rbac.md) section 6.6). *(Earlier versions had Members / Org chart / Roles tabs; they were replaced in 2026-09.)*
+2. New employee: created by the root seat into a seat (direct username/password, or an invite, a 7-day single-use token, for an empty seat). Car/document grants are
+   "give only what the seat may hold": a seat can never exceed what the company bought.
 3. `/team/analytics` — usage by member/category/trend + downloadable Persian PDF report.
 4. `/requests` — file requests to the vendor (more vehicles, seats, AI enablement…) and watch
    their status change live (SSE).
@@ -97,14 +97,17 @@ guide (doc 13).
 | **Document layer / package** | Sellable slice of a manual: `manual` (repair), `parts`, `standard_time`, `special_tools`, `full_spec`. |
 | **Grant** | `CompanyCarAccess` (company bought car X with layers Y) or `UserCarAccess` (user may open car X with layers ⊆ company's). `admin_granted` rows bypass purchase clamps. |
 | **Capability** | Per-user boolean: `can_manage_team`, `can_view_analytics`, `ai_assistant_enabled`. |
-| **OrgRole** | Company-defined position with a numeric `rank` (1 = top) and a `manage_scope` (org / subtree / none). |
+| **Seat / OrgNode** | A node on the company's org-graph canvas, empty or occupied by one user; the root seat is the company super-admin. Its `NodePermission` (car access, AI eligibility, admin panels) is synced to the occupant's real grants. *(The former `OrgRole` rank/scope model was removed in migration 0016.)* |
 | **Blob / occurrence** | RAG index storage: identical page content across the fleet is stored once (blob); each (car, path) it appears at is an occurrence. |
 | **Diag sidecar** | Per-car derived DB of DTC subtrees + symptom tables powering the deterministic diagnostic engine. |
 | **Pipeline** | The admin-triggered/automatic chain: catalog sync → RAG ingest/embed/graph → diag build → audit refresh, run by a detached worker. |
 | **Event** | Append-only `Event` row tailed by the SSE endpoint — the real-time backbone. |
 | **Category** | Canonical technical area (engine, brakes, electrical, …) resolved from manual section titles; the analytics dimension. |
 
-## Current production state (2026-07-15)
+## Production state on 2026-07-15 (historical snapshot)
+
+> This section is dated and was **not** refreshed. Later observations: 237 catalog cars on 2026-11-03 (222 manual cars in `kgkg_vec`, 15 parts-only) **[S]**;
+> the portal database is PostgreSQL 16 `kgkg` since 2026-10-29; current company and user counts are **[U]**. Use [23](23-data-layer.md) and [27](27-open-risks-and-decisions.md) for current state.
 
 - 1 active company (شرکت خدمات گستر سپهر گیتی), 5 portal users (manager `gostar_te_01`,
   head `yar_mohammadi`, supervisor `Behnam_hosienpour`, specialists incl. custom role

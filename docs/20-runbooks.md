@@ -52,9 +52,10 @@ After any SEV1/SEV2: a short postmortem and a regression test.
 
 ## R5 — The AI assistant fails or is slow
 
-* **Answer text fails** (LLM provider down): the bot id and model are
-  configuration (`METIS_BOT_ID`, `KG_LLM_MODEL`); point them at another
-  provider's bot and `ops/deploy/deploy.sh --reload`. Retrieval, ranking and
+* **Answer text fails** (LLM provider down): the bot is configuration
+  (`METIS_BOT_ID`, plus the fallback chain `METIS_FALLBACK_BOT_IDS` that the chat route tries automatically; `KG_LLM_MODEL` is only the label shown in the
+  AI-cost insights, `api/insights.py`, and does not choose a model); point `METIS_BOT_ID` at another
+  provider's bot in the frontend env and `ops/deploy/deploy.sh --reload`. Retrieval, ranking and
   the diagnostic engine run locally and keep working.
 * **Slow first answer:** the KG-Reranker loads on first use (≈15 s, then ≈4 s).
   To switch it off, remove `RAG_RERANK=1` from `.env.prod` and reload.

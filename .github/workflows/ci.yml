@@ -324,6 +324,13 @@ jobs:
           python3 -m unittest discover -s ops/governance -t ops/governance -p 'test_*.py' -v
       - name: Every document is owned and in date (docs/OWNERS.toml)
         run: python3 ops/governance/check_docs_freshness.py --docs docs
+      - name: Persian documentation matches its English source (docs/i18n.toml)
+        run: python3 ops/governance/check_i18n.py
+      - name: Generated model schema is current; SRS tests exist and every requirement is traced
+        run: |
+          python3 ops/governance/gen_schema.py --check
+          python3 ops/governance/gen_routes.py --check
+          python3 ops/governance/check_srs_trace.py
       - name: Docs match the code (inventory is current; no new undocumented item versus the target branch)
         # The binding baseline is doc-debt.json on the TARGET branch, so regenerating the file in
         # the change cannot excuse a new item. Push builds have no target and check freshness only;
