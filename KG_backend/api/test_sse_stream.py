@@ -133,15 +133,15 @@ class StreamConnectionHandlingTests(TestCase):
         resp = events.stream_view(self.rf.get(url, HTTP_AUTHORIZATION=f'Bearer {self.token.key}'))
         return ''.join(c.decode() if isinstance(c, bytes) else c for c in resp.streaming_content)
 
-    def test_postgresql_keeps_its_connection_between_polls_and_releases_it_at_the_end(self):
+    def test_postgresql_keeps_its_connection_between_polls(self):
         self.conn.vendor = 'postgresql'
         self.run_stream(after=events.emit('x', {}, audience='admin').id)
-        self.assertEqual(self.conn.close.call_count, 1, 'only the final release, not one per poll')
+        self.assertEqual(self.conn.close.call_count, 0, 'no close per poll; Django recycles it at request end')
 
     def test_sqlite_still_closes_between_polls(self):
         self.conn.vendor = 'sqlite'
         self.run_stream(after=events.emit('x', {}, audience='admin').id)
-        self.assertGreaterEqual(self.conn.close.call_count, 3)       # each of the polls, plus the release
+        self.assertGreaterEqual(self.conn.close.call_count, 2)       # once per poll
 
     def test_a_failed_poll_drops_the_connection_and_the_next_poll_recovers(self):
         self.conn.vendor = 'postgresql'
@@ -159,4 +159,4 @@ class StreamConnectionHandlingTests(TestCase):
         with mock.patch.object(events, 'events_since', side_effect=flaky):
             body = self.run_stream(after=after)
         self.assertIn(f'id: {ev.id}', body, 'the stream survived the failure and delivered the event')
-        self.assertGreaterEqual(self.conn.close.call_count, 2, 'closed after the failure, and at the end')
+        self.assertGreaterEqual(self.conn.close.call_count, 1, 'closed after the failed poll so the next reconnects')

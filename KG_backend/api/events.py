@@ -235,17 +235,9 @@ def stream_view(request):
                     pass
             time.sleep(_TAIL_INTERVAL_S)
 
-    def gen():
-        try:
-            yield from _stream()
-        finally:
-            # The stream ended or the client went away: give this thread's connection back.
-            try:
-                connection.close()
-            except Exception:
-                pass
-
-    resp = StreamingHttpResponse(gen(), content_type='text/event-stream')
+    # No explicit release when the stream ends: Django closes or recycles the thread's connection
+    # when the request finishes (CONN_MAX_AGE), and closing here would also close a test's shared one.
+    resp = StreamingHttpResponse(_stream(), content_type='text/event-stream')
     resp['Cache-Control'] = 'no-cache, no-transform'
     resp['X-Accel-Buffering'] = 'no'     # belt-and-suspenders vs nginx buffering
     # No 'Connection' header: it is hop-by-hop, PEP 3333 forbids a WSGI app from
