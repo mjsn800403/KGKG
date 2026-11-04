@@ -33,4 +33,7 @@ files = [
   "26-auth-and-sessions.md",
   "27-open-risks-and-decisions.md",
   "28-team-workflow.md",
+  "15-vehicle-schema.md",
+  "16-parts-catalog.md",
+  "17-evaluation.md",
 ]
