@@ -42,7 +42,7 @@ One Django app holds everything. Modules, what they own, and what to know before
 - `user_can_view_company_stream` — company SSE audience rule (manage OR analytics).
 
 ### `access.py` — the RBAC spine (doc 06 covers semantics)
-Roles/levels, packages, capability seeding, org-role helpers, rank/scope resolution,
+Roles/levels, packages, capability seeding, legacy rank/scope helpers (still used when a user has no seat), seat-based reach through `orggraph`,
 `manageable_user_ids` / `subtree_user_ids` / `manager_can_target`,
 `find_valid_supervisor` / `enforce_org_consistency`,
 grant writers `apply_user_access` / `apply_managed_access` / `manager_grantable_cars`,

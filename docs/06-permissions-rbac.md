@@ -15,8 +15,9 @@ surface (admin panel, team API, content serving, RAG) calls into it.
 | Blockers | inactive user OR company, `locked`, `access_expires_at` past, invite not accepted (`password_set=False`) | inactive admin |
 
 Password hashing is Django's default (PBKDF2). Login is timing-equalized against a dummy
-hash so account existence can't be probed. There is **no self-service password change or
-reset flow yet** for either population (known limitation, doc 12).
+hash so account existence can't be probed. Portal users have an SMS second factor (OTP) and SMS-based account recovery
+(`api/auth/recover/start|reset`, [26-auth-and-sessions.md](26-auth-and-sessions.md)); the admin login has an SMS second factor too
+(`ADMIN_REQUIRE_2FA` can make it mandatory). *Historical:* when this chapter was written (2026-07) neither population had a reset flow.
 
 ## 6.2 What a company bought: purchase scope
 
@@ -71,9 +72,9 @@ Backend-enforced since 2026-07-09 (before that it was frontend-only — doc 12 h
 ## 6.5 Capabilities (feature flags per user)
 
 `can_manage_team` — team area + company requests; `can_view_analytics` — analytics + PDF;
-`ai_assistant_enabled` — personal AI switch. Stored on the user, **seeded** from the
-org-role's defaults at creation/role-change (explicit values in the request win), and
-individually editable afterwards.
+`ai_assistant_enabled` — personal AI switch. Stored on the user and driven by the user's seat permission (`NodePermission.ai_eligible`,
+synced by `orggraph.sync_node_to_user`) and, for admin-created users, by `access.default_capabilities_for_role`; they remain
+individually editable by the platform admin.
 
 AI eligibility is three-way AND — `user_ai_eligible`: user flag ∧ company flag
 (`Company.ai_assistant_enabled`) ∧ the `manual` package present in the user's effective
@@ -85,40 +86,39 @@ capable) but the backend decorators are the enforcement (`require_manager`,
 
 ## 6.6 Org hierarchy: who manages whom
 
-Each company defines its own **positions** (`OrgRole`): `rank` (1 = top; smaller outranks)
-and `manage_scope`:
+**Current model: the org-graph canvas** (`OrgGraph`, `OrgNode`, `NodePermission`; `api/orggraph.py`, `api/orggraph_api.py`).
+The old per-company position model (`OrgRole` with `rank` and `manage_scope`) was removed in migration 0016; `CompanyRole` now only holds
+selectable role *labels*. What replaced it:
 
-- `org` — sees/manages every company member of strictly larger rank (the pyramid,
-  independent of reporting lines);
-- `subtree` — only transitive `reports_to` descendants;
-- `none` — nobody.
+- One graph per company; each `OrgNode` is a seat with an optional `parent` and at most one occupant. Exactly one root per graph (database
+  constraint `one_root_per_graph`). **Only the root-seat occupant (the company super-admin) may edit** the graph, create users into seats and set
+  seat permissions (`require_root` in `orggraph_api.py`); everybody else gets a read-only view.
+- `NodePermission` (per seat): `car_access` (list of `{car_id, documents}`), `ai_eligible`, `admin_panels` (subset of `metrics`, `data_quality`, `ingest`,
+  `terminology`, `reports`). It is an **authoring** surface: `orggraph.sync_node_to_user` is the one-way bridge that rewrites the occupant's real
+  enforcement state (`UserCarAccess` rows, `PortalUser` flags) whenever a seat's permission or occupant changes. Content, RAG and chat gating still read
+  `UserCarAccess` and the user flags, not the graph. The root's grants are applied as admin grants (not capped by purchase) and the root is always AI
+  eligible and holds every admin panel implicitly; any other seat can never exceed what the company bought (clamped by `apply_user_access`).
+- **Who may manage whom**, `manager_can_target(actor, target)`: same company, actor has `can_manage_team`, and target sits **below the actor on the canvas**
+  (`graph_subtree_user_ids`). Sitting below *is* the authority; the old strict-rank comparison survives only as a legacy path for an actor with no seat
+  (a company whose graph was never seeded), where the former `rank` / `manage_scope` / `reports_to` rules apply. `manageable_user_ids` is the matching set used
+  for the team chats, analytics and recommendations scope.
+- **Who sees the team page:** `user_can_view_team`: the root seat, or any seat that has children. Leaf seats and seatless users do not.
+- `reports_to` is kept mirrored from the canvas parent edges (`sync_reports_to_from_graph`) because analytics ordering and
+  `enforce_org_consistency` still use it. Break-glass: the platform admin can move the root onto another user (`api/admin/org/reassign-root/`,
+  `reassign_root`), and `add_root_on_top` transfers 0-level ownership without redrawing the chart.
+- New companies get a graph seeded (`seed_graph_for_company`: root = the top person, who holds the company's whole purchased scope); admin-created
+  employees are seated under the root (`seat_new_user`).
 
-Legacy users without an `org_role` fall back to the fixed 4-level ladder
-(`ROLE_LEVEL`) and subtree scope.
-
-**The authorization spine** — `manager_can_target(actor, target)`: same company ∧ actor
-outranks target (strict) ∧ target ∈ `manageable_user_ids(actor)`. Every team read/write and
-analytics scope flows through this (list, update, access, org chart, analytics via
-`build_team_analytics`).
-
-**Reporting-edge invariant:** a supervisor must *strictly outrank* their report
-(`rank(reports_to) < rank(user)`). Enforced with Persian validation errors on member
-create/update/chart-move, and **auto-repaired** by `enforce_org_consistency(company_id)`
-after any operation that can invalidate edges (position change, role re-rank, role
-delete+reassign, admin user-update). Repair walks the old chain upward
-(`find_valid_supervisor`), falls back to the company's top-ranked active user, and is
-cycle-safe.
-
-**Role editing rules:** an actor may only create/edit/delete roles ranked strictly below
-their own; quick role change re-seeds capability flags from the new role's defaults
-(explicit flags in the same request win); responses carry
-`adjustments:{caps_reseeded, reparented}` so UIs can toast what happened.
+**Legacy invariants that still run:** `enforce_org_consistency(company_id)` (called from the admin user-update path) re-parents any user whose
+`reports_to` no longer points to a strictly higher legacy rank, walking the old chain upward (`find_valid_supervisor`) and falling back to the company's top
+active user; it is cycle-safe. Whether this repair is still meaningful for graph-seated companies is **[U]**: the canvas parent edge is the live truth and
+`reports_to` is its mirror.
 
 ## 6.7 Platform admin
 
 The admin token bypasses company scoping entirely: cross-company user/grant CRUD, purchase
 scope editing, `admin_granted` rows, request handling, ops panels. Admin actions that touch
-org structure run the same consistency repair as the team API. There is exactly **one**
+org structure run `enforce_org_consistency` and, for the root seat, `reassign_root`. There is exactly **one**
 PlatformAdmin in production; its password was rotated 2026-07-08 (history in doc 12).
 
 ## 6.8 Adding a permission-adjacent feature — checklist
@@ -129,8 +129,8 @@ PlatformAdmin in production; its password was rotated 2026-07-08 (history in doc
    it in any cache key.
 3. If it writes grants, go through `apply_user_access`/`apply_managed_access` — never raw
    ORM writes.
-4. If it moves people/roles, call `enforce_org_consistency` afterwards and return
-   `adjustments` to the UI.
+4. If it moves people between seats, go through the org-graph API (`api/org/*`) so `sync_node_to_user` and `sync_reports_to_from_graph` run; do not
+   edit `reports_to` or grants directly.
 5. Coerce request ids at the boundary (`team._as_id`) — HTML selects send strings.
 6. Add tests beside the feature (`tests.py` / `test_org_consistency.py` patterns) and
    update this doc + doc 05.

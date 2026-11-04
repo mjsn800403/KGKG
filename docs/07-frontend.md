@@ -21,7 +21,7 @@ respected via `MotionConfig`).
 | `/[brand]` and `/[brand]/[year]` | portal | Brand and year level of the same `car_view` hierarchy (model list) |
 | `/frm/[slug]` (+`/lts`, `/preparation`, `/preparation/models`, `/preparation/operations`) | portal | Flat-rate manual hub: LTS labor-time sheet (filterable) and the preparation reference sheets (`FrmShell`, `FrmTable`; backend `api/frm/<slug>/`) |
 | `/assistant` | portal (AI-eligible for answers) | General assistant chat (`AssistantChat`) |
-| `/team` | manager | Team area: Members / Org chart / Roles tabs (`TeamView`, `OrgChart`, `RolesPanel`) |
+| `/team` | any seat that is the root seat or has at least one child seat (`user_can_view_team`; leaf seats do not see it) | Org-graph canvas (`OrgGraphCanvas`); editable by the root seat only |
 | `/team/chats` | manager / analytics gate | `ChatLogsView`: assistant conversations of users within the viewer's org-graph reach (same gate and scope as team analytics; backend `api/team/chat-logs/`) |
 | `/team/analytics` | analytics | `AnalyticsView`: category bars, member drill-down, trend, PDF download |
 | `/requests` | **portal** (was manager) | `RequestsView`: the customer side of the support desk — file a ticket, hold the conversation (`TicketThread`), see the SLA state, reopen by replying to a closed ticket, rate the resolution (`CsatPrompt`). A seat sees its own tickets, a manager the company's; the kinds offered come from the server's `meta` so a commercial kind is never shown to someone who would be refused |
@@ -58,19 +58,19 @@ respected via `MotionConfig`).
 - `Sidebar` links are capability-gated: Team + Requests need `can_manage_team`, Analytics
   needs `can_view_analytics` (or manage). Nav items carry `data-tour` attributes — the
   guidance system anchors on these (doc 13).
-- `TeamView` drawer (add/edit member) — invite-vs-credentials toggle, org-role select
-  (supervisor dropdown filtered to ranks above the chosen position), access delegation
-  limited to `meta.cars` (the manager's grantable set with layer ceilings), copyable
-  invite-link / credentials success panels. **Ids from `<select>`s are strings — `Number()`
-  them before sending** (bug class fixed 2026-07-14).
-- `OrgChart` — rank-layered chart, click-to-move (validated server-side), role menu (quick
-  role change), legend, empty-position ghost cards («افزودن عضو» opens the drawer
-  preselected via `initialRoleId`).
-- `RolesPanel` — motion `Reorder` drag-to-re-rank, scope picker, color swatches, access
-  template editor, apply-to-members, per-role member chips (+ transfer select). Rows at or
-  above the viewer's own rank are locked («جایگاه شما» tags).
-- `TeamView` subscribes to `team.*` SSE events → debounced reload → tabs and other open
-  sessions stay in sync without manual refresh.
+- **Team area = the org-graph canvas** (`app/team/page.jsx` -> `OrgGraphCanvas`, `@xyflow/react`, n8n-style). The graph *is* the org
+  structure: each node is a seat (empty or occupied by one user) joined to its parent by a purely visual reporting line. Only the
+  occupant of the **root seat** (the company super-admin) can edit: create seats, create users into seats (`orgCreateUser`), move
+  seats, and set each seat's permission (car/document access, AI eligibility, admin panels: `orgSetPermission`). Everyone else
+  sees the same graph read-only with their own seat highlighted. A list view (`org-list`) mirrors the canvas. The older
+  `TeamView` / `OrgChart` / `RolesPanel` (members, rank-layered chart, role editor with drag-to-re-rank) **no longer exist**; they were
+  replaced when the `OrgRole` model was removed (migration 0016, see [03](03-data-model.md) section 3.1 and [06](06-permissions-rbac.md) section 6.6).
+  Backend: `api/org/*` ([generated/routes.md](generated/routes.md)). **Ids from `<select>`s are strings: `Number()` them before sending**
+  (bug class fixed 2026-07-14).
+- `/team/chats` (`ChatLogsView`) shows assistant conversations of the viewer's reach; `/team/analytics` shows usage analytics.
+- *Known drift:* the guidance tours still target `data-guide="team-tabs"`, `team-add` and `team-search` anchors and hint rules `team.memberCount` /
+  `team.drawer` (`kg_frontend/src/guidance/content.js`, `hintRules.js`), which belonged to the removed `TeamView`; no component renders those
+  anchors now **[C]**. Tours and hints for the team page therefore have no target until updated ([13](13-guidance-system.md)).
 - Content rendering: `NodeList`/`NodeItem` (tree), `ContentRenderer` (leaf HTML),
   `Breadcrumb`, `SearchBox`, `EvidencePanel` + `FeedbackBar` (assistant citations + 👍/👎),
   `AssistantChat` (chat UI with car context, suggested actions, link buttons).

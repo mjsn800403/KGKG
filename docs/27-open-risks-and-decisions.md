@@ -42,3 +42,11 @@ ADR-0007 ratification (retrospective; does not settle R1 or R5) · enabling the 
 - Doc 11 §11.6: "the warehouse is derived; its loss costs a rebuild, not data" is **not established** (see R1, doc 23).
 - README (before this change): "38 vehicles, rag-db-improvements branch, verified 2026-07-15" was stale.
 - Doc 02/ADR-0001 "one read-only SQLite per vehicle": superseded in part by ADR-0007 and doc 23.
+- Docs 01, 03, 06, 07 (before 2026-11-04): described the per-company `OrgRole` rank/scope model and the Members/Org chart/Roles tabs; both were removed (migration 0016, org-graph canvas). Corrected in those documents; see [06](06-permissions-rbac.md) §6.6.
+- Doc 18 (2026-08-05) and doc 02 (before 2026-11-04): "no TLS" / "HTTP only" and systemd-only process model; current: TLS at nginx and container deployment ([33](33-system-design.md)).
+
+## Findings from the 2026-11-04 verification pass (code, not production)
+
+- **F1 Guidance anchors orphaned.** `guidance/content.js` and `hintRules.js` target `team-tabs`, `team-add`, `team-search` and signals `team.memberCount` / `team.drawer` that belonged to the removed `TeamView`; no component renders them ([07](07-frontend.md) §7.3, [13](13-guidance-system.md)). Fix is application code and was not made here.
+- **F2 openapi.yaml lagged two views**: `POST api/admin/company-requests/` and `GET api/admin/company-requests/<id>/` existed in code but not in the spec; added 2026-11-04 (`test_openapi_routes.py` checks routes, not methods).
+- **F3 No automated test** for the Grafana/VNC admin gates (FR-29) and no dedicated test module for the AI allowance (FR-25) or behaviour insights (FR-30).
