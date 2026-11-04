@@ -251,6 +251,8 @@ Names only; values live in `.env.prod` on the server and are never recorded here
 | `KG_ALERT_AI_DEGRADED` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_ALERT_AI_MIN_N` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_ALERT_BUDGET_MIN_H` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_CANARY_DAYS` | `KG_backend/api/alert_rules.py` | yes |
+| `KG_ALERT_CANARY_WAIT_H` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_ALERT_DISK_CRIT` | `KG_backend/api/monitoring.py` | yes |
 | `KG_ALERT_DISK_PCT` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_ALERT_DISK_WARN` | `KG_backend/api/monitoring.py` | yes |
@@ -439,9 +441,9 @@ Names only; values live in `.env.prod` on the server and are never recorded here
 | `SENTRY_DSN` | `KG_backend/KG_backend/settings.py`, `kg_frontend/src/instrumentation.ts` | yes |
 | `SENTRY_ENVIRONMENT` | `KG_backend/KG_backend/settings.py`, `kg_frontend/src/instrumentation.ts` | yes |
 | `SENTRY_TRACES_RATE` | `KG_backend/KG_backend/settings.py`, `kg_frontend/src/instrumentation.ts` | yes |
-| `SMS_API_KEY` | `KG_backend/api/portal.py` | yes |
+| `SMS_API_KEY` | `KG_backend/api/alert_rules.py`, `KG_backend/api/portal.py` | yes |
 | `SMS_FROM` | `KG_backend/api/portal.py` | yes |
-| `SMS_USERNAME` | `KG_backend/api/portal.py` | yes |
+| `SMS_USERNAME` | `KG_backend/api/alert_rules.py`, `KG_backend/api/portal.py` | yes |
 | `TERMS_JSON_PATH` | `kg_frontend/src/lib/faTerms.js` | yes |
 | `TURNSTILE_HOSTNAMES` | `KG_backend/api/portal.py` | yes |
 | `TURNSTILE_SECRET` | `KG_backend/api/portal.py` | yes |
