@@ -120,3 +120,20 @@ links respect `allowed_cars`.
    `--export`) — never hand-edit `Book1.csv`, it is a generated artifact now (doc 14).
 7. `feedback.db` logs the contextualized (joined) query string for follow-ups — the
    fa-gap miner (`build_terms --fa-gaps`) filters the ` — ` joiner before analysis.
+
+## 8.8 Behaviour added since this chapter was written (2026-11-04)
+
+Verified in code at `8a380f6` unless tagged; CHANGELOG has the dated detail.
+
+| Topic | Behaviour | Where |
+|---|---|---|
+| Scope refusal | `retrieve.assist` returns `grounded: false` with `out_of_scope` when the asked-for component or title is not documented for the selected vehicle (before: it cited that car's nearest unrelated page). `RAG_ABSENT_REFUSES=0` restores flag-only | `api/rag/retrieve.py`, `config.ABSENT_REFUSES` |
+| Grounding floor | sources below `RAG_GROUND_SIM_FLOOR` (default 0.60) are dropped | `api/rag/config.py` |
+| Query adapter | optional bge-m3 query-side adapter, off unless `RAG_QUERY_ADAPTER` names a file. It was enabled on 2026-10-29 and pushed every query under the 0.60 floor, so the assistant cited nothing; it was disabled in the production environment on 2026-11-03 [D #kg-dev]. Recalibrate the floor before enabling again | `api/rag/embed.py`, `train_query_adapter` |
+| Persian queries | `RAG_MQ_TRANSLATE=1` translates fa→en with one Metis call before retrieval; gated by a `FeatureFlag` | `kg_frontend/src/app/api/chat/route.js`, migration 0034 |
+| Metis resilience | fallback bot chain `METIS_FALLBACK_BOT_IDS` after the primary bot's 503/400; then the no-LLM renderer | doc 24 |
+| Embedding load | at most `RAG_EMBED_CONCURRENCY` (default 2) concurrent encodes per process | `api/rag/embed.py` |
+| Car store | manual pages are read from PostgreSQL schemas for loaded cars | [23](23-data-layer.md) |
+
+Open item: the nightly performance baseline saw assist latency of 13.9 s against a 4 s limit; the suspected cause (per-call PostgreSQL
+connections to car databases) is not proven [D]. See doc 27 R14.

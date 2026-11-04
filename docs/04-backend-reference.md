@@ -169,3 +169,39 @@ KG_RL_DISABLE=1 .venv/bin/python manage.py test api
 Known flake: one rate-limit test is test-order-sensitive (shared in-process bucket);
 `TeamManagementTests.setUp` clears `ratelimit._HITS` for this reason — new test classes that
 hit rate-limited endpoints should do the same.
+
+## 4.x Modules and commands added after this reference was written (2026-11-04)
+
+One line each, taken from the module and command docstrings; the code is the authority. The full, generated list of
+every module, model, command and env var is `docs/generated/inventory.md`.
+
+### Modules (`KG_backend/api/`)
+
+| Module | Role |
+|---|---|
+| `cardb_pg.py` | serves a car from its own PostgreSQL schema through a sqlite3-compatible connection; see [23](23-data-layer.md) |
+| `assist_lookup.py` | structured lookups beside RAG: part numbers (parts catalog) and "which special tool for job X" answered from tables, not prose |
+| `contentguard.py` | per-user hourly caps on page and media reads to stop bulk copying; thresholds `KG_CG_PAGE_WARN/BLOCK`, `KG_CG_MEDIA_WARN/BLOCK`; see [26](26-auth-and-sessions.md) |
+| `shield.py` | encrypted document payloads and signed single-use requests (`KG_SHIELD=1` + `KG_SHIELD_SECRET`); see [26](26-auth-and-sessions.md) |
+| `vncauth.py` | admin-only cookie ticket gating the TIS browser screen at `/kg-vnc/` (nginx `auth_request`) |
+| `nulguard.py` | rejects request text containing NUL with 400, because PostgreSQL text cannot store U+0000 (SQLite did) |
+| `safepath.py` | `safe_join` (the only way request-derived names become paths) and `split_year_suffix`; closes CodeQL path-injection/ReDoS classes |
+| `frm.py` | flat-rate manual data sets (`Database_warehouse/_frm/<slug>.json`): labour-hour tables per model family |
+| `labortimes.py`, `sst.py` | per-vehicle CSV export of Labor Times and Special Service Tools tables |
+| `orggraph.py` | compiles a seat's root-assigned permissions into the enforcement primitives; break-glass root reassignment; seeding from the legacy org roles |
+| `partsouq_crawler.py`, `partsouq_build.py` | admin start/stop/status of the Partsouq VIN crawl (shares the server Chrome with the TIS crawler on CDP 127.0.0.1:9222) and building a parts DB from a finished crawl |
+| `support_metrics.py` | support-desk metrics; each number has a definition in `audit-evidence/16-improvement-programme/METRIC_DEFINITIONS.md` and a test |
+| `support_chat/`, `notifications/` | see [22](22-support-chat.md) |
+
+### Management commands (`manage.py <name>`)
+
+| Command | Role |
+|---|---|
+| `backfill_last_login` | fill null `PortalUser.last_login_at` from the newest `login` activity row (`--dry-run` counts only) |
+| `check_coverage` | audit diagnostic-engine and retrieval coverage per vehicle against a stored baseline and alert on regression; run by `kgkg-coverage.timer` (not test coverage) |
+| `check_secret_age` | alert when server secrets are overdue for rotation (`--max-age-days`, default 90); never rotates by itself |
+| `copy_sqlite_to_postgres` | one-time portal data copy from the old SQLite file into PostgreSQL (`--verify-only`) |
+| `seed_kb_faq` | publish the support desk FAQ articles into the knowledge base (`--dry-run`) |
+| `seed_qa_fixtures` | deterministic accounts for E2E/load/DAST; runs only inside the isolated QA stack |
+| `sync_org_reports` | backfill `PortalUser.reports_to` from the org-graph canvas |
+| `build_reranker_trainset`, `train_kg_reranker`, `train_query_adapter` | offline training of the domain-adapted cross-encoder and the bge-m3 query-side adapter (doc 17); need torch and the model |

@@ -178,3 +178,25 @@ silently lose edges). The pipeline encodes this correctly; don't hand-roll it.
 4. Empty `documents` on a **company** grant means "all layers", but user grants are always
    stored explicit (never empty) to avoid accidental ceiling lifts.
 5. `Event.id` ordering is the SSE resume contract — never reuse/renumber ids.
+
+## 3.6 Models not described above (added 2026-11-04 from the model docstrings)
+
+These models existed in `api/models.py` and its sub-packages but were not named in this document. One line each; the
+docstring in the code is the authority. `docs/generated/inventory.md` lists every model and CI flags a new one that no
+reference doc names. Migrations: 41 on `work` (latest `0041_support_chat_core`).
+
+| Model | Purpose | Related doc |
+|---|---|---|
+| `CompanyRole` | per-company organisational-role label for the admin user editor; four built-in roles seeded on first use | 06 |
+| `OrgGraph`, `OrgNode`, `NodePermission`, `NodeInvite` | company org-structure canvas: one document per company, seats (empty or occupied by a user), root-assigned permission set per seat compiled into enforcement primitives (`api/orggraph.py`), invite bound to an empty seat (sha256 of token only) | 06 |
+| `OtpChallenge`, `AdminOtpChallenge`, `OtpEvent` | SMS second factor between password and token issue (DB-backed because gunicorn runs several workers; 2-minute TTL, 5 attempts) and a rolling 24 h send/fail log used for caps | 26 |
+| `KnownDevice`, `RetiredDevice` | rotating `kg_dev` device cookie (stored hashed); an unknown device triggers the new-device SMS; reuse of a retired ID means the cookie was copied | 26 |
+| `NotificationLog` | one SMS sent to a user and the dedupe ledger (one manual-update SMS per user per car per day) | 24 |
+| `SearchLog` | one manual search, plain ids with no foreign keys so content-gap history outlives accounts (`api/insights.py`) | 10 |
+| `FeatureFlag` | A/B or gradual-rollout switch with stable hash bucketing, `force_on` / `force_off` pins (`api/flags.py`); `RAG_MQ_TRANSLATE` experiment seeded by migration 0034 | 08 |
+| `TicketMessage`, `TicketRead` | turns in a request-desk ticket (replaces the single `admin_note` field) and per-viewer read position from which every unread badge is computed | 10 |
+| `KnowledgeArticle`, `KnowledgeRevision` | knowledge base: durable article with a named owner; append-only revisions (who, why) | 13 |
+| `SupportThread`, `SupportMessage`, `SupportRating`, `SupportPresence` | human support chat | 22 |
+| notification outbox models (`api/notifications/models.py`, migration 0040) | queued SMS/e-mail with `suppressed` / dry-run / live switches | 11, 22 |
+
+Storage of vehicle content is described in [23 — Data layer](23-data-layer.md), not here.
