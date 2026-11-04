@@ -1,3 +1,4 @@
+import logging
 import os
 """Operational admin API: data quality, system health, traffic analytics.
 
@@ -18,6 +19,8 @@ from .models import (
     ZipPackage,
 )
 from . import dataquality, monitoring, partsouq_crawler, pipeline, tis_crawler
+
+log = logging.getLogger('kgkg.adminops')
 
 
 def _json_body(request):
@@ -373,8 +376,10 @@ def admin_pipeline_view(request):
                 summary = ingest.scan_inbox(
                     normalize=bool(body.get('normalize', True)),
                     dry_run=bool(body.get('dry_run')))
-            except Exception as e:
-                return JsonResponse({'error': str(e)}, status=500)
+            except Exception:
+                # Full trace to the log only (CodeQL py/stack-trace-exposure, KGTEC-14).
+                log.exception('scan_zips failed')
+                return JsonResponse({'error': 'اسکن بسته‌ها ناموفق بود؛ جزئیات در لاگ سرور.'}, status=500)
             return JsonResponse({'ok': True, 'summary': summary})
 
         if action in ('skip_zip', 'requeue_zip'):
