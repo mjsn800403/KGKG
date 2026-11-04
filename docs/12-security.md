@@ -42,8 +42,9 @@
 10. **Staging holds no usable credentials** (2026-10-27). The database copy staging runs on
    is sanitized before it serves anything: session/OTP/invite tables emptied, password
    hashes replaced with an unusable sentinel, phone numbers and e-mails replaced, audit IPs
-   masked to the /24. Previously a session token lifted from staging would have worked
-   against production.
+   masked to the /24, support-chat contact details and message bodies replaced (#79).
+   Unhandled identifying columns fail the staging and QA builds (`--strict-audit`).
+   Previously a session token lifted from staging would have worked against production.
 11. **Monitoring has its own credential.** `KG_METRICS_TOKEN` gates `/api/metrics/` and is
    separate from `KG_ADMIN_TOKEN`, so handing a scrape credential to Prometheus does not
    hand it the admin surface. The public path to the endpoint is denied at nginx regardless,

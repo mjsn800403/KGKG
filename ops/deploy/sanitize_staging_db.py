@@ -28,7 +28,9 @@ It is written against the schema as it is, not as it was assumed to be: every
 table and column is checked before it is touched, so a model change makes this
 skip that table rather than crash a deploy. Tables it has never heard of are
 reported, because an unknown table holding a phone column is exactly the thing
-that should not pass quietly.
+that should not pass quietly; staging and QA builds pass --strict-audit, so
+such a table fails the build. After rewriting, every masked column is checked
+again and any surviving value fails the run (counts are printed, never values).
 
     ops/deploy/sanitize_staging_db.py <db-path>
     ops/deploy/sanitize_staging_db.py --selftest
@@ -40,6 +42,7 @@ import argparse
 import hashlib
 import sqlite3
 import sys
+from urllib.parse import urlsplit
 
 
 # Columns that must never survive in a staging copy, by intent.
@@ -47,6 +50,16 @@ MASK_PHONE = 'phone'
 MASK_EMAIL = 'email'
 KILL_HASH = 'password_hash'
 MASK_IP = 'ip'
+# Free text a visitor typed (support chat): the value is replaced, its length
+# class is kept so layout and truncation code still see realistic sizes.
+MASK_NAME = 'name'
+MASK_TEXT = 'text'
+# A URL from outside (the visitor's referrer): reduced to its origin, since
+# paths and query strings can carry search terms, e-mails or tokens.
+MASK_URL = 'url'
+# A unique bearer-token hash: one shared sentinel would break the unique index,
+# so each row gets its own value, which is not hex and so never a sha256 output.
+KILL_TOKEN = 'token'
 
 # Tables whose whole purpose is to hold a credential or a one-time secret.
 PURGE_TABLES = (
@@ -64,10 +77,17 @@ PURGE_TABLES = (
 MASK_COLUMNS = {
     'api_portaluser': {MASK_PHONE: 'phone', MASK_EMAIL: 'email', KILL_HASH: 'password_hash'},
     'api_platformadmin': {MASK_PHONE: 'phone', KILL_HASH: 'password_hash'},
-    'api_companycaraccess': {MASK_PHONE: 'phone', MASK_EMAIL: 'email'},
-    'api_nodepermission': {MASK_EMAIL: 'email'},
-    'api_activitylog': {MASK_PHONE: 'phone', KILL_HASH: 'password_hash'},
+    # api_companycaraccess, api_nodepermission and api_activitylog used to be
+    # listed with phone/e-mail/hash columns those tables do not have (they were
+    # skipped silently); api/test_sanitizer_coverage.py now fails on such entries.
     'api_auditlog': {MASK_IP: 'ip'},
+    # Support chat (#79). contact_* are what a visitor typed to be reached;
+    # token_hash is the visitor's resume credential. source_page is one of our
+    # own paths and stays. Message bodies are free text and can hold anything.
+    'api_supportthread': {MASK_PHONE: 'contact_phone', MASK_EMAIL: 'contact_email',
+                          MASK_NAME: 'contact_name', MASK_URL: 'referrer',
+                          KILL_TOKEN: 'token_hash'},
+    'api_supportmessage': {MASK_TEXT: 'body'},
     # Django's own user table: the admin site's superusers live here, and its
     # hash column is called `password`, not `password_hash`.
     'auth_user': {MASK_EMAIL: 'email', KILL_HASH: 'password'},
@@ -89,6 +109,23 @@ def fake_phone(seed: str, length: int = 11) -> str:
     while len(digits) < length:
         digits += digits or '0'
     return '09' + digits[: max(length - 2, 0)]
+
+
+def fake_text(intent: str, value: str, key) -> str:
+    """Replacement for MASK_NAME / MASK_TEXT / MASK_URL / KILL_TOKEN values."""
+    if intent == KILL_TOKEN:
+        return f'staging-sanitized:{key}'
+    if intent == MASK_NAME:
+        return 'Staging Visitor'
+    if intent == MASK_TEXT:
+        return f'[sanitized message, {len(value)} chars]'
+    if intent == MASK_URL:
+        p = urlsplit(value)
+        return f'{p.scheme}://{p.netloc}/' if p.scheme and p.netloc else ''
+    raise AssertionError(f'unknown text intent {intent}')
+
+
+TEXT_INTENTS = (MASK_NAME, MASK_TEXT, MASK_URL, KILL_TOKEN)
 
 
 def table_columns(con: sqlite3.Connection, table: str) -> set[str]:
@@ -169,6 +206,15 @@ def sanitize(con: sqlite3.Connection, verbose: bool = True) -> dict[str, int]:
                     f"rtrim(\"{column}\", '0123456789') || '0' "
                     f"WHERE \"{column}\" LIKE '%.%.%.%'"
                 ).rowcount
+            elif intent in TEXT_INTENTS:
+                key = pk or 'rowid'       # by id, like the PostgreSQL path
+                rows = con.execute(
+                    f'SELECT {key}, "{column}" FROM "{table}" '
+                    f'WHERE "{column}" IS NOT NULL AND "{column}" != ""'
+                ).fetchall()
+                con.executemany(f'UPDATE "{table}" SET "{column}" = ? WHERE {key} = ?',
+                                [(fake_text(intent, str(v), rid), rid) for rid, v in rows])
+                n = len(rows)
             else:                                  # pragma: no cover - guarded by dict
                 raise AssertionError(f'unknown intent {intent}')
             report[f'{intent}:{table}.{column}'] = n
@@ -237,6 +283,13 @@ def sanitize_pg(dsn: str, verbose: bool = True) -> tuple[dict[str, int], list[st
                                 f'regexp_replace("{column}", %s, %s) WHERE "{column}" ~ %s',
                                 (r'\.[0-9]+$', '.0', r'^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'))
                     n = cur.rowcount
+                elif intent in TEXT_INTENTS:
+                    cur.execute(f'SELECT id, "{column}" FROM "{table}" '
+                                f'WHERE "{column}" IS NOT NULL AND "{column}" <> %s', ('',))
+                    rows = cur.fetchall()
+                    cur.executemany(f'UPDATE "{table}" SET "{column}" = %s WHERE id = %s',
+                                    [(fake_text(intent, str(v), rid), rid) for rid, v in rows])
+                    n = len(rows)
                 else:                              # pragma: no cover
                     raise AssertionError(f'unknown intent {intent}')
                 report[f'{intent}:{table}.{column}'] = n
@@ -253,7 +306,56 @@ def sanitize_pg(dsn: str, verbose: bool = True) -> tuple[dict[str, int], list[st
             if risky:
                 unknown.append(f'{table}: {", ".join(sorted(risky))}')
         con.commit()
+
+        bad = []
+        for label, sql, param in leftover_sql():
+            table, _, column = label.partition('.')
+            if table not in schema or (column and column not in schema[table]):
+                continue
+            args = (param, param) if sql.endswith('? = ?') else (param,)
+            cur.execute(sql.replace('?', '%s'), args)
+            n = cur.fetchone()[0]
+            if n:
+                bad.append(f'{label}: {n} rows')
+        report['leftovers'] = bad
     return report, unknown
+
+
+def leftover_sql() -> list[tuple[str, str, str]]:
+    """(label, sql, param) per masked column: the query counts rows that still
+    hold a value the sanitizer should have replaced."""
+    checks = []
+    for table, intents in MASK_COLUMNS.items():
+        for intent, column in intents.items():
+            q = f'SELECT count(*) FROM "{table}" WHERE "{column}" IS NOT NULL AND "{column}" <> \'\' AND '
+            if intent == MASK_EMAIL:
+                checks.append((f'{table}.{column}', q + f'"{column}" NOT LIKE ?', '%@staging.invalid'))
+            elif intent == KILL_HASH:
+                checks.append((f'{table}.{column}', q + f'"{column}" <> ?', UNUSABLE_HASH))
+            elif intent == MASK_NAME:
+                checks.append((f'{table}.{column}', q + f'"{column}" <> ?', fake_text(MASK_NAME, '', 0)))
+            elif intent == MASK_TEXT:
+                checks.append((f'{table}.{column}', q + f'"{column}" NOT LIKE ?', '[sanitized message, %'))
+            elif intent == KILL_TOKEN:
+                checks.append((f'{table}.{column}', q + f'"{column}" NOT LIKE ?', 'staging-sanitized:%'))
+    for table in PURGE_TABLES:
+        checks.append((table, f'SELECT count(*) FROM "{table}" WHERE ? = ?', '1'))
+    return checks
+
+
+def leftovers(con: sqlite3.Connection) -> list[str]:
+    """After sanitize(): columns that still hold unsanitized values."""
+    tables = existing_tables(con)
+    bad = []
+    for label, sql, param in leftover_sql():
+        table, _, column = label.partition('.')
+        if table not in tables or (column and column not in table_columns(con, table)):
+            continue
+        args = (param, param) if sql.endswith('? = ?') else (param,)
+        n = con.execute(sql, args).fetchone()[0]
+        if n:
+            bad.append(f'{label}: {n} rows')
+    return bad
 
 
 def audit_unknown(con: sqlite3.Connection) -> list[str]:
@@ -292,7 +394,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.pg:
         if not args.quiet:
             print(f'sanitizing PostgreSQL staging copy {args.pg}')
-        _, unknown = sanitize_pg(args.pg, verbose=not args.quiet)
+        report, unknown = sanitize_pg(args.pg, verbose=not args.quiet)
+        bad = report['leftovers']
     else:
         if not args.db:
             ap.error('a database path (or --pg DSN) is required')
@@ -302,9 +405,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f'sanitizing staging copy {args.db}')
             sanitize(con, verbose=not args.quiet)
             unknown = audit_unknown(con)
+            bad = leftovers(con)
         finally:
             con.close()
 
+    if bad:
+        # counts only: a value printed here would itself be the leak
+        print('\nERROR: values survived sanitizing:')
+        for line in bad:
+            print(f'  {line}')
+        return 1
     if unknown:
         print('\nWARNING: identifying columns this script does not handle:')
         for line in unknown:
@@ -335,6 +445,10 @@ def selftest() -> int:
         CREATE TABLE api_auditlog (id INTEGER PRIMARY KEY, ip TEXT);
         CREATE TABLE api_car (id INTEGER PRIMARY KEY, name TEXT);
         CREATE TABLE api_newthing (id INTEGER PRIMARY KEY, phone TEXT);
+        CREATE TABLE api_supportthread (id TEXT PRIMARY KEY, token_hash TEXT,
+            contact_name TEXT, contact_phone TEXT, contact_email TEXT,
+            source_page TEXT, referrer TEXT);
+        CREATE TABLE api_supportmessage (id INTEGER PRIMARY KEY, thread_id TEXT, body TEXT);
         INSERT INTO api_portaluser VALUES
             (1, 'qa_e_root', '09121234567', 'real@example.com', 'argon2$real'),
             (2, 'someone',   '09351112222', 'other@example.com', 'argon2$other');
@@ -342,6 +456,12 @@ def selftest() -> int:
         INSERT INTO api_auditlog VALUES (1, '203.0.113.42'), (2, '::1');
         INSERT INTO api_car VALUES (1, 'Corolla');
         INSERT INTO api_newthing VALUES (1, '09120000000');
+        INSERT INTO api_supportthread VALUES
+            ('a1', 'tok$real', 'Real Name', '09125550000', 'v@example.com',
+             '/pricing', 'https://www.google.com/search?q=v%40example.com'),
+            ('b2', 'tok$other', '', '', '', '/', '');
+        INSERT INTO api_supportmessage VALUES
+            (1, 'a1', 'my number is 09125550000'), (2, 'a1', '');
         """
     )
     sanitize(con, verbose=False)
@@ -389,7 +509,36 @@ def selftest() -> int:
     expect('non-ipv4 left alone',
            con.execute('SELECT ip FROM api_auditlog WHERE id=2').fetchone()[0], '::1')
 
+    t = dict(zip(('token_hash', 'contact_name', 'contact_phone', 'contact_email',
+                  'source_page', 'referrer'),
+                 con.execute('SELECT token_hash, contact_name, contact_phone, contact_email, '
+                             "source_page, referrer FROM api_supportthread WHERE id='a1'").fetchone()))
+    expect('support contact name masked', t['contact_name'], 'Staging Visitor')
+    if t['contact_phone'] == '09125550000' or not t['contact_phone'].startswith('09'):
+        failures.append(f'support contact phone not masked: {t["contact_phone"]}')
+    expect('support contact email masked', t['contact_email'].endswith('@staging.invalid'), True)
+    expect('support visitor token unusable', t['token_hash'], 'staging-sanitized:a1')
+    expect('support referrer reduced to origin', t['referrer'], 'https://www.google.com/')
+    expect('support source page kept', t['source_page'], '/pricing')
+    expect('support empty contact stays empty',
+           con.execute("SELECT contact_name, contact_phone, contact_email, referrer "
+                       "FROM api_supportthread WHERE id='b2'").fetchone(), ('', '', '', ''))
+    expect('support message body masked',
+           con.execute('SELECT body FROM api_supportmessage WHERE id=1').fetchone()[0],
+           '[sanitized message, 24 chars]')
+    expect('support rows kept',
+           con.execute('SELECT (SELECT count(*) FROM api_supportthread), '
+                       '(SELECT count(*) FROM api_supportmessage)').fetchone(), (2, 2))
+    expect('nothing survives sanitizing', leftovers(con), [])
+
+    # The post-sanitize check must catch a value that slipped through.
+    con.execute("UPDATE api_supportthread SET contact_email='leak@example.com' WHERE id='a1'")
+    if leftovers(con) != ['api_supportthread.contact_email: 1 rows']:
+        failures.append(f'leftover check missed a surviving e-mail: {leftovers(con)}')
+
     unknown = audit_unknown(con)
+    if any('api_supportthread' in u for u in unknown):
+        failures.append('audit still flags api_supportthread')
     if not any('api_newthing' in u for u in unknown):
         failures.append('audit missed an unhandled table with a phone column')
     if any('api_car' in u for u in unknown):

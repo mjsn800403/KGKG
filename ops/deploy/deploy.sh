@@ -395,9 +395,9 @@ ln -sfn "$KG_BE_DIR/Database_warehouse" "$STG/db/Database_warehouse"
 # served from it: a session token lifted from staging would otherwise work
 # against production. Representative row counts and relationships are kept.
 if is_pg; then
-  "$VENV/python" -I "$W/ops/deploy/sanitize_staging_db.py" --pg "dbname=$PG_STAGING" --quiet
+  "$VENV/python" -I "$W/ops/deploy/sanitize_staging_db.py" --pg "dbname=$PG_STAGING" --quiet --strict-audit
 else
-  python3 -I "$W/ops/deploy/sanitize_staging_db.py" "$STG/db/db.sqlite3" --quiet
+  python3 -I "$W/ops/deploy/sanitize_staging_db.py" "$STG/db/db.sqlite3" --quiet --strict-audit
 fi \
   || die "could not sanitize the staging database copy; refusing to serve real credentials from staging"
 cat > "$STG/stagecfg/staging_settings.py" <<'PY'

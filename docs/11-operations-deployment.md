@@ -248,8 +248,19 @@ from it: credential tables emptied, password hashes replaced with an unusable
 sentinel, phone numbers replaced by deterministic format-preserving fakes,
 e-mails pointed at `.invalid`, audit IPs masked to the `/24`. Row counts,
 foreign keys, grants and vehicle data are kept — staging has to stay
-representative. Any table carrying an identifying column that the script does
-not handle is reported; add it to `MASK_COLUMNS`.
+representative. Support chat (#79): `contact_phone` and `contact_email` are
+masked like the others, `contact_name` becomes `Staging Visitor`, message
+bodies become `[sanitized message, N chars]`, the referrer is cut to its
+origin, the visitor token hash is made unusable; `source_page` (our own path)
+is kept. Empty values stay empty.
+
+It fails closed: staging (`deploy.sh`) and the QA stack (`qa/stack.sh`) pass
+`--strict-audit`, so a table carrying an identifying column the script does not
+handle fails the build instead of printing a warning (add it to
+`MASK_COLUMNS`). After rewriting, every masked column is re-checked and any
+surviving value fails the run, printing counts only. `api/test_sanitizer_coverage.py`
+walks the Django models in CI, so a new phone/e-mail column fails before it
+reaches a copy.
 
 ### Other deploy verbs
 
