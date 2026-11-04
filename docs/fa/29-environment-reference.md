@@ -1,5 +1,4 @@
 <!-- i18n-source: 29-environment-reference.md sha256:80bbd25ab765 -->
-<!-- i18n-source: 29-environment-reference.md sha256:b06c7d70ccda -->
 <div dir="rtl" lang="fa">
 
 # ۲۹ — مرجع متغیرهای محیطی (متغیرهای عملیاتی و تنظیمی)
