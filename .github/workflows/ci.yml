@@ -242,6 +242,7 @@ jobs:
           bash ops/deploy/ci_is_tip.sh --selftest
           bash ops/deploy/test_detached_prod.sh
           bash ops/deploy/test_promote_guard.sh
+          bash ops/deploy/test_promote_guard_wiring.sh
           python3 qa/e2e_record.py --selftest
           python3 -I ops/deploy/smoke_fleet.py --selftest
           python3 -I qa/e2e/support_chat_guard.py --selftest

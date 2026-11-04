@@ -86,7 +86,7 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
 ```bash
 git fetch && git log origin/work -5 --oneline          # what is current
 gh pr list -R mjsn800403/KGKG; gh issue list -R mjsn800403/KGKG
-python3 ops/governance/gen_inventory.py --check        # docs vs code drift
+python3 ops/governance/gen_inventory.py --check --base-ref origin/work --require-base   # docs vs code drift (env KG_DOC_BASE_REF sets the default base ref)
 python3 ops/governance/check_docs_freshness.py --docs docs
 ```
 

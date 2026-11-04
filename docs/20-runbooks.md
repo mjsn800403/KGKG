@@ -106,8 +106,12 @@ The chat is human-only (no AI). Everything here is a person's decision; none of 
   `results/` are kept as the artifact `support-chat-e2e-<sha>` (90 days). The shared QA stack
   (`qa/run_e2e.sh`) still skips them; that is intended, the chat is not enabled there (#78).
 
-* **Notice:** `manage.py support_health --fail-on warn` exits 1, staff report waiting visitors, or a
-  privacy/abuse report arrives. (Not wired to alerts yet, so check it by hand during opening hours.)
+* **Notice:** a `support:unanswered` alert (warning) or `support:unanswered:critical` (see below), staff
+  reporting waiting visitors, `manage.py support_health --fail-on warn` exiting 1, or a privacy/abuse
+  report. The alert rule is **off by default**: `KG_SUPPORT_ALERTS=1` raises the warning on the existing
+  alert engine (dashboard only, never an SMS); `KG_SUPPORT_ALERTS=page` also raises the critical alert
+  past `KG_SUPPORT_WAIT_CRIT_S`, which the existing delivery path SMSes once (6 h cooldown). Both close by
+  themselves when the queue is answered. Until a person sets it, check `support_health` by hand in hours.
 * **Confirm:** `python manage.py support_health` (waiting count, oldest wait, by intent; read-only),
   `curl -s https://<site>/kg-api/api/support-chat/status/` (`enabled`, `mode`).
 * **Emergency shutdown:** remove `KG_SUPPORT_CHAT_ENABLED` (or set it to anything but `1`) in
@@ -118,8 +122,22 @@ The chat is human-only (no AI). Everything here is a person's decision; none of 
   admin access. A typo is enforced (403 `rbac_invalid_mode`): fix the value, reload. In `enforce` with no
   owner (403 `rbac_no_owner`) set `KG_SUPPORT_OWNERS` to an active admin username. Run
   `python manage.py support_roles check` (read-only) to see exactly why.
-* **Inbox not updating:** the console falls back to polling every 20 s. If the stream is the problem,
-  check nginx `/kg-api/api/events/stream/` (`proxy_buffering off`, `limit_conn kg_sse 8`) and R1.
+* **Inbox not updating:** the console shows «اتصال زنده قطع است» while the stream is down and keeps
+  refreshing every 20 s; it catches up the moment the stream returns (the browser retries after 3 s, doubling
+  to 60 s, and reconnects at once when the network returns). If the stream is the problem, check nginx
+  `/kg-api/api/events/stream/` (`proxy_buffering off`, `limit_conn kg_sse 8`, read timeout above the 300 s
+  recycle; `ops/governance/test_nginx_sse.py` guards these) and R1. Each open admin or portal tab holds one
+  gunicorn thread for up to 300 s (24 threads in total, 3 workers x 8): many open tabs can starve the API.
+* **Production runs a commit that is not on `work`** (staging aborts with "does not contain the live commit"):
+  do not force anything. Fetch the commit from its deploy tag, push it to a branch, merge it into `work`
+  through a PR (as #72 did for `3a65964`), and the next staging passes. `deploy.sh --rollback` and `--reload`
+  never depend on GitHub. A guard that stops direct `deploy.sh` runs from promoting off-work commits exists as a
+  tested patch, not yet applied (`docs/superpowers/specs/2026-11-03-promote-drift-prevention.md`).
+* **Backups of the chat data:** it lives in PostgreSQL. The hourly off-host snapshot includes
+  `/root/backup_snapshot/portal.dump` (`pg_dump -Fc`, contains the support-chat and outbox tables), and
+  `/opt/KGKG_release/db-backups/db-*.pgdump` is taken before each promote. Check an archive without
+  restoring: `pg_restore -l <file> | grep -c 'TABLE DATA'`. A restore into a scratch database has not been
+  rehearsed, and `verify_restore.py` does not cover `portal.dump`.
 * **Abuse or spam wave:** raise nothing blindly; read `KG_SC_*` limits in 11, mark threads spam from
   the console, and shut down per above if limits do not contain it.
 * **Never** run `purge_support_chat --apply`, enable notifications, or promote from this runbook.

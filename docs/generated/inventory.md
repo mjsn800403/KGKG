@@ -295,6 +295,7 @@ Names only; values live in `.env.prod` on the server and are never recorded here
 | `KG_DB_PATH` | `KG_backend/KG_backend/settings.py` | no |
 | `KG_DEPLOY_LOCK_WAIT` | `ops/deploy/deploy.sh` | no |
 | `KG_DOCKER` | `ops/deploy/prune_images.sh` | no |
+| `KG_DOC_BASE_REF` | `ops/governance/gen_inventory.py` | yes |
 | `KG_ENV_FILE` | `KG_backend/api/management/commands/rotate_secrets.py` | no |
 | `KG_ENV_FILE_WATCHDOG` | `ops/observability/watchdog.py` | no |
 | `KG_FE_ENV` | `ops/docker/containers.sh` | no |
@@ -362,6 +363,7 @@ Names only; values live in `.env.prod` on the server and are never recorded here
 | `KG_SPOOL` | `ops/docker/containers.sh` | no |
 | `KG_SSH_DIR` | `ops/deploy/setup_ci_access.sh` | no |
 | `KG_STAGING_QA_USER` | `ops/deploy/deploy.sh` | no |
+| `KG_SUPPORT_ALERTS` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_SUPPORT_CHAT_ENABLED` | `KG_backend/api/support_chat/config.py`, `kg_frontend/src/app/layout.tsx` | yes |
 | `KG_SUPPORT_OWNERS` | `KG_backend/api/support_chat/rbac.py` | yes |
 | `KG_SUPPORT_RBAC` | `KG_backend/api/support_chat/rbac.py` | yes |

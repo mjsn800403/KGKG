@@ -43,6 +43,11 @@ No AI is involved anywhere in it. Everything below is migration-independent; mig
 | G13 | `khadamat.pem` private key sits in `D:\programing`. | documented | high if the folder was ever shared | owner action: move, treat as exposed if shared |
 | G14 | Role changes reach an open stream only at reconnect (up to 300 s). | confirmed (design) | low | accepted; documented |
 | G15 | `TableStore` and the last-owner concurrency test cannot be exercised before migration B. | confirmed | blocker for RBAC enforcement | waits on Ali |
+| G16 | **Each open stream opened a new PostgreSQL connection every second** (the stream closed its connection each loop, a SQLite-WAL workaround): 60 connects for 60 polls (12 streams, 4 s). | confirmed: CI on PostgreSQL | medium (connection churn grows with open tabs) | **fixed in batch 3**: 12 connects for the same 60 polls (one per stream); SQLite unchanged; a failed poll now reconnects instead of failing silently |
+| G17 | **Capacity: each open admin or portal tab holds one gunicorn thread for up to 300 s.** Documented gunicorn is 3 workers x 8 threads = 24 threads, shared with every API request; nginx limits 8 streams per IP, not in total. Enough open tabs would starve the API while polling fallback hides nothing. | confirmed (code: generator sleeping in the request thread) / documented (thread counts) / **not measured** | high at scale, low at today's staff count | open: needs an infrastructure decision (more threads, a separate stream worker, or ASGI); not changed |
+| G18 | Backups: the hourly off-host snapshot **does** include `portal.dump` (`pg_dump -Fc`, readable, contains the support-chat and outbox tables; checked read-only 2026-11-04) and a `.pgdump` is taken before each promote. `verify_restore.py` does not cover the PostgreSQL dump, a restore into a scratch database has not been rehearsed, off-host retention length is unknown, secrets are excluded by design. | confirmed (server, read-only) / unverified (restore, retention) | high until a restore is rehearsed | open: rehearse a restore into a scratch database, extend `verify_restore.py` |
+| G19 | The alert engine had no unanswered-visitor rule. | confirmed | high before launch | **built, off by default**: `support:unanswered` / `support:unanswered:critical` on the existing engine, 9 tests through the real sweep with no send; enabling (`KG_SUPPORT_ALERTS=1` or `page`) is your decision |
+| G20 | Nginx could silently buffer or time out the live stream (the 20 s refresh would hide it). | confirmed (live `nginx -T`, read-only: no buffering, no gzip or ModSecurity body inspection for `text/event-stream`, read timeout 3600 s above the 300 s recycle) | low | verified; `ops/governance/test_nginx_sse.py` now guards it. An end-to-end stream through the real Nginx was not run (no Nginx here) |
 
 ## 3. Roadmap
 
@@ -64,16 +69,17 @@ code rows has been run against production.
 | Security | Every staff route returns 401 without a staff session (sweep test green) | pass |
 | Security | Visitor routes give identical answers for real and unknown threads (sweep test green) | pass |
 | Security | Logs contain no message text, contact details or tokens (test green) | pass |
+| Security | CSRF: every support-chat view is classified header-token or pre-auth in the #83 registry, and a portal cookie grants nothing on any support route (tests green) | pass |
 | Security | Turnstile keys set in production, action `support_chat` | unverified |
 | Security | No private key in the shared working folder | **fail** (G13) |
 | Security | `support_roles check --for-enforce` exits 0 and at least two owners exist, before enforcement | not run (needs migration B) |
 | Reliability | Production commit is an ancestor of `origin/work` | pass at 2026-11-03 (#72); can recur until the guard is enabled |
-| Reliability | SSE survives drop, stall, expiry and reconnect | pass: 11 connector unit tests (mid-stream drop with cursor resume, 45 s stall, heartbeats, backoff, 401, 503, online) and E2E F5-F7 |
-| Reliability | Restore drill completed from the off-host backup, including secrets | unverified |
-| Performance | Baseline p95 for create, poll, send, staff list, thread detail and `support_health` on PostgreSQL | handler-level baseline in section 4.1; no network soak yet |
-| Operations | Unanswered-visitor monitor wired to an alert and tested | **fail** (command exists, one query, not wired: needs your approval) |
-| Operations | Runbook exists and was rehearsed on staging | written (R10), not rehearsed |
-| Privacy | Privacy notice reviewed and published; retention policy approved. **Launch blocker:** the notice must name everything the widget keeps in the visitor's browser, including the **half-typed draft** (sessionStorage `kg_sc_d_v1`, this tab only, up to 2000 characters, expires after 24 h, removed when the box is emptied or by "delete conversation"), the unsent-message queue (`kg_sc_q_v1`) and the thread id and token (`kg_sc_v1`, localStorage). The draft page does not mention the draft yet | **fail** (draft only, not approved, not updated for the draft) |
+| Reliability | SSE survives drop, stall, expiry and reconnect; Nginx route cannot buffer it; connection cost bounded | pass: 11 connector tests, E2E F5-F7 (now in CI), Nginx invariants test, 12 connects per 12 streams on PostgreSQL. Not run: an end-to-end stream through the real Nginx; gunicorn thread capacity (G17) |
+| Reliability | A restore from the off-host backup into a scratch database, including secrets handling | **fail**: snapshot contents verified (G18), restore not rehearsed |
+| Performance | Baseline latency and a concurrency run on PostgreSQL | pass: section 4.1 and 4.2. Not done: network-level load, soak, gunicorn/Nginx capacity |
+| Operations | Unanswered-visitor alert exists, deduplicated and tested without sending | pass (off by default); **enabling it** and choosing warning-only or paging is your decision |
+| Operations | Runbook exists and was rehearsed on staging | written and updated with this evidence (R10); not rehearsed |
+| Privacy | Privacy notice reviewed and published; retention policy approved. **Launch blocker:** the notice must name everything the widget keeps in the visitor's browser, including the **half-typed draft** (sessionStorage `kg_sc_d_v1`, this tab only, up to 2000 characters, expires after 24 h, removed when the box is emptied or by "delete conversation"), the unsent-message queue (`kg_sc_q_v1`) and the thread id and token (`kg_sc_v1`, localStorage). Reviewed 2026-11-04: the draft now lists the token, queue and draft and states that deletion from backups is not immediate; the retention periods and the token's lifetime are owner decisions still in [brackets] | **fail** (draft only, not approved) |
 | Staffing | Named staff on shift, hours, off-hours message, escalation path | not defined (owner decision) |
 | Infrastructure | Kill switch off by default and flips only by a person | pass (documented, tested) |
 
@@ -103,6 +109,19 @@ each, 60 samples, rate limits off); the run's log carries the `BENCH` lines.
   of a minute or more, not per request. It still does not alert.
 * **Not measured:** concurrency (many simultaneous polls and open SSE streams), real network latency, Nginx and
   gunicorn behaviour, and a long soak. A load test of those needs a deployed isolated stack and is the next performance step.
+
+### 4.2 Concurrency and streams (batch 3, PostgreSQL in CI, 2 vCPU runner, one process)
+
+30 visitors and 4 staff on real threads (create, 3 sends, polls; staff list and detail), rate limits off, no network.
+Three CI runs gave 85, 95 and 147 requests per second with **0 errors and exactly 120 messages stored for 30 visitors
+x 4 messages (none lost, none duplicated)**. Under that contention p50 was about 420 ms for create, 140 ms for poll, 410 ms for
+send, 90-150 ms for the staff list: the same handlers take 5-8 ms alone, so the time is CPU queueing among 34 threads in one
+Python process (the GIL), not a lock or a slow query. Treat the throughput as a floor for one process, not a capacity claim.
+
+| Open streams (12 for 4 s) | events_since calls | new database connections |
+|---|---|---|
+| before the fix | 60 | 60 |
+| after the fix | 60 | 12 |
 
 ## 5. Launch plan
 
