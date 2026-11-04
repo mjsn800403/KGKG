@@ -18,13 +18,13 @@ Related: [11-operations-deployment.md](11-operations-deployment.md), [25-ops-inv
 
 | Variable | Default | Consumer | Meaning and implication |
 |---|---|---|---|
-| `DJANGO_CORS_ALLOW_ALL` | `DEBUG` value | `KG_backend/settings.py:104` | `true` allows every origin. Must stay off in production; otherwise `DJANGO_CORS_*` allow-list applies. |
+| `DJANGO_CORS_ALLOW_ALL` | `DEBUG` value | `KG_backend/KG_backend/settings.py:104` | `true` allows every origin. Must stay off in production; otherwise `DJANGO_CORS_*` allow-list applies. |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | empty list | `settings.py:277` | Comma-separated origins trusted for CSRF checks on cross-origin POSTs. |
 | `DJANGO_SSL_REDIRECT` | `false` | `settings.py:267` | Django-level HTTP→HTTPS redirect. **Keep off** behind the Next.js proxy: it was switched on 2026-09-07, made server-side rendering call `https://127.0.0.1:8000` and fail, and was turned off again (comment in `settings.py`). TLS is terminated by nginx. |
 | `ADMIN_REQUIRE_2FA` | unset (off) | `api/portal.py:958` | `1` forces the second factor (OTP) for the admin login. See [26-auth-and-sessions.md](26-auth-and-sessions.md). |
 | `RUN_MAIN` | set by Django autoreload | `api/apps.py:21` | Only the autoreload child process warms caches in development; `false` is the watcher parent. Not an operator setting. |
 | `KG_RELEASE` | `dev` (metrics) / unset (Sentry) | `settings.py:361`, `api/metrics_exposition.py:221` | Release identifier (commit SHA) attached to GlitchTip/Sentry events and exposed as the `release` label of the build-info metric. Set by the deploy. |
-| `KG_TESTING` | unset | `KG_backend/jsonlog.py:166` | When set, structured JSON logging is not installed (tests use plain output). Also skipped when `test` is in `argv[:2]`. |
+| `KG_TESTING` | unset | `KG_backend/KG_backend/jsonlog.py:166` | When set, structured JSON logging is not installed (tests use plain output). Also skipped when `test` is in `argv[:2]`. |
 | `API_BASE_INTERNAL` | `http://backend:8000` in `docker-compose.yml` | `kg_frontend/src/utils/api.jsx` | Base URL the Next.js server uses for server-side calls to Django (`docker-compose.yml:31`). Override if the backend moves. |
 | `KG_MEDIA_ROOT` | `/media` in compose | `kg_frontend/src/app/[brand]/[year]/[model]/[...path]/page.jsx:27` | Directory the frontend reads vehicle media from when rendering the manual viewer. |
 | `KG_PUBLIC_MEDIA_PREFIX` | `/kg-api/media` | `api/sst.py:74` | Public URL prefix under which nginx serves the media store. A deployment fact, hence overridable. |

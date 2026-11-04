@@ -1,4 +1,4 @@
-<!-- i18n-source: 04-backend-reference.md sha256:6d1e84ee06c9 -->
+<!-- i18n-source: 04-backend-reference.md sha256:f529e7096604 -->
 <div dir="rtl" lang="fa">
 
 # ۰۴ — مرجع بک‌اند (`KG_backend/api`)
@@ -96,7 +96,7 @@ pool با LRU برای هر thread (پیش‌فرض ۸ برای هر thread) ا�
 
 ## تست‌ها
 
-در `origin/work` نسخهٔ `07f3ab5` تعداد ۱۱۰ ماژول تست زیر `KG_backend/` هست (`api/tests.py`، `api/test_*.py`، `api/rag/test_*.py`، `api/support_chat/test_*.py`، `api/notifications/test_*.py`)؛ نقشهٔ کامل، دستورات، کف پوشش و رفتار CI در [32-testing-and-qa.md](32-testing-and-qa.md) است. (این بخش زمانی «حدود ۱۹۳ تست سبز در ۲۰۲۶‑۰۷‑۱۴» نقل می‌کرد؛ آن عدد تاریخی است.) اجرای سریع:
+در `origin/work` نسخهٔ `07f3ab5` تعداد ۱۱۲ ماژول تست زیر `KG_backend/` هست (`api/tests.py`، `api/test_*.py`، `api/rag/test_*.py`، `api/support_chat/test_*.py`، `api/notifications/test_*.py`)؛ نقشهٔ کامل، دستورات، کف پوشش و رفتار CI در [32-testing-and-qa.md](32-testing-and-qa.md) است. (این بخش زمانی «حدود ۱۹۳ تست سبز در ۲۰۲۶‑۰۷‑۱۴» نقل می‌کرد؛ آن عدد تاریخی است.) اجرای سریع:
 
 <div dir="ltr">
 

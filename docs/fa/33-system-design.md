@@ -1,4 +1,4 @@
-<!-- i18n-source: 33-system-design.md sha256:c146d6963a5b -->
+<!-- i18n-source: 33-system-design.md sha256:4bcf53408e46 -->
 <div dir="rtl" lang="fa">
 
 # ۳۳ — طراحی سیستم (آنچه پیاده‌سازی شده)
@@ -43,8 +43,8 @@ flowchart TB
   subgraph Host["Single Ubuntu host"]
     NGX[nginx :80/:443 + :8081 metrics listener]
     subgraph C["Docker containers (network host, loopback only)"]
-      BEC[kgkg-backend:<sha> gunicorn gthread]
-      FEC[kgkg-frontend:<sha> next start]
+      BEC[kgkg-backend:SHA gunicorn gthread]
+      FEC[kgkg-frontend:SHA next start]
     end
     NGX -->|127.0.0.1:8000| BEC
     NGX -->|127.0.0.1:3000| FEC
