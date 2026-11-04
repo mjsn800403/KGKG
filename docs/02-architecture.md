@@ -3,7 +3,7 @@
 ## Runtime topology (single host)
 
 ```
-                         nginx :80  (103.75.197.155, HTTP only — no TLS yet)
+                         nginx :80/:443  (TLS 1.2/1.3, Cloudflare origin certificate; see 33-system-design.md)
         ┌───────────────────────────┼───────────────────────────────┐
         │ /kg-api/media/*           │ /kg-api/*                     │ /*
         │ alias → static_warehouse/ │ proxy → gunicorn :8000        │ proxy → Next.js :3000
@@ -22,9 +22,10 @@
                              │    └─ _quarantine/ ────────── corrupt/duplicate files (moved, never deleted)
                              └─ static_warehouse/<car>/ ─── manual images (SVG/PNG), served by nginx
 
-   systemd: kgkg-backend, kgkg-frontend, nginx,
-            kgkg-alerts.timer (5m), kgkg-pipeline.timer (5m), kgkg-detect.timer (30s),
-            transient kgkg-pipeline-job<id>-a<n> units (detached pipeline workers)
+   Backend and frontend run as Docker containers (kgkg-backend:<sha>, kgkg-frontend:<sha>; host network, loopback only)
+   started by ops/deploy/deploy.sh (ADR-0003). Host systemd: nginx, kgkg-hostjobs, timers (alerts 5m, pipeline 5m, detect 30s,
+   watchdog, outbox, qa-nightly) and transient kgkg-pipeline-job<id>-a<n> units (detached pipeline workers).
+   The pre-container units kgkg-backend.service / kgkg-frontend.service are historical; whether they still exist on the host is [U].
 ```
 
 The Next.js server is both the SSR frontend AND a thin API proxy for exactly one route:
@@ -58,7 +59,8 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 3. **Derived data is disposable.** Everything under `_rag/` (index, diag) and the
    audit reports can be rebuilt from the vehicle content stores (feedback in `_rag/feedback.db` is user data, not derived). Deleting `_rag/` degrades the site to
    manual browsing — it never breaks it.
-4. **No new infrastructure until measured need.** The SSE bus is a SQLite table because the
+4. **No new infrastructure until measured need.** The SSE bus is a table in the main database (the `Event` model; SQLite when
+   this was written, PostgreSQL `kgkg` since 2026-10-29) because the
    process set (3 gunicorn workers + detached pipeline worker) has exactly one shared,
    durable medium and no Redis. The rate limiter is per-process in-memory. Each such piece
    documents its envelope and its replacement path (see Scale path below).
@@ -74,7 +76,8 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 - Catalog/brand listings: 60s in-process cache; per-file existence checks TTL-cached
   (`cardb.ready_path`) so listings don't `stat()` the whole fleet per request.
 - Breadcrumbs: one recursive CTE per page, not N queries.
-- Main DB: WAL + `IMMEDIATE` + 20s busy timeout — readers never block on the metrics flush
+- Main DB: on PostgreSQL (production) normal MVCC; the WAL + `IMMEDIATE` + 20s busy-timeout settings below apply to the SQLite
+  development default and the former production file — readers never block on the metrics flush
   or activity writes.
 - gunicorn `gthread` (3×8): database reads and media are I/O-bound; threads multiply
   concurrency without multiplying the ~2.3GB embedding model (loaded once per process).
@@ -107,7 +110,7 @@ answer with real in-app links; fallback renders without LLM.
 
 | Pressure signal | Move |
 |---|---|
-| `database is locked` in logs (write contention) | PostgreSQL via `DATABASES` swap |
+| `database is locked` in logs (write contention) | PostgreSQL via `DATABASES` swap — **done 2026-10-29** for the portal database |
 | >1 app host needed | Warehouse + media → shared/object storage; rate limit + cache → Redis; sessions are already DB-backed |
 | Media bandwidth | Object storage/CDN for `static_warehouse` (URLs already relative) |
 | Embedding rebuild time | `build_rag --add` is incremental + content-deduplicated; shard by car across hosts |
@@ -139,6 +142,6 @@ detached from request serving.
 └─ Book1.csv                 EN↔FA parts glossary feeding RAG query expansion
 ```
 
-**Git notes:** branch `rag-db-improvements` is the live branch (main is stale).
+**Git notes:** `work` is the integration branch and the one development happens on; `main` is the GitHub default and is behind it ([36-cicd-and-deployment.md](36-cicd-and-deployment.md) §36.1). (This note once named a different branch; that was true in 2026-07.)
 `.gitignore` ignores `*.md` globally (crawled-content protection) — docs must be
 `git add -f`. `db.sqlite3` and the warehouses are intentionally untracked.

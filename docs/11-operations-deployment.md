@@ -69,8 +69,8 @@ nginx). Optional knobs: `KG_ALERT_*` thresholds, `KG_RL_*` rate rules, `KG_METRI
 `KG_CARDB_POOL`, `KG_INVITE_EMAIL` (invite e-mail off by default — no SMTP),
 `KG_FRONTEND_BASE_URL` (invite-link base).
 
-`kg_frontend/.env.production`: `NEXT_PUBLIC_API_BASE=http://103.75.197.155/kg-api`
-(baked at build), `BACKEND_URL=http://127.0.0.1:8000` (SSR + chat), `METIS_API_KEY`,
+`kg_frontend/.env.production`: runtime settings and secrets for the frontend container (`NEXT_PUBLIC_API_BASE` is not here any more: it is the
+build argument of `ops/docker/frontend.Dockerfile`, default `/kg-api`; the older absolute `http://<ip>/kg-api` value is historical), `BACKEND_URL=http://127.0.0.1:8000` (SSR + chat), `METIS_API_KEY`,
 `METIS_BOT_ID` (paid LLM — server-side only).
 
 ## 11.2 nginx

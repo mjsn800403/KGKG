@@ -100,6 +100,7 @@ python3 ops/governance/gen_inventory.py --check --base-ref origin/work --require
 python3 ops/governance/check_docs_freshness.py --docs docs
 python3 ops/governance/check_i18n.py               # Persian twins vs English sources (list: docs/i18n.toml)
 python3 ops/governance/gen_schema.py --check       # generated model schema is current
+python3 ops/governance/gen_routes.py --check       # generated route table (from openapi.yaml + decorators) is current
 python3 ops/governance/check_srs_trace.py          # SRS tests exist, every FR/NFR is in doc 37
 ```
 

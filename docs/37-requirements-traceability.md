@@ -1,6 +1,6 @@
 # 37 — Requirements-to-implementation traceability
 
-Maps every requirement in [00-srs.md](00-srs.md) (FR-01…FR-20, NFR-01…NFR-14) to the code that implements it (routes, modules, models) and to the tests the SRS names as verification. The *verified by* column
+Maps every requirement in [00-srs.md](00-srs.md) (FR-01…FR-30, NFR-01…NFR-14) to the code that implements it (routes, modules, models) and to the tests the SRS names as verification. The *verified by* column
 is copied from the SRS and **checked by `ops/governance/check_srs_trace.py`**: every test file named there must exist, and every requirement ID in the SRS must appear in this table. The check proves
 that the named tests exist, **not** that they pass or that they cover the requirement; pass/fail is the CI result of the release commit. Revision `origin/work` @ `07f3ab5` **[C]**. Persian version:
 [fa/37-requirements-traceability.md](fa/37-requirements-traceability.md). Security/business rules `RQ-xx`: `audit-evidence/01-requirements-and-traceability/TRACEABILITY.md` (dated audit evidence).
@@ -31,20 +31,21 @@ Status vocabulary: **Implemented** = code and routes exist; **Implemented, confi
 | FR-18 | Feature flags incl. A/B | `api/auth/flags/`, `api/admin/flags/…` → `flags.py` → `FeatureFlag` | `test_flags.py` | Implemented |
 | FR-19 | Structured vehicle specs | `api/admin/vehicle-specs/` → `adminops.py`, `frm.py` → `VehicleSpec` | `test_vehicleschema.py`, `test_adminops.py` | Implemented |
 | FR-20 | SMS alerts without duplicates | `alert_rules.py`, `monitoring.py`, `ops/observability/watchdog.py` → `SystemAlert`, `NotificationLog` | `test_alert_probe.py`, `test_disk_guard_resolve.py`, `ops/observability/test_*.py`, watchdog `--selftest` | Implemented |
+| FR-21 | Anonymous support chat | `api/support-chat/*` (status, threads, messages, contact, reopen, csat) → `support_chat/views_public.py`, `tokens.py`, `limits.py`, `throttle.py`, `lifecycle.py`, `config.py` → `SupportThread`, `SupportMessage`, `SupportRating` | `test_public_api.py`, `test_lifecycle.py`, `test_tokens.py`, `test_security_sweep.py`, `test_kill_switch.py`, `test_throttling.py`, `support-chat.spec.js` | Implemented, config-gated (`KG_SUPPORT_CHAT_ENABLED`); production state **[U]** |
+| FR-22 | Staff inbox and support RBAC | `api/admin/support-chat/*` → `views_admin.py`, `views_admin_inbox.py`, `views_status.py`, `rbac.py`, `permissions.py` → `SupportPresence` (+ role storage after a later migration **[U]**) | `test_inbox_api.py`, `test_staff_actions.py`, `test_rbac.py`, `test_rbac_api.py`, `test_support_roles_command.py` | Implemented; RBAC off by default |
+| FR-23 | Notification outbox | `notifications/service.py`, `worker.py`, `providers.py`, `config.py`; `manage.py process_outbox`; `ops/outbox/` → `NotificationOutbox` | `notifications/test_service.py`, `notifications/test_worker.py`, `notifications/test_providers.py`, `notifications/test_privacy_and_concurrency.py`, `notifications/test_command.py` | Implemented, config-gated (channels default `off`); delivery receipts not observed |
+| FR-24 | Knowledge base | `api/kb/*`, `api/admin/kb/*`, `api/admin/company-requests/<id>/promote-to-article/` → `knowledge.py` → `KnowledgeArticle`, `KnowledgeRevision`, `KbSearchLog` | `test_knowledge.py`, `test_helpdesk_desk.py` | Implemented |
+| FR-25 | Assistant allowance per plan | `api/auth/ai-usage/` → `quota.py` (`PLAN_AI`) → `ActivityLog` (`ask_assistant` rows), `Company.plan`; checked in `/api/chat` | `test_qa_access.py`, `pricing.test.mjs` | Implemented; **no dedicated test module** (only allowance paths inside access tests) |
+| FR-26 | Helpdesk SLA targets and product feedback | `sla.py` (high 2 h/8 h, normal 8 h/48 h, low 24 h/120 h, calendar hours), `feedback.py` (`api/feedback/submit/`, `api/admin/feedback/`), `support_metrics.py` → `CompanyRequest`, `Feedback` | `test_helpdesk.py`, `test_helpdesk_desk.py` | Implemented |
+| FR-27 | Feature-discovery checklist | `api/auth/onboarding/` → `onboarding.py`, `access.user_ai_eligible` → `ActivityLog` | `test_onboarding.py`, `onboarding.test.mjs` | Implemented |
+| FR-28 | Content shield and read caps | `shield.py` (`api/shield/key/`, `KG_SHIELD`, `KG_SHIELD_SECRET`), `contentguard.py` | `test_shield.py`, `test_contentguard.py` | Implemented, config-gated (shield); caps always on |
+| FR-29 | Admin tool gates | `grafanaauth.py` (`api/admin/grafana-ticket/`, `api/grafana-auth/`), `vncauth.py` (`api/vnc-auth/`), nginx `auth_request` | **(manual)** | Implemented; **no automated test found** |
+| FR-30 | Assistant behaviour insights | `behavior.py`, `insights.py` (`api/admin/insights/*`, `api/auth/chat-feedback/`) → `ChatLog` | `test_routes_and_independence.py` (route coverage only) | Implemented; behaviour logic has no dedicated test **[U]** |
 
-### Capabilities that exist in code but have no FR in the SRS (gap in the SRS, not in the code)
+### Coverage statement
 
-| Capability | Code | Documented in |
-|---|---|---|
-| Anonymous support chat and staff inbox | `support_chat/*` | [35](35-support-system.md) |
-| Notification outbox (SMS/e-mail) | `notifications/*` | [35](35-support-system.md) §35.9 |
-| Knowledge base and feedback | `knowledge.py`, `feedback.py` (`api/kb/…`, `api/feedback/submit/`) | [04](04-backend-reference.md) |
-| Onboarding / guidance tours | `onboarding.py`, frontend guidance | [13](13-guidance-system.md), [19](19-onboarding.md) |
-| AI usage quota | `quota.py` (`api/auth/ai-usage/`) | [30](30-ai-assistant-deep-dive.md) §30.3 |
-| Request signing/sealing | `shield.py` (`KG_SHIELD=1`) | [18](18-security-hardening.md) |
-| Admin tool gates (Grafana, VNC) | `grafanaauth.py`, `vncauth.py` | [31](31-ops-files-reference.md), [18](18-security-hardening.md) |
-
-Proposed follow-up (not a requirement yet): add FR entries for these in `00-srs.md`; the trace check will then force their tests to be named.
+FR-21…FR-30 were added to the SRS on 2026-11-04 from the verified code (they existed before; the SRS had not named them). "Test file exists" in the *Verified by* column means the file is present and named for that behaviour; it does **not** mean
+every rule of the requirement is asserted or that the test passes. Rows marked *no dedicated test* (FR-25, FR-30) or *(manual)* (FR-29) are the known verification gaps. The requirement-by-requirement pass/fail is the CI run on the release commit.
 
 ## 37.2 Quality requirements
 
