@@ -38,18 +38,28 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [19 — Engineer onboarding](19-onboarding.md) | Day 1 / week 1 / month 1 path for a new engineer, with a check per step; how knowledge is handed over |
 | [20 — Runbooks](20-runbooks.md) | Site down, false alerts, slowness, failed deploy, AI provider outage, disk, restore, adding a vehicle, SMS paging |
 | [21 — CSRF-exempt views](21-csrf-exempt-views.md) | Every @csrf_exempt view, how it authenticates, why it is safe; registry + Origin guard |
+| [AGENTS — start here (agents and new engineers)](AGENTS.md) | Evidence rules, task-to-doc map, rules that are easy to break, how docs are kept true |
+| [22 — Support chat](22-support-chat.md) | Visitor widget, staff inbox, tokens, throttling, RBAC rollout, kill switch |
+| [23 — Data layer](23-data-layer.md) | Where every kind of data lives: PostgreSQL `kgkg`, per-car schemas in `kgkg_vec`, parts SQLite, RAG index |
+| [24 — Integrations](24-integrations.md) | Metis, SMS, Turnstile, Cloudflare, GlitchTip, observability: config names and failure behaviour |
+| [25 — Operations inventory](25-ops-inventory.md) | Observed host state: units, timers, containers, directories, with evidence tags |
+| [26 — Authentication and sessions](26-auth-and-sessions.md) | Token lifetimes, login/OTP flow, single-session rule, admin gate, content protection |
+| [27 — Open risks and decisions](27-open-risks-and-decisions.md) | Register of known risks (backups, shared staging data, ...) with evidence and tracking |
+| [28 — Team workflow](28-team-workflow.md) | GitHub/Jira/Trello/Slack roles, labels, issue-closing rule, daily reconcile |
+| [Generated inventory](generated/inventory.md) | Machine-generated list of modules, models, commands, env var names, routes, units; CI-checked |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |
 | [CHANGELOG](CHANGELOG.md) | Dated log of shipped changes, newest first |
 
-## Quick facts (verified 2026-07-15)
+## Quick facts (re-verified 2026-11-04 against `origin/work` `8a380f6`; production head matched)
 
-- **Production:** `http://103.75.197.155/` — single Ubuntu 24 host (16 cores / 31 GB / 290 GB).
+- **Production:** `https://kgtechvault.com` — single Ubuntu 24 host `103.75.197.155` (16 cores / 31 GB / 290 GB, 75% used).
 - **Repo root on server:** `/opt/KGKG` (this is the deployed working copy AND the git repo).
 - **Backend:** Django 5.2.15, gunicorn (3 gthread workers × 8 threads) on `:8000`.
 - **Frontend:** Next.js 16.2.9 / React 19.2.4 (`npm run start`) on `:3000`, behind nginx 1.24.
-- **Data:** 38 servable vehicles (21 GB warehouse + 9.8 GB static assets), one SQLite DB per
-  vehicle; main relational DB `db.sqlite3` (WAL); unified RAG index `_rag/index.rag.db`.
-- **Branch:** `rag-db-improvements` (ahead of `main`); remote `github.com/mjsn800403/KGKG`.
+- **Data:** 237 cars on 2026-11-03: 222 manual cars in PostgreSQL `kgkg_vec` (one schema per car), 15 parts-only cars as SQLite; portal data in
+  PostgreSQL `kgkg`; unified RAG index `_rag/index.rag.db`. Details and caveats: [23 — Data layer](23-data-layer.md).
+- **Branches:** work on `work` (PRs target it); `main` is the GitHub default and receives merges from `work`. Remote `github.com/mjsn800403/KGKG`.
+- **Start here if you are an AI agent or new engineer:** [AGENTS.md](AGENTS.md). Open risks: [27](27-open-risks-and-decisions.md).
 
 ## Maintenance protocol
 

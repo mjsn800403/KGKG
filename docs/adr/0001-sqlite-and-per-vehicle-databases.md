@@ -1,6 +1,6 @@
 # ADR-0001 — SQLite (WAL) for application data; one read-only SQLite file per vehicle
 
-**Status:** Accepted · **Since:** 2026-06 (project start) · **Recorded:** 2026-10-29
+**Status:** Accepted, amended in part by [ADR-0007](0007-postgresql-for-manual-vehicle-content.md) (manual vehicle content now served from PostgreSQL) · **Since:** 2026-06 (project start) · **Recorded:** 2026-10-29
 
 ## Context
 The product serves large, immutable manual content: 38 vehicles, 21 GB of warehouse data

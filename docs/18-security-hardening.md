@@ -62,7 +62,9 @@ manage.py rotate_secrets --status
 manage.py rotate_secrets --what django-key
 manage.py rotate_secrets --what admin-token --print-new
 manage.py rotate_secrets --what all --prune-fallbacks 1
-systemctl restart kgkg-backend        # nothing is live until this runs
+# OUTDATED (2026-11-04): the backend is a container now and `kgkg-backend.service` is retired (it crash-looped beside the
+# container on 2026-11-02). Reload the env with `ops/deploy/deploy.sh --reload` run by the owner; see docs/25-ops-inventory.md.
+systemctl restart kgkg-backend        # nothing is live until this runs  [do not run on the current host]
 ```
 
 The env file is rewritten **atomically** (temp file + `os.replace`) at mode

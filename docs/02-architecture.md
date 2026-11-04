@@ -14,7 +14,8 @@
    Disk (nginx)              Django 5.2 (KG_backend)          Next.js 16 (kg_frontend)
                              ├─ PostgreSQL 16 `kgkg` ───── users/RBAC/companies/rollups/events/jobs
                              │    (since 2026-10-29; db.sqlite3 frozen as the way back)
-                             ├─ Database_warehouse/*.db ─── one read-only SQLite per vehicle (38)
+                             ├─ PostgreSQL `kgkg_vec` ───── manual content of 222 cars, one schema per car (docs/23-data-layer.md, ADR-0007)
+                             ├─ Database_warehouse/_parts/*.db ─ one SQLite per parts-only vehicle (15 on 2026-11-03)
                              │    ├─ _rag/index.rag.db ──── unified deduplicated semantic index (~2.3GB)
                              │    ├─ _rag/diag/*.db ─────── per-vehicle diagnostic sidecars
                              │    ├─ _rag/feedback.db ───── ratings/pins/click log (assistant HITL)
@@ -45,7 +46,9 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 
 ## Design principles (the "why" behind the shape)
 
-1. **One vehicle = one immutable content DB.** Content sharding by design: per-vehicle
+1. **One vehicle = one immutable content DB.** *(Original design. Since 2026-11 manual content of loaded cars is served from
+   per-car PostgreSQL schemas, parts-only cars stay SQLite: see `23-data-layer.md` and ADR-0007. The principle of per-vehicle
+   isolation holds; the engine does not.)* Content sharding by design: per-vehicle
    isolation, trivially parallelizable, no shared-schema migrations for content changes.
    Serving code (`api/cardb.py`) opens them strictly read-only with a per-thread LRU pool
    (mmap, 16MB page cache, busy timeout, auto-reopen on file replacement).

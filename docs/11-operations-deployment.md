@@ -384,6 +384,10 @@ What this covers, and why the 21 GB warehouse is not in it: the warehouse and
 the RAG index are **derived** from the source ZIPs, which are themselves copied
 off-host hourly. Losing them costs a rebuild, not data.
 
+> **Correction 2026-11-04 (see `23-data-layer.md`, `27-open-risks-and-decisions.md` R1):** this paragraph predates the move of manual
+> content into PostgreSQL `kgkg_vec`. Loaded cars' SQLite files are deleted after loading, `kgkg_vec` is not in the deploy dump or the hourly
+> snapshot, and a rebuild from ZIPs has not been demonstrated. Treat "costs a rebuild, not data" as **unverified** until the owner decides on R1.
+
 On top of that, the hosting provider takes a full server backup monthly (5th).
 That bounds a total-host-loss scenario; the hourly snapshot is what bounds
 everyday loss to an hour.

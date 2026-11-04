@@ -16,7 +16,8 @@ After any SEV1/SEV2: a short postmortem and a regression test.
   and `docker ps --filter label=kgkg.env=prod`. If loopback is healthy but the
   public probe is not, go to R2.
 * **Do:** if a deploy happened in the last hour, `ops/deploy/deploy.sh --rollback`.
-  Otherwise read `journalctl -t kgkg-backend -n 200 --no-pager` and
+  Otherwise read the backend container log (`docker logs --tail 200 <kgkg-backend container>`; the `journalctl -t kgkg-backend`
+  tag belongs to the retired systemd unit and may be empty **[U]**) and
   `ops/deploy/deploy.sh --reload`.
 * **Fixed when:** the smoke suite passes
   (`KG_SMOKE_NGINX=http://127.0.0.1 ops/deploy/smoke.sh http://127.0.0.1:8000 http://127.0.0.1:3000`).
