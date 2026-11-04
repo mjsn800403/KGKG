@@ -26,18 +26,18 @@ No AI is involved anywhere in it. Everything below is migration-independent; mig
 
 | # | Finding | Evidence | Severity | Status |
 |---|---|---|---|---|
-| G1 | **Production runs a commit that is on no branch.** `3a65964` (Ali, one file `kg_frontend/src/app/api/chat/route.js`, parent `551f6f6` which is on `work`) is reachable only through the annotated tag `deploy-20261103-123544`. Against `origin/work` it is 1 ahead, 3 behind. Not lost (the tag keeps it, and the commit is fetchable from GitHub) but never reviewed or CI-tested as a PR, and the next promote from `work` would silently revert the fix. | confirmed: `git rev-list --left-right --count`, tag object, GitHub compare API | high (integrity, not availability) | open |
-| G1a | Cause of G1 (**inferred**): `kgkg-promote` refuses a commit that is not an ancestor of `origin/work` (`ops/deploy/kgkg-promote:99`), but `deploy.sh` itself only requires a fast-forward of the live commit (`deploy.sh:350`) and writes the deploy tag (`:562`). Running `deploy.sh` directly skips the guard. How it was actually run is unverified (needs the server shell history or the CI/promote record). | confirmed (code) / unverified (what happened) | | open |
+| G1 | **Production runs a commit that is on no branch.** `3a65964` (Ali, one file `kg_frontend/src/app/api/chat/route.js`, parent `551f6f6` which is on `work`) is reachable only through the annotated tag `deploy-20261103-123544`. Against `origin/work` it is 1 ahead, 3 behind. Not lost (the tag keeps it, and the commit is fetchable from GitHub) but never reviewed or CI-tested as a PR, and the next promote from `work` would silently revert the fix. | confirmed: `git rev-list --left-right --count`, tag object, GitHub compare API | high (integrity, not availability) | open **Update 2026-11-03: resolved** by #72 (merge of `3a65964` into `work`); staging passes again. |
+| G1a | Cause of G1 (**inferred**): `kgkg-promote` refuses a commit that is not an ancestor of `origin/work` (`ops/deploy/kgkg-promote:99`), but `deploy.sh` itself only requires a fast-forward of the live commit (`deploy.sh:350`) and writes the deploy tag (`:562`). Running `deploy.sh` directly skips the guard. How it was actually run is unverified (needs the server shell history or the CI/promote record). | confirmed (code) / unverified (what happened) | | open **Update:** the full analysis and a tested, unwired guard are in `2026-11-03-promote-drift-prevention.md`; enabling it needs separate approval. |
 | G1b | Same class as issue #50 (five unpushed commits, rescued to #51), now a one-file fix. #50 stays open. | confirmed | | open |
 | G2 | **No alert on unanswered visitors.** `monitoring.evaluate_alerts` has no support-chat rule. Once the chat is on, a visitor can wait unnoticed. | confirmed: grep, no match | high before launch | `support_health` added (read-only); wiring to alerts needs approval because it sends real alerts |
-| G3 | **Half-typed text was lost on reload or when the panel closed** (draft only lived in component state). | confirmed: code read | medium (UX) | fixed in this batch |
+| G3 | **Half-typed text was lost on reload or when the panel closed** (draft only lived in component state). | confirmed: code read | medium (UX) | fixed in this batch **Update:** also fixed in batch 2: a message resent after an outage no longer leaves its text in the box. |
 | G4 | Route-level authorization had no sweep test: a new staff route could ship without a guard. | confirmed: no such test | medium | fixed: `test_security_sweep.py` covers every URL pattern |
 | G5 | No test asserted that application logs stay free of message text, contact details and tokens (audit rows were covered, logs were not). | confirmed | medium (privacy) | fixed: `LogPrivacy` test, includes a self-check that the collector can fail |
 | G6 | CSRF concern. Support endpoints are `csrf_exempt` and authenticate with a header token (`X-Support-Chat-Token`, `Authorization: Bearer`), never a cookie, so a cross-site form cannot carry credentials. | confirmed: code + sweep test (requests without the header get 401/404, and no auth path reads a cookie) | **not a defect for these endpoints** | closed for support chat; the wider site was not audited |
 | G7 | Enumeration: a real thread id and an unknown one get byte-identical answers without the right token. | confirmed: sweep test | n/a | passing |
 | G8 | Rate limiting: nginx volumetric zones exist (`kg_api` 20 r/s, SSE `limit_conn 8`); Django per-thread/IP limits on top. Poll limiter is per gunicorn worker (up to 3x the configured value), by design and documented in code. | confirmed (config + code) | low | accepted; no load numbers yet (G10) |
 | G9 | SSE through nginx: `/kg-api/api/events/stream/` has `proxy_buffering off`, `X-Accel-Buffering: no`, `proxy_read_timeout 3600s`. | confirmed: `ops/nginx/kgkg.conf` | low | OK on paper; **unverified end to end behind the real proxy** |
-| G10 | No measured performance baseline or soak test of the stream/poll path. | confirmed: none exist | medium | next batch (isolated environment only) |
+| G10 | No measured performance baseline or soak test of the stream/poll path. | confirmed: none exist | medium | next batch (isolated environment only) **Update (batch 2):** handler-level baseline added (`test_benchmark.py`, PostgreSQL in CI); a network-level soak is still not done. |
 | G11 | Backup retention, secrets missing from backup, restore drill. Docs describe an hourly off-host backup verified 2026-10-27. Retention policy and restore of secrets are listed as open risks in the workspace notes. | documented | high (recovery) | **unverified**: needs a read-only server check and a restore drill |
 | G12 | Missing staging secret turns the `stage` job red. CI has a "Check the staging credential" step. | documented + CI file | low | unverified whether it currently fails |
 | G13 | `khadamat.pem` private key sits in `D:\programing`. | documented | high if the folder was ever shared | owner action: move, treat as exposed if shared |
@@ -67,26 +67,42 @@ code rows has been run against production.
 | Security | Turnstile keys set in production, action `support_chat` | unverified |
 | Security | No private key in the shared working folder | **fail** (G13) |
 | Security | `support_roles check --for-enforce` exits 0 and at least two owners exist, before enforcement | not run (needs migration B) |
-| Reliability | Production commit is an ancestor of `origin/work` | **fail** (G1) |
-| Reliability | SSE survives drop, expiry and reconnect in E2E | partial (expiry, idle console covered; mid-stream drop not) |
+| Reliability | Production commit is an ancestor of `origin/work` | pass at 2026-11-03 (#72); can recur until the guard is enabled |
+| Reliability | SSE survives drop, stall, expiry and reconnect | pass: 11 connector unit tests (mid-stream drop with cursor resume, 45 s stall, heartbeats, backoff, 401, 503, online) and E2E F5-F7 |
 | Reliability | Restore drill completed from the off-host backup, including secrets | unverified |
-| Performance | Baseline p95 for create, poll, send, and SSE connection count, from an isolated load run | not measured |
-| Operations | Unanswered-visitor monitor wired to an alert and tested | **fail** (command exists, not wired) |
+| Performance | Baseline p95 for create, poll, send, staff list, thread detail and `support_health` on PostgreSQL | handler-level baseline in section 4.1; no network soak yet |
+| Operations | Unanswered-visitor monitor wired to an alert and tested | **fail** (command exists, one query, not wired: needs your approval) |
 | Operations | Runbook exists and was rehearsed on staging | written (R10), not rehearsed |
 | Privacy | Privacy notice reviewed and published; retention policy approved. **Launch blocker:** the notice must name everything the widget keeps in the visitor's browser, including the **half-typed draft** (sessionStorage `kg_sc_d_v1`, this tab only, up to 2000 characters, expires after 24 h, removed when the box is emptied or by "delete conversation"), the unsent-message queue (`kg_sc_q_v1`) and the thread id and token (`kg_sc_v1`, localStorage). The draft page does not mention the draft yet | **fail** (draft only, not approved, not updated for the draft) |
 | Staffing | Named staff on shift, hours, off-hours message, escalation path | not defined (owner decision) |
 | Infrastructure | Kill switch off by default and flips only by a person | pass (documented, tested) |
 
-### 4.1 `support_health` scalability (measured 2026-11-03, SQLite in memory, indicative only)
+### 4.1 Measured baselines (batch 2)
 
-| Waiting threads | Queries | Time |
-|---|---|---|
-| 1 / 10 / 100 | 2 / 11 / 101 | 2 / 4 / 25 ms |
-| 500 (cap) / 600 | 501 / 501 | 124 / 127 ms |
+Handler-level latency through Django (URL routing, middleware, view, database), with the test client:
+no network, TLS or proxy, so it is a baseline for regressions and for finding slow queries, **not a
+capacity claim**. Isolated PostgreSQL service in CI (`test_benchmark.py`, 500 live threads with 3 messages
+each, 60 samples, rate limits off); the run's log carries the `BENCH` lines.
 
-* **N+1 confirmed:** one query for the candidate threads plus one per waiting thread to find when the current wait began. Harmless at the expected volume (tens of waiting visitors). On PostgreSQL each query costs more round-trip time, so the 500-thread worst case should be re-measured there before it runs on a timer; expect well under a few seconds, not milliseconds.
-* **The 500-thread cap** applies to the oldest-activity threads first. A waiting thread's last activity is its last visitor message, so those are the longest waits: `oldest_wait_s`, `level`, `over_warn` and `over_crit` stay correct when the cap is hit. `waiting` and `waiting_by_intent` are then **undercounts**, and `truncated` is true. Treat `truncated` as "the queue is far past any threshold".
-* **Monitoring implication:** run it by hand or from a timer no more often than every minute. It is read-only, so a slow run cannot damage data, but each run holds one database connection for its duration. It does not alert. Wiring it into `check_alerts` needs your approval and should come with the single-query rewrite (a correlated subquery for the wait start), which removes the N+1 and the practical need for the cap. Deferred to Batch 2 as non-critical.
+| Endpoint | p50 ms | p95 ms | Queries |
+|---|---|---|---|
+| visitor create | 6.1 | 8.2 | 7 |
+| visitor poll | 4.7 | 5.5 | 3 |
+| visitor send | 8.4 | 9.5 | 10 |
+| **staff list (500 live)** | **22.6** (was **192.4**) | 24.8 (was 208.5) | 4 |
+| staff thread detail | 10.1 | 12.5 | 4 |
+| `support_health` report | 16.6 | 19.8 | **1** (was 501 at 500 waiting) |
+| `support_health`, 2000 waiting | 55 | n/a | 1 |
+
+* **Bottleneck found and fixed:** the staff list was 192 ms for four queries on PostgreSQL (11 ms on SQLite, which hid it).
+  The cause was the join plus aggregate behind `message_count`: PostgreSQL computed five correlated subqueries for every
+  thread before sorting. A correlated count removes the join, so it sorts on the indexed `last_activity_at` and reads
+  the subqueries for the page only. Remaining cost is the counts query (about 10 ms) and the 30-row page (about 8 ms).
+* **`support_health`:** one query, no 500-thread cap (`SCAN_LIMIT` is now a 20000-row safety valve); `waiting` and the
+  per-intent counts are exact. Cost grows with the number of waiting threads (about 55 ms at 2000), so run it on a timer
+  of a minute or more, not per request. It still does not alert.
+* **Not measured:** concurrency (many simultaneous polls and open SSE streams), real network latency, Nginx and
+  gunicorn behaviour, and a long soak. A load test of those needs a deployed isolated stack and is the next performance step.
 
 ## 5. Launch plan
 

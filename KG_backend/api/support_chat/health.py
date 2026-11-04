@@ -8,14 +8,17 @@ is open or waiting for staff. The wait is measured from the oldest visitor messa
 last public reply.
 """
 import os
+from datetime import datetime, timezone as dt_timezone
 
-from django.db.models import F, Max, Q
+from django.db.models import DateTimeField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from .models import SupportMessage, SupportThread
 
 LIVE_STATUSES = ('open', 'waiting_staff')
-SCAN_LIMIT = 500
+SCAN_LIMIT = 20000          # a safety valve for a runaway queue, not a normal limit
+_EPOCH = Value(datetime(1970, 1, 1, tzinfo=dt_timezone.utc), output_field=DateTimeField())
 DEFAULT_WARN_S = 300
 DEFAULT_CRIT_S = 900
 
@@ -34,31 +37,33 @@ def thresholds():
 
 
 def waiting_threads():
-    """[(thread, waiting_since)] for live threads whose visitor has no public staff reply yet."""
-    rows = (SupportThread.objects.filter(status__in=LIVE_STATUSES)
-            .annotate(last_staff=Max('messages__created_at',
-                                     filter=Q(messages__author_kind='admin', messages__internal=False)),
-                      last_visitor=Max('messages__created_at', filter=Q(messages__author_kind='visitor')))
-            .filter(last_visitor__isnull=False)
-            .filter(Q(last_staff__isnull=True) | Q(last_visitor__gt=F('last_staff')))
-            .order_by('last_activity_at')[:SCAN_LIMIT])
-    out = []
-    for t in rows:
-        since = SupportMessage.objects.filter(thread=t, author_kind='visitor')
-        if t.last_staff:
-            since = since.filter(created_at__gt=t.last_staff)
-        first = since.order_by('created_at').values_list('created_at', flat=True).first()
-        out.append((t, first or t.last_visitor))
-    return out
+    """[(intent, waiting_since)] for live threads whose visitor has no public staff reply yet.
+
+    One query: a correlated subquery finds the last public staff reply, a second the oldest
+    visitor message after it. Only two columns come back per waiting thread.
+    """
+    last_staff = (SupportMessage.objects
+                  .filter(thread=OuterRef('pk'), author_kind='admin', internal=False)
+                  .order_by('-created_at').values('created_at')[:1])
+    wait_start = (SupportMessage.objects
+                  .filter(thread=OuterRef('pk'), author_kind='visitor',
+                          created_at__gt=Coalesce(OuterRef('last_staff'), _EPOCH))
+                  .order_by('created_at').values('created_at')[:1])
+    return list(SupportThread.objects.filter(status__in=LIVE_STATUSES)
+                .annotate(last_staff=Subquery(last_staff))
+                .annotate(wait_start=Subquery(wait_start))
+                .filter(wait_start__isnull=False)
+                .order_by('last_activity_at')
+                .values_list('intent', 'wait_start')[:SCAN_LIMIT])
 
 
 def report(now=None):
     now = now or timezone.now()
     warn, crit = thresholds()
-    waits = [(t, max(0, (now - since).total_seconds())) for t, since in waiting_threads()]
+    waits = [(intent, max(0, (now - since).total_seconds())) for intent, since in waiting_threads()]
     by_intent = {}
-    for t, _ in waits:
-        by_intent[t.intent] = by_intent.get(t.intent, 0) + 1
+    for intent, _ in waits:
+        by_intent[intent] = by_intent.get(intent, 0) + 1
     oldest = max((w for _, w in waits), default=0)
     level = 'crit' if oldest >= crit else 'warn' if oldest >= warn else 'ok'
     return {

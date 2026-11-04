@@ -3,7 +3,7 @@
    False positive: the hook's refs (poll timer, Turnstile mount) are only read
    inside event handlers and effects, never while rendering. */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import './support-chat.css';
 import { COPY } from './copy.fa';
@@ -76,6 +76,21 @@ function Panel({ chat }) {
   const [draft, setDraft] = useState(() => chat.getDraft());
   const { saveDraft } = chat;
   useEffect(() => { saveDraft(draft); }, [draft, saveDraft]);
+  // A message that failed and was later delivered (the queue resends when the network
+  // returns) leaves its restored text in the box; clear it, or the visitor sends it twice.
+  // The delivered message replaces the failed one under a new key, so match on the text,
+  // and only at that moment: text typed fresh, even if identical, is left alone.
+  const failedBodies = useRef(new Set());
+  useEffect(() => {
+    for (const m of state.messages) {
+      if (m.kind !== 'visitor') continue;
+      const body = (m.body || '').trim();
+      if (m.delivery === 'failed') failedBodies.current.add(body);
+      else if ((m.delivery === 'sent' || m.delivery === 'read') && failedBodies.current.delete(body)) {
+        setDraft((cur) => (cur.trim() === body ? '' : cur));
+      }
+    }
+  }, [state.messages]);
   const [placeholder, setPlaceholder] = useState('');
   const [menu, setMenu] = useState(false);
   const [contactDone, setContactDone] = useState(false);
@@ -92,7 +107,7 @@ function Panel({ chat }) {
   }, [chat]);
 
   return (
-    <section className="sc-panel" role="dialog" aria-label={COPY.title} id="sc-panel" dir="rtl">
+    <section className="sc-panel" role="dialog" aria-label={COPY.title} id="sc-panel" dir="rtl" tabIndex={-1}>
       <header className="sc-head">
         <div>
           <strong>{COPY.title}</strong>
@@ -141,6 +156,15 @@ export default function SupportChat() {
   const chat = useSupportChat();
   const [label, setLabel] = useState(true);
   useEffect(() => { const t = setTimeout(() => setLabel(false), 6000); return () => clearTimeout(t); }, []);
+  // Keyboard and screen-reader users: opening moves focus into the dialog, closing
+  // returns it to the launcher (which is unmounted while the panel is open).
+  const launcherRef = useRef(null);
+  const wasOpen = useRef(false);
+  const panelOpen = chat.state.panelOpen;
+  useEffect(() => {
+    if (panelOpen) { wasOpen.current = true; document.getElementById('sc-panel')?.focus(); }
+    else if (wasOpen.current) { wasOpen.current = false; launcherRef.current?.focus(); }
+  }, [panelOpen]);
   const show = SHOW_ON.includes(pathname.replace(/\/+$/, '') || '/');
   if (!show || chat.avail.enabled === false) return null;
   const { state } = chat;
@@ -148,7 +172,7 @@ export default function SupportChat() {
     <div className="sc-root" data-open={state.panelOpen ? '1' : '0'} data-page={pathname.replace(/\/+$/, '') || '/'}>
       {state.panelOpen && <Panel chat={chat} />}
       {!state.panelOpen && (
-        <button type="button" className="sc-launcher" aria-expanded="false" aria-controls="sc-panel" onClick={chat.open}>
+        <button type="button" className="sc-launcher" ref={launcherRef} aria-expanded="false" aria-controls="sc-panel" onClick={chat.open}>
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
           {label && <span className="sc-launcher-label">{COPY.launcher}</span>}
           {state.unread > 0 && <span className="sc-badge" aria-label={`${state.unread}`}>{state.unread.toLocaleString('fa-IR')}</span>}
