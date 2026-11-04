@@ -1,4 +1,4 @@
-<!-- i18n-source: 40-documentation-access-guide.md sha256:ae89c634edef -->
+<!-- i18n-source: 40-documentation-access-guide.md sha256:58f39beb7a73 -->
 <div dir="rtl" lang="fa">
 
 # ۴۰ — راهنمای دسترسی به مستندات
@@ -15,16 +15,23 @@
 | نقطهٔ ورود عامل/مهندس جدید | [docs/AGENTS.md](https://github.com/mjsn800403/KGKG/blob/work/docs/AGENTS.md) |
 | ماتریس وضعیت (آنچه امروز واقعی است) | [docs/38-implementation-status-matrix.md](https://github.com/mjsn800403/KGKG/blob/work/docs/38-implementation-status-matrix.md) |
 | ادعاهای امن بیرونی | [docs/39-evaluation-evidence-guide.md](https://github.com/mjsn800403/KGKG/blob/work/docs/39-evaluation-evidence-guide.md) |
+| معماری فرانت‌اند | [docs/42-frontend-architecture.md](https://github.com/mjsn800403/KGKG/blob/work/docs/42-frontend-architecture.md) |
+| نمودارهای معماری | [docs/43-architecture-diagrams.md](https://github.com/mjsn800403/KGKG/blob/work/docs/43-architecture-diagrams.md) |
+| چرخهٔ عمر داده و وضعیت پشتیبان | [docs/44-data-lifecycle.md](https://github.com/mjsn800403/KGKG/blob/work/docs/44-data-lifecycle.md) |
+| راهنمای کاربر (فارسی) | [docs/manuals/fa/01-user-guide.md](https://github.com/mjsn800403/KGKG/blob/work/docs/manuals/fa/01-user-guide.md) |
+| راهنمای کارکنان/ادمین (فارسی) | [docs/manuals/fa/02-staff-admin-guide.md](https://github.com/mjsn800403/KGKG/blob/work/docs/manuals/fa/02-staff-admin-guide.md) |
+| پوشش مستندات و شکاف‌ها | [docs/41-documentation-coverage-and-backlog.md](https://github.com/mjsn800403/KGKG/blob/work/docs/41-documentation-coverage-and-backlog.md) |
+| فهرست پیگیری مهندسی | [docs/47-engineering-followups.md](https://github.com/mjsn800403/KGKG/blob/work/docs/47-engineering-followups.md) |
 
 ## ۴۰٫۲ نقشهٔ پوشه‌ها بر اساس دسته
 
 | دسته | انگلیسی | همتای فارسی |
 |---|---|---|
 | SRS و نیازمندی‌ها | [00-srs](https://github.com/mjsn800403/KGKG/blob/work/docs/00-srs.md)، [37-requirements-traceability](https://github.com/mjsn800403/KGKG/blob/work/docs/37-requirements-traceability.md) | `docs/fa/00-srs.md`، `docs/fa/37-…` |
-| معماری و طراحی | [02-architecture](https://github.com/mjsn800403/KGKG/blob/work/docs/02-architecture.md)، [33-system-design](https://github.com/mjsn800403/KGKG/blob/work/docs/33-system-design.md)، [01-overview](https://github.com/mjsn800403/KGKG/blob/work/docs/01-overview.md)، [04-backend-reference](https://github.com/mjsn800403/KGKG/blob/work/docs/04-backend-reference.md)، [07-frontend](https://github.com/mjsn800403/KGKG/blob/work/docs/07-frontend.md)، [09-realtime-sse](https://github.com/mjsn800403/KGKG/blob/work/docs/09-realtime-sse.md) | همان نام فایل زیر `docs/fa/` |
+| معماری و طراحی | [43-architecture-diagrams](https://github.com/mjsn800403/KGKG/blob/work/docs/43-architecture-diagrams.md)، [42-frontend-architecture](https://github.com/mjsn800403/KGKG/blob/work/docs/42-frontend-architecture.md)، [02-architecture](https://github.com/mjsn800403/KGKG/blob/work/docs/02-architecture.md)، [33-system-design](https://github.com/mjsn800403/KGKG/blob/work/docs/33-system-design.md)، [01-overview](https://github.com/mjsn800403/KGKG/blob/work/docs/01-overview.md)، [04-backend-reference](https://github.com/mjsn800403/KGKG/blob/work/docs/04-backend-reference.md)، [07-frontend](https://github.com/mjsn800403/KGKG/blob/work/docs/07-frontend.md)، [09-realtime-sse](https://github.com/mjsn800403/KGKG/blob/work/docs/09-realtime-sse.md) | همان نام فایل زیر `docs/fa/` |
 | دستیار هوشمند و RAG | [30-ai-assistant-deep-dive](https://github.com/mjsn800403/KGKG/blob/work/docs/30-ai-assistant-deep-dive.md)، [08-ai-assistant-rag](https://github.com/mjsn800403/KGKG/blob/work/docs/08-ai-assistant-rag.md)، [17-evaluation](https://github.com/mjsn800403/KGKG/blob/work/docs/17-evaluation.md) | همان |
 | پشتیبانی و ارتباطات | [35-support-system](https://github.com/mjsn800403/KGKG/blob/work/docs/35-support-system.md)، [22-support-chat](https://github.com/mjsn800403/KGKG/blob/work/docs/22-support-chat.md) | همان |
-| پایگاه‌داده و schemaها | [34-data-model-reference](https://github.com/mjsn800403/KGKG/blob/work/docs/34-data-model-reference.md)، [23-data-layer](https://github.com/mjsn800403/KGKG/blob/work/docs/23-data-layer.md)، [03-data-model](https://github.com/mjsn800403/KGKG/blob/work/docs/03-data-model.md)، [15-vehicle-schema](https://github.com/mjsn800403/KGKG/blob/work/docs/15-vehicle-schema.md)، تولیدشدهٔ [schema](https://github.com/mjsn800403/KGKG/blob/work/docs/generated/schema.md) | همان (فایل‌های تولیدشده فقط انگلیسی‌اند) |
+| پایگاه‌داده و schemaها | [44-data-lifecycle](https://github.com/mjsn800403/KGKG/blob/work/docs/44-data-lifecycle.md)، [34-data-model-reference](https://github.com/mjsn800403/KGKG/blob/work/docs/34-data-model-reference.md)، [23-data-layer](https://github.com/mjsn800403/KGKG/blob/work/docs/23-data-layer.md)، [03-data-model](https://github.com/mjsn800403/KGKG/blob/work/docs/03-data-model.md)، [15-vehicle-schema](https://github.com/mjsn800403/KGKG/blob/work/docs/15-vehicle-schema.md)، تولیدشدهٔ [schema](https://github.com/mjsn800403/KGKG/blob/work/docs/generated/schema.md) | همان (فایل‌های تولیدشده فقط انگلیسی‌اند) |
 | API | [05-api-reference](https://github.com/mjsn800403/KGKG/blob/work/docs/05-api-reference.md)، تولیدشدهٔ [routes](https://github.com/mjsn800403/KGKG/blob/work/docs/generated/routes.md)، [openapi.yaml](https://github.com/mjsn800403/KGKG/blob/work/docs/openapi.yaml) | `docs/fa/05-…` |
 | آزمون، QA، E2E، کارایی | [32-testing-and-qa](https://github.com/mjsn800403/KGKG/blob/work/docs/32-testing-and-qa.md)، [17-evaluation](https://github.com/mjsn800403/KGKG/blob/work/docs/17-evaluation.md) | همان |
 | امنیت | [12-security](https://github.com/mjsn800403/KGKG/blob/work/docs/12-security.md)، [18-security-hardening](https://github.com/mjsn800403/KGKG/blob/work/docs/18-security-hardening.md)، [21-csrf-exempt-views](https://github.com/mjsn800403/KGKG/blob/work/docs/21-csrf-exempt-views.md)، [26-auth-and-sessions](https://github.com/mjsn800403/KGKG/blob/work/docs/26-auth-and-sessions.md)، [06-permissions-rbac](https://github.com/mjsn800403/KGKG/blob/work/docs/06-permissions-rbac.md) | همان |

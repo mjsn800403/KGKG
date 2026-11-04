@@ -56,7 +56,7 @@ ADR-0007 ratification (retrospective; does not settle R1 or R5) · enabling the 
 
 ## Production observations of 2026-11-04 (read-only; details in [38](38-implementation-status-matrix.md))
 
-- **R1 confirmed:** `kgkg_vec` (58 GB) is in no backup path found; PostgreSQL `archive_mode` is off; the hourly off-host snapshot covers only the portal dump.
+- **R1 refined (2026-11-04, later check):** the local dumps and the hourly snapshot cover `kgkg` only; `kgkg_vec` (58 GB) and `_parts` are in no backup path visible from the host and PostgreSQL `archive_mode` is off. The owner states that the company backup server and the hosting provider also back up the server; their scope is **not visible from the host**, so R1 stays open as *unverified coverage*, not as *no backup* ([44 §44.8](44-data-lifecycle.md), [47](47-engineering-followups.md)).
 - **R17 (new): `xrdp` is active** on the production host; reachability of its port was not checked **[U]**.
 - **Nightly QA is failing:** e2e 51 passed / 6 failed / 17 skipped on an older commit (`cedcb79b3`); five failures are in `support.spec.js`, one in `session.spec.js`; causes not analysed.
 - **Staging isolation (R5) still unverified:** no staging container was running; whether staging reads production `kgkg_vec` could not be checked. A newer commit (`135aa78b7`) passed gate and smoke on staging and was not promoted.

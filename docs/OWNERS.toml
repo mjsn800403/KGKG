@@ -512,3 +512,48 @@ review_days = 45
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-04
 review_days = 45
+
+["42-frontend-architecture.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/42-frontend-architecture.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["43-architecture-diagrams.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/43-architecture-diagrams.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["44-data-lifecycle.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/44-data-lifecycle.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["47-engineering-followups.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["manuals/fa/01-user-guide.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["manuals/fa/02-staff-admin-guide.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45

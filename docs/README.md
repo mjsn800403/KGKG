@@ -59,6 +59,11 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [39 — Evaluation evidence guide](39-evaluation-evidence-guide.md) · [fa](fa/39-evaluation-evidence-guide.md) | Per subsystem: demonstrable capability, limits and reporting-ready wording |
 | [40 — Documentation access guide](40-documentation-access-guide.md) · [fa](fa/40-documentation-access-guide.md) | GitHub links, directory map by category, which document for which report, downloadable package |
 | [41 — Documentation coverage and backlog](41-documentation-coverage-and-backlog.md) · [fa](fa/41-documentation-coverage-and-backlog.md) | Honest coverage assessment, gaps G1-G18, further documents worth writing, owner questions |
+| [42 — Frontend architecture reference](42-frontend-architecture.md) · [fa](fa/42-frontend-architecture.md) | Layers, auth path, security, state, API integration, component catalogue, workflows |
+| [43 — Architecture and data-flow diagrams](43-architecture-diagrams.md) · [fa](fa/43-architecture-diagrams.md) | 10 Mermaid diagrams from the implementation (context, components, login, assistant, retrieval, ingestion, access, chat, observability, ERD) |
+| [44 — Data lifecycle](44-data-lifecycle.md) · [fa](fa/44-data-lifecycle.md) | Per data class: collection, storage, access, retention, deletion, backup; evidence-based backup status; undefined policies |
+| [47 — Engineering follow-up register](47-engineering-followups.md) | Internal register of engineering/operations items (not documentation tasks), with status and evidence |
+| [Persian user guide](manuals/fa/01-user-guide.md) · [Persian staff/admin guide](manuals/fa/02-staff-admin-guide.md) | Task-oriented manuals for company users and platform staff (Persian only) |
 | [Persian index](fa/README.md) | Persian twins of the documents above and how they are kept in sync |
 | [Generated inventory](generated/inventory.md) | Machine-generated list of modules, models, commands, env var names, routes, units; CI-checked |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |

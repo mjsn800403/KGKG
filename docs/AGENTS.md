@@ -60,6 +60,10 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
 | Know what is really implemented / enabled in production (before any external claim) | `38-implementation-status-matrix.md`, `39-evaluation-evidence-guide.md` | evidence tags [P] dated 2026-11-04 |
 | Find a document by category, or get the downloadable package | `40-documentation-access-guide.md` | `ops/governance/build_docs_package.py` |
 | Know what is still undocumented / what to write next | `41-documentation-coverage-and-backlog.md` | gap IDs G1-G18 |
+| Understand the frontend (layers, state, API use, components) | `42-frontend-architecture.md`, `07-frontend.md` | `kg_frontend/src/` |
+| See the system as diagrams | `43-architecture-diagrams.md`, `generated/schema.md` | Mermaid in each doc |
+| Know how data is kept, retained, deleted, backed up | `44-data-lifecycle.md` | `[POLICY?]` marks undefined rules |
+| Operations/engineering items that are not documentation work | `47-engineering-followups.md` | one place, with status |
 | Add an env var, command, model, module, ops file | `docs/generated/inventory.md` rules in section 5 | run `python3 ops/governance/gen_inventory.py` |
 
 ## 4. Rules that are easy to break
