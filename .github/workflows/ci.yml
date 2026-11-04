@@ -323,6 +323,8 @@ jobs:
           python3 -m unittest discover -s ops/governance -t ops/governance -p 'test_*.py' -v
       - name: Every document is owned and in date (docs/OWNERS.toml)
         run: python3 ops/governance/check_docs_freshness.py --docs docs
+      - name: Docs match the code (generated inventory is current, no new undocumented items)
+        run: python3 ops/governance/gen_inventory.py --check
       - name: This change references the work it serves
         # Skipped on push builds, where there is no pull request to judge.
         run: python3 ops/governance/check_traceability.py
