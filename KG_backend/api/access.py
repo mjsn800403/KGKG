@@ -501,6 +501,21 @@ def apply_user_access(user, accesses, override_purchase=False, allow_admin_grant
     from .models import Car, UserCarAccess  # lazy
     if not isinstance(accesses, list):
         raise ValueError('accesses must be a list')
+    # Validate the shape before anything is touched. A bare string id would reach
+    # the ORM, whose ValueError echoes the value back ("Field 'id' expected a
+    # number but got ..."), and a non-dict entry or unhashable value would be a 500
+    # (CodeQL py/stack-trace-exposure on the admin access view, KGTEC-14).
+    checked = []
+    for a in accesses:
+        cid = a.get('car_id') if isinstance(a, dict) else None
+        if isinstance(cid, str) and cid.isascii() and cid.isdigit():
+            cid = int(cid)                       # "5" was accepted by the ORM before
+        docs = a.get('documents') if isinstance(a, dict) else None
+        if (not isinstance(a, dict) or isinstance(cid, bool) or not isinstance(cid, int)
+                or not (not docs or (isinstance(docs, list) and all(isinstance(d, str) for d in docs)))):
+            raise ValueError('each access must be {car_id: int, documents: [str]}')
+        checked.append({**a, 'car_id': cid})
+    accesses = checked
     company_scope = {
         a.car_id: (set(a.documents) if a.documents else set(VALID_DOCS))
         for a in user.company.car_accesses.all()

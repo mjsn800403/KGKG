@@ -116,10 +116,27 @@ and client-id checks in `kg_frontend/src/lib/safeUrl.js`); they close when
 |---|---|---|
 | #50 py/stack-trace-exposure | `parts.py` corrupt catalog (503) | **Fixed**: the sqlite message is logged, not returned. |
 | #40 py/stack-trace-exposure | `adminops.py` `scan_zips` | **Fixed**: logged; the admin gets a fixed message. |
-| #34-39, #41, #42 py/stack-trace-exposure | `adminops.py` pipeline / crawler / data-quality / alerts | False positive: admin-token only, and the values are our own operator messages (`start()` refusals, audit status, alert text), which the operator needs. |
-| #44 py/stack-trace-exposure | `portal.py` `admin_user_access_view` | False positive: `apply_user_access` raises `ValueError` only with its own validation message, shown to the platform admin. |
-| #45 py/cookie-injection | `portal.py` `_set_portal_cookie` | False positive: the value is the token we just generated (`AuthToken.issue`), never request input. |
-| #1 js/stored-xss | car page EWD `<iframe src>` | False positive: built server-side from a fixed path, `encodeURIComponent(model)`, a directory name matching `^[A-Z0-9]+$` and a hash taken from our own `termdata.xml`. |
-| #2 js/xss-through-dom | `AssistantChat.jsx` link | False positive: only `isInternalHref()` paths (leading `/`, not `//` or `/\`, no control characters; unit-tested) become links; anything else is plain text. |
+| #34-39, #41, #42 py/stack-trace-exposure | `adminops.py` pipeline / crawler / data-quality / alerts | **Fixed (see below)**. An independent re-audit found these were not all fixed text: raw `OSError`/sqlite/driver messages, `str(e)` of a database error and a stored full traceback reached admin responses. Admin-only, so low severity, but real. |
+| #44 py/stack-trace-exposure | `portal.py` `admin_user_access_view` | **Fixed (see below)**. `Car.objects.filter(id='abc')` raises a `ValueError` that echoes the value, and the view returned `str(e)`. |
+| #45 py/cookie-injection | `portal.py` `_set_portal_cookie` | False positive, to be dismissed by the owner. Both call sites pass a token that was minted by `AuthToken.issue` (`secrets.token_urlsafe(48)`) or, in `me_view`, a bearer that `portal_user()` has just resolved by hash. Cookie is HttpOnly, Secure, SameSite=Lax, path `/`, no Domain, max-age at most the token TTL. |
+| #1 js/stored-xss | car page EWD `<iframe src>` | **Unresolved**. The flagged flow cannot change scheme, host or path (fixed `/kg-api/media/` prefix, `encodeURIComponent(model)`, `^[A-Z0-9]+$` directory), and the fragment comes from our own mirrored `termdata.xml`. The open question is the mirrored `viewer.html`, which is not in this repository: how it reads `location.hash`, and that it runs same-origin without `sandbox` or a CSP (the nginx `/kg-api/media/` block defines its own `add_header`, so the server-level CSP is not inherited). Needs a read-only look at the mirrored files and the live headers. |
+| #2 js/xss-through-dom | `AssistantChat.jsx` link | False positive, to be dismissed by the owner. `fixHref` runs first, then only `isInternalHref()` paths (leading `/`, not `//` or `/\`, no control characters) become `next/link` links; everything else is a React text node. No `dangerouslySetInnerHTML` in the component. |
 
-The false positives are dismissed in GitHub code scanning with a pointer to this table.
+Status words in this table: **Fixed** means the code no longer returns the text and a regression test pins it; the GitHub alert closes by itself
+when the fix reaches `main` and CodeQL rescans. **Unresolved** stays open. Nothing in this table has been dismissed in GitHub; dismissal of
+#2 and #45 needs the owner's decision.
+
+### What the fix does (KGTEC-14, second pass)
+
+- **New errors.** The crawler/Chrome/build/ingest/audit/monitoring code logs the exception (logger `kgkg.*`, with traceback) and returns or stores
+  only the exception class (`OSError`) or a fixed Persian sentence ending in "جزئیات در لاگ سرور". Our own `BuildError` validation messages are
+  still shown. `DataQualityRun.error` no longer stores a traceback.
+- **Stored errors.** Rows written before the fix still hold raw text. They are not rewritten. `safepath.public_error()` / `scrub_errors()` reduce
+  every `error` / `db_error` value (and the detail of a `*_failed` data-quality action) on the way out of the data-quality, system, pipeline and
+  `job_dict` (also used by the event stream) responses: a short plain phrase passes, anything with a path, URL, quote or traceback becomes its
+  exception class name(s), or `error`.
+- **Admin access view.** `apply_user_access` validates the shape of every entry before touching the database (`car_id` an integer or digit
+  string, `documents` a list of strings) and the view answers `invalid accesses payload` for any `ValueError`.
+- **Not changed.** `ProcessingJob.log_tail` is the worker's own log and is still returned to admins as is; it can contain exception text.
+  `hostjobs` results returned by `tis_start_chrome` are host-helper text, not reviewed here. `apply_managed_access` (company-manager API) was
+  not touched.

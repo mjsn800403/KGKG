@@ -1,4 +1,4 @@
-"""Two small helpers that close whole classes of CodeQL findings at one place.
+"""Small helpers that close whole classes of CodeQL findings at one place.
 
 ``safe_join`` is the only way a name that came from a request, a database row or
 a folder listing becomes a path under a known directory (``py/path-injection``).
@@ -30,6 +30,49 @@ def safe_join(base, *names):
     if joined != base_s and not joined.startswith(base_s.rstrip(os.sep) + os.sep):
         raise ValueError('path escapes its base directory')
     return Path(joined)
+
+
+# --- error text that may leave the server --------------------------------
+# Exception messages name files, SQL, hosts and DSNs, and a stored traceback names
+# every frame (CodeQL py/stack-trace-exposure, KGTEC-14). New code stores and returns
+# the exception CLASS only and logs the rest; ``public_error`` also reduces the
+# text already persisted by older versions (DataQualityRun.error, ZipPackage.error,
+# ProcessingJob.error/stages, SystemAlert.context) when an API serves it.
+_EXC_NAME = re.compile(
+    r'(?<![\w.])(?:[A-Za-z_]\w*\.)*([A-Z]\w*(?:Error|Exception|Exit|Warning|Interrupt|Timeout))(?=:)')
+# A short one-line phrase with no path/URL/DSN/frame punctuation cannot carry
+# those details and is kept as is (e.g. 'skipped by admin', 'parse; rag').
+_PLAIN = re.compile(r'[^\n\r:/\\"\'.()\[\]{}<>@=%]{1,120}')
+_ERROR_KEYS = ('error', 'db_error')
+
+
+def public_error(value):
+    """A stored or caught error text reduced to what is safe to send to a client.
+
+    Plain short phrases and bare class names pass; anything else (a traceback,
+    ``'OSError: [Errno 2] ... /srv/x'``, ``'cannot open: <sqlite message>'``)
+    becomes the exception class name(s) it contains, or ``'error'``."""
+    if not isinstance(value, str) or not value.strip():
+        return value
+    s = value.strip()
+    if _PLAIN.fullmatch(s):
+        return s
+    names = []
+    for m in _EXC_NAME.finditer(s):
+        if m.group(1) not in names:
+            names.append(m.group(1))
+    return ', '.join(names[:3]) if names else 'error'
+
+
+def scrub_errors(obj):
+    """``obj`` (JSON-like) with every ``error`` / ``db_error`` string passed through
+    :func:`public_error`; other keys and structure are untouched."""
+    if isinstance(obj, dict):
+        return {k: (public_error(v) if k in _ERROR_KEYS and isinstance(v, str) else scrub_errors(v))
+                for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [scrub_errors(v) for v in obj]
+    return obj
 
 
 def split_year_suffix(name):

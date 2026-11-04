@@ -12,6 +12,7 @@ static_warehouse/_parts_assets with a per-VIN prefix, watermark removed
 (remove_watermark).
 """
 import html as H
+import logging
 import os
 import re
 import shutil
@@ -25,6 +26,8 @@ from . import partsouq_crawler
 from .safepath import safe_join
 from .partsingest import (CATEGORY_FA, CATEGORY_ORDER, SCHEMA_VERSION, VEHICLE_DB_SCHEMA,
                           load_fa_terms, nfkc, sha1)
+
+log = logging.getLogger('kgkg.partsouq_build')
 
 MEDIA = '/media/_parts_assets'
 CAR_NAME = re.compile(r'[\w ()\-.]{3,80}')
@@ -255,8 +258,13 @@ def build_and_register(folder, car_name, grade=''):
         return None, 'تا پایان خزش صبر کنید یا آن را متوقف کنید.'
     try:
         counts = build_db(crawl, car_name, grade)
-    except (BuildError, OSError, sqlite3.Error) as e:
+    except BuildError as e:
+        # BuildError texts are our own fixed validation messages (see above).
         return None, f'ساخت پایگاه داده ناموفق بود: {e}'
+    except (OSError, sqlite3.Error):
+        # OS / driver messages name files and SQL: log them, don't return them.
+        log.warning('partsouq build failed for %s', crawl.name, exc_info=True)
+        return None, 'ساخت پایگاه داده ناموفق بود؛ جزئیات در لاگ سرور.'
     car, created = Car.objects.get_or_create(brand_name='Toyota', car_name=car_name, year=int(m['year']),
                                              defaults={'db_address': ''})
     cardb.invalidate_ready_cache()
