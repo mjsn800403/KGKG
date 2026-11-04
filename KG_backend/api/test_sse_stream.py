@@ -106,3 +106,57 @@ class StreamContractTests(TestCase):
         self.admin.active = False
         self.admin.save()
         self.assertEqual(self.open().status_code, 401)
+
+
+class StreamConnectionHandlingTests(TestCase):
+    """The stream polls once a second per open stream; how it treats its database connection
+    decides what that costs (60 new PostgreSQL connections for 60 polls before this)."""
+
+    def setUp(self):
+        self.rf = RequestFactory()
+        self.admin = PlatformAdmin.objects.create(username='ann', password_hash='x', active=True)
+        self.token = AdminAuthToken.issue(self.admin)
+        self.conn = mock.MagicMock()
+        for p in (mock.patch.object(events, 'connection', self.conn),
+                  mock.patch.object(events, 'time', types.SimpleNamespace(
+                      monotonic=self._clock([0, 0, 1, 2, 10 ** 6]), sleep=lambda s: None))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    @staticmethod
+    def _clock(ticks):
+        ticks = list(ticks)
+        return lambda: ticks.pop(0) if len(ticks) > 1 else ticks[0]
+
+    def run_stream(self, after=None):
+        url = '/api/events/stream/' + (f'?after={after}' if after is not None else '')
+        resp = events.stream_view(self.rf.get(url, HTTP_AUTHORIZATION=f'Bearer {self.token.key}'))
+        return ''.join(c.decode() if isinstance(c, bytes) else c for c in resp.streaming_content)
+
+    def test_postgresql_keeps_its_connection_between_polls_and_releases_it_at_the_end(self):
+        self.conn.vendor = 'postgresql'
+        self.run_stream(after=events.emit('x', {}, audience='admin').id)
+        self.assertEqual(self.conn.close.call_count, 1, 'only the final release, not one per poll')
+
+    def test_sqlite_still_closes_between_polls(self):
+        self.conn.vendor = 'sqlite'
+        self.run_stream(after=events.emit('x', {}, audience='admin').id)
+        self.assertGreaterEqual(self.conn.close.call_count, 3)       # each of the polls, plus the release
+
+    def test_a_failed_poll_drops_the_connection_and_the_next_poll_recovers(self):
+        self.conn.vendor = 'postgresql'
+        after = events.emit('x', {}, audience='admin').id
+        ev = events.emit('support_chat.message', {'thread_id': 't'}, audience='admin')
+        real = events.events_since
+        calls = {'n': 0}
+
+        def flaky(*a, **k):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                raise RuntimeError('server closed the connection unexpectedly')
+            return real(*a, **k)
+
+        with mock.patch.object(events, 'events_since', side_effect=flaky):
+            body = self.run_stream(after=after)
+        self.assertIn(f'id: {ev.id}', body, 'the stream survived the failure and delivered the event')
+        self.assertGreaterEqual(self.conn.close.call_count, 2, 'closed after the failure, and at the end')

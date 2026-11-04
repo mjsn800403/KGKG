@@ -149,3 +149,8 @@ class StreamLoad(SupportTxCase):
               f'db_connects={len(connects)} connects_per_stream_per_s={len(connects) / (self.STREAMS * self.SECONDS):.2f}',
               flush=True)
         self.assertGreater(len(polls), self.STREAMS * (self.SECONDS - 1), 'every stream kept polling')
+        if connection.vendor != 'sqlite':
+            # One connection per stream thread, held between polls. Before the fix this equalled the
+            # number of polls (a new server process per stream per second).
+            self.assertLessEqual(len(connects), self.STREAMS * 2,
+                                 f'{len(connects)} connects for {len(polls)} polls')
