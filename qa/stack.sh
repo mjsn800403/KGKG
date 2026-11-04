@@ -87,7 +87,7 @@ up() {
     pg_dump -Fc "$PG_NAME" | pg_restore --no-owner --role="$PG_USER" --exit-on-error -d "$PG_QA" \
       || die "could not clone $PG_NAME into $PG_QA"
     "${KG_QA_PY:-/opt/KGKG/KG_backend/.venv/bin/python}" -I "$REPO/ops/deploy/sanitize_staging_db.py" \
-      --pg "dbname=$PG_QA" --quiet || die "sanitizer failed; refusing to serve the copy"
+      --pg "dbname=$PG_QA" --quiet --strict-audit || die "sanitizer failed; refusing to serve the copy"
     db_env=(-e KG_PG_NAME="$PG_QA")
   else
     say "copying + sanitizing the production database"
@@ -96,7 +96,7 @@ import sqlite3, sys
 s = sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True, timeout=60)
 d = sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()
 PY
-    python3 -I "$REPO/ops/deploy/sanitize_staging_db.py" "$QA/db/db.sqlite3" --quiet \
+    python3 -I "$REPO/ops/deploy/sanitize_staging_db.py" "$QA/db/db.sqlite3" --quiet --strict-audit \
       || die "sanitizer failed; refusing to serve the copy"
   fi
   : > "$QA/db/.qa-stack"
