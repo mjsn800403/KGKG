@@ -55,8 +55,9 @@ respected via `MotionConfig`).
 ## 7.3 Portal UI composition
 
 - `DashboardShell` = `Sidebar` + content column; every authed portal page renders inside it.
-- `Sidebar` links are capability-gated: Team + Requests need `can_manage_team`, Analytics
-  needs `can_view_analytics` (or manage). Nav items carry `data-tour` attributes — the
+- `Sidebar` links are gated by the user payload: the "Team" group appears when the user can manage or `can_view_team` (root seat or a seat with children);
+  "Team and staff" (`/team`) needs `can_view_team`; Analytics and "assistant chats" (`/team/chats`) need `can_view_analytics` (or manage);
+  Requests/support is shown to every seat (see 7.8). Nav items carry `data-tour` attributes — the
   guidance system anchors on these (doc 13).
 - **Team area = the org-graph canvas** (`app/team/page.jsx` -> `OrgGraphCanvas`, `@xyflow/react`, n8n-style). The graph *is* the org
   structure: each node is a seat (empty or occupied by one user) joined to its parent by a purely visual reporting line. Only the
@@ -77,7 +78,7 @@ respected via `MotionConfig`).
 - `RecommendationsWidget` — «ادامه بدهید», related, focus areas etc. on `/browse`.
 - `RequestsView`/`RequestsInbox` — the two sides of company requests, both live.
 
-## 7.4 Admin panel (`app/admin/page.jsx`, ~1900 lines)
+## 7.4 Admin panel (`app/admin/page.jsx`, ~3600 lines)
 
 Single client page, hash-routed sections (`#dashboard`, `#users`, …), guarded by the admin
 token (`guard` wrapper redirects to `/admin/login` on 401). Landing state is the **hub** —
@@ -124,7 +125,7 @@ help articles to these ids (doc 13).
 
 ## 7.7 Shared vehicle filter (`components/VehicleFilter.jsx`)
 
-The catalogue is 221 vehicles and grows with every ingest run, so **any screen that lists
+The catalogue is large (237 cars on 2026-11-03 **[S]**; 221 when this chapter was written) and grows with every ingest run, so **any screen that lists
 more than four vehicles filters them** — one component, so the experience is identical
 whether you are a customer picking a manual or an admin granting access.
 
