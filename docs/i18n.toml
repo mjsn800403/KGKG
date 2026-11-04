@@ -38,4 +38,5 @@ files = [
   "17-evaluation.md",
   "13-guidance-system.md",
   "20-runbooks.md",
+  "18-security-hardening.md",
 ]

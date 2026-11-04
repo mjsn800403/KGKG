@@ -103,6 +103,9 @@ only — turning them on without a certificate would redirect-loop the site.
 `/etc/nginx/conf.d/kgkg-limits.conf` defines the zones; the site config applies
 them per location.
 
+> **Values as of 2026-08-05.** The zones now live in the repository (`ops/nginx/kgkg-limits.conf`) and have been tuned since; on 2026-11-04 the file defines
+> `kg_general` 30 r/s, `kg_static` 100 r/s, `kg_api` 20 r/s, `kg_auth` 30 r/min, `kg_chat` 60 r/min and `kg_admin` 20 r/s (status 429). Read that file, not this table, for current numbers.
+
 | zone | rate | burst | applies to |
 |---|---|---|---|
 | `kg_static` | 100 r/s | 300 | `/kg-api/media/`, `/_next/static/` |
