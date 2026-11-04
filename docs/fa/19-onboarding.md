@@ -12,7 +12,7 @@
 | GitHub: به `mjsn800403/KGKG` با **Write** اضافه شو (برای مدیران انتشار Maintain) | `gh api repos/mjsn800403/KGKG --jq .permissions.push` مقدار `true` چاپ کند |
 | سرور: کلید SSH خودت روی میزبان تولید (دسترسی root را یک maintainer می‌دهد، هرگز مشترک نیست) | `ssh root@<host> 'ops/deploy/deploy.sh --status'` از `/opt/KGKG_work` |
 | به ترتیب بخوان: [README](README.md) ← [01 نمای کلی](01-overview.md) ← [02 معماری](02-architecture.md) ← [06 RBAC](06-permissions-rbac.md) ← [11 عملیات](../11-operations-deployment.md) | بتوانی بگویی دفترچهٔ یک خودرو کجاست، چه کسی می‌بیند و یک تغییر چگونه به تولید می‌رسد |
-| [CONTRIBUTING](../CONTRIBUTING.md) و [ADRها](adr/README.md) را بخوان | بدانی چرا فقط یک انسان promote می‌کند (ADR-0004) |
+| [CONTRIBUTING](../../CONTRIBUTING.md) و [ADRها](../adr/README.md) را بخوان | بدانی چرا فقط یک انسان promote می‌کند (ADR-0004) |
 | اگر on-call خواهی بود به گیرندگان هشدار بپیوند (`KG_ALERT_PHONES`) | اجرای آزمایشی watchdog شمارهٔ تو را فهرست کند |
 
 ## هفتهٔ ۱ — اجرا کن، سپس تغییر بده
