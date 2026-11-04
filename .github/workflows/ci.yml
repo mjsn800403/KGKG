@@ -324,6 +324,17 @@ jobs:
           python3 -m unittest discover -s ops/governance -t ops/governance -p 'test_*.py' -v
       - name: Every document is owned and in date (docs/OWNERS.toml)
         run: python3 ops/governance/check_docs_freshness.py --docs docs
+      - name: Docs match the code (inventory is current; no new undocumented item versus the target branch)
+        # The binding baseline is doc-debt.json on the TARGET branch, so regenerating the file in
+        # the change cannot excuse a new item. Push builds have no target and check freshness only;
+        # the pull request is where growth is judged.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            python3 ops/governance/gen_inventory.py --check --require-base --base-ref "origin/${{ github.base_ref }}"
+          else
+            python3 ops/governance/gen_inventory.py --check
+          fi
       - name: This change references the work it serves
         # Skipped on push builds, where there is no pull request to judge.
         run: python3 ops/governance/check_traceability.py

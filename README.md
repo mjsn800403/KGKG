@@ -49,6 +49,7 @@ Standing decisions are recorded as ADRs in [`docs/adr/`](docs/adr/).
 |---|---|
 | `KG_backend/` | Django application: API, auth and entitlements, RAG, diagnostics, analytics |
 | `kg_frontend/` | Next.js portal (fa/RTL) |
+| `AGENTS.md`, `docs/AGENTS.md` | Entry point for AI agents and new engineers (start here) |
 | `docs/` | The source of truth, including the [SRS](docs/00-srs.md) and [`openapi.yaml`](docs/openapi.yaml) |
 | `ops/` | Deployment, the forced-command gates, nginx, observability, security scanning |
 | `qa/` | The QA stack, E2E, load, DAST, mutation testing, nightly suite |

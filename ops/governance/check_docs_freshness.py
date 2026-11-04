@@ -29,7 +29,7 @@ DEFAULT_REVIEW_DAYS = 180
 #: A record of what was decided on a particular day cannot go stale, and
 #: putting it on a review cycle would turn the gate into noise — which is how
 #: a gate stops being read.
-EXCLUDED_DIRS = ('superpowers',)
+EXCLUDED_DIRS = ('superpowers', 'generated')   # generated/ is checked by gen_inventory.py --check, not by a date
 
 
 def owners_of(entry):

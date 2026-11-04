@@ -96,3 +96,10 @@
 - Does it log anything? → no secrets/PII beyond the established activity fields.
 - Does it add a long-lived connection or background work? → document the envelope; make it
   survive restarts or fail visibly (events/alerts).
+
+## Addendum (2026-11-04): behaviour documented elsewhere
+
+Session lifetimes, the single-active-session rule (`KG_SINGLE_SESSION`), the OTP flow, device-copy detection, the admin loopback
+token rule and content-protection modules are described, with their source files, in [26 — Authentication and sessions](26-auth-and-sessions.md).
+The open-risk register (backups of `kgkg_vec`, staging sharing production car data, reconstructed activity rows, missing password reset) is
+[27](27-open-risks-and-decisions.md).

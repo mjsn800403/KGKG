@@ -187,3 +187,48 @@ review_days = 180
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-08-05
 review_days = 180
+
+["AGENTS.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 90
+
+["22-support-chat.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 60
+
+["23-data-layer.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 60
+
+["24-integrations.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 90
+
+["25-ops-inventory.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["26-auth-and-sessions.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 90
+
+["27-open-risks-and-decisions.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 30
+
+["28-team-workflow.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 90
+
+["adr/0007-postgresql-for-manual-vehicle-content.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 180

@@ -18,3 +18,4 @@ One file per decision that shapes the system and would be expensive to reverse. 
 | [0004](0004-only-a-person-promotes.md) | CI stages; only a person promotes, on staging + E2E evidence | Accepted | 2026-10-27 (E2E: 2026-10-29) |
 | [0005](0005-self-hosted-error-monitoring.md) | Self-hosted GlitchTip, Prometheus, Loki, Grafana; no SaaS observability | Accepted | 2026-08-05 / 2026-10-13 |
 | [0006](0006-docs-as-code.md) | Documentation lives in the repo and ships with the change | Accepted | 2026-07 |
+| [0007](0007-postgresql-for-manual-vehicle-content.md) | Retrospective record of the PostgreSQL stores in the data layer (amends 0001); operational risks decided separately | Proposed | in force by 2026-11-03; decision date unknown |

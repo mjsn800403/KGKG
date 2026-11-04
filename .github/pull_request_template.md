@@ -20,6 +20,7 @@ verification; the output is. State which test failed before the change. -->
 
 - [ ] The new or changed test **failed before this change** and passes after it
 - [ ] `docs/` updated in this PR if behaviour, an endpoint or operations changed (ADR-0006)
+- [ ] If I added a model, management command, env var, backend module, route or `ops/` file: I ran `python3 ops/governance/gen_inventory.py` and described it in the matching doc (`docs/AGENTS.md` section 3)
 - [ ] `docs/openapi.yaml` updated if a route changed (`test_openapi_routes.py` enforces it)
 - [ ] An ADR added if this sets a standing decision
 - [ ] No ratchet lowered (`ops/deploy/coverage_min`, `ops/deploy/lint_max_warnings`) and nothing excluded from coverage to pass it
