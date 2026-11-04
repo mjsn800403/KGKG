@@ -15,6 +15,7 @@ from unittest import mock
 from django.urls import URLPattern, URLResolver, get_resolver
 
 from .helpers import SupportCase, bearer, visitor_hdr
+from .models import SupportMessage
 
 ADMIN_PREFIX = 'api/admin/support-chat/'
 VISITOR_PREFIX = 'api/support-chat/threads/'
@@ -142,3 +143,55 @@ class LogPrivacy(SupportCase):
         collector.emit(logging.LogRecord('selfcheck', logging.WARNING, __file__, 1,
                                          'visitor said %s', (marker,), None))
         self.assertIn(marker, ' '.join(collector.text))
+
+
+class CookiesAndCsrf(SupportCase):
+    """Ties the support chat to the CSRF work (#83, api/csrf_registry.py): its views opt out of
+    CSRF only because nothing here authenticates by cookie, so that must stay true."""
+
+    def setUp(self):
+        super().setUp()
+        env = mock.patch.dict(os.environ, {'KG_ADMIN_TOKEN': 'loop-secret'})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def test_every_support_chat_view_is_classified_as_header_token_or_pre_auth(self):
+        from api.csrf_registry import EXEMPT
+        mine = {k: v for k, v in EXEMPT.items() if k.startswith('api/support_chat/')}
+        self.assertGreaterEqual(len(mine), 10)
+        self.assertEqual({v[0] for v in mine.values()} - {'admin-header', 'token-header', 'pre-auth'}, set(),
+                         'a support-chat view classified as cookie-authenticated would need CSRF protection')
+
+    def test_a_portal_cookie_grants_nothing_on_any_support_route(self):
+        real, token, _ = self.create()
+        fake = uuid.uuid4().hex
+        self.c.cookies['kg_portal_token'] = 'any-portal-session-value'
+        self.c.cookies['sessionid'] = 'any-django-session-value'
+        offences = []
+        for route in _routes(ADMIN_PREFIX):
+            for method in METHODS:
+                for tid in (real, fake):
+                    r = getattr(self.c, method)(_fill(route, tid))
+                    if r.status_code != 401:
+                        offences.append((route, method, r.status_code))
+        for route in (r for r in _routes(VISITOR_PREFIX) if '<str:thread_id>' in r):
+            for method in ('get', 'post', 'patch'):
+                answers = set()
+                for tid in (real, fake):
+                    url = _fill(route, tid)
+                    r = (getattr(self.c, method)(url) if method == 'get'
+                         else self.send(url, {'message': 'x', 'client_id': 'z'}, None, method=method))
+                    answers.add((r.status_code, r.content))
+                if len(answers) != 1 or {s for s, _ in answers} & {200, 201}:
+                    offences.append((route, method, sorted(s for s, _ in answers)))
+        self.assertEqual(offences, [])
+        self.assertEqual(self.poll(real, token).status_code, 200, 'the token header still works')
+
+    def test_a_cross_origin_request_cannot_borrow_the_cookie_for_a_write(self):
+        """The Origin guard (#83) covers cookie writes; a support write with only a cookie is refused anyway."""
+        real, _, _ = self.create()
+        self.c.cookies['kg_portal_token'] = 'any-portal-session-value'
+        r = self.send(f'/api/support-chat/threads/{real}/messages/', {'message': 'x', 'client_id': 'q'}, None,
+                      HTTP_ORIGIN='https://evil.example')
+        self.assertIn(r.status_code, (403, 404))
+        self.assertEqual(SupportMessage.objects.filter(thread_id=real).count(), 1)

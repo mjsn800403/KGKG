@@ -187,7 +187,7 @@ def stream_view(request):
         # A new subscriber starts at the live edge (history comes from REST).
         after = _latest_id()
 
-    def gen():
+    def _stream():
         cursor = after
         started = time.monotonic()
         last_beat = started
@@ -209,6 +209,13 @@ def stream_view(request):
                     limit=200)
             except Exception:
                 rows = []
+                # A dropped connection (database restart, idle timeout) would otherwise fail
+                # every poll for the rest of this stream while heartbeats kept it looking
+                # alive; closing it makes the next iteration open a fresh one.
+                try:
+                    connection.close()
+                except Exception:
+                    pass
             if rows:
                 for ev in rows:
                     yield _sse_frame(ev)
@@ -217,15 +224,20 @@ def stream_view(request):
             elif now - last_beat >= _HEARTBEAT_S:
                 yield ": ping\n\n"        # comment frame keeps proxies from idling us out
                 last_beat = now
-            # Don't hold a SQLite connection open between polls (WAL readers are
-            # cheap to reopen, and a long-held conn would pin the WAL).
-            try:
-                connection.close()
-            except Exception:
-                pass
+            # SQLite: don't hold a connection open between polls (WAL readers are cheap
+            # to reopen, and a long-held conn would pin the WAL). PostgreSQL: keep it. This
+            # loop runs once a second per open stream, and reconnecting every time cost one
+            # new server process per stream per second (60 connects for 60 polls in CI).
+            if getattr(connection, 'vendor', 'sqlite') == 'sqlite':
+                try:
+                    connection.close()
+                except Exception:
+                    pass
             time.sleep(_TAIL_INTERVAL_S)
 
-    resp = StreamingHttpResponse(gen(), content_type='text/event-stream')
+    # No explicit release when the stream ends: Django closes or recycles the thread's connection
+    # when the request finishes (CONN_MAX_AGE), and closing here would also close a test's shared one.
+    resp = StreamingHttpResponse(_stream(), content_type='text/event-stream')
     resp['Cache-Control'] = 'no-cache, no-transform'
     resp['X-Accel-Buffering'] = 'no'     # belt-and-suspenders vs nginx buffering
     # No 'Connection' header: it is hop-by-hop, PEP 3333 forbids a WSGI app from
