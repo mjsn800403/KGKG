@@ -52,6 +52,11 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
 | Understand or change the assistant end to end (retrieval, scoring, prompts, Metis, fallbacks, evaluation) | `30-ai-assistant-deep-dive.md`, then `08`, `17` | `api/rag/retrieve.py`, `api/rag/service.py`, `kg_frontend/src/app/api/chat/route.js` |
 | Touch observability, log rotation, Umami, systemd units, offline RAG tools, security baselines | `31-ops-files-reference.md` | the file it cites under `ops/` |
 | Decide how to verify a change; understand CI, QA stack, E2E, load, mutation tests | `32-testing-and-qa.md` | `.github/workflows/ci.yml`, `qa/` |
+| Understand the overall design, runtime topology, middleware, failure scenarios | `33-system-design.md` | `ops/nginx/kgkg.conf`, `KG_backend/KG_backend/settings.py` |
+| Read or change models, constraints, relationships | `34-data-model-reference.md`, then generated `schema.md` | `api/models.py`; regenerate with `gen_schema.py` |
+| Work on support chat, RBAC, outbox, retention (deep) | `35-support-system.md`, `22-support-chat.md` | `api/support_chat/`, `api/notifications/` |
+| Understand CI jobs, branch protection, promotion, rollback | `36-cicd-and-deployment.md`, `11`, `20` | `.github/workflows/ci.yml`, `ops/deploy/` |
+| Find which code/tests implement a requirement | `37-requirements-traceability.md`, `00-srs.md` | `ops/governance/check_srs_trace.py` |
 | Add an env var, command, model, module, ops file | `docs/generated/inventory.md` rules in section 5 | run `python3 ops/governance/gen_inventory.py` |
 
 ## 4. Rules that are easy to break
@@ -94,6 +99,8 @@ gh pr list -R mjsn800403/KGKG; gh issue list -R mjsn800403/KGKG
 python3 ops/governance/gen_inventory.py --check --base-ref origin/work --require-base   # docs vs code drift (env KG_DOC_BASE_REF sets the default base ref)
 python3 ops/governance/check_docs_freshness.py --docs docs
 python3 ops/governance/check_i18n.py               # Persian twins vs English sources (list: docs/i18n.toml)
+python3 ops/governance/gen_schema.py --check       # generated model schema is current
+python3 ops/governance/check_srs_trace.py          # SRS tests exist, every FR/NFR is in doc 37
 ```
 
 Production checks go through the saved `kgtechvault` SSH connection (host in `11-operations-deployment.md`):

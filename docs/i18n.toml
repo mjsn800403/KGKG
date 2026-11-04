@@ -6,4 +6,9 @@ files = [
   "30-ai-assistant-deep-dive.md",
   "31-ops-files-reference.md",
   "32-testing-and-qa.md",
+  "33-system-design.md",
+  "34-data-model-reference.md",
+  "35-support-system.md",
+  "36-cicd-and-deployment.md",
+  "37-requirements-traceability.md",
 ]

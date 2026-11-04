@@ -277,3 +277,53 @@ review_days = 45
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-04
 review_days = 90
+
+["33-system-design.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/33-system-design.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["34-data-model-reference.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/34-data-model-reference.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["35-support-system.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/35-support-system.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["36-cicd-and-deployment.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/36-cicd-and-deployment.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["37-requirements-traceability.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/37-requirements-traceability.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45

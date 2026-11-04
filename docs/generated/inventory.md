@@ -486,8 +486,10 @@ Timers and services installed on the host from `ops/`. The host also runs units 
 | `ops/docker/frontend.Dockerfile` | yes |
 | `ops/governance/check_docs_freshness.py` | yes |
 | `ops/governance/check_i18n.py` | yes |
+| `ops/governance/check_srs_trace.py` | yes |
 | `ops/governance/check_traceability.py` | yes |
 | `ops/governance/gen_inventory.py` | yes |
+| `ops/governance/gen_schema.py` | yes |
 | `ops/hostjobs/hostjobs_daemon.py` | yes |
 | `ops/nginx/kgkg-limits.conf` | yes |
 | `ops/nginx/kgkg-mediaauth.conf` | yes |

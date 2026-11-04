@@ -50,6 +50,11 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [30 — AI assistant deep dive](30-ai-assistant-deep-dive.md) · [fa](fa/30-ai-assistant-deep-dive.md) | Request lifecycle, retrieval, scoring, scope gates, prompts, Metis, fallbacks, feedback, evaluation, capability status |
 | [31 — Ops files and units reference](31-ops-files-reference.md) · [fa](fa/31-ops-files-reference.md) | Observability stack, log rotation, Umami, systemd units, offline RAG tools, security baselines |
 | [32 — Testing, QA and verification](32-testing-and-qa.md) · [fa](fa/32-testing-and-qa.md) | Every test and gate: purpose, commands, CI, QA stack, gaps |
+| [33 — System design](33-system-design.md) · [fa](fa/33-system-design.md) | Context, runtime topology, middleware, auth layers, async work, caches, failure scenarios |
+| [34 — Data model reference](34-data-model-reference.md) · [fa](fa/34-data-model-reference.md) | Entity groups, ER overview, lifecycles, constraints; generated field-level [schema](generated/schema.md) |
+| [35 — Support system](35-support-system.md) · [fa](fa/35-support-system.md) | Visitor chat, staff inbox, tickets, RBAC, outbox, retention, capability status |
+| [36 — CI/CD and deployment](36-cicd-and-deployment.md) · [fa](fa/36-cicd-and-deployment.md) | Branch protection, workflows, promotion pipeline, environments, rollback |
+| [37 — Requirements traceability](37-requirements-traceability.md) · [fa](fa/37-requirements-traceability.md) | FR/NFR to routes, modules, models, tests; checked by CI |
 | [Persian index](fa/README.md) | Persian twins of the documents above and how they are kept in sync |
 | [Generated inventory](generated/inventory.md) | Machine-generated list of modules, models, commands, env var names, routes, units; CI-checked |
 | [ADR — Architecture decisions](adr/README.md) | Why the system is built this way: SQLite, local retrieval, containers, promotion, monitoring, docs-as-code |

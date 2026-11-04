@@ -10,6 +10,11 @@
 | [۳۰ — دستیار هوش مصنوعی: بررسی عمیق](30-ai-assistant-deep-dive.md) | [30-ai-assistant-deep-dive.md](../30-ai-assistant-deep-dive.md) |
 | [۳۱ — مرجع فایل‌ها و واحدهای عملیاتی](31-ops-files-reference.md) | [31-ops-files-reference.md](../31-ops-files-reference.md) |
 | [۳۲ — تست، QA و راستی‌آزمایی](32-testing-and-qa.md) | [32-testing-and-qa.md](../32-testing-and-qa.md) |
+| [۳۳ — طراحی سیستم](33-system-design.md) | [33-system-design.md](../33-system-design.md) |
+| [۳۴ — مرجع مدل داده](34-data-model-reference.md) | [34-data-model-reference.md](../34-data-model-reference.md) |
+| [۳۵ — سامانهٔ پشتیبانی](35-support-system.md) | [35-support-system.md](../35-support-system.md) |
+| [۳۶ — CI/CD و استقرار](36-cicd-and-deployment.md) | [36-cicd-and-deployment.md](../36-cicd-and-deployment.md) |
+| [۳۷ — ردیابی نیازمندی‌ها](37-requirements-traceability.md) | [37-requirements-traceability.md](../37-requirements-traceability.md) |
 
 قواعد ترجمه: شناسه‌ها، مسیر فایل‌ها، دستورات، نام جدول‌ها و کلیدهای پیکربندی عیناً حفظ می‌شوند؛ متن توضیحی فارسی است؛ برچسب‌های شواهد (`[C]`، `[S]`، `[D]`، `[H]`، `[U]`) ترجمه نمی‌شوند. اسناد تاریخی (ADRها و CHANGELOG) به‌عنوان سابقه می‌مانند و بازنویسی یا ترجمهٔ تازه نمی‌شوند.
 
