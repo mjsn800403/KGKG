@@ -1,7 +1,16 @@
 # 03 — Data Model
 
-Three storage tiers: the **main relational DB** (`db.sqlite3`, Django ORM), the **per-vehicle
-content warehouse** (immutable SQLite files), and the **derived RAG tier** (rebuildable).
+Storage tiers (authoritative map: [23 — Data layer](23-data-layer.md)):
+
+- the **main relational DB**: PostgreSQL 16 database `kgkg` in production (Django ORM, `KG_DB_ENGINE=postgres`);
+  SQLite `db.sqlite3` is the development default and the frozen former production file;
+- the **per-vehicle content stores**: manual content of loaded cars in PostgreSQL schemas of database `kgkg_vec`
+  (registry `public.car_dbs`), parts-only cars as read-only SQLite files under `_parts/`;
+- the **derived RAG tier**: `_rag/index.rag.db` (SQLite + `sqlite-vec`), rebuildable from the content stores; it may be
+  mirrored into `kgkg_vec` (pgvector).
+
+Vehicle content was originally one immutable SQLite file per car (ADR-0001); sections below that say `db_address`
+or "warehouse DB" refer to that file name, which is still the key used to find a car's PostgreSQL schema.
 
 ## 3.1 Main DB — Django models (`api/models.py`)
 

@@ -68,12 +68,12 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
 
 ## 5. Keeping the docs true (change-triggered, not date-triggered)
 
-- `docs/generated/inventory.md` is produced from the source (`ops/governance/gen_inventory.py`): backend
-  modules, models, management commands, env var names, frontend routes, systemd units, `ops/` files,
-  migrations, CI jobs. **CI fails** (job `governance`) when it is stale or when something new is added
-  that no reference doc names. `docs/generated/doc-debt.json` is the list of existing, still-undocumented
-  items; it can only shrink. To clear a debt item: describe it in the matching reference doc, then run
-  `python3 ops/governance/gen_inventory.py`.
+- `docs/generated/inventory.md` is produced from the source (`ops/governance/gen_inventory.py`): backend modules, models, management commands,
+  env var names, frontend routes, systemd units, `ops/` files, migrations, CI jobs. CI (job `governance`) fails when it is stale.
+- `docs/generated/doc-debt.json` records items that are still undocumented. It must match the code, but **what binds is the copy on the target
+  branch**: on a pull request CI fails for any undocumented item that is not already in the base branch's file, even if you regenerated yours.
+  The way through is to describe the item in the matching reference doc, then run `python3 ops/governance/gen_inventory.py`. The only exception
+  route is an entry with a reason in `docs/generated/doc-debt-exceptions.json` (CODEOWNERS: the repository owner).
 - `ops/governance/check_docs_freshness.py` still requires an owner and a review date per document. Moving a
   date is not a verification. Move it only after the document's facts were re-checked against the code.
 - When you change behaviour, update (a) the reference doc named in section 3, (b) the CHANGELOG line, and

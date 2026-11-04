@@ -13,12 +13,16 @@ for humans and agents to read, and enforces two content rules in CI:
    regenerated, so the change is visible in the diff of the same pull request.
 2. NO NEW DEBT: every item the inventory lists should be named in a hand-written
    reference doc (docs/*.md, not CHANGELOG, not docs/superpowers). The items that
-   are not yet are recorded in docs/generated/doc-debt.json. An item missing from
-   the docs AND from that file fails the build; an item that has since been
-   documented but is still in the file also fails, so the debt can only shrink.
+   are not yet are recorded in docs/generated/doc-debt.json, which must match the
+   code (so documented items leave it). What BINDS is the copy of that file on the
+   target branch (--base-ref): an undocumented item that is not in that baseline
+   fails, however the file in the change was regenerated. The only other way
+   through is an entry with a reason in docs/generated/doc-debt-exceptions.json,
+   which CODEOWNERS routes to the repository owner.
 
     python3 ops/governance/gen_inventory.py            # rewrite both files
-    python3 ops/governance/gen_inventory.py --check    # CI: exit 1 on drift
+    python3 ops/governance/gen_inventory.py --check    # exit 1 on drift
+    python3 ops/governance/gen_inventory.py --check --base-ref origin/work --require-base  # CI, pull requests
 
 Standard library only (the governance job installs nothing).
 """
@@ -33,6 +37,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 BACKEND = 'KG_backend/api'
 OUT_MD = 'docs/generated/inventory.md'
 OUT_DEBT = 'docs/generated/doc-debt.json'
+OUT_EXC = 'docs/generated/doc-debt-exceptions.json'
 #: Not documentation of the current system: a changelog mentions a name once,
 #: when it shipped, which is history, not a description.
 DOC_EXCLUDE = ('CHANGELOG.md',)
@@ -341,9 +346,52 @@ def _dump_debt(debt):
     return json.dumps(debt, indent=1, sort_keys=True, ensure_ascii=False) + '\n'
 
 
+def _base_debt(ref):
+    """The debt baseline as it stands on the target branch, or None when that
+    branch has no baseline yet (the pull request that introduces this file).
+
+    Raises RuntimeError when the ref cannot be read at all: a gate that quietly
+    compares against nothing is a gate that always passes.
+    """
+    import subprocess
+    try:
+        subprocess.run(['git', 'rev-parse', '--verify', '--quiet', ref + '^{commit}'],
+                       cwd=ROOT, check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        raise RuntimeError(f'cannot read base ref {ref!r}: fetch it first '
+                           f'(git fetch origin <branch>) so the baseline can be compared')
+    r = subprocess.run(['git', 'show', f'{ref}:{OUT_DEBT}'], cwd=ROOT, capture_output=True)
+    if r.returncode != 0:
+        return None
+    return json.loads(r.stdout.decode('utf-8'))
+
+
+def _exceptions():
+    """Reviewed exceptions: {kind: {item: reason}}. A reason is mandatory."""
+    try:
+        raw = json.load(open(os.path.join(ROOT, OUT_EXC), encoding='utf-8'))
+    except FileNotFoundError:
+        return {}, []
+    out, bad = {}, []
+    for kind, items in raw.items():
+        if kind.startswith('_'):
+            continue
+        for item, reason in (items or {}).items():
+            if not str(reason).strip():
+                bad.append(f'{OUT_EXC}: {kind}/{item} has no reason')
+            else:
+                out.setdefault(kind, {})[item] = reason
+    return out, bad
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--check', action='store_true', help='CI mode: exit 1 on drift, write nothing')
+    ap.add_argument('--base-ref', default=os.environ.get('KG_DOC_BASE_REF', ''),
+                    help='git ref of the target branch whose doc-debt.json is the trusted baseline '
+                         '(CI: origin/$GITHUB_BASE_REF)')
+    ap.add_argument('--require-base', action='store_true',
+                    help='fail instead of skipping the baseline comparison when no base ref is given')
     args = ap.parse_args(argv)
     md, debt = build()
     md_path = os.path.join(ROOT, OUT_MD)
@@ -357,6 +405,8 @@ def main(argv=None):
             f.write(_dump_debt(debt))
         print(f'wrote {OUT_MD} and {OUT_DEBT}; undocumented: ' +
               ', '.join(f'{k}={len(v)}' for k, v in debt.items()))
+        print('NOTE: regenerating records the current debt; CI compares it with the target branch, '
+              'so an item added here still fails unless it is documented or listed in ' + OUT_EXC + '.')
         return 0
 
     problems = []
@@ -368,17 +418,39 @@ def main(argv=None):
         problems.append(f'{OUT_MD} is out of date. Run: python3 ops/governance/gen_inventory.py '
                         'and commit the result (git add -f for files ignored by *.md).')
     try:
-        base = json.load(open(debt_path, encoding='utf-8'))
+        tree = json.load(open(debt_path, encoding='utf-8'))
     except FileNotFoundError:
-        base = {}
-    for kind, items in debt.items():
-        known = set(base.get(kind, []))
-        for x in sorted(set(items) - known):
-            problems.append(f'undocumented {kind[:-1] if kind.endswith("s") else kind}: {x} - describe it in '
-                            'the matching docs/ reference (see docs/AGENTS.md "Where each kind of fact lives").')
-        for x in sorted(known - set(items)):
-            problems.append(f'{kind}: {x} is documented now or gone; remove it from {OUT_DEBT} '
-                            '(regenerate) so the debt only shrinks.')
+        tree = {}
+    if {k: sorted(v) for k, v in tree.items()} != {k: sorted(v) for k, v in debt.items()}:
+        problems.append(f'{OUT_DEBT} does not match the code. Run: python3 ops/governance/gen_inventory.py '
+                        '(it also drops items that are documented now, so the debt only shrinks).')
+
+    # The trusted comparison: the committed file is only a record; what binds is
+    # the target branch's copy, which this change cannot edit.
+    exc, bad = _exceptions()
+    problems.extend(bad)
+    base = None
+    if args.base_ref:
+        try:
+            base = _base_debt(args.base_ref)
+        except RuntimeError as e:
+            problems.append(str(e))
+            base = False
+        if base is None:
+            print(f'note: {args.base_ref} has no {OUT_DEBT}; this change introduces it, so its own '
+                  'file is taken as the starting baseline (reviewed once, in this change).')
+    elif args.require_base:
+        problems.append('no base ref given: pass --base-ref origin/<target branch> '
+                        '(CI does this for pull requests)')
+    else:
+        print('note: no base ref; only freshness was checked, not growth of the debt baseline.')
+    if base:
+        for kind, items in debt.items():
+            allowed = set(base.get(kind, [])) | set(exc.get(kind, {}))
+            for x in sorted(set(items) - allowed):
+                problems.append(f'NEW undocumented {kind}: {x} - describe it in the matching docs/ reference '
+                                f'(docs/AGENTS.md section 3). Editing {OUT_DEBT} cannot excuse it; the only '
+                                f'alternative is a reviewed entry with a reason in {OUT_EXC}.')
     if problems:
         print('Documentation drift:\n  - ' + '\n  - '.join(problems), file=sys.stderr)
         return 1

@@ -35,3 +35,8 @@
 # Documentation and the evaluation evidence package.
 /docs/                              @mjsn800403
 /audit-evidence/                    @mjsn800403
+
+# The documentation-debt baseline and its exceptions: an exception lets an undocumented item through the
+# drift check, so adding one is a decision for the owner.
+/docs/generated/doc-debt-exceptions.json  @mjsn800403
+/ops/governance/gen_inventory.py          @mjsn800403

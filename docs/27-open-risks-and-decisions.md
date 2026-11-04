@@ -35,7 +35,7 @@ server pass was refused by the permission layer).
 
 KGTEC-4 pricing · KGTEC-5 production checkout branch and CI access path · KGTEC-6 host changes · KGTEC-16 delete `rag-db-improvements` ·
 KGTEC-18/R1 backup design for `kgkg_vec` and `_parts` · KGTEC-19 penetration test · KGTEC-20 disclose or remove reconstructed rows ·
-ADR-0007 acceptance (doc `adr/0007-...`) · enabling the support chat publicly (privacy notice, retention periods, RBAC mode).
+ADR-0007 ratification (retrospective; does not settle R1 or R5) · enabling the support chat publicly (privacy notice, retention periods, RBAC mode).
 
 ## Claims in older docs that this register overrides
 

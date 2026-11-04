@@ -38,7 +38,7 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 |---|---|---|
 | Frontend | Next.js 16.2.9, React 19.2.4, `motion` 12 | App Router; JS + a few TS files; Tailwind v4 present but styling is hand-written `globals.css` (~1500 lines, CSS variables + `data-theme`) |
 | Backend | Django 5.2.15, gunicorn gthread | No DRF — plain `JsonResponse` views, `@csrf_exempt` + token auth |
-| DBs | SQLite everywhere | Main DB in WAL + IMMEDIATE transactions; per-car DBs read-only via `api/cardb.py` pool; RAG index via `sqlite-vec` |
+| DBs | PostgreSQL 16 (portal data `kgkg`; manual vehicle content `kgkg_vec`, one schema per car) + SQLite (parts-only car catalogs, RAG index via `sqlite-vec`, small side DBs) | Portal data: `KG_DB_ENGINE=postgres` since 2026-10-29. Car content: `api/cardb.py` hands back a SQLite file connection or, for cars in `KG_CARDB_PG`/`public.car_dbs`, a PostgreSQL connection (`api/cardb_pg.py`). Full map: [23-data-layer.md](23-data-layer.md); decision record: ADR-0007 (Proposed) |
 | Embeddings | bge-m3 (sentence-transformers 5.6, torch 2.12 CPU) | Fully offline: HF cache at `/root/.cache/huggingface`, `HF_HUB_OFFLINE=1` |
 | PDF | WeasyPrint 69 + bundled Vazirmatn TTFs | fa/RTL team reports |
 | LLM | Metis (api.metisai.ir, paid, external) | Phrasing only; key lives in frontend server env |
@@ -46,16 +46,17 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 
 ## Design principles (the "why" behind the shape)
 
-1. **One vehicle = one immutable content DB.** *(Original design. Since 2026-11 manual content of loaded cars is served from
-   per-car PostgreSQL schemas, parts-only cars stay SQLite: see `23-data-layer.md` and ADR-0007. The principle of per-vehicle
-   isolation holds; the engine does not.)* Content sharding by design: per-vehicle
+1. **One vehicle = one immutable content store.** Content sharding by design: per-vehicle
    isolation, trivially parallelizable, no shared-schema migrations for content changes.
-   Serving code (`api/cardb.py`) opens them strictly read-only with a per-thread LRU pool
-   (mmap, 16MB page cache, busy timeout, auto-reopen on file replacement).
-2. **Metadata in one relational DB.** All Django models are engine-agnostic; PostgreSQL is a
-   `DATABASES` swap + dump/load when write contention is *measured*.
-3. **Derived data is disposable.** Everything under `_rag/` (index, diag, feedback) and the
-   audit reports can be rebuilt from the warehouse. Deleting `_rag/` degrades the site to
+   Today a manual vehicle's store is a PostgreSQL schema in `kgkg_vec` (the read path is query-only) and a parts-only
+   vehicle's store is a read-only SQLite file under `_parts/`; `api/cardb.py` opens SQLite files strictly read-only with a
+   per-thread LRU pool (mmap, 16MB page cache, busy timeout, auto-reopen on file replacement). *History:* the original
+   design (ADR-0001) was one SQLite file per vehicle for everything; the change to PostgreSQL schemas is recorded
+   retrospectively in ADR-0007, whose rationale and date are not established.
+2. **Metadata in one relational DB.** All Django models are engine-agnostic. Production runs PostgreSQL 16 (database
+   `kgkg`, since 2026-10-29); SQLite is the development default and the frozen former production file.
+3. **Derived data is disposable.** Everything under `_rag/` (index, diag) and the
+   audit reports can be rebuilt from the vehicle content stores (feedback in `_rag/feedback.db` is user data, not derived). Deleting `_rag/` degrades the site to
    manual browsing — it never breaks it.
 4. **No new infrastructure until measured need.** The SSE bus is a SQLite table because the
    process set (3 gunicorn workers + detached pipeline worker) has exactly one shared,
@@ -75,7 +76,7 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 - Breadcrumbs: one recursive CTE per page, not N queries.
 - Main DB: WAL + `IMMEDIATE` + 20s busy timeout — readers never block on the metrics flush
   or activity writes.
-- gunicorn `gthread` (3×8): SQLite reads and media are I/O-bound; threads multiply
+- gunicorn `gthread` (3×8): database reads and media are I/O-bound; threads multiply
   concurrency without multiplying the ~2.3GB embedding model (loaded once per process).
 - nginx serves manual images directly from disk with 30-day immutable cache and gzips JSON.
 - Metrics middleware aggregates in memory and flushes batched rollups — zero per-request DB

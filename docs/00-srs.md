@@ -52,7 +52,7 @@ ingestion pipeline, and the operations tooling in `ops/` and `qa/`.
 ## 3. Constraints and assumptions
 
 * **C-01:** single production host (Ubuntu 24, 16 cores, 31 GB RAM). Staging and QA share it. (doc 02, 11)
-* **C-02:** relational data in SQLite (WAL); manuals as one read-only SQLite file per vehicle.
+* **C-02:** relational data in PostgreSQL 16 (SQLite in development); manual content of loaded vehicles in per-car PostgreSQL schemas, parts-only vehicles and the RAG index in SQLite files (see 23-data-layer.md; original constraint was SQLite throughout, ADR-0001).
   (ADR-0001)
 * **C-03:** the embedding model runs locally and offline (`HF_HUB_OFFLINE=1`); no request data
   leaves the host except to Metis (phrasing) and the SMS provider. (doc 08, 12)
