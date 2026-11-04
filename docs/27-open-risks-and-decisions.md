@@ -50,3 +50,6 @@ ADR-0007 ratification (retrospective; does not settle R1 or R5) · enabling the 
 - **F1 Guidance anchors orphaned.** `guidance/content.js` and `hintRules.js` target `team-tabs`, `team-add`, `team-search` and signals `team.memberCount` / `team.drawer` that belonged to the removed `TeamView`; no component renders them ([07](07-frontend.md) §7.3, [13](13-guidance-system.md)). Fix is application code and was not made here.
 - **F2 openapi.yaml lagged two views**: `POST api/admin/company-requests/` and `GET api/admin/company-requests/<id>/` existed in code but not in the spec; added 2026-11-04 (`test_openapi_routes.py` checks routes, not methods).
 - **F3 No automated test** for the Grafana/VNC admin gates (FR-29) and no dedicated test module for the AI allowance (FR-25) or behaviour insights (FR-30).
+- **F4 Timer units not in the repository.** Docs 02/11 name `kgkg-alerts.timer`, `kgkg-pipeline.timer`, `kgkg-detect.timer` and `kgkg-coverage.timer`, but no unit file
+  for them exists under `ops/` (only `kgkg-watchdog`, `kgkg-outbox`, `kgkg-qa-nightly` and `kgkg-hostjobs` do). They are therefore hand-installed on the host
+  or defined elsewhere **[U]**; rebuilding the host from the repository would not recreate them (compare the PR checklist item "nothing needs a hand-install").
