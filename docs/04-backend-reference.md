@@ -60,10 +60,12 @@ as strings; coerce with `_as_id` before comparing to int sets (the 2026-07-14 bu
 `api/admin/org/reassign-root/`. `orggraph.py` compiles a seat's `NodePermission` into the real enforcement state (`sync_node_to_user`), mirrors the canvas
 parent edge onto `reports_to`, decides who sees the team page (`user_can_view_team`) and seeds graphs for new companies. Semantics: [06](06-permissions-rbac.md) section 6.6.
 
-### `ratelimit.py` — fixed-window in-memory limiter
+### `ratelimit.py` — sliding-window limiter with a shared store
 `@rate_limited(name, limit, window)`; per-IP via `X-Real-IP`/last-XFF-hop when
-`KG_TRUST_PROXY=1` (nginx sets it). Per-process buckets (3 workers ⇒ ~3× nominal limit;
-documented envelope). `KG_RL_DISABLE=1` for tests. Rules overridable via env `KG_RL_<NAME>`.
+`KG_TRUST_PROXY=1` (nginx sets it). Counters live in a SQLite file (`KG_RL_STORE`, default `/tmp/kg_ratelimit.sqlite3`) shared by all gunicorn workers of one
+container, so the cap is not multiplied by the worker count; if the file cannot be used the limiter falls back to an in-process window (then ≈ workers × nominal) and
+never blocks on its own fault. The file is container-local and ephemeral (reset by a deploy). The support chat's per-thread *poll* limiter is deliberately in-process
+(see [35](35-support-system.md)); its other limits use this shared store. `KG_RL_DISABLE=1` for tests. Rules overridable via env `KG_RL_<NAME>`.
 
 ## Real-time & requests
 

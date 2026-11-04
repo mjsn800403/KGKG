@@ -146,7 +146,7 @@ sequenceDiagram
 | Registry cache of PG cars | per process, 60 s | `public.car_dbs` |
 | Assistant exact/semantic caches | per process | keyed with `allowed_cars` ([30](30-ai-assistant-deep-dive.md) §30.5) |
 | Embedding lock | per process | one embed at a time |
-| Rate limits | nginx zones (shared) + in-process sliding windows (per worker) | per-worker limits multiply by worker count |
+| Rate limits | nginx zones (shared) + `@rate_limited` counters in a SQLite file shared by the container's workers (in-process fallback) + the support-chat poll limiter (in-process, per worker) | only the fallback and the poll limiter multiply by worker count |
 | Metrics aggregation | per process, batched flush | no per-request write |
 | gunicorn | 3 workers × 8 threads default | I/O-bound reads; the ~2.3 GB embedding model loads once per process |
 

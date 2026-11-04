@@ -100,7 +100,7 @@ if no active owner resolves, support endpoints answer 403 `rbac_no_owner`; recov
   (`kg_frontend/src/utils/eventStreamConnector.js`, [09](09-realtime-sse.md)). The visitor poll endpoint is rate-limited to 30/min/thread (3 s polling = 20/min).
 - **Limits** (`config.py`, override `KG_SC_<NAME>="N/seconds"`, `0/0` disables): poll 30/60 s per thread; send 20/60 s per thread; send_hour 30/3600 s; contact 10/60; csat 5/60; reopen 5/60;
   create 20/600 s per IP; failed-token checks 30/60 s per IP; status 60/60 s per IP. Keyed by thread token, not IP, so shared NATs do not eat each other's allowance. The poll limiter is per
-  gunicorn worker (effective allowance up to workers × value). A limiter fault never takes the chat down (fails open). nginx adds a `kg_chat` zone (60 r/min).
+  gunicorn worker, in process (effective allowance up to workers × value); the other limits use the shared store of `api/ratelimit.py`. A limiter fault never takes the chat down (fails open). nginx adds a `kg_chat` zone (60 r/min).
 - **Load test:** `qa/k6/support_chat_poll.js` (100 VUs / 60 s default) measures polling cost ([32](32-testing-and-qa.md) §32.6); no recorded result is committed **[U]**.
 
 ## 35.8 Privacy and retention

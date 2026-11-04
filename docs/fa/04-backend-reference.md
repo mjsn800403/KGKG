@@ -1,4 +1,4 @@
-<!-- i18n-source: 04-backend-reference.md sha256:f22dbb9124c4 -->
+<!-- i18n-source: 04-backend-reference.md sha256:6d1e84ee06c9 -->
 <div dir="rtl" lang="fa">
 
 # ۰۴ — مرجع بک‌اند (`KG_backend/api`)
@@ -36,8 +36,8 @@ CRUD اعضا/نقش‌ها که اینجا بود (`team_members_view`، `team_
 ### `orggraph_api.py` / `orggraph.py` — بوم گراف سازمانی
 `api/org/graph|nodes|nodes/<id>|nodes/<id>/permission|nodes/<id>/create-user` (نوشتن فقط برای ریشه با `require_root`؛ هر عضو شرکت می‌تواند بخواند) و `api/admin/org/reassign-root/`. `orggraph.py` `NodePermission` یک صندلی را به وضعیت اعمال واقعی کامپایل می‌کند (`sync_node_to_user`)، یال والد بوم را روی `reports_to` آینه می‌کند، تصمیم می‌گیرد چه کسی صفحهٔ تیم را می‌بیند (`user_can_view_team`) و گراف شرکت‌های جدید را می‌کارد. معنا: [06](../06-permissions-rbac.md) بخش ۶٫۶.
 
-### `ratelimit.py` — محدودکنندهٔ درون‌حافظه‌ای با پنجرهٔ ثابت
-`@rate_limited(name, limit, window)`؛ برای هر IP از طریق `X-Real-IP`/آخرین hop در XFF وقتی `KG_TRUST_PROXY=1` (nginx تنظیم می‌کند). سطل‌ها به‌ازای هر فرایند (۳ worker ⇐ حدود ۳ برابر حد اسمی؛ پوشش مستند). برای تست `KG_RL_DISABLE=1`. قواعد با env به نام `KG_RL_<NAME>` قابل override‌اند.
+### `ratelimit.py` — محدودکنندهٔ پنجرهٔ لغزان با مخزن مشترک
+`@rate_limited(name, limit, window)`؛ برای هر IP از طریق `X-Real-IP`/آخرین hop در XFF وقتی `KG_TRUST_PROXY=1` (nginx تنظیم می‌کند). شمارنده‌ها در یک فایل SQLite (`KG_RL_STORE`، پیش‌فرض `/tmp/kg_ratelimit.sqlite3`) هستند که همهٔ worker‌های gunicorn در یک کانتینر مشترکاً استفاده می‌کنند، پس سقف در تعداد worker ضرب نمی‌شود؛ اگر فایل قابل استفاده نباشد محدودکننده به پنجرهٔ درون‌فرایندی برمی‌گردد (آن‌گاه ≈ worker × مقدار اسمی) و هرگز روی خطای خودش مسدود نمی‌کند. فایل محلی کانتینر و موقت است (با دیپلوی صفر می‌شود). برای تست `KG_RL_DISABLE=1`. قواعد با env به نام `KG_RL_<NAME>` قابل override‌اند. محدودکنندهٔ *poll* هر thread در چت پشتیبانی عمداً درون‌فرایندی است (← [35](35-support-system.md))؛ بقیهٔ محدودیت‌های آن از همین مخزن مشترک استفاده می‌کنند.
 
 ## بی‌درنگ و درخواست‌ها
 

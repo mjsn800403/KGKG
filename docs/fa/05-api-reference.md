@@ -1,4 +1,4 @@
-<!-- i18n-source: 05-api-reference.md sha256:1e94fbdda5b4 -->
+<!-- i18n-source: 05-api-reference.md sha256:33ff20fd2ccb -->
 <div dir="rtl" lang="fa">
 
 # ۰۵ — مرجع API
@@ -17,7 +17,7 @@
 | *analytics* | portal + `can_view_analytics` یا `can_manage_team` (`@require_analytics`) |
 | *admin* | `X-Admin-Token`/Bearer برابر مقدار env با نام `KG_ADMIN_TOKEN` **یا** توکن نشست `AdminAuthToken` (`@require_admin_token`) |
 
-**محدودیت‌های نرخ** (`@rate_limited(name, N, window)` در `api/ratelimit.py`: پنجرهٔ لغزان به‌ازای IP کلاینت و به‌ازای هر فرایند worker، پس سقف مؤثر تا تعداد worker × N است؛ اگر خود محدودکننده خطا بدهد fail-open است). پیش‌فرض‌ها از decoratorها خوانده شده: login ‏۱۵/۶۰ ثانیه، verify_otp ‏۱۰/۶۰ ثانیه، resend_otp ‏۳/۶۰ ثانیه، recover_start ‏۵/۶۰ ثانیه، recover_reset ‏۱۰/۶۰ ثانیه، admin_login ‏۲۰/۶۰ ثانیه، admin_otp ‏۱۰/۶۰ ثانیه، activity ‏۱۲۰/۶۰ ثانیه، assist ‏۶۰/۶۰ ثانیه، diagnose ‏۶۰/۶۰ ثانیه، search ‏۹۰/۶۰ ثانیه، click ‏۱۲۰/۶۰ ثانیه، purchase ‏۱۰/۶۰ ثانیه، rate ‏۲۰/۶۰ ثانیه، pin ‏۳۰/۶۰ ثانیه، feedback ‏۳۰/۶۰ ثانیه، kb ‏۳۰۰/۶۰ ثانیه، parts ‏۶۰۰/۶۰ ثانیه. برای هر نقطهٔ پایانی با `KG_RL_<NAME>="N/seconds"` (مقدار `0/0` خاموش) override کنید یا همه را با `KG_RL_DISABLE=1` غیرفعال کنید. بدنهٔ ۴۲۹: `{error:'rate_limited', detail:<پیام فارسی>}` با هدر `Retry-After`. nginx منطقه‌های خودش را جلوتر اضافه می‌کند ([33](33-system-design.md) بخش ۳۳٫۲). نگاشت هر route: [generated/routes.md](../generated/routes.md).
+**محدودیت‌های نرخ** (`@rate_limited(name, N, window)` در `api/ratelimit.py`: پنجرهٔ لغزان به‌ازای IP کلاینت، شمارش‌شده در یک فایل SQLite که worker‌های کانتینر مشترکاً استفاده می‌کنند (`KG_RL_STORE`، پیش‌فرض `/tmp/kg_ratelimit.sqlite3`، موقت)، با جایگزین درون‌فرایندی (آن‌گاه سقف می‌تواند تا worker × N باشد) و fail-open اگر خود محدودکننده خطا بدهد). پیش‌فرض‌ها از decoratorها خوانده شده: login ‏۱۵/۶۰ ثانیه، verify_otp ‏۱۰/۶۰ ثانیه، resend_otp ‏۳/۶۰ ثانیه، recover_start ‏۵/۶۰ ثانیه، recover_reset ‏۱۰/۶۰ ثانیه، admin_login ‏۲۰/۶۰ ثانیه، admin_otp ‏۱۰/۶۰ ثانیه، activity ‏۱۲۰/۶۰ ثانیه، assist ‏۶۰/۶۰ ثانیه، diagnose ‏۶۰/۶۰ ثانیه، search ‏۹۰/۶۰ ثانیه، click ‏۱۲۰/۶۰ ثانیه، purchase ‏۱۰/۶۰ ثانیه، rate ‏۲۰/۶۰ ثانیه، pin ‏۳۰/۶۰ ثانیه، feedback ‏۳۰/۶۰ ثانیه، kb ‏۳۰۰/۶۰ ثانیه، parts ‏۶۰۰/۶۰ ثانیه. برای هر نقطهٔ پایانی با `KG_RL_<NAME>="N/seconds"` (مقدار `0/0` خاموش) override کنید یا همه را با `KG_RL_DISABLE=1` غیرفعال کنید. بدنهٔ ۴۲۹: `{error:'rate_limited', detail:<پیام فارسی>}` با هدر `Retry-After`. nginx منطقه‌های خودش را جلوتر اضافه می‌کند ([33](33-system-design.md) بخش ۳۳٫۲). نگاشت هر route: [generated/routes.md](../generated/routes.md).
 
 **خطاهای رایج:** 401 ‏`{error:'unauthorized'}`؛ 403 ‏`{error:'forbidden', detail}` (detail فارسی برای دروازه‌های محتوا)؛ 400 خطای اعتبارسنجی `{error:<پیام فارسی>}`؛ 405 ‏`{error:'POST only'}`.
 

@@ -62,7 +62,7 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 4. **No new infrastructure until measured need.** The SSE bus is a table in the main database (the `Event` model; SQLite when
    this was written, PostgreSQL `kgkg` since 2026-10-29) because the
    process set (3 gunicorn workers + detached pipeline worker) has exactly one shared,
-   durable medium and no Redis. The rate limiter is per-process in-memory. Each such piece
+   durable medium and no Redis. The rate limiter (`api/ratelimit.py`) keeps its counters in a small SQLite file shared by the workers of one container (`KG_RL_STORE`, default `/tmp/kg_ratelimit.sqlite3`, so it resets when the container is replaced) and falls back to an in-process window if that file is unusable. Each such piece
    documents its envelope and its replacement path (see Scale path below).
 5. **Authorization lives at the lowest layer that serves content.** Per-car access is checked
    in the Django views AND threaded into RAG retrieval as an allow-list (`allowed_cars`), so

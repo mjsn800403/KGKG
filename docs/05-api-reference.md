@@ -27,8 +27,9 @@ Routing: `api/urls.py`. All bodies are JSON; all responses are JSON unless noted
 | *analytics* | portal + `can_view_analytics` or `can_manage_team` (`@require_analytics`) |
 | *admin* | `X-Admin-Token`/Bearer = `KG_ADMIN_TOKEN` env value **or** an `AdminAuthToken` session token (`@require_admin_token`) |
 
-**Rate limits** (`@rate_limited(name, N, window)` in `api/ratelimit.py`: sliding window per client IP
-and per worker process, so the effective cap is up to workers × N; fail-open if the limiter itself errors).
+**Rate limits** (`@rate_limited(name, N, window)` in `api/ratelimit.py`: sliding window per client IP,
+counted in a SQLite file shared by the container's workers (`KG_RL_STORE`, default `/tmp/kg_ratelimit.sqlite3`, ephemeral), with an in-process fallback (then the cap can be up to
+workers × N) and fail-open if the limiter itself errors).
 Defaults read from the decorators: login 15/60s, verify_otp 10/60s, resend_otp 3/60s, recover_start 5/60s,
 recover_reset 10/60s, admin_login 20/60s, admin_otp 10/60s, activity 120/60s, assist 60/60s, diagnose 60/60s,
 search 90/60s, click 120/60s, purchase 10/60s, rate 20/60s, pin 30/60s, feedback 30/60s, kb 300/60s,
