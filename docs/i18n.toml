@@ -37,4 +37,5 @@ files = [
   "16-parts-catalog.md",
   "17-evaluation.md",
   "13-guidance-system.md",
+  "20-runbooks.md",
 ]
