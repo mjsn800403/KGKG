@@ -131,12 +131,29 @@ when the fix reaches `main` and CodeQL rescans. **Unresolved** stays open. Nothi
 - **New errors.** The crawler/Chrome/build/ingest/audit/monitoring code logs the exception (logger `kgkg.*`, with traceback) and returns or stores
   only the exception class (`OSError`) or a fixed Persian sentence ending in "جزئیات در لاگ سرور". Our own `BuildError` validation messages are
   still shown. `DataQualityRun.error` no longer stores a traceback.
-- **Stored errors.** Rows written before the fix still hold raw text. They are not rewritten. `safepath.public_error()` / `scrub_errors()` reduce
-  every `error` / `db_error` value (and the detail of a `*_failed` data-quality action) on the way out of the data-quality, system, pipeline and
-  `job_dict` (also used by the event stream) responses: a short plain phrase passes, anything with a path, URL, quote or traceback becomes its
-  exception class name(s), or `error`.
+- **Stored errors (fail closed).** Rows written before the fix still hold raw text. They are not rewritten. `safepath.public_error()` /
+  `scrub_errors()` reduce every `error` / `db_error` value, an audit `integrity` verdict and the detail of a `*_failed` data-quality action on
+  the way out of the data-quality, system, pipeline and `job_dict` (also used by the event stream) responses. Text is returned unchanged only
+  when it is a phrase our own code writes (`SAFE_PHRASES`) or a list of our pipeline stage keys; otherwise it becomes the verified
+  exception class name(s) it contains (builtins plus a short list of library errors), or `error`. Short text without any punctuation
+  ("password for admin is hunter2") is therefore not echoed either. Operator trade-off: an unknown class name also shows as `error`.
+- **Worker log tail.** `ProcessingJob.log_tail` is the pipeline worker's rolling log (`run_pipeline.Runner.log`), which also tees the output of
+  the commands it calls. Verified exposure: stage and crash lines carried `Class: message` and a traceback's last line. The worker now logs
+  that detail to the `kgkg.run_pipeline` logger and writes only the class; the disk-guard line keeps its own size message. Older rows and the
+  crawler `log_tail` of the TIS / partsouq status are passed through `public_log_tail()`: `!!` error lines lose their message, traceback
+  frames are replaced, `Class: message` is cut after the class and credential-looking values (`password=`, `token:`, `user:pass@`) are masked.
+  This is a redaction, not an allow-list: other free text from the teed commands (for example file names in progress lines) is kept so the
+  diagnostics stay useful.
+- **Data-quality actions.** `quarantine_corrupt`, `merge_duplicate` and `flag_suspect_copy` details are our own audit-trail text (moved file
+  paths, row counts); they are not exception text and are unchanged.
 - **Admin access view.** `apply_user_access` validates the shape of every entry before touching the database (`car_id` an integer or digit
   string, `documents` a list of strings) and the view answers `invalid accesses payload` for any `ValueError`.
-- **Not changed.** `ProcessingJob.log_tail` is the worker's own log and is still returned to admins as is; it can contain exception text.
-  `hostjobs` results returned by `tis_start_chrome` are host-helper text, not reviewed here. `apply_managed_access` (company-manager API) was
-  not touched.
+- **Checked, no client path.** `hostjobs` errors (the daemon's `RuntimeError(stderr)` from `systemd-run`, spool failures) are caught and
+  discarded in `pipeline.launch_worker` / `cancel_job`, and replaced by a fixed message in the Chrome / crawler start paths; the
+  `tis_start_chrome` result pair is our own constant text. `apply_managed_access` has no caller outside tests (`team.py` imports it but
+  never calls it), so it has no response path today; it should get the same shape check as `apply_user_access` if it is wired to an endpoint.
+- **Not reviewed.** `notifications/worker.py` stores `provider raised: <exc>` in the outbox row; it is not one of the CodeQL alerts and
+  was not traced to a response. `log_tail` text produced by the commands the worker tees is only redacted, not proven free of paths.
+- **Review finding fixed (Codex P2 on PR #98).** A review showed that `remediate()` takes a `log` callback parameter that shadowed the module
+  logger: the new `log.warning` in the WAL-checkpoint handler would raise `AttributeError` and fail the whole audit. The logger is now
+  `_log`; regression tests fail on the old code.

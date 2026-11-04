@@ -39,7 +39,7 @@ from django.utils import timezone
 
 from .rag import config
 
-log = logging.getLogger('kgkg.dataquality')
+_log = logging.getLogger('kgkg.dataquality')   # not `log`: run_audit/remediate take a `log` callback
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ def audit_vehicle_db(path):
         con = _ro(path)
         cur = con.cursor()
     except Exception as e:
-        log.warning('data-quality: cannot open %s', stem, exc_info=True)
+        _log.warning('data-quality: cannot open %s', stem, exc_info=True)
         info['error'] = e.__class__.__name__      # the message names the file
         info['integrity'] = 'unreadable'
         return info
@@ -204,7 +204,7 @@ def audit_vehicle_db(path):
             h.update(f'{rel}|{clen}\n'.encode('utf-8', 'replace'))
         info['fingerprint'] = h.hexdigest()
     except sqlite3.DatabaseError as e:
-        log.warning('data-quality: integrity check failed for %s', stem, exc_info=True)
+        _log.warning('data-quality: integrity check failed for %s', stem, exc_info=True)
         info['error'] = e.__class__.__name__
         if info['integrity'] == 'ok':
             info['integrity'] = 'error'
@@ -530,7 +530,7 @@ def remediate(vehicles, duplicates, log=None):
             con.close()
             actions.append({'action': 'wal_checkpoint', 'stem': v['stem']})
         except sqlite3.Error as e:
-            log.warning('data-quality: wal checkpoint failed for %s', v['stem'], exc_info=True)
+            _log.warning('data-quality: wal checkpoint failed for %s', v['stem'], exc_info=True)
             actions.append({'action': 'wal_checkpoint_failed', 'stem': v['stem'],
                             'detail': e.__class__.__name__})
 
@@ -555,7 +555,7 @@ def run_audit_to_db(fix=False):
     except Exception as e:
         # The trace goes to the server log; the row (and the API) keep only the
         # exception class (CodeQL py/stack-trace-exposure, KGTEC-14).
-        log.exception('data-quality audit failed')
+        _log.exception('data-quality audit failed')
         run.status = 'failed'
         run.error = e.__class__.__name__
     run.finished_at = timezone.now()

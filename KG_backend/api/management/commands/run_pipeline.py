@@ -15,11 +15,11 @@ Contract:
 * a stage failure is recorded on that stage and — where safe — later stages
   still run; the job ends 'failed' only when the core work could not proceed.
 """
+import logging
 import os
 import signal
 import threading
 import time
-import traceback
 
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
@@ -28,6 +28,10 @@ from django.utils import timezone
 
 from api import dataquality, events, monitoring, pipeline
 from api.models import PipelineSettings, ProcessingJob
+
+# Exception detail goes here (the worker's journal), not into the job row or log tail
+# that the admin API serves (CodeQL py/stack-trace-exposure, KGTEC-14).
+_log = logging.getLogger('kgkg.run_pipeline')
 
 
 def parse_worker_count():
@@ -92,6 +96,12 @@ class Runner:
             self._log_lines.append(f'[{stamp}] {line}')
             if len(self._log_lines) > 400:
                 del self._log_lines[:100]
+
+    @staticmethod
+    def _safe(exc):
+        """The message of our own disk-guard RuntimeError (a size, no path); only the
+        class name of anything else (an OSError from statvfs names a path)."""
+        return str(exc) if type(exc) is RuntimeError else exc.__class__.__name__
 
     def _log_tail(self):
         with self._lock:
@@ -217,9 +227,9 @@ class Runner:
             raise
         except Exception as e:
             s['status'] = 'failed'
-            s['error'] = f'{e.__class__.__name__}: {e}'[:500]
+            _log.warning('pipeline stage %s failed', key, exc_info=True)
+            s['error'] = e.__class__.__name__
             self.log(f'!! stage {key} failed: {s["error"]}')
-            self.log(traceback.format_exc().splitlines()[-1])
             return False
         finally:
             s['finished_at'] = timezone.now().isoformat()
@@ -280,7 +290,7 @@ class Runner:
         try:
             ingest.check_disk_guard()
         except Exception as e:
-            self.log(f'disk guard tripped before parse: {e}')
+            self.log(f'disk guard tripped before parse: {self._safe(e)}')
             raise _Canceled()      # low disk => resumable pause, not a failure
         workers = min(parse_worker_count(), len(todo))
         self.log(f'parse stage: {len(todo)} zip(s) with {workers} parallel process(es)')
@@ -302,7 +312,8 @@ class Runner:
                     break
                 except Exception as e:
                     done += 1
-                    errors.append(f'worker: {e.__class__.__name__}: {e}')
+                    _log.warning('parse worker failed', exc_info=True)
+                    errors.append(f'worker: {e.__class__.__name__}')
                     continue
                 done += 1
                 s['items_done'] = done
@@ -320,7 +331,7 @@ class Runner:
                     try:
                         ingest.check_disk_guard()
                     except Exception as e:
-                        self.log(f'disk guard tripped: {e}')
+                        self.log(f'disk guard tripped: {self._safe(e)}')
                         aborted = True
                         break
         finally:
@@ -363,8 +374,9 @@ class Runner:
             try:
                 vehicleschema.build_for_stem(stem)
             except Exception as e:
-                errors.append(f'{stem}: {e.__class__.__name__}: {e}')
-                self.log(f'!! schema failed for {stem}: {e}')
+                _log.warning('schema build failed for %s', stem, exc_info=True)
+                errors.append(f'{stem}: {e.__class__.__name__}')
+                self.log(f'!! schema failed for {stem}: {e.__class__.__name__}')
             s['items_done'] = i + 1
             self.update_overall()
             self.persist_progress()
@@ -457,8 +469,9 @@ class Runner:
                 prev = self.settings_row.diag_secs_per_car or dt
                 self.settings_row.diag_secs_per_car = round(0.7 * prev + 0.3 * dt, 1)
             except Exception as e:
-                errors.append(f'{stem}: {e.__class__.__name__}: {e}')
-                self.log(f'!! diag failed for {stem}: {e}')
+                _log.warning('diagnostic build failed for %s', stem, exc_info=True)
+                errors.append(f'{stem}: {e.__class__.__name__}')
+                self.log(f'!! diag failed for {stem}: {e.__class__.__name__}')
             s['items_done'] = i + 1
             self.update_overall()
             self.persist_progress()
@@ -483,8 +496,9 @@ class Runner:
             try:
                 cardb_pg.adopt(ragcfg_path(stem), log=self.tee.write)
             except Exception as e:
-                errors.append(f'{stem}: {e.__class__.__name__}: {e}')
-                self.log(f'!! PostgreSQL move failed for {stem}: {e}')
+                _log.warning('PostgreSQL move failed for %s', stem, exc_info=True)
+                errors.append(f'{stem}: {e.__class__.__name__}')
+                self.log(f'!! PostgreSQL move failed for {stem}: {e.__class__.__name__}')
             s['items_done'] = i + 1
             self.update_overall()
             self.persist_progress()
@@ -538,8 +552,8 @@ class Runner:
             self.log('cancel requested — checkpointed cleanly; resume later')
             final = 'paused'
         except Exception as e:
-            self.log(f'!! worker crashed: {e}')
-            self.log(traceback.format_exc().splitlines()[-1])
+            _log.exception('pipeline worker crashed')
+            self.log(f'!! worker crashed: {e.__class__.__name__}')
             final = 'failed'
             failed_stages = ['worker']
         finally:

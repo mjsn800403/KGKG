@@ -9,10 +9,10 @@ response or in a stored error field. Background work is mocked; nothing is start
 """
 import sqlite3
 import tempfile
+import types
 from pathlib import Path
 from unittest import mock
 
-from django.test import TestCase
 from django.utils import timezone
 
 from .models import (
@@ -176,25 +176,190 @@ class ErrorExposureTests(AdminCase):
         self.assertEqual((pkg.status, pkg.error), ('failed', 'ValueError'))
 
 
-class SafeErrorTextTests(TestCase):
-    def test_public_error_reduces_anything_that_can_carry_details(self):
-        from .safepath import public_error, scrub_errors
+class WalCheckpointFailureTests(AdminCase):
+    """remediate() has a ``log`` callback parameter; the module logger must not be named ``log``
+    or a failed checkpoint raises AttributeError and the whole audit is lost (Codex P2 on PR #98)."""
+
+    def _vehicle(self):
+        return {'stem': 'x', 'size_mb': 0.0, 'integrity': 'ok', 'error': None, 'total_nodes': 0,
+                'content_leaves': 0, 'empty_leaves': 0, 'content_mb': 0.0, 'sections': [],
+                'fingerprint': None}
+
+    def _broken_sqlite(self):
+        return types.SimpleNamespace(
+            connect=mock.Mock(side_effect=sqlite3.OperationalError('unable to open /srv/secret/x.db-wal')),
+            Error=sqlite3.Error, DatabaseError=sqlite3.DatabaseError)
+
+    def test_remediate_records_a_failed_checkpoint_with_and_without_a_log_callback(self):
+        from . import dataquality
+        from .rag import config
+        with tempfile.TemporaryDirectory() as tmp:
+            wh = Path(tmp)
+            (wh / 'x.db').write_bytes(b'')
+            (wh / 'x.db-wal').write_bytes(b'')
+            vehicles = [dict(self._vehicle(), status='complete')]
+            want = [{'action': 'wal_checkpoint_failed', 'stem': 'x', 'detail': 'OperationalError'}]
+            for callback in (None, [].append):        # the default lambda and a real callback
+                with mock.patch.object(config, 'WAREHOUSE_DIR', wh), \
+                     mock.patch('api.dataquality.sqlite3', self._broken_sqlite()), \
+                     self.assertLogs('kgkg.dataquality', 'WARNING') as logs:
+                    actions = dataquality.remediate(vehicles, [], log=callback)
+                self.assertEqual(actions, want)
+                self.assertNotIn('/srv/secret/x.db-wal', ' '.join(r.getMessage() for r in logs.records))
+
+    def test_a_failed_checkpoint_does_not_fail_the_audit_and_stays_clean_in_the_api(self):
+        from . import dataquality
+        from .rag import config
+        with tempfile.TemporaryDirectory() as tmp:
+            wh = Path(tmp)
+            (wh / 'x.db').write_bytes(b'')
+            (wh / 'x.db-wal').write_bytes(b'')
+            with mock.patch.object(config, 'WAREHOUSE_DIR', wh), \
+                 mock.patch.object(config, 'DIAG_DIR', wh / 'diag'), \
+                 mock.patch.object(config, 'car_db_files', return_value=[wh / 'x.db']), \
+                 mock.patch('api.dataquality.audit_vehicle_db', return_value=self._vehicle()), \
+                 mock.patch('api.dataquality._rag_indexed_stems', return_value=set()), \
+                 mock.patch('api.dataquality._static_dirs', return_value=set()), \
+                 mock.patch('api.dataquality.sqlite3', self._broken_sqlite()), \
+                 self.assertLogs('kgkg.dataquality', 'WARNING'):
+                run = dataquality.run_audit_to_db(fix=True)
+        self.assertEqual((run.status, run.error), ('done', ''))
+        self.assertEqual(run.actions, [{'action': 'wal_checkpoint_failed', 'stem': 'x',
+                                        'detail': 'OperationalError'}])
+        r = self.get('/api/admin/data-quality/')
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn('/srv/secret', r.content.decode())
+        self.assertEqual(r.json()['report']['actions'][0]['detail'], 'OperationalError')
+
+
+class FailClosedErrorTextTests(AdminCase):
+    """Stored error text that has no suspicious punctuation is still not returned."""
+
+    PLAIN_SECRETS = ('password for admin is hunter2', 'connection refused by host db internal',
+                     'Alice Smith alice smith', 'رمز عبور کاربر رضا ۱۲۳۴', 'FooBarError',
+                     'parse; rag; password hunter2', 'could not connect to server', 'x' * 200)
+
+    def test_public_error_returns_only_known_phrases_stage_keys_and_known_exception_classes(self):
+        from .safepath import public_error
+        for raw in self.PLAIN_SECRETS:
+            self.assertEqual(public_error(raw), 'error', raw)
         cases = {
             '': '', None: None, 'OSError': 'OSError', 'skipped by admin': 'skipped by admin',
-            'parse; rag': 'parse; rag',
+            'parse; rag': 'parse; rag', 'rag': 'rag',
             'به دلیل خطا در مرحله RAG اجرا نشد': 'به دلیل خطا در مرحله RAG اجرا نشد',
             'OSError: [Errno 2] No such file: /srv/x': 'OSError',
+            'ValueError: password hunter2': 'ValueError',
             'cannot open: unable to open database file': 'error',
             'a/b': 'error', 'C:\\x': 'error', "it's": 'error',
-            'x' * 200: 'error',
             OLD_TRACEBACK: 'OperationalError',
             'worker: ValueError: a | s: sqlite3.OperationalError: b': 'ValueError, OperationalError',
         }
         for raw, want in cases.items():
             self.assertEqual(public_error(raw), want, raw)
-        self.assertEqual(
-            scrub_errors({'error': 'X: /a', 'n': [{'db_error': 'Y: /b', 'detail': '/keep'}], 'ok': 1}),
-            {'error': 'error', 'n': [{'db_error': 'error', 'detail': '/keep'}], 'ok': 1})
+
+    def test_scrub_errors_reduces_error_keys_integrity_and_log_tail_only(self):
+        from .safepath import scrub_errors
+        got = scrub_errors({
+            'error': 'X: /a', 'integrity': '*** in database main *** Page 5 is never used',
+            'n': [{'db_error': 'Y: /b', 'integrity': 'ok', 'detail': '/keep'}], 'ok': 1,
+            'log_tail': '[10:00:00] !! diag failed for A: boom password=hunter2'})
+        self.assertEqual(got, {
+            'error': 'error', 'integrity': 'error',
+            'n': [{'db_error': 'error', 'integrity': 'ok', 'detail': '/keep'}], 'ok': 1,
+            'log_tail': '[10:00:00] !! diag failed for A'})
+
+    def test_plain_historical_errors_do_not_reach_any_admin_response(self):
+        DataQualityRun.objects.create(
+            status='failed', finished_at=timezone.now(), error='password for admin is hunter2',
+            vehicles=[{'stem': 'a', 'error': 'could not connect to host db internal',
+                       'integrity': 'wrong number of entries in index sqlite_autoindex_x'}])
+        ZipPackage.objects.create(path='/inbox/p.zip', zip_name='p.zip', status='failed',
+                                  error='Wrong credentials for ftp user bob')
+        ProcessingJob.objects.create(status='failed', error='database password is hunter2',
+                                     stages=[{'key': 'rag', 'error': 'token for bob expired'}])
+        SystemAlert.objects.create(key='k', message='m', context={'error': 'bob forgot the password'})
+        bodies = [self.get(u).content.decode() for u in
+                  ('/api/admin/data-quality/', PIPELINE, '/api/admin/system/')]
+        for body in bodies:
+            for secret in ('hunter2', 'bob', 'ftp', 'credentials', 'internal', 'sqlite_autoindex'):
+                self.assertNotIn(secret, body, secret)
+
+
+class WorkerLogTailTests(AdminCase):
+    TAIL = '\n'.join([
+        '[10:00:01] worker started (pid 12, attempt 1)',
+        '[10:00:02] !! stage rag failed: OSError: [Errno 2] No such file: /srv/secret/x.db',
+        '[10:00:03] !! diag failed for Camry: unable to open /srv/secret/diag.db',
+        'Traceback (most recent call last):',
+        '  File "/srv/secret/a.py", line 3, in f',
+        'sqlite3.OperationalError: unable to open /srv/secret/x',
+        '[10:00:04] connecting postgres://kgkg:hunter2@db-internal/kgkg',
+        '[10:00:05] request failed password=hunter2 token: abc123',
+        '[10:00:06] parse stage: 3 parsed, 0 failed, 0 skipped/remaining',
+    ])
+
+    def test_job_dict_removes_messages_frames_and_credentials_from_the_log_tail(self):
+        from . import pipeline
+        job = ProcessingJob.objects.create(status='failed', log_tail=self.TAIL)
+        tail = pipeline.job_dict(job)['log_tail']
+        for secret in ('/srv/secret', 'hunter2', 'abc123', 'File "', 'Traceback'):
+            self.assertNotIn(secret, tail, secret)
+        lines = tail.split('\n')
+        self.assertEqual(lines[0], '[10:00:01] worker started (pid 12, attempt 1)')
+        self.assertEqual(lines[1], '[10:00:02] !! stage rag failed: OSError')
+        self.assertEqual(lines[2], '[10:00:03] !! diag failed for Camry')
+        self.assertEqual(lines[5], 'sqlite3.OperationalError')
+        self.assertEqual(lines[-1], '[10:00:06] parse stage: 3 parsed, 0 failed, 0 skipped/remaining')
+        self.assertIn('[redacted]', tail)
+
+    def test_the_admin_pipeline_view_and_crawler_status_serve_the_same_redaction(self):
+        ProcessingJob.objects.create(status='failed', log_tail=self.TAIL)
+        crawl = {'running': False, 'log_tail': self.TAIL}
+        with mock.patch('api.adminops.tis_crawler.status', return_value=dict(crawl)), \
+             mock.patch('api.adminops.partsouq_crawler.status', return_value=dict(crawl)):
+            r = self.get(PIPELINE)
+        body = r.content.decode()
+        for secret in ('/srv/secret', 'hunter2', 'abc123', 'Traceback'):
+            self.assertNotIn(secret, body, secret)
+
+    def test_a_failing_stage_writes_only_the_class_into_the_job_and_its_log(self):
+        from .management.commands import run_pipeline
+        job = ProcessingJob.objects.create(
+            status='running', stages=[{'key': 'rag', 'label': 'rag', 'status': 'pending',
+                                       'items_total': 2, 'items_done': 0, 'error': ''}])
+        runner = run_pipeline.Runner(job)
+
+        def boom(stage):
+            raise OSError('/srv/secret/x.db unreadable for password=hunter2')
+
+        with self.assertLogs('kgkg.run_pipeline', 'WARNING'):
+            self.assertFalse(runner.run_stage('rag', boom))
+        job.refresh_from_db()
+        self.assertEqual(job.stages[0]['error'], 'OSError')
+        self.assertNotIn('/srv/secret', runner._log_tail())
+        self.assertNotIn('hunter2', runner._log_tail())
+        self.assertIn('!! stage rag failed: OSError', runner._log_tail())
+
+
+class PartsouqStartTests(AdminCase):
+    URL = ('https://partsouq.com/en/catalog/toyota/vehicle/gcc/2020/corolla/zre/'
+           'category/groups/vin/JTDKBRFU5J3000000')
+
+    def test_a_failed_partsouq_start_returns_a_fixed_message(self):
+        from . import partsouq_crawler
+        with mock.patch('api.partsouq_crawler.hostjobs.enabled', return_value=True), \
+             mock.patch('api.partsouq_crawler._pids', return_value=[]), \
+             mock.patch('api.partsouq_crawler.tis_crawler._pids', return_value=[]), \
+             mock.patch('api.partsouq_crawler.tis_crawler._chrome', return_value={'reachable': True}), \
+             mock.patch('api.partsouq_crawler.hostjobs.call', side_effect=OSError('/srv/secret/spool')), \
+             self.assertLogs('kgkg.partsouq_crawler', 'WARNING'):
+            pid, err = partsouq_crawler.start(self.URL)
+            r = self.post(PIPELINE, {'action': 'ps_start', 'url': self.URL})
+        self.assertIsNone(pid)
+        self.assertNotIn('/srv/secret', err)
+        self.assertEqual(r.status_code, 409)
+        self.assertNotIn('/srv/secret', r.content.decode())
+        self.assertIn('جزئیات در لاگ سرور', r.json()['error'])
 
 
 class AdminUserAccessInputTests(AdminCase):

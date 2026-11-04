@@ -51,7 +51,7 @@ from django.utils import timezone
 
 from . import hostjobs
 from .rag import config
-from .safepath import public_error, scrub_errors
+from .safepath import public_error, public_log_tail, scrub_errors
 
 HEARTBEAT_EVERY_S = 5
 STALL_AFTER_S = 180            # heartbeat older than this + dead pid => stalled
@@ -544,11 +544,12 @@ def job_dict(job):
         'worker_alive': _pid_alive(job.pid) if job.status == 'running' else None,
         'attempts': job.attempts,
         # Stage errors were stored as 'Class: message' (paths, SQL); only the
-        # class and the phrase reach a client (KGTEC-14). log_tail is the
-        # worker's own log and stays as is.
+        # class and the phrase reach a client (KGTEC-14). log_tail is the worker's
+        # free-form log: error lines lose their message, traceback frames and
+        # credential-looking values are removed (older rows hold them).
         'stages': scrub_errors(job.stages),
         'progress': scrub_errors(job.progress),
-        'log_tail': job.log_tail[-2500:],
+        'log_tail': public_log_tail(job.log_tail[-2500:]),
         'error': public_error(job.error),
         'resumable': job.status in type(job).RESUMABLE,
     }
