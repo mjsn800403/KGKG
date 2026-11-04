@@ -47,6 +47,12 @@
 | [۳۸ — ماتریس وضعیت پیاده‌سازی و بهره‌برداری](38-implementation-status-matrix.md) | [38-implementation-status-matrix.md](../38-implementation-status-matrix.md) |
 | [۳۹ — راهنمای شواهد ارزیابی](39-evaluation-evidence-guide.md) | [39-evaluation-evidence-guide.md](../39-evaluation-evidence-guide.md) |
 | [۴۰ — راهنمای دسترسی به مستندات](40-documentation-access-guide.md) | [40-documentation-access-guide.md](../40-documentation-access-guide.md) |
+| [۴۱ — ارزیابی پوشش مستندات و فهرست کارهای باقی‌مانده](41-documentation-coverage-and-backlog.md) | [41-documentation-coverage-and-backlog.md](../41-documentation-coverage-and-backlog.md) |
+| [۴۲ — مرجع معماری فرانت‌اند](42-frontend-architecture.md) | [42-frontend-architecture.md](../42-frontend-architecture.md) |
+| [۴۳ — نمودارهای معماری و جریان داده](43-architecture-diagrams.md) | [43-architecture-diagrams.md](../43-architecture-diagrams.md) |
+| [۴۴ — چرخهٔ عمر داده](44-data-lifecycle.md) | [44-data-lifecycle.md](../44-data-lifecycle.md) |
+| [راهنمای کاربر](../manuals/fa/01-user-guide.md) · [راهنمای کارکنان و ادمین](../manuals/fa/02-staff-admin-guide.md) | فقط فارسی |
+| [۴۷ — فهرست پیگیری مهندسی](../47-engineering-followups.md) | فقط انگلیسی (فهرست داخلی) |
 
 قواعد ترجمه: شناسه‌ها، مسیر فایل‌ها، دستورات، نام جدول‌ها و کلیدهای پیکربندی عیناً حفظ می‌شوند؛ متن توضیحی فارسی است؛ برچسب‌های شواهد (`[C]`، `[S]`، `[D]`، `[H]`، `[U]`) ترجمه نمی‌شوند. اسناد تاریخی (ADRها و CHANGELOG) به‌عنوان سابقه می‌مانند و ترجمه یا بازنویسی نمی‌شوند. سندهای تولیدشده (`docs/generated/`) فقط انگلیسی هستند چون از کد ساخته می‌شوند.
 

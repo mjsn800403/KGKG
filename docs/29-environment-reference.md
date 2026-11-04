@@ -43,7 +43,7 @@ Related: [11-operations-deployment.md](11-operations-deployment.md), [25-ops-inv
 | `KG_PG_PORT` | `5432` | `settings.py:151`; also `api/rag/config.py:688` | Port; also forwarded into the pgvector DSN. |
 | `KG_PG_TEST_NAME` | unset | `settings.py:157` | Name of Django's test database. The gate sets a per-run name (`test_kgkg_gate_$$`) so a CI gate and a deploy gate cannot drop each other's database. |
 | `KG_CARDB_ADMIN_DSN` | `dbname=kgkg_vec` | `api/cardb_pg.py:203` | libpq DSN used by `adopt()`/loaders to create and fill per-car schemas in `kgkg_vec`. Requires create-schema rights. See [23-data-layer.md](23-data-layer.md). |
-| `RAG_PGVEC_DB` | `kgkg_vec` | `api/rag/config.py:686` | Database name of the optional pgvector mirror. Active only when `RAG_VEC_BACKEND`/`RAG_FTS_BACKEND` select PostgreSQL. |
+| `RAG_PGVEC_DB` | `kgkg_vec` | `api/rag/config.py:686` | Database name of the pgvector store. **Set to PostgreSQL in production** (`RAG_VEC_BACKEND=pgvector`, `RAG_FTS_BACKEND=pg`, observed 2026-11-04); active only when `RAG_VEC_BACKEND`/`RAG_FTS_BACKEND` select PostgreSQL. |
 | `RAG_INDEX_DB` | `_rag/index.rag.db` | `api/rag/config.py:33` | Alternate RAG index file for offline experiments. Unset in production. |
 | `RAG_PARTS_DB` | resolved by `config.py:66` | `api/rag/config.py:66` | Override for the parts catalog DB used by the assistant. |
 | `RAG_FEEDBACK_DB` | `_rag/feedback.db` | `api/rag/config.py:654` | Sidecar SQLite with query log and ratings. **Staging/QA stacks mount production's `_rag/` and must set this**, otherwise their queries and ratings land in production's store and re-rank live results. |

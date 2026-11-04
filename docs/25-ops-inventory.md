@@ -90,7 +90,7 @@ after any change to units or directories, and move the date at the top of sectio
 | `ops/umami/*` | cookieless analytics; nginx exposes only the tracker script and collect endpoint under `/stats/` |
 | `ops/qa/*` | nightly QA service and timer (01:30 UTC) |
 | `ops/outbox/*` | unit templates for the notification outbox (not installed; `ExecStart` is a placeholder) |
-| `ops/rag/*` | offline experiments: pgvector/FTS loaders and benchmarks, fusion sweep, paired significance, candidate dump. Not run in production paths |
+| `ops/rag/*` | offline experiments: pgvector/FTS loaders and benchmarks, fusion sweep, paired significance, candidate dump. The pgvector/FTS loaders populate the store that production reads (`RAG_VEC_BACKEND=pgvector`, `RAG_FTS_BACKEND=pg`, observed 2026-11-04); benchmarks and sweeps are offline |
 | `ops/cardb/*` | PostgreSQL car loader and parity check ([23](23-data-layer.md)) |
 | `ops/partsouq/partsouq_vin_crawl.py` | polite one-vehicle Partsouq crawl; stops on a persistent Cloudflare challenge |
 | `ops/security/*` | bandit baseline, npm audit allow-list and gate (`npm_audit_gate.mjs`: fails only on non-allow-listed advisories at or above a severity) |
