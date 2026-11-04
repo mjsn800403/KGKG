@@ -16,4 +16,6 @@ files = [
   "02-architecture.md",
   "03-data-model.md",
   "04-backend-reference.md",
+  "05-api-reference.md",
+  "06-permissions-rbac.md",
 ]

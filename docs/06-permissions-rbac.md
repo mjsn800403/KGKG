@@ -106,8 +106,8 @@ selectable role *labels*. What replaced it:
 - `reports_to` is kept mirrored from the canvas parent edges (`sync_reports_to_from_graph`) because analytics ordering and
   `enforce_org_consistency` still use it. Break-glass: the platform admin can move the root onto another user (`api/admin/org/reassign-root/`,
   `reassign_root`), and `add_root_on_top` transfers 0-level ownership without redrawing the chart.
-- New companies get a graph seeded (`seed_graph_for_company`: root = the top person, who holds the company's whole purchased scope); admin-created
-  employees are seated under the root (`seat_new_user`).
+- A company's graph is seeded on first use (`seed_graph_for_company`, called from the org API and from root reassignment: root = the top person, who holds the company's whole purchased scope); admin-created
+  employees are seated under the root (`seat_new_user`, called from the admin user-create path).
 
 **Legacy invariants that still run:** `enforce_org_consistency(company_id)` (called from the admin user-update path) re-parents any user whose
 `reports_to` no longer points to a strictly higher legacy rank, walking the old chain upward (`find_valid_supervisor`) and falling back to the company's top

@@ -352,3 +352,13 @@ review_days = 45
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-04
 review_days = 45
+
+["fa/05-api-reference.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45
+
+["fa/06-permissions-rbac.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-04
+review_days = 45

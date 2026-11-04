@@ -125,6 +125,31 @@ response / 8 h resolution · normal 8 h / 48 h · low 24 h / 120 h. State per ti
 
 ## 5.7a Product feedback
 
+General product feedback is deliberately not a ticket (no SLA), see `api/feedback.py`.
+
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
+| `/api/feedback/submit/` | POST | portal | `{page?, rating? 1..5, comment?}` — either a rating or a comment is required. Rate-limited `feedback` 30/60s. Emits to the admin audience |
+| `/api/admin/feedback/` | GET | admin | `?days=30` — feed plus totals and a per-page breakdown |
+
+## 5.7b Knowledge base
+
+Articles have a **named owner**, a review interval (`is_stale` = never reviewed or
+past the interval), append-only revisions, and optional provenance from the ticket
+they were promoted out of. Code: `api/knowledge.py`.
+
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
+| `/api/kb/` | GET | portal | `?q=&category=` — published, customer-facing articles. A `q=` search is logged with its result count (`KbSearchLog`); browsing the index is not |
+| `/api/kb/<slug>/` | GET | portal | Article; counts a view |
+| `/api/kb/<slug>/vote/` | POST | portal | `{helpful: bool}` |
+| `/api/admin/kb/` | GET/POST | admin | GET everything (`?status=`, `?audience=`, `?stale=1`); POST `{title, slug, body, category?, audience?, status?, review_interval_days?}`. `slug` must match `^[a-zA-Z0-9][-a-zA-Z0-9_]*$` — what the reader's `<slug:slug>` route can match — so a published article is always reachable by its own URL |
+| `/api/admin/kb/<id>/` | GET/POST | admin | GET with revision history. POST `{title?, body?, category?, status?, audience?, owner_id?, review_interval_days?, reviewed?, note?}` — a **text** change appends a revision and bumps the version; a review, a status change or a reassignment does not |
+
+## 5.7c Support chat (anonymous visitor and staff inbox)
+
+Moved here from under 5.7a, where its rows had been placed without a heading. Semantics, state machine, limits and RBAC: [35-support-system.md](35-support-system.md). Off for new visitor threads unless `KG_SUPPORT_CHAT_ENABLED=1`.
+
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
 | `/api/support-chat/status/` | GET | public | `{enabled, mode: live\|async, reply_target_minutes}`; optional `?intent=sales\|demo\|technical\|other` asks about one intent (live only if someone who can answer THAT intent is available, once roles are enforced; 400 for an unknown intent). `live` only when a staff member is connected (pinged in the last 60 s) AND declared available. `reply_target_minutes` is `null` unless the owner sets `KG_SUPPORT_REPLY_TARGET_MINUTES`; the internal ticket SLA is never exposed. Limit `status_ip` |
@@ -146,22 +171,6 @@ response / 8 h resolution · normal 8 h / 48 h · low 24 h / 120 h. State per ti
 | `/api/admin/support-chat/threads/<id>/intent/` | POST | admin session (person) | `{intent: sales\|demo\|technical\|other}` |
 | `/api/admin/support-chat/threads/<id>/spam/` | POST | admin session (person) | Spam: the visitor token stops working (404); `restore` undoes it |
 | `/api/admin/support-chat/threads/<id>/restore/` | POST | admin session (person) | Spam back to `waiting_staff` |
-| `/api/feedback/submit/` | POST | portal | `{page?, rating? 1..5, comment?}` — either a rating or a comment is required. Rate-limited `feedback` 30/60s. Emits to the admin audience |
-| `/api/admin/feedback/` | GET | admin | `?days=30` — feed plus totals and a per-page breakdown |
-
-## 5.7b Knowledge base
-
-Articles have a **named owner**, a review interval (`is_stale` = never reviewed or
-past the interval), append-only revisions, and optional provenance from the ticket
-they were promoted out of. Code: `api/knowledge.py`.
-
-| Endpoint | Method | Auth | Notes |
-|---|---|---|---|
-| `/api/kb/` | GET | portal | `?q=&category=` — published, customer-facing articles. A `q=` search is logged with its result count (`KbSearchLog`); browsing the index is not |
-| `/api/kb/<slug>/` | GET | portal | Article; counts a view |
-| `/api/kb/<slug>/vote/` | POST | portal | `{helpful: bool}` |
-| `/api/admin/kb/` | GET/POST | admin | GET everything (`?status=`, `?audience=`, `?stale=1`); POST `{title, slug, body, category?, audience?, status?, review_interval_days?}`. `slug` must match `^[a-zA-Z0-9][-a-zA-Z0-9_]*$` — what the reader's `<slug:slug>` route can match — so a published article is always reachable by its own URL |
-| `/api/admin/kb/<id>/` | GET/POST | admin | GET with revision history. POST `{title?, body?, category?, status?, audience?, owner_id?, review_interval_days?, reviewed?, note?}` — a **text** change appends a revision and bumps the version; a review, a status change or a reassignment does not |
 
 ## 5.8 Real-time
 
@@ -186,7 +195,7 @@ All *admin* auth. The admin panel (`/admin`) is the only consumer.
 | `/api/admin/packages/` | GET | Package id/label list |
 | `/api/admin/cars/` | GET | Catalog + per-car DB readiness + health indicators (`health`: status, completeness %, missing/empty sections, RAG/diag/asset indexing, pending processes — from the last DataQualityRun) + `has_spec`/`spec_fields`; `audited_at` on the envelope. Drives the admin catalogue filter (doc 07 §7.7) |
 | `/api/admin/requests/` | GET | Purchase requests; `/<id>/status/` POST updates workflow status |
-| `/api/admin/companies/` | GET/POST | List/create (create seeds default org roles) |
+| `/api/admin/companies/` | GET/POST | List/create (the former default-org-roles seeding no longer exists; the org graph is seeded on first use of `api/org/*`) |
 | `/api/admin/companies/<id>/` | GET/POST | Detail (deep: accesses+users) / update (field-length clamped) |
 | `/api/admin/companies/<id>/access/` | POST | Replace purchased scope; prunes now-out-of-scope user grants (admin_granted rows survive) |
 | `/api/admin/users/` | GET/POST | Cross-company user admin; create issues credentials |
@@ -203,7 +212,7 @@ All *admin* auth. The admin panel (`/admin`) is the only consumer.
 
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
-| `/api/chat` | POST | portal token (validated against backend `/api/auth/me/` + `ai_eligible`) | The assistant conversation route. Grounds via backend diagnose→assist, then Metis-phrases with a strict context-only prompt + link-faithfulness gate; deterministic no-LLM fallback. Per-IP rate limited (uses `x-real-ip`/last XFF hop). Metis credentials never reach the browser |
+| `/api/chat` | POST | portal token (validated against backend `/api/auth/me/` + `ai_eligible`) | The assistant conversation route. Grounds via backend diagnose→assist, then Metis-phrases with a strict context-only prompt + link-faithfulness gate; deterministic no-LLM fallback. Per-IP rate limited (uses `x-real-ip`/last XFF hop). Metis credentials never reach the browser. Details: [30](30-ai-assistant-deep-dive.md) |
 
 ## 5.11 Conventions for new endpoints
 
