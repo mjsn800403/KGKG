@@ -19,13 +19,13 @@ server pass was refused by the permission layer).
 | R6 | Production activity log is 96.8% reconstructed rows that metrics read as genuine; two untracked files sit in `/opt/KGKG/KG_backend` | [D GH #64; S untracked files 2026-11-04]; PR #65 adds `audit-evidence/17-data-integrity/` | GH #64, KGTEC-20 | Reports and metrics may overstate usage; deploy dirty-tree handling |
 | R7 | No independent penetration test | [D] | GH #23, KGTEC-19 | Assurance |
 | R8 | SMS paging path never verified end to end | [D] | GH #24 | Alerts may not wake anyone |
-| R9 | No password change/reset route for portal users or admins | [C `api/urls.py`] | **none found** | Account recovery is manual |
+| R9 | No self-service password *change* route for signed-in portal users, and no recovery or change route for platform admins (portal users do have SMS recovery) | [C `api/urls.py`; recovery routes `api/auth/recover/*`] | **none found** | Admin password changes are manual |
 | R10 | No CSRF tokens; protected by SameSite=Lax + Origin guard | [C doc 21] | GH #62 closed | Residual risk if cookies lose Lax semantics |
 | R11 | `deploy.sh` could bypass the `work` check; guard `ops/deploy/promote_guard.sh` written but not wired | [C CHANGELOG 2026-11-03, spec promote-drift-prevention] | **none found** | Promotion of an unmerged commit |
 | R12 | `kgkg-backend.service` (old gunicorn unit) once crash-looped beside the container; left `disabled` with `Restart=always`; docs still describe restarting it | [D session f197e5f1; S not running 2026-11-04] | KGTEC-6 (host changes) | A restart or reboot path could re-create the port conflict **[U]** |
 | R13 | Assistant retrieval: `RAG_QUERY_ADAPTER` pushed queries under the 0.60 grounding floor and was disabled in `.env.prod`; floor must be recalibrated first | [D #kg-dev 2026-11-03] | none found | Re-enabling silently drops all citations |
 | R14 | Nightly QA performance: assist latency 13.9 s vs 4 s limit (suspected per-call PostgreSQL connections to car DBs); not proven | [D session 26d9f5ff] | none found | Slow answers under load |
-| R15 | Backend test coverage 58% against a stated 80%; ratchet `ops/deploy/coverage_min` | [C file, D GH #22] | GH #22, KGTEC-11 | Regression risk |
+| R15 | Backend test coverage floor is 59% (`ops/deploy/coverage_min`) against a stated 80% target; the measured value is not stored in the repository | [C file, D GH #22] | GH #22, KGTEC-11 | Regression risk |
 | R16 | Migrations `0042`/`0043` reservation awaiting written confirmation | [D Slack 2026-11-03; answer **U**] | support chat | Number collision |
 | R17 | Hung `claude --version` probes burning about 4 vCPU since 2026-10-24; xrdp service on the host | [D GH #26, #17] | KGTEC-6 | CPU waste; unnecessary attack surface |
 | R18 | Pricing jumps between 29 and 30 seats | [D GH #28] | KGTEC-4 | Revenue/UX defect |

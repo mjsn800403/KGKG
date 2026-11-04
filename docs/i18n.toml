@@ -29,4 +29,8 @@ files = [
   "22-support-chat.md",
   "23-data-layer.md",
   "24-integrations.md",
+  "25-ops-inventory.md",
+  "26-auth-and-sessions.md",
+  "27-open-risks-and-decisions.md",
+  "28-team-workflow.md",
 ]
