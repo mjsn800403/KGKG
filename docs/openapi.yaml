@@ -622,14 +622,62 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+    post:
+      tags:
+      - admin
+      summary: Log a request received by phone, e-mail or in person
+      description: 'Body {company_id, subject, body?, kind?, priority?, source?}. Added to match the view
+        (requests_api.admin_company_requests_view handles POST). Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/admin/company-requests/{req_id}/:
     parameters:
     - $ref: '#/components/parameters/req_id'
+    get:
+      tags:
+      - admin
+      summary: Company request with internal notes
+      description: 'Returns the ticket including internal notes. Added to match the view
+        (requests_api.admin_company_request_detail_view handles GET). Auth: admin.'
+      x-kg-auth: admin
+      security:
+      - bearer: []
+      - adminToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags:
       - admin
       summary: Update a company request (status / note / handler)
-      description: 'Only POST (other methods 405 after the 404 lookup). Auth: admin.'
+      description: 'GET and POST (other methods 405 after the 404 lookup). Auth: admin.'
       x-kg-auth: admin
       security:
       - bearer: []

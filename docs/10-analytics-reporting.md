@@ -13,14 +13,14 @@ titles).
 ## 10.2 Team analytics (manager/analytics viewers)
 
 `team.build_team_analytics(viewer, days, member_id?, category?)` — scoped to
-`manageable_user_ids(viewer)` (the same visibility rule as the team area, so an analytics
-viewer can never see people they couldn't manage): totals, per-category distribution,
+`manageable_user_ids(viewer)` (the same visibility rule as the team area: seats below the viewer on the org-graph canvas, see [06](06-permissions-rbac.md) section 6.6,
+so an analytics viewer can never see people they couldn't manage): totals, per-category distribution,
 per-member drill-down, daily trend. Served by `/api/team/analytics/`, rendered by
 `AnalyticsView` (bars, count-ups, area trend).
 
 ## 10.3 PDF team report (`api/reporting.py`)
 
-`GET /api/team/report/?range=N` → WeasyPrint 69, fa/RTL, designed (cover, KPI band, donut +
+`GET /api/team/report/?range=N` → WeasyPrint 70, fa/RTL, designed (cover, KPI band, donut +
 category bars, trend SVG, member/vehicle tables). Implementation constraints that must
 survive refactors:
 

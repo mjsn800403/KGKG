@@ -3,7 +3,7 @@
 ## Runtime topology (single host)
 
 ```
-                         nginx :80  (103.75.197.155, HTTP only — no TLS yet)
+                         nginx :80/:443  (TLS 1.2/1.3, Cloudflare origin certificate; see 33-system-design.md)
         ┌───────────────────────────┼───────────────────────────────┐
         │ /kg-api/media/*           │ /kg-api/*                     │ /*
         │ alias → static_warehouse/ │ proxy → gunicorn :8000        │ proxy → Next.js :3000
@@ -14,16 +14,18 @@
    Disk (nginx)              Django 5.2 (KG_backend)          Next.js 16 (kg_frontend)
                              ├─ PostgreSQL 16 `kgkg` ───── users/RBAC/companies/rollups/events/jobs
                              │    (since 2026-10-29; db.sqlite3 frozen as the way back)
-                             ├─ Database_warehouse/*.db ─── one read-only SQLite per vehicle (38)
+                             ├─ PostgreSQL `kgkg_vec` ───── manual content of 222 cars, one schema per car (docs/23-data-layer.md, ADR-0007)
+                             ├─ Database_warehouse/_parts/*.db ─ one SQLite per parts-only vehicle (15 on 2026-11-03)
                              │    ├─ _rag/index.rag.db ──── unified deduplicated semantic index (~2.3GB)
                              │    ├─ _rag/diag/*.db ─────── per-vehicle diagnostic sidecars
                              │    ├─ _rag/feedback.db ───── ratings/pins/click log (assistant HITL)
                              │    └─ _quarantine/ ────────── corrupt/duplicate files (moved, never deleted)
                              └─ static_warehouse/<car>/ ─── manual images (SVG/PNG), served by nginx
 
-   systemd: kgkg-backend, kgkg-frontend, nginx,
-            kgkg-alerts.timer (5m), kgkg-pipeline.timer (5m), kgkg-detect.timer (30s),
-            transient kgkg-pipeline-job<id>-a<n> units (detached pipeline workers)
+   Backend and frontend run as Docker containers (kgkg-backend:<sha>, kgkg-frontend:<sha>; host network, loopback only)
+   started by ops/deploy/deploy.sh (ADR-0003). Host systemd: nginx, kgkg-hostjobs, timers (alerts 5m, pipeline 5m, detect 30s,
+   watchdog, outbox, qa-nightly) and transient kgkg-pipeline-job<id>-a<n> units (detached pipeline workers).
+   The pre-container units kgkg-backend.service / kgkg-frontend.service are historical; whether they still exist on the host is [U].
 ```
 
 The Next.js server is both the SSR frontend AND a thin API proxy for exactly one route:
@@ -33,30 +35,34 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 
 ## Stack
 
-| Layer | Tech | Notes |
+| Layer | Tech (versions from `package.json` and `ops/docker/backend-requirements.lock`, 2026-11-04) | Notes |
 |---|---|---|
-| Frontend | Next.js 16.2.9, React 19.2.4, `motion` 12 | App Router; JS + a few TS files; Tailwind v4 present but styling is hand-written `globals.css` (~1500 lines, CSS variables + `data-theme`) |
-| Backend | Django 5.2.15, gunicorn gthread | No DRF — plain `JsonResponse` views, `@csrf_exempt` + token auth |
-| DBs | SQLite everywhere | Main DB in WAL + IMMEDIATE transactions; per-car DBs read-only via `api/cardb.py` pool; RAG index via `sqlite-vec` |
-| Embeddings | bge-m3 (sentence-transformers 5.6, torch 2.12 CPU) | Fully offline: HF cache at `/root/.cache/huggingface`, `HF_HUB_OFFLINE=1` |
-| PDF | WeasyPrint 69 + bundled Vazirmatn TTFs | fa/RTL team reports |
+| Frontend | Next.js 16.4.3, React 19.2.4, `motion` ^12.42 | App Router; JS + a few TS files; Tailwind v4 present but styling is hand-written `globals.css` (~2650 lines, CSS variables + `data-theme`) |
+| Backend | Django 5.2.17, gunicorn 26 (gthread) | No DRF — plain `JsonResponse` views, `@csrf_exempt` + token auth |
+| DBs | PostgreSQL 16 (portal data `kgkg`; manual vehicle content `kgkg_vec`, one schema per car) + SQLite (parts-only car catalogs, RAG index via `sqlite-vec`, small side DBs) | Portal data: `KG_DB_ENGINE=postgres` since 2026-10-29. Car content: `api/cardb.py` hands back a SQLite file connection or, for cars in `KG_CARDB_PG`/`public.car_dbs`, a PostgreSQL connection (`api/cardb_pg.py`). Full map: [23-data-layer.md](23-data-layer.md); decision record: ADR-0007 (Proposed) |
+| Embeddings | bge-m3 (sentence-transformers 5.6.0, torch 2.12.1 CPU) | Fully offline: HF cache at `/root/.cache/huggingface`, `HF_HUB_OFFLINE=1` |
+| PDF | WeasyPrint 70 + bundled Vazirmatn TTFs | fa/RTL team reports |
 | LLM | Metis (api.metisai.ir, paid, external) | Phrasing only; key lives in frontend server env |
 | Proxy | nginx 1.24 | gzip, media alias, SSE passthrough |
 
 ## Design principles (the "why" behind the shape)
 
-1. **One vehicle = one immutable content DB.** Content sharding by design: per-vehicle
+1. **One vehicle = one immutable content store.** Content sharding by design: per-vehicle
    isolation, trivially parallelizable, no shared-schema migrations for content changes.
-   Serving code (`api/cardb.py`) opens them strictly read-only with a per-thread LRU pool
-   (mmap, 16MB page cache, busy timeout, auto-reopen on file replacement).
-2. **Metadata in one relational DB.** All Django models are engine-agnostic; PostgreSQL is a
-   `DATABASES` swap + dump/load when write contention is *measured*.
-3. **Derived data is disposable.** Everything under `_rag/` (index, diag, feedback) and the
-   audit reports can be rebuilt from the warehouse. Deleting `_rag/` degrades the site to
+   Today a manual vehicle's store is a PostgreSQL schema in `kgkg_vec` (the read path is query-only) and a parts-only
+   vehicle's store is a read-only SQLite file under `_parts/`; `api/cardb.py` opens SQLite files strictly read-only with a
+   per-thread LRU pool (mmap, 16MB page cache, busy timeout, auto-reopen on file replacement). *History:* the original
+   design (ADR-0001) was one SQLite file per vehicle for everything; the change to PostgreSQL schemas is recorded
+   retrospectively in ADR-0007, whose rationale and date are not established.
+2. **Metadata in one relational DB.** All Django models are engine-agnostic. Production runs PostgreSQL 16 (database
+   `kgkg`, since 2026-10-29); SQLite is the development default and the frozen former production file.
+3. **Derived data is disposable.** Everything under `_rag/` (index, diag) and the
+   audit reports can be rebuilt from the vehicle content stores (feedback in `_rag/feedback.db` is user data, not derived). Deleting `_rag/` degrades the site to
    manual browsing — it never breaks it.
-4. **No new infrastructure until measured need.** The SSE bus is a SQLite table because the
+4. **No new infrastructure until measured need.** The SSE bus is a table in the main database (the `Event` model; SQLite when
+   this was written, PostgreSQL `kgkg` since 2026-10-29) because the
    process set (3 gunicorn workers + detached pipeline worker) has exactly one shared,
-   durable medium and no Redis. The rate limiter is per-process in-memory. Each such piece
+   durable medium and no Redis. The rate limiter (`api/ratelimit.py`) keeps its counters in a small SQLite file shared by the workers of one container (`KG_RL_STORE`, default `/tmp/kg_ratelimit.sqlite3`, so it resets when the container is replaced) and falls back to an in-process window if that file is unusable. Each such piece
    documents its envelope and its replacement path (see Scale path below).
 5. **Authorization lives at the lowest layer that serves content.** Per-car access is checked
    in the Django views AND threaded into RAG retrieval as an allow-list (`allowed_cars`), so
@@ -70,9 +76,10 @@ Django via `/kg-api/…` (the `NEXT_PUBLIC_API_BASE` env). SSR pages call Django
 - Catalog/brand listings: 60s in-process cache; per-file existence checks TTL-cached
   (`cardb.ready_path`) so listings don't `stat()` the whole fleet per request.
 - Breadcrumbs: one recursive CTE per page, not N queries.
-- Main DB: WAL + `IMMEDIATE` + 20s busy timeout — readers never block on the metrics flush
+- Main DB: on PostgreSQL (production) normal MVCC; the WAL + `IMMEDIATE` + 20s busy-timeout settings below apply to the SQLite
+  development default and the former production file — readers never block on the metrics flush
   or activity writes.
-- gunicorn `gthread` (3×8): SQLite reads and media are I/O-bound; threads multiply
+- gunicorn `gthread` (3×8): database reads and media are I/O-bound; threads multiply
   concurrency without multiplying the ~2.3GB embedding model (loaded once per process).
 - nginx serves manual images directly from disk with 30-day immutable cache and gzips JSON.
 - Metrics middleware aggregates in memory and flushes batched rollups — zero per-request DB
@@ -103,7 +110,7 @@ answer with real in-app links; fallback renders without LLM.
 
 | Pressure signal | Move |
 |---|---|
-| `database is locked` in logs (write contention) | PostgreSQL via `DATABASES` swap |
+| `database is locked` in logs (write contention) | PostgreSQL via `DATABASES` swap — **done 2026-10-29** for the portal database |
 | >1 app host needed | Warehouse + media → shared/object storage; rate limit + cache → Redis; sessions are already DB-backed |
 | Media bandwidth | Object storage/CDN for `static_warehouse` (URLs already relative) |
 | Embedding rebuild time | `build_rag --add` is incremental + content-deduplicated; shard by car across hosts |
@@ -135,6 +142,6 @@ detached from request serving.
 └─ Book1.csv                 EN↔FA parts glossary feeding RAG query expansion
 ```
 
-**Git notes:** branch `rag-db-improvements` is the live branch (main is stale).
+**Git notes:** `work` is the integration branch and the one development happens on; `main` is the GitHub default and is behind it ([36-cicd-and-deployment.md](36-cicd-and-deployment.md) §36.1). (This note once named a different branch; that was true in 2026-07.)
 `.gitignore` ignores `*.md` globally (crawled-content protection) — docs must be
 `git add -f`. `db.sqlite3` and the warehouses are intentionally untracked.

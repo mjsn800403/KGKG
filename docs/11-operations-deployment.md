@@ -2,9 +2,9 @@
 
 ## 11.1 Server layout
 
-Single Ubuntu 24 host `103.75.197.155` (16 cores / 31 GB RAM / 290 GB disk, ~64% used).
-Everything lives in `/opt/KGKG` (git working copy = deployed copy). Python venv:
-`KG_backend/.venv` (3.12). Node 20.
+Single Ubuntu 24 host `103.75.197.155` (16 cores / 31 GB RAM / 290 GB disk; ~64% used when this chapter was written, 75% on 2026-11-04 **[S]**).
+The production checkout is `/opt/KGKG` (git working copy; the applications themselves run as containers built from it, see 11.3). Host Python venv:
+`KG_backend/.venv` (3.12), used by host timers and pipeline jobs. Node 20. The complete host inventory is [25-ops-inventory.md](25-ops-inventory.md).
 
 ### systemd units
 
@@ -54,6 +54,7 @@ or RAG dependency. Defaults below are initial values, changed by environment var
 | `KG_SUPPORT_REPLY_TARGET_MINUTES` | unset | published reply target; unset means no promise is shown |
 | `KG_SUPPORT_PRESENCE_WINDOW_S` | `60` | how long a staff ping counts as connected |
 | `KG_SUPPORT_WAIT_WARN_S`, `KG_SUPPORT_WAIT_CRIT_S` | `300` / `900` | thresholds for `manage.py support_health` (visitors waiting for a human reply); invalid or non-positive values fall back to the defaults; nothing alerts on them yet |
+| `KG_SUPPORT_ALERTS` | unset (off) | unanswered-visitor alert on the alert engine (`api/alert_rules.py`): `1` = warning `support:unanswered` (dashboard only, never an SMS), `page` = also a critical `support:unanswered:critical` past `KG_SUPPORT_WAIT_CRIT_S` that the existing delivery SMSes once; any other value is off. Counts only in the alert, never message or contact data |
 | `KG_SUPPORT_RETENTION_*_DAYS`, `KG_SUPPORT_RETENTION_ENABLED` | proposals / unset | `purge_support_chat` reports against proposed periods; deletion needs `ENABLED=1` and `--apply`, and no policy is approved yet |
 
 Chat routes are excluded from `AuditLog` request bodies (`api/audit.py` skip list); staff actions are
@@ -68,8 +69,8 @@ nginx). Optional knobs: `KG_ALERT_*` thresholds, `KG_RL_*` rate rules, `KG_METRI
 `KG_CARDB_POOL`, `KG_INVITE_EMAIL` (invite e-mail off by default — no SMTP),
 `KG_FRONTEND_BASE_URL` (invite-link base).
 
-`kg_frontend/.env.production`: `NEXT_PUBLIC_API_BASE=http://103.75.197.155/kg-api`
-(baked at build), `BACKEND_URL=http://127.0.0.1:8000` (SSR + chat), `METIS_API_KEY`,
+`kg_frontend/.env.production`: runtime settings and secrets for the frontend container (`NEXT_PUBLIC_API_BASE` is not here any more: it is the
+build argument of `ops/docker/frontend.Dockerfile`, default `/kg-api`; the older absolute `http://<ip>/kg-api` value is historical), `BACKEND_URL=http://127.0.0.1:8000` (SSR + chat), `METIS_API_KEY`,
 `METIS_BOT_ID` (paid LLM — server-side only).
 
 ## 11.2 nginx
@@ -81,7 +82,7 @@ anything left there is included by nginx and breaks every reload (it did, on
 
 Public server, `:80` and `:443` (Cloudflare origin certificates in
 `/etc/nginx/cloudflare/`): gzip for JSON/text; `^~ /kg-api/media/` aliases the
-static warehouse (30d immutable; `www-data` needs read access on new car dirs);
+static warehouse (30d `private` immutable cache; every file goes through an `auth_request` to `api/mediaauth.py`, so a login and access to that car are required; `www-data` needs read access on new car dirs);
 `= /kg-api/api/events/stream/` is an unbuffered SSE proxy (3600s read timeout);
 `^~ /grafana/` is admitted only with a valid admin ticket cookie
 (`api/grafanaauth.py`) and then gets `X-WEBAUTH-USER` set server-side;
@@ -380,9 +381,19 @@ That is the right call for a copy leaving the host, and it means a bare-metal
 rebuild needs those values from wherever they are kept — they are not in any
 backup by design.
 
-What this covers, and why the 21 GB warehouse is not in it: the warehouse and
-the RAG index are **derived** from the source ZIPs, which are themselves copied
-off-host hourly. Losing them costs a rebuild, not data.
+What this covers, and what it does not. The 2026-10-27 verification covered the application database and the small
+side databases. It did **not** establish that vehicle content can be recovered. Manual content of 222 cars lives only in
+PostgreSQL database `kgkg_vec` (about 58 GB): `cardb_pg.adopt()` deletes a car's SQLite file once it is loaded, the deploy-time
+`pg_dump` covers database `kgkg` only, and no backup of `kgkg_vec` was found in the hourly snapshot (observed 2026-11-03, sessions;
+re-verify). The 15 parts-only catalogs and the static images are on the same disk with no copy found. The source ZIPs are copied
+off-host hourly, but whether every car can be rebuilt from them, and how long that takes, has **not** been demonstrated, so
+this section makes no claim that the warehouse is rebuildable. The RAG index (`_rag/`) is derived from the content stores and
+is the only part treated as disposable. See [23-data-layer.md](23-data-layer.md) and risk R1 in
+[27-open-risks-and-decisions.md](27-open-risks-and-decisions.md).
+
+Also **[U]**: the snapshot description above names `db.sqlite3`, the former production database (frozen 2026-10-29). Which
+PostgreSQL databases the hourly snapshot now includes was not re-inspected; a session reported that only `kgkg` (133 MB) is
+dumped.
 
 On top of that, the hosting provider takes a full server backup monthly (5th).
 That bounds a total-host-loss scenario; the hourly snapshot is what bounds
@@ -424,7 +435,7 @@ kgkg-promote --status
 
 # status (the serving pair are containers, not systemd units)
 docker ps --filter label=kgkg.env=prod
-journalctl -t kgkg-backend -n 100 --no-pager
+docker logs --tail 100 <the kgkg-backend container>   # the journalctl -t kgkg-backend tag belongs to the retired unit
 systemctl status nginx kgkg-hostjobs
 
 # is the alerting alive? (dry run never sends an SMS)

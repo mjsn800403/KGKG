@@ -242,6 +242,7 @@ jobs:
           bash ops/deploy/ci_is_tip.sh --selftest
           bash ops/deploy/test_detached_prod.sh
           bash ops/deploy/test_promote_guard.sh
+          bash ops/deploy/test_promote_guard_wiring.sh
           python3 qa/e2e_record.py --selftest
           python3 -I ops/deploy/smoke_fleet.py --selftest
           python3 -I qa/e2e/support_chat_guard.py --selftest
@@ -323,6 +324,24 @@ jobs:
           python3 -m unittest discover -s ops/governance -t ops/governance -p 'test_*.py' -v
       - name: Every document is owned and in date (docs/OWNERS.toml)
         run: python3 ops/governance/check_docs_freshness.py --docs docs
+      - name: Persian documentation matches its English source (docs/i18n.toml)
+        run: python3 ops/governance/check_i18n.py
+      - name: Generated model schema is current; SRS tests exist and every requirement is traced
+        run: |
+          python3 ops/governance/gen_schema.py --check
+          python3 ops/governance/gen_routes.py --check
+          python3 ops/governance/check_srs_trace.py
+      - name: Docs match the code (inventory is current; no new undocumented item versus the target branch)
+        # The binding baseline is doc-debt.json on the TARGET branch, so regenerating the file in
+        # the change cannot excuse a new item. Push builds have no target and check freshness only;
+        # the pull request is where growth is judged.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            python3 ops/governance/gen_inventory.py --check --require-base --base-ref "origin/${{ github.base_ref }}"
+          else
+            python3 ops/governance/gen_inventory.py --check
+          fi
       - name: This change references the work it serves
         # Skipped on push builds, where there is no pull request to judge.
         run: python3 ops/governance/check_traceability.py

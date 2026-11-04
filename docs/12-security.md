@@ -64,7 +64,7 @@
 | 2 | **Secrets are in no backup, by design.** `.env.prod` and the Cloudflare origin key are excluded from the snapshot. A bare-metal rebuild needs them from wherever they are kept. | Keep them in a password manager; without `DJANGO_SECRET_KEY` the restored database still works but every session is invalidated. |
 | ~~3~~ | ~~**Portal token readable by JS.**~~ — **closed.** The session is a backend-set `HttpOnly; Secure; SameSite=Lax` cookie (`portal._set_portal_cookie`); the frontend no longer stores the token (`utils/api.jsx setPortalSession`). Covered by `api/test_qa_auth.py`. |
 | ~~4~~ | ~~**No password reset**~~ — **closed.** SMS-verified recovery (`/api/auth/recover/start/`, `/reset/`), rate-limited; covered by `api/test_recover.py`. |
-| 5 | **No CSRF tokens on state-changing endpoints.** Sessions are now cookies, so the original "Bearer-only mutations" argument no longer holds. What protects mutations today is `SameSite=Lax` (browsers do not send the cookie on cross-site POST/PUT/DELETE) plus JSON request bodies. | Add an `Origin`/`Sec-Fetch-Site` check on cookie-authenticated mutations as defence in depth; never add a state-changing GET. |
+| 5 | **No CSRF tokens on state-changing endpoints.** Sessions are now cookies, so the original "Bearer-only mutations" argument no longer holds. What protects mutations today is `SameSite=Lax` (browsers do not send the cookie on cross-site POST/PUT/DELETE) plus JSON request bodies, plus (added since this table was written) `OriginGuardMiddleware`, which refuses cookie-authenticated unsafe requests whose `Origin`/`Referer` is not ours (`KG_ORIGIN_GUARD=0` turns it off). | Never add a state-changing GET; see [21](21-csrf-exempt-views.md). |
 | 6 | **No SMTP** — invite e-mail off (`KG_INVITE_EMAIL`); invite links are copy-pasted by managers (they see the raw link — acceptable, they created the account). |
 | ~~7~~ | ~~**Rate limiter is per-process**~~ — **closed.** Counters live in a SQLite store shared by all workers (`api/ratelimit.py`, `KG_RL_STORE`), falling back to in-process only if the store is unusable; covered by `api/test_qa_ratelimit.py`. |
 | 8 | **Admin token in env** (`KG_ADMIN_TOKEN`) is long-lived — rotate occasionally; session tokens exist for humans. |
@@ -90,9 +90,16 @@
 
 - Does any new endpoint serve manual-derived content? → it needs `_guard_car_content` (or
   equivalent) AND allow-list threading if results can span cars.
-- Does it mutate state? → Bearer-token auth (not cookie), rate limit if unauthenticated
-  surface, Persian validation errors, body via hardened parsers.
-- Does it write grants/org structure? → only via the access.py writers + consistency pass.
+- Does it mutate state? → authenticated session (Bearer header or the `HttpOnly; SameSite=Lax` cookie; cookie-authenticated writes also pass `OriginGuardMiddleware`), rate limit if
+  unauthenticated surface, Persian validation errors, body via hardened parsers.
+- Does it write grants/org structure? → only via the access.py writers and the org-graph API (`api/org/*`).
 - Does it log anything? → no secrets/PII beyond the established activity fields.
 - Does it add a long-lived connection or background work? → document the envelope; make it
   survive restarts or fail visibly (events/alerts).
+
+## Addendum (2026-11-04): behaviour documented elsewhere
+
+Session lifetimes, the single-active-session rule (`KG_SINGLE_SESSION`), the OTP flow, device-copy detection, the admin loopback
+token rule and content-protection modules are described, with their source files, in [26 — Authentication and sessions](26-auth-and-sessions.md).
+The open-risk register (backups of `kgkg_vec`, staging sharing production car data, reconstructed activity rows, missing password reset) is
+[27](27-open-risks-and-decisions.md).

@@ -13,10 +13,16 @@ respected via `MotionConfig`).
 | `/login` | public | Portal login (username or email) |
 | `/purchase` | public | Purchase-request wizard (vehicle, layers, `SeatPlanBuilder`, contact) |
 | `/invite/[token]` | public | Invite acceptance: validate → set password → auto-login |
+| `/recover` | public | Account recovery by SMS (start → code → new password); its timing constants must match `OtpChallenge.DEFAULT_TTL` / `RESEND_INTERVAL` on the backend |
+| `/privacy` | public, **404 unless `KG_PRIVACY_DRAFT_PAGE=1`** | **Draft** privacy notice for the support chat. Not an approved policy (legal entity, retention periods, processors and contact route pending); never indexed (`robots: noindex`) |
 | `/browse` | portal | Dashboard home: granted fleet tiles (`FleetView`), shared vehicle filter (§7.7), `RecommendationsWidget` |
 | `/[brand]/[year]/[model]` (+`/[...path]`, `/page/[file]`, `/search`, `/assistant`) | portal + car grant (SSR-gated) | Manual browsing: node tree, leaf pages, per-car semantic search, per-car assistant |
+| `/[brand]/[year]/[model]/parts` (+`/[...ppath]`) | portal + car grant + parts layer | Parts catalog: configuration picker (`?cfg=`) and group tree; leaves render `PartsViewer` (exploded diagrams + structured tables). Static segment, so it wins over the manuals catch-all ([16](16-parts-catalog.md)) |
+| `/[brand]` and `/[brand]/[year]` | portal | Brand and year level of the same `car_view` hierarchy (model list) |
+| `/frm/[slug]` (+`/lts`, `/preparation`, `/preparation/models`, `/preparation/operations`) | portal | Flat-rate manual hub: LTS labor-time sheet (filterable) and the preparation reference sheets (`FrmShell`, `FrmTable`; backend `api/frm/<slug>/`) |
 | `/assistant` | portal (AI-eligible for answers) | General assistant chat (`AssistantChat`) |
-| `/team` | manager | Team area: Members / Org chart / Roles tabs (`TeamView`, `OrgChart`, `RolesPanel`) |
+| `/team` | any seat that is the root seat or has at least one child seat (`user_can_view_team`; leaf seats do not see it) | Org-graph canvas (`OrgGraphCanvas`); editable by the root seat only |
+| `/team/chats` | manager / analytics gate | `ChatLogsView`: assistant conversations of users within the viewer's org-graph reach (same gate and scope as team analytics; backend `api/team/chat-logs/`) |
 | `/team/analytics` | analytics | `AnalyticsView`: category bars, member drill-down, trend, PDF download |
 | `/requests` | **portal** (was manager) | `RequestsView`: the customer side of the support desk — file a ticket, hold the conversation (`TicketThread`), see the SLA state, reopen by replying to a closed ticket, rate the resolution (`CsatPrompt`). A seat sees its own tickets, a manager the company's; the kinds offered come from the server's `meta` so a commercial kind is never shown to someone who would be refused |
 | `/settings` | portal | `SettingsView`: account, theme, notifications, security, tour restart |
@@ -49,29 +55,30 @@ respected via `MotionConfig`).
 ## 7.3 Portal UI composition
 
 - `DashboardShell` = `Sidebar` + content column; every authed portal page renders inside it.
-- `Sidebar` links are capability-gated: Team + Requests need `can_manage_team`, Analytics
-  needs `can_view_analytics` (or manage). Nav items carry `data-tour` attributes — the
+- `Sidebar` links are gated by the user payload: the "Team" group appears when the user can manage or `can_view_team` (root seat or a seat with children);
+  "Team and staff" (`/team`) needs `can_view_team`; Analytics and "assistant chats" (`/team/chats`) need `can_view_analytics` (or manage);
+  Requests/support is shown to every seat (see 7.8). Nav items carry `data-tour` attributes — the
   guidance system anchors on these (doc 13).
-- `TeamView` drawer (add/edit member) — invite-vs-credentials toggle, org-role select
-  (supervisor dropdown filtered to ranks above the chosen position), access delegation
-  limited to `meta.cars` (the manager's grantable set with layer ceilings), copyable
-  invite-link / credentials success panels. **Ids from `<select>`s are strings — `Number()`
-  them before sending** (bug class fixed 2026-07-14).
-- `OrgChart` — rank-layered chart, click-to-move (validated server-side), role menu (quick
-  role change), legend, empty-position ghost cards («افزودن عضو» opens the drawer
-  preselected via `initialRoleId`).
-- `RolesPanel` — motion `Reorder` drag-to-re-rank, scope picker, color swatches, access
-  template editor, apply-to-members, per-role member chips (+ transfer select). Rows at or
-  above the viewer's own rank are locked («جایگاه شما» tags).
-- `TeamView` subscribes to `team.*` SSE events → debounced reload → tabs and other open
-  sessions stay in sync without manual refresh.
+- **Team area = the org-graph canvas** (`app/team/page.jsx` -> `OrgGraphCanvas`, `@xyflow/react`, n8n-style). The graph *is* the org
+  structure: each node is a seat (empty or occupied by one user) joined to its parent by a purely visual reporting line. Only the
+  occupant of the **root seat** (the company super-admin) can edit: create seats, create users into seats (`orgCreateUser`), move
+  seats, and set each seat's permission (car/document access, AI eligibility, admin panels: `orgSetPermission`). Everyone else
+  sees the same graph read-only with their own seat highlighted. A list view (`org-list`) mirrors the canvas. The older
+  `TeamView` / `OrgChart` / `RolesPanel` (members, rank-layered chart, role editor with drag-to-re-rank) **no longer exist**; they were
+  replaced when the `OrgRole` model was removed (migration 0016, see [03](03-data-model.md) section 3.1 and [06](06-permissions-rbac.md) section 6.6).
+  Backend: `api/org/*` ([generated/routes.md](generated/routes.md)). **Ids from `<select>`s are strings: `Number()` them before sending**
+  (bug class fixed 2026-07-14).
+- `/team/chats` (`ChatLogsView`) shows assistant conversations of the viewer's reach; `/team/analytics` shows usage analytics.
+- *Known drift:* the guidance tours still target `data-guide="team-tabs"`, `team-add` and `team-search` anchors and hint rules `team.memberCount` /
+  `team.drawer` (`kg_frontend/src/guidance/content.js`, `hintRules.js`), which belonged to the removed `TeamView`; no component renders those
+  anchors now **[C]**. Tours and hints for the team page therefore have no target until updated ([13](13-guidance-system.md)).
 - Content rendering: `NodeList`/`NodeItem` (tree), `ContentRenderer` (leaf HTML),
   `Breadcrumb`, `SearchBox`, `EvidencePanel` + `FeedbackBar` (assistant citations + 👍/👎),
   `AssistantChat` (chat UI with car context, suggested actions, link buttons).
 - `RecommendationsWidget` — «ادامه بدهید», related, focus areas etc. on `/browse`.
 - `RequestsView`/`RequestsInbox` — the two sides of company requests, both live.
 
-## 7.4 Admin panel (`app/admin/page.jsx`, ~1900 lines)
+## 7.4 Admin panel (`app/admin/page.jsx`, ~3600 lines)
 
 Single client page, hash-routed sections (`#dashboard`, `#users`, …), guarded by the admin
 token (`guard` wrapper redirects to `/admin/login` on 401). Landing state is the **hub** —
@@ -105,9 +112,12 @@ help articles to these ids (doc 13).
 
 ## 7.6 Build & deploy quirks
 
-- `NEXT_PUBLIC_API_BASE` is baked at **build time** — rebuilding on the server with the
-  right `.env.production` matters (`http://103.75.197.155/kg-api`).
-- `npm run build` ~90s on the server; `systemctl restart kgkg-frontend` afterwards.
+- `NEXT_PUBLIC_API_BASE` is baked at **build time**. In the container build it is the build argument of
+  `ops/docker/frontend.Dockerfile` (default `/kg-api`, same-origin through nginx); changing it means rebuilding the image
+  ([31](31-ops-files-reference.md) §31.1). *Historical:* before the container deployment it was set in
+  `.env.production` as an absolute `http://<ip>/kg-api` URL and the app was restarted with `systemctl restart kgkg-frontend`.
+- Production builds happen in `ops/deploy/deploy.sh` (images tagged by commit); `npm run build` runs inside the image build
+  and in CI job `frontend`.
 - Staging copies must hardlink `node_modules` (`cp -al`) — Turbopack rejects out-of-root
   symlinks.
 - `/api/chat` holds secrets (Metis) — it must stay a server route, never client-fetchable
@@ -115,7 +125,7 @@ help articles to these ids (doc 13).
 
 ## 7.7 Shared vehicle filter (`components/VehicleFilter.jsx`)
 
-The catalogue is 221 vehicles and grows with every ingest run, so **any screen that lists
+The catalogue is large (237 cars on 2026-11-03 **[S]**; 221 when this chapter was written) and grows with every ingest run, so **any screen that lists
 more than four vehicles filters them** — one component, so the experience is identical
 whether you are a customer picking a manual or an admin granting access.
 

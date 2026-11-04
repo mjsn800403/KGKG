@@ -1,6 +1,6 @@
 # 00 — Software Requirements Specification (SRS)
 
-**Product:** KGtechvault (KGKG) · **Version:** 1.0.0 (`VERSION`) · **Status:** baseline, 2026-10-29
+**Product:** KGtechvault (KGKG) · **Version:** 1.0.0 (`VERSION`) · **Status:** baseline 2026-10-29; FR-21…FR-30 added 2026-11-04 from verified code (support chat, outbox, knowledge base, quota, SLA/feedback, onboarding, shield, tool gates, behaviour insights)
 **Structure:** ISO/IEC/IEEE 29148 (stakeholder → system requirements), quality attributes per ISO/IEC 25010.
 
 This document states *what* the system must do and how well. *How* lives in docs 01–15;
@@ -52,8 +52,7 @@ ingestion pipeline, and the operations tooling in `ops/` and `qa/`.
 ## 3. Constraints and assumptions
 
 * **C-01:** single production host (Ubuntu 24, 16 cores, 31 GB RAM). Staging and QA share it. (doc 02, 11)
-* **C-02:** relational data in SQLite (WAL); manuals as one read-only SQLite file per vehicle.
-  (ADR-0001)
+* **C-02:** relational data in PostgreSQL 16 (SQLite in development); manual content of loaded vehicles in per-car PostgreSQL schemas, parts-only vehicles and the RAG index in SQLite files (see 23-data-layer.md; original constraint was SQLite throughout, ADR-0001).
 * **C-03:** the embedding model runs locally and offline (`HF_HUB_OFFLINE=1`); no request data
   leaves the host except to Metis (phrasing) and the SMS provider. (doc 08, 12)
 * **C-04:** the user interface is Persian and right-to-left; manual content stays English.
@@ -86,6 +85,16 @@ ingestion pipeline, and the operations tooling in `ops/` and `qa/`.
 | FR-18 | switch features per company or user with flags, including A/B variants | Admin | `test_flags.py` |
 | FR-19 | publish structured vehicle specifications (schema.org) built from the manuals | Seat, Admin | `test_vehicleschema.py`, `test_adminops.py` (VehicleSpecsTests) |
 | FR-20 | alert the operator by SMS when security, AI, SMS-delivery or infrastructure rules fire, without duplicate pages | Admin | `test_alert_probe.py`, `test_disk_guard_resolve.py`, `ops/observability/test_*.py`, watchdog `--selftest` |
+| FR-21 | let an anonymous visitor open a support conversation (intent, optional contact details), exchange messages with staff, rate it and reopen it within a limited period, with ownership proven by a per-thread bearer token stored only as a hash; the widget must be switchable off without losing existing conversations | Visitor, Staff | `test_public_api.py`, `test_lifecycle.py`, `test_tokens.py`, `test_security_sweep.py`, `test_kill_switch.py`, `test_throttling.py`, `support-chat.spec.js` |
+| FR-22 | give staff an inbox (list, reply, internal notes, assign, priority, intent, close, reopen, spam) and optional role-based access (`off`/`audit`/`enforce`, fail-closed on unrecognised mode) | Staff | `test_inbox_api.py`, `test_staff_actions.py`, `test_rbac.py`, `test_rbac_api.py`, `test_support_roles_command.py` |
+| FR-23 | queue SMS and e-mail notifications transactionally, send them from a worker with retry and visible failure, and keep every channel off unless an operator sets it live | Staff, Visitor, Customer | `notifications/test_service.py`, `notifications/test_worker.py`, `notifications/test_providers.py`, `notifications/test_privacy_and_concurrency.py`, `notifications/test_command.py` |
+| FR-24 | provide a knowledge base: published customer-facing articles with search, views, votes, deflection before ticket creation, revisions, named owner and staleness, promotion of a resolved ticket to a draft article, and a log of searches with no answer | Seat, Admin | `test_knowledge.py`, `test_helpdesk_desk.py` |
+| FR-25 | enforce a per-user assistant allowance by plan (demo 5 and 2-day 20 per access window; monthly 150 and annual 200 per rolling 30 days), refuse with a Persian message when used up, and charge only answered questions | Seat | `test_qa_access.py` (allowance paths), `pricing.test.mjs` (plan numbers); no dedicated quota test module |
+| FR-26 | give the helpdesk calendar-hour service targets per priority (first public reply, resolution), exclude internal notes from the response clock, and collect general product feedback separately from tickets | Manager, Admin | `test_helpdesk.py`, `test_helpdesk_desk.py` |
+| FR-27 | show each seat a feature-discovery checklist whose items complete only when the activity log shows the feature was used, and list only features the seat is entitled to | Seat | `test_onboarding.py`, `onboarding.test.mjs` |
+| FR-28 | optionally seal content API answers and require signed single-use requests (`KG_SHIELD=1`), and cap per-user document reads per hour with scraping alerts | Seat | `test_shield.py`, `test_contentguard.py` |
+| FR-29 | gate the embedded Grafana and TIS-browser (VNC) screens behind a short-lived signed admin ticket checked by nginx `auth_request` | Admin | **(manual)**: no automated test found |
+| FR-30 | record per-answer behaviour signals (feedback, copy, source clicks, rephrase) and show admins assistant usage insights | Admin | `test_routes_and_independence.py` (route coverage only) |
 
 ## 5. Quality (non-functional) requirements
 
@@ -110,7 +119,7 @@ ingestion pipeline, and the operations tooling in `ops/` and `qa/`.
 
 | Interface | Specification |
 |---|---|
-| HTTP API (90 routes) | `docs/openapi.yaml`, enforced by `test_openapi_routes.py`; narrative in doc 05 |
+| HTTP API (120 paths; [generated/routes.md](generated/routes.md)) | `docs/openapi.yaml`, enforced by `test_openapi_routes.py`; narrative in doc 05 |
 | Real-time events | Server-Sent Events, doc 09 |
 | Metis LLM | outbound HTTPS, phrasing only, with a deterministic fallback (doc 08) |
 | SMS provider | outbound HTTPS, OTP and alerts; never called from tests (`alert_rules.deliver`) |

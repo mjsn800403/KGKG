@@ -1,0 +1,20 @@
+diff --git a/ops/deploy/deploy.sh b/ops/deploy/deploy.sh
+index 2618508..399c770 100644
+--- a/ops/deploy/deploy.sh
++++ b/ops/deploy/deploy.sh
+@@ -348,6 +348,15 @@ PREV=$(git -C "$PROD" rev-parse HEAD)
+ say "deploy $REF = $SHORT (live: ${PREV:0:9}) mode=$MODE log=$LOG"
+ prod_clean || { git -C "$PROD" status --short --untracked-files=no; die "live tree has uncommitted edits. Commit them (or move them to the work branch) first."; }
+ git -C "$PROD" merge-base --is-ancestor "$PREV" "$SHA" || die "$SHORT does not contain the live commit ${PREV:0:9}; rebase/merge onto it first (prod only fast-forwards)."
++# Production runs only commits the repository contains: refuse one that is not on origin/work.
++# (kgkg-promote enforces this; a direct deploy.sh run did not. #50, 3a65964.) Full promote only:
++# --staging, --rollback, --reload and --status are unaffected. One deliberate override per
++# command: KGKG_ALLOW_OFF_WORK=1. Library and tests: ops/deploy/promote_guard.sh.
++if [[ $MODE == full ]]; then
++  # shellcheck source=ops/deploy/promote_guard.sh
++  source "$(dirname "${BASH_SOURCE[0]}")/promote_guard.sh"
++  require_on_work "$PROD" "$SHA" || die "$GUARD_MESSAGE"
++fi
+ if [[ $SHA == "$PREV" && $FORCE -eq 0 && $MODE == full ]] && [[ -n $(prod_containers backend) ]]; then
+   say "already live; nothing to do (use --force to rebuild)"; exit 0
+ fi
