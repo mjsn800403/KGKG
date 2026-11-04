@@ -444,6 +444,55 @@ function Conversation({ guard, sessionKey, onClose }) {
   );
 }
 
+// One global switch over the feature flag `llm_off` (api/flags.py): on = every
+// user, off = nobody. The chat route reads it per request, so it takes effect
+// on the next question without a deploy or restart.
+const LLM_OFF = 'llm_off';
+
+function MetisSwitch({ guard }) {
+  const [flag, setFlag] = useState(undefined);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const load = useCallback(async () => {
+    const d = await guard(() => adminApi.flags());
+    if (d) setFlag((d.flags || []).find((f) => f.key === LLM_OFF) || null);
+    else setErr('وضعیت متیس خوانده نشد.');
+  }, [guard]);
+  useEffect(() => { load(); }, [load]);
+  const off = !!(flag && flag.enabled && flag.rollout_pct >= 100);
+  const toggle = async () => {
+    setBusy(true);
+    setErr('');
+    const r = await guard(() => adminApi.saveFlag({
+      key: LLM_OFF, enabled: !off, rollout_pct: 100, force_on: [], force_off: [],
+      description: 'Admin switch: answer without Metis (no-LLM digest of the retrieved pages).',
+    }));
+    if (r && r.flag) setFlag(r.flag); else setErr('تغییر وضعیت ناموفق بود.');
+    setBusy(false);
+  };
+  return (
+    <section className="an-card glass" style={{ marginTop: 16 }}>
+      <div className="an-card-head" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0 }}><Icon name="bot" size={16} /> مدل زبانی (متیس)</h3>
+        <span style={{ padding: '2px 10px', borderRadius: 999, fontSize: 13, fontWeight: 600, color: '#fff',
+                       background: flag === undefined ? '#888' : (off ? '#c0392b' : '#2e8b57') }}>
+          {flag === undefined ? '…' : (off ? 'خاموش' : 'روشن')}
+        </span>
+        <button className="range-chip active" disabled={busy || flag === undefined} onClick={toggle}
+          aria-pressed={off}>
+          {busy ? '…' : (off ? 'روشن کردن متیس' : 'خاموش کردن متیس')}
+        </button>
+      </div>
+      <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+        {off
+          ? 'دستیار اکنون بدون متیس پاسخ می‌دهد: منابع از پایگاه دانش خودمان بازیابی و بدون مدل زبانی خارجی خلاصه می‌شوند. برای همهٔ کاربران از پرسش بعدی اعمال است.'
+          : 'دستیار با متیس پاسخ می‌دهد. با خاموش کردن، همهٔ کاربران از پرسش بعدی پاسخ بدون مدل زبانی (فقط بازیابی منابع) می‌گیرند.'}
+      </div>
+      {err && <div className="muted" style={{ color: 'var(--danger, #c33)', marginTop: 6 }}>{err}</div>}
+    </section>
+  );
+}
+
 export function AssistantBehaviorPanel({ guard }) {
   const [days, setDays] = useState(30);
   const [open, setOpen] = useState(null);
@@ -453,6 +502,7 @@ export function AssistantBehaviorPanel({ guard }) {
     <>
       <h1 className="page-title">رفتار کاربران با دستیار</h1>
       <div className="page-sub">چه می‌پرسند، چقدر وقت می‌گذارند و آیا پاسخ به کارشان آمد</div>
+      <MetisSwitch guard={guard} />
       <Ranges value={days} onChange={setDays} />
       {!data ? <Loading err={err} /> : (
         <>
