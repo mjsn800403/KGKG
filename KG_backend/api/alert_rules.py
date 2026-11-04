@@ -19,7 +19,7 @@ from django.utils import timezone
 
 log = logging.getLogger('kgkg.alerts')
 
-OWNED_PREFIXES = ('sec:', 'ai:', 'sms:', 'infra:')
+OWNED_PREFIXES = ('sec:', 'ai:', 'sms:', 'infra:', 'support:')
 
 
 def _env_num(name, default, cast=int):
@@ -45,12 +45,41 @@ _AUTH_LOGIN = ('auth.login', 'auth.verify_otp', 'auth.recover_reset')
 
 def evaluate():
     firing = {}
-    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _ai_health, _infra, _qa):
+    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _ai_health, _infra, _qa, _support_chat):
         try:
             firing.update(rule())
         except Exception:
             log.exception('alert rule %s failed', rule.__name__)
     return firing
+
+
+def _support_chat():
+    """Visitors waiting for a human reply (api/support_chat/health.py), off unless asked.
+
+    KG_SUPPORT_ALERTS: unset/0 = off (default); 1 = dashboard alerts only, never an SMS;
+    page = a wait past KG_SUPPORT_WAIT_CRIT_S also opens a CRITICAL alert, which the existing
+    delivery path SMSes to the on-call numbers (once, with its cooldown). Two keys, because an
+    alert is delivered only when it is first opened: a wait that grows from warning to critical
+    must be a new alert to page. Both close by themselves when the queue is answered
+    ('support:' is an owned prefix). The context is counts only, never message or contact data.
+    """
+    import os
+    mode = os.environ.get('KG_SUPPORT_ALERTS', '').strip().lower()
+    if mode not in ('1', 'page'):
+        return {}
+    from .support_chat import health
+    r = health.report()
+    if r['level'] == 'ok':
+        return {}
+    fa = lambda n: str(n).translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
+    msg = (f"{fa(r['waiting'])} گفتگوی پشتیبانی منتظر پاسخ انسانی است؛ "
+           f"قدیمی‌ترین {fa(max(1, r['oldest_wait_s'] // 60))} دقیقه.")
+    ctx = {'waiting': r['waiting'], 'oldest_wait_s': r['oldest_wait_s'],
+           'by_intent': r['waiting_by_intent']}
+    out = {'support:unanswered': ('warning', msg, ctx)}
+    if r['level'] == 'crit' and mode == 'page':
+        out['support:unanswered:critical'] = ('critical', msg, ctx)
+    return out
 
 
 def _login_bruteforce():
