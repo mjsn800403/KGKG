@@ -1,4 +1,4 @@
-<!-- i18n-source: 29-environment-reference.md sha256:afa5615b04bf -->
+<!-- i18n-source: 29-environment-reference.md sha256:b06c7d70ccda -->
 <div dir="rtl" lang="fa">
 
 # ۲۹ — مرجع متغیرهای محیطی (متغیرهای عملیاتی و تنظیمی)
@@ -101,6 +101,8 @@
 | `KG_ALERT_WATCHDOG_STALE_S` | 1800 | ثانیه | ضربان watchdog قدیمی‌تر از این مقدار (timer هر ۵ دقیقه اجرا می‌شود؛ ۳۰ دقیقه = شش اجرای از دست‌رفته). |
 | `KG_ALERT_5XX` | 5 | در ساعت | پاسخ‌های 5xx؛ انتخاب شد چون بیشینهٔ ۷ روز پیش از ۲۰۲۶‑۱۰‑۲۹ برابر ۰ بود. |
 | `KG_ALERT_BUDGET_MIN_H` | 24 | ساعت | حداقل پنجرهٔ مشاهده پیش از ارزیابی هشدار سوخت بودجه. |
+| `KG_ALERT_CANARY_DAYS` | 7 | روز | فاصلهٔ پیامک‌های آزمایشی مسیر هشدار (یک پیامک آزمایشی به هر شمارهٔ `KG_ALERT_PHONES`، ساعت ۱۰ تا ۱۲ تهران)؛ `0` آن را خاموش می‌کند. |
+| `KG_ALERT_CANARY_WAIT_H` | 2 | ساعت | مدتی که پیامک آزمایشی می‌تواند بدون رسید تحویل بماند پیش از باز شدن `infra:sms_canary`. |
 | `KG_ALERT_QA_STALE_H` | 36 | ساعت | نتیجهٔ QA شبانه قدیمی‌تر از این مقدار. |
 | `KG_LOCAL_HEALTH_URL` | `http://127.0.0.1:8000/api/health/` | URL | probe سلامت محلی که هم موتور قواعد و هم watchdog استفاده می‌کنند. |
 | `KG_ALERT_DISK_WARN` / `KG_ALERT_DISK_CRIT` | 85 / 93 | درصد | آستانه‌های رنگ در صفحهٔ پایش ادمین (`monitoring.py:283-284`). |

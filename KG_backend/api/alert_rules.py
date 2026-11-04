@@ -45,7 +45,8 @@ _AUTH_LOGIN = ('auth.login', 'auth.verify_otp', 'auth.recover_reset')
 
 def evaluate():
     firing = {}
-    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _ai_health, _infra, _qa, _support_chat):
+    for rule in (_login_bruteforce, _admin_logins, _sms_failures, _sms_canary, _ai_health, _infra, _qa,
+                 _support_chat):
         try:
             firing.update(rule())
         except Exception:
@@ -146,6 +147,100 @@ def _sms_failures():
             'اعتبار یا خط ملی‌پیامک را بررسی کنید.',
             {'otp_failures': otp_fail, 'notify_failures': notify_fail})}
     return {}
+
+
+# ---------------------------------------------------------------------------
+# SMS paging canary (#24, A-18)
+#
+# _sms_failures() only sees failures the provider reports. If Melipayamak
+# accepts a message and then drops it, nothing notices and nobody is paged.
+# Once every KG_ALERT_CANARY_DAYS (default 7; 0 = off) a short test message
+# goes to the on-call numbers in a daytime window (Tehran), and its delivery
+# receipt is read back. No send, or no number confirmed as delivered within
+# KG_ALERT_CANARY_WAIT_H hours, opens infra:sms_canary until a later canary
+# is delivered. That alert is itself an SMS, which may not arrive: it is on the
+# dashboard regardless, and a second paging channel is the issue's step 2.
+# ---------------------------------------------------------------------------
+
+CANARY_DAYS = _env_num('KG_ALERT_CANARY_DAYS', 7, float)
+CANARY_WAIT_H = _env_num('KG_ALERT_CANARY_WAIT_H', 2, float)
+CANARY_HOURS = (10, 12)              # Tehran local time, [start, end)
+CANARY_TEXT = 'خدمات گستر\nپیام آزمایشی هفتگی سامانه هشدار؛ نیازی به اقدام نیست.\nلغو11'
+# GetDeliveries2 status codes: 1 delivered to the phone; these are final failures.
+_DELIVERED = '1'
+_UNDELIVERED = {'2', '16', '35', '300', '500'}
+
+
+def _sms_delivery(rec_id):
+    """Melipayamak's delivery status for one sent message (a code, or '' if unknown)."""
+    import json
+    import urllib.request
+    payload = json.dumps({'username': os.environ.get('SMS_USERNAME', ''),
+                          'password': os.environ.get('SMS_API_KEY', ''),
+                          'recID': int(rec_id)}).encode('utf-8')
+    req = urllib.request.Request('https://rest.payamak-panel.com/api/SendSMS/GetDeliveries2',
+                                 data=payload, headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return str(json.loads(resp.read().decode('utf-8')).get('Value', '')).strip()
+    except Exception as exc:
+        log.warning('canary delivery check failed: %s', exc)
+        return ''
+
+
+def _canary_window(now):
+    from zoneinfo import ZoneInfo
+    return CANARY_HOURS[0] <= now.astimezone(ZoneInfo('Asia/Tehran')).hour < CANARY_HOURS[1]
+
+
+def _sms_canary():
+    from .monitoring import TESTING
+    from .models import SystemState
+    if TESTING or not CANARY_DAYS or not _phones():
+        return {}
+    from datetime import datetime
+    now = timezone.now()
+    st = SystemState.get('sms_canary', {})
+    sent_at = datetime.fromisoformat(st['sent_at']) if st.get('sent_at') else None
+
+    if st.get('status') == 'pending' and sent_at:
+        codes = {k: _sms_delivery(rid) for k, rid in st.get('rec_ids', {}).items()}
+        st['codes'] = codes
+        if _DELIVERED in codes.values():
+            st['status'] = 'delivered'
+        elif (codes and all(c in _UNDELIVERED for c in codes.values())) \
+                or now - sent_at > timedelta(hours=CANARY_WAIT_H):
+            st['status'] = 'failed'
+        SystemState.put('sms_canary', st)
+
+    due = not sent_at or now - sent_at >= timedelta(days=CANARY_DAYS)
+    if due and st.get('status') != 'pending' and _canary_window(now):
+        from .portal import _post_sms
+        rec_ids = {}
+        for phone in _phones():
+            try:
+                ok, value = _post_sms(phone, CANARY_TEXT)
+            except Exception:
+                log.exception('canary SMS crashed')
+                ok, value = False, ''
+            if ok:
+                rec_ids[phone[-4:]] = value
+        # Keep the last outcome until this canary resolves, so the alert does
+        # not clear just because a new one is in flight.
+        st.update(sent_at=now.isoformat(), rec_ids=rec_ids, codes={},
+                  status='pending' if rec_ids else 'failed',
+                  last=st.get('status'))
+        SystemState.put('sms_canary', st)
+
+    failed = st.get('status') == 'failed' or (st.get('status') == 'pending' and st.get('last') == 'failed')
+    if not failed:
+        return {}
+    when = (st.get('sent_at') or '')[:16].replace('T', ' ')
+    return {'infra:sms_canary': (
+        'critical',
+        f'SMS paging canary not delivered (sent {when} UTC): pages may not be arriving',
+        {'sent_at': st.get('sent_at'), 'codes': st.get('codes', {}),
+         'numbers': sorted(st.get('rec_ids', {}))})}
 
 
 def _ai_health():
