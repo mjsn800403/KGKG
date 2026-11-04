@@ -174,6 +174,13 @@ class PipelineTests(AdminCase):
         self.assertEqual(d['partsouq'], {'error': 'OSError: gone'})
         self.assertEqual(d['zip_queue']['counts'], {'pending': 1})
 
+    def test_a_failed_zip_scan_does_not_return_the_exception_text(self):
+        # KGTEC-14 (CodeQL py/stack-trace-exposure): the trace goes to the log only.
+        with mock.patch('api.ingest.scan_inbox', side_effect=OSError('/srv/secret/path missing')),              self.assertLogs('kgkg.adminops', 'ERROR'):
+            r = self.post(self.URL, {'action': 'scan_zips'})
+        self.assertEqual(r.status_code, 500)
+        self.assertNotIn('/srv/secret', r.content.decode())
+
     def test_start_conflict_is_409(self):
         with mock.patch('api.adminops.pipeline.start_job', return_value=(None, 'already running')):
             r = self.post(self.URL, {'action': 'start'})

@@ -13,6 +13,7 @@ model code) whose group tree is being browsed — a parts catalog is per-frame
 in the source EPC, unlike manuals.
 """
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -27,6 +28,8 @@ from .models import Car
 from .portal import portal_user
 from .ratelimit import rate_limited, require_admin_token
 from .safepath import safe_join
+
+log = logging.getLogger('kgkg.parts')
 
 PARTS_DIRNAME = '_parts'
 
@@ -218,9 +221,11 @@ def parts_view(request, brand_name, year, model_name):
         # The DB vanished between the readiness check and the open (rebuild).
         return JsonResponse({'error': 'parts catalog not available on server'},
                             status=404)
-    except sqlite3.Error as e:
-        return JsonResponse({'error': 'parts catalog unavailable',
-                             'detail': str(e)}, status=503)
+    except sqlite3.Error:
+        # The driver's message names files and SQL; it goes to the log, not
+        # to the client (CodeQL py/stack-trace-exposure, KGTEC-14).
+        log.exception('parts catalog %s unreadable', car.id)
+        return JsonResponse({'error': 'parts catalog unavailable'}, status=503)
 
 
 # No leading/trailing `\s*` in these: they were quadratic on long whitespace

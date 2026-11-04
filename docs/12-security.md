@@ -103,3 +103,23 @@ Session lifetimes, the single-active-session rule (`KG_SINGLE_SESSION`), the OTP
 token rule and content-protection modules are described, with their source files, in [26 — Authentication and sessions](26-auth-and-sessions.md).
 The open-risk register (backups of `kgkg_vec`, staging sharing production car data, reconstructed activity rows, missing password reset) is
 [27](27-open-risks-and-decisions.md).
+
+## CodeQL triage (KGTEC-14, 2026-11-04)
+
+45 alerts were open, all reported against `main` (`95c45b6`). On `work` 31 of
+them no longer occur (fixed earlier: `safe_join` on every user-influenced path,
+the year/parts suffix regexes without leading/trailing `\s*`, the Metis path
+and client-id checks in `kg_frontend/src/lib/safeUrl.js`); they close when
+`work` is promoted to `main`. The 14 still found on `work`:
+
+| Alert | Where | Verdict |
+|---|---|---|
+| #50 py/stack-trace-exposure | `parts.py` corrupt catalog (503) | **Fixed**: the sqlite message is logged, not returned. |
+| #40 py/stack-trace-exposure | `adminops.py` `scan_zips` | **Fixed**: logged; the admin gets a fixed message. |
+| #34-39, #41, #42 py/stack-trace-exposure | `adminops.py` pipeline / crawler / data-quality / alerts | False positive: admin-token only, and the values are our own operator messages (`start()` refusals, audit status, alert text), which the operator needs. |
+| #44 py/stack-trace-exposure | `portal.py` `admin_user_access_view` | False positive: `apply_user_access` raises `ValueError` only with its own validation message, shown to the platform admin. |
+| #45 py/cookie-injection | `portal.py` `_set_portal_cookie` | False positive: the value is the token we just generated (`AuthToken.issue`), never request input. |
+| #1 js/stored-xss | car page EWD `<iframe src>` | False positive: built server-side from a fixed path, `encodeURIComponent(model)`, a directory name matching `^[A-Z0-9]+$` and a hash taken from our own `termdata.xml`. |
+| #2 js/xss-through-dom | `AssistantChat.jsx` link | False positive: only `isInternalHref()` paths (leading `/`, not `//` or `/\`, no control characters; unit-tested) become links; anything else is plain text. |
+
+The false positives are dismissed in GitHub code scanning with a pointer to this table.

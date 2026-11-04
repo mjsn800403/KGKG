@@ -1068,7 +1068,7 @@ class PartsCatalogTests(QAUsersMixin, TestCase):
     def test_corrupt_catalog_is_503_not_500(self):
         r = self.get(self.broken)
         self.assertEqual(r.status_code, 503)
-        self.assertEqual(r.json()['error'], 'parts catalog unavailable')
+        self.assertEqual(r.json(), {'error': 'parts catalog unavailable'})   # no driver text (KGTEC-14)
 
     # -- root / frames ----------------------------------------------------
     def test_root_lists_frames_with_flagged_default(self):
