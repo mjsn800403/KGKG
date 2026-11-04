@@ -2,9 +2,9 @@
 
 ## 11.1 Server layout
 
-Single Ubuntu 24 host `103.75.197.155` (16 cores / 31 GB RAM / 290 GB disk, ~64% used).
-Everything lives in `/opt/KGKG` (git working copy = deployed copy). Python venv:
-`KG_backend/.venv` (3.12). Node 20.
+Single Ubuntu 24 host `103.75.197.155` (16 cores / 31 GB RAM / 290 GB disk; ~64% used when this chapter was written, 75% on 2026-11-04 **[S]**).
+The production checkout is `/opt/KGKG` (git working copy; the applications themselves run as containers built from it, see 11.3). Host Python venv:
+`KG_backend/.venv` (3.12), used by host timers and pipeline jobs. Node 20. The complete host inventory is [25-ops-inventory.md](25-ops-inventory.md).
 
 ### systemd units
 
@@ -82,7 +82,7 @@ anything left there is included by nginx and breaks every reload (it did, on
 
 Public server, `:80` and `:443` (Cloudflare origin certificates in
 `/etc/nginx/cloudflare/`): gzip for JSON/text; `^~ /kg-api/media/` aliases the
-static warehouse (30d immutable; `www-data` needs read access on new car dirs);
+static warehouse (30d `private` immutable cache; every file goes through an `auth_request` to `api/mediaauth.py`, so a login and access to that car are required; `www-data` needs read access on new car dirs);
 `= /kg-api/api/events/stream/` is an unbuffered SSE proxy (3600s read timeout);
 `^~ /grafana/` is admitted only with a valid admin ticket cookie
 (`api/grafanaauth.py`) and then gets `X-WEBAUTH-USER` set server-side;
@@ -435,7 +435,7 @@ kgkg-promote --status
 
 # status (the serving pair are containers, not systemd units)
 docker ps --filter label=kgkg.env=prod
-journalctl -t kgkg-backend -n 100 --no-pager
+docker logs --tail 100 <the kgkg-backend container>   # the journalctl -t kgkg-backend tag belongs to the retired unit
 systemctl status nginx kgkg-hostjobs
 
 # is the alerting alive? (dry run never sends an SMS)
