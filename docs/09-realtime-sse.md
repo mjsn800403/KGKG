@@ -1,9 +1,11 @@
 # 09 — Real-time Events (SSE)
 
-## 9.1 Why SQLite-backed SSE
+## 9.1 Why database-backed SSE
+
+*(Written when the main database was SQLite; since 2026-10-29 it is PostgreSQL `kgkg` and the design is unchanged.)*
 
 The app is several gunicorn worker processes + a detached pipeline worker, with no Redis.
-The one medium every process can write to and tail durably is the main SQLite DB (WAL).
+The one medium every process can write to and tail durably is the main database.
 So the real-time layer is: append-only `Event` table → SSE endpoint tails it → dashboards
 update live. This gives durability and `Last-Event-ID` resume for free; the trade-off is a
 1s tail latency, which is fine for dashboards. If fan-out ever outgrows it, only the
@@ -20,12 +22,12 @@ events.emit_user(type, user_id, payload)              # one user
 Best-effort (never raises into the request path). Table auto-trims to ~20k rows, amortized
 (every ~500th emit).
 
-**Current emitters:** pipeline worker (`pipeline.progress` throttled + terminal states),
-pipeline start/resume/cancel (adminops), alerts raise/resolve (monitoring), login +
-activity beacons (portal), team changes (`team.member.added/updated`,
-`team.role.created/updated/deleted/reordered`), company requests
-(`request.created/updated` → both audiences), change detector (`data.detected`,
-`processing.pending`).
+**Current emitters** (event types found as literal `emit*` calls in `KG_backend/api`, 2026-11-04 **[C]**): pipeline worker
+(`pipeline.progress` throttled + terminal states) and pipeline start/resume/cancel (`pipeline.started|resumed|canceled`), alerts
+(`alert.opened`, `alert.resolved`), login + activity beacons (portal), company requests / support desk (`request.created|updated|reopened|rated|message`,
+both audiences where relevant), product feedback (`feedback.created`), recommendations refresh (`rec.updated`), support chat
+(`support_chat.message|updated|reopened`), change detector (`data.detected`, `processing.pending`). *Historical:* the `team.member.*` and
+`team.role.*` events of the removed team CRUD are no longer emitted (`team._emit_team` has no caller).
 
 ## 9.3 The stream (`/api/events/stream/`)
 
@@ -58,7 +60,7 @@ Consumers:
   and event ticker.
 - **RequestsInbox** (admin) / **RequestsView** (manager) — request lifecycle both ways,
   toast on completion, no reload.
-- **TeamView** — `team.*` events → debounced reload (cross-tab and cross-user sync).
+- **SupportChatInbox** (`support-chat/admin/`) — `support_chat.*` events for the staff inbox, with the shared connector and a 20 s refresh fallback; **RecommendationsWidget** — `rec.updated`. *(The former `TeamView` consumer of `team.*` events was removed with the team CRUD.)*
 - **kgkg-detect.timer** (30s `realtime_tick`) diffs the pending-work fingerprint so "new
   data landed" appears on the admin dashboard without anyone clicking refresh.
 

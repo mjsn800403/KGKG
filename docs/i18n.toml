@@ -19,4 +19,7 @@ files = [
   "05-api-reference.md",
   "06-permissions-rbac.md",
   "07-frontend.md",
+  "08-ai-assistant-rag.md",
+  "09-realtime-sse.md",
+  "10-analytics-reporting.md",
 ]
