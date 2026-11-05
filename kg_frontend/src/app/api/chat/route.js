@@ -587,7 +587,12 @@ export async function POST(request) {
       if (q.body?.quota) quota = q.body.quota;
       return { ...payload, quota };
     };
-    const metisConfigured = !!(API_KEY && BOT_ID);
+    // Admin switch (admin -> رفتار کاربران با دستیار): the global flag llm_off
+    // takes Metis out of the request entirely, so the reply is the same
+    // deterministic no-LLM digest a Metis outage produces. Used to show that
+    // the assistant answers without the external model.
+    const llmOff = flags.llm_off === true;
+    const metisConfigured = !!(API_KEY && BOT_ID) && !llmOff;
     // Phraser usage for the chat log: streamed replies report tokens + cost,
     // non-streamed ones only `billing.cost`.
     const llm = { ms: null, usage: null, cost: null };
@@ -686,7 +691,8 @@ export async function POST(request) {
       // translation means we retrieve with the original Persian, exactly as
       // before. NOT applied to /api/diagnose above -- that engine matches
       // Persian symptom text.
-      const translated = await translateQuery(retrievalQuery, flags.mq_translate ?? MQ_TRANSLATE);
+      const translated = await translateQuery(retrievalQuery,
+        llmOff ? false : (flags.mq_translate ?? MQ_TRANSLATE));
       const assistQuery = translated || retrievalQuery;
       try {
         rag = await backend('/api/assist/', { query: assistQuery, brand, model, car }, token);
@@ -856,7 +862,8 @@ export async function POST(request) {
         degraded = true;
       }
     } else {
-      console.warn('Metis not configured -> serving no-LLM fallback.');
+      console.warn(llmOff ? 'Metis switched off by admin (llm_off) -> serving no-LLM answer.'
+                          : 'Metis not configured -> serving no-LLM fallback.');
       degraded = true;
     }
 
