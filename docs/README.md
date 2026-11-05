@@ -62,6 +62,7 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [42 — Frontend architecture reference](42-frontend-architecture.md) · [fa](fa/42-frontend-architecture.md) | Layers, auth path, security, state, API integration, component catalogue, workflows |
 | [43 — Architecture and data-flow diagrams](43-architecture-diagrams.md) · [fa](fa/43-architecture-diagrams.md) | 10 Mermaid diagrams from the implementation (context, components, login, assistant, retrieval, ingestion, access, chat, observability, ERD) |
 | [44 — Data lifecycle](44-data-lifecycle.md) · [fa](fa/44-data-lifecycle.md) | Per data class: collection, storage, access, retention, deletion, backup; evidence-based backup status; undefined policies |
+| [48 — Graphify](48-graphify.md) | Code knowledge graph + mandatory Claude Code session-start integration; new-machine setup |
 | [47 — Engineering follow-up register](47-engineering-followups.md) | Internal register of engineering/operations items (not documentation tasks), with status and evidence |
 | [Persian user guide](manuals/fa/01-user-guide.md) · [Persian staff/admin guide](manuals/fa/02-staff-admin-guide.md) | Task-oriented manuals for company users and platform staff (Persian only) |
 | [Persian index](fa/README.md) | Persian twins of the documents above and how they are kept in sync |

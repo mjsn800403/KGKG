@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture view</title>
+<style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#6b7280;--bd:#e5e7eb;--card:#f8fafc;--fe:#2563eb;--be:#059669;--tl:#9333ea;--dc:#d97706}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--fg:#e5e7eb;--mut:#9ca3af;--bd:#2a2f3a;--card:#171a21;--fe:#60a5fa;--be:#34d399;--tl:#c084fc;--dc:#fbbf24}}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;height:100vh}
+header{padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+h1{font-size:16px;margin:0}.mut{color:var(--mut);font-size:12px}
+nav{display:flex;gap:4px;margin-left:auto}nav button{border:1px solid var(--bd);background:var(--card);color:var(--fg);padding:4px 12px;border-radius:6px;cursor:pointer}nav button.on{background:var(--fg);color:var(--bg)}
+main{flex:1;display:flex;min-height:0}
+aside{width:250px;border-right:1px solid var(--bd);padding:12px;overflow:auto;font-size:13px}
+aside h3{margin:12px 0 4px;font-size:12px;text-transform:uppercase;color:var(--mut)}aside label{display:block;margin:2px 0;cursor:pointer}
+#stage{flex:1;position:relative;min-width:0}svg{width:100%;height:100%}
+#panel{width:340px;border-left:1px solid var(--bd);padding:12px;overflow:auto;font-size:13px}
+.node{cursor:pointer}.node text{font-size:11px;fill:var(--fg);pointer-events:none}
+.pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;background:var(--card);border:1px solid var(--bd);margin:1px}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--bd);padding:4px 6px;text-align:left;vertical-align:top;font-size:12px}
+code{font:12px ui-monospace,monospace}.path{cursor:pointer;color:var(--fe)}
+input[type=search]{width:100%;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--fg)}
+.view{display:none;flex:1;overflow:auto;padding:16px}.view.on{display:block}
+.ok{color:var(--be)}.inf{color:var(--dc)}
+</style></head><body>
+<header><h1>Architecture view</h1><span class="mut" id="meta"></span>
+<nav><button id="tg" class="on">Graph</button><button id="te">Endpoints</button><button id="tu">Unresolved &amp; drift</button></nav></header>
+<main id="mg">
+<aside>
+ <h3>Layers</h3><div id="f-layer"></div>
+ <h3>Code kind</h3><label><input type="checkbox" id="f-prod" checked> production</label><label><input type="checkbox" id="f-test"> tests</label>
+ <h3>Confidence</h3><label><input type="radio" name="conf" value="E" checked> EXTRACTED only</label><label><input type="radio" name="conf" value="EI"> + INFERRED</label>
+ <h3>Edge types</h3><div id="f-rel"></div>
+ <h3>Sources</h3><label><input type="checkbox" id="f-ast" checked> Graphify AST</label><label><input type="checkbox" id="f-xl" checked> cross-layer (xlayer)</label><label><input type="checkbox" id="f-docs"> docs mentions</label>
+ <h3>Rationale</h3><label><input type="checkbox" id="f-rat"> show docstring/rationale links</label>
+ <h3>Focus</h3><div class="mut" id="focusinfo">Click a module, then “Focus” to expand its files and show only direct neighbours.</div>
+ <button id="unfocus" style="margin-top:6px;display:none">Clear focus</button>
+</aside>
+<div id="stage"><svg id="svg"></svg></div>
+<div id="panel"><div class="mut">Click a module for files, top symbols, and links. Edge width = number of underlying graph edges.</div></div>
+</main>
+<div class="view" id="ve"><input type="search" id="q" placeholder="filter endpoints, functions, models…"><p class="mut" id="ecount"></p><table id="et"></table></div>
+<div class="view" id="vu"></div>
+<script>
+const D=/*__DATA__*/null;
+const $=s=>document.querySelector(s);
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const LC={frontend:'var(--fe)',backend:'var(--be)',tooling:'var(--tl)',docs:'var(--dc)'};
+const layerOf=m=>m.startsWith('kg_frontend')?'frontend':m.startsWith('KG_backend')?'backend':m==='docs'?'docs':'tooling';
+$('#meta').textContent=`commit ${D.meta.commit} · ${D.meta.nodes} nodes / ${D.meta.links} edges (Graphify AST) · ${D.files.length} files`;
+const fileMap={};D.files.forEach(f=>fileMap[f.p]=f);
+const rels=[...new Set(D.edges.map(e=>e[2]))].sort();
+const defaultOn=new Set(['calls','imports','imports_from','uses','inherits','references','re_exports','calls_endpoint','uses_api_client','routes_to','served_by','calls_service','references_model','foreign_key','one_to_one','many_to_many','documents']);
+$('#f-rel').innerHTML=rels.map(r=>`<label><input type=checkbox class=rel value="${r}" ${defaultOn.has(r)&&r!=='rationale_for'?'checked':''}> ${r}</label>`).join('');
+const layers=['frontend','backend','tooling','docs'];
+$('#f-layer').innerHTML=layers.map(l=>`<label><input type=checkbox class=lay value=${l} ${l!=='docs'?'checked':''}> <span style="color:${LC[l]}">●</span> ${l}</label>`).join('');
+document.querySelectorAll('aside input').forEach(i=>i.addEventListener('change',render));
+let focus=null,sel=null,pos={};
+function state(){return{lay:new Set([...document.querySelectorAll('.lay:checked')].map(x=>x.value)),rel:new Set([...document.querySelectorAll('.rel:checked')].map(x=>x.value)),
+ prod:$('#f-prod').checked,test:$('#f-test').checked,inf:document.querySelector('[name=conf]:checked').value==='EI',ast:$('#f-ast').checked,xl:$('#f-xl').checked,docs:$('#f-docs').checked,rat:$('#f-rat').checked}}
+function unit(f,S){const e=fileMap[f];if(!e)return null;if(focus&&e.m===focus)return f;return e.m}
+function compute(){
+ const S=state(),nodes={},edges={};
+ const okFile=f=>{const e=fileMap[f];return e&&S.lay.has(layerOf(e.m))&&((e.t&&S.test)||(!e.t&&S.prod))};
+ D.files.forEach(e=>{if(!okFile(e.p))return;const u=unit(e.p,S);nodes[u]=nodes[u]||{id:u,files:0,layer:layerOf(e.m),m:e.m,file:u!==e.m};nodes[u].files++});
+ D.edges.forEach(([a,b,r,c,lay,k,ex])=>{
+  if(!S.rel.has(r)&&!(r==='rationale_for'&&S.rat))return; if(c!=='EXTRACTED'&&!S.inf)return;
+  if(lay==='ast'&&!S.ast||lay==='xlayer'&&!S.xl||lay==='docs'&&!S.docs)return;
+  if(!okFile(a)||!okFile(b))return;
+  let ua=unit(a,S),ub=unit(b,S);if(!ua||!ub||ua===ub)return;
+  if(focus&&!(fileMap[a].m===focus||fileMap[b].m===focus))return;
+  const key=ua+'|'+ub+'|'+(c==='EXTRACTED'?'E':'I');const e=edges[key]=edges[key]||{a:ua,b:ub,c,k:0,rel:{},ex:[]};e.k+=k;e.rel[r]=(e.rel[r]||0)+k;if(e.ex.length<3)e.ex.push(ex);
+ });
+ if(focus){const keep=new Set();Object.values(edges).forEach(e=>{keep.add(e.a);keep.add(e.b)});Object.keys(nodes).forEach(k=>{if(!keep.has(k)&&!(nodes[k].m===focus))delete nodes[k]})}
+ Object.values(edges).forEach(e=>{if(!nodes[e.a]||!nodes[e.b])delete edges[e.a+'|'+e.b+'|'+(e.c==='EXTRACTED'?'E':'I')]});
+ return{nodes,edges:Object.values(edges)}}
+function layout(ns,es){
+ const ids=Object.keys(ns),W=900,H=620;ids.forEach((id,i)=>{if(!pos[id]){const L={frontend:150,backend:450,tooling:750,docs:750}[ns[id].layer];pos[id]={x:L+Math.random()*120-60,y:H/2+(Math.random()-.5)*400,vx:0,vy:0}}});
+ for(let it=0;it<260;it++){
+  for(const a of ids)for(const b of ids){if(a>=b)continue;const p=pos[a],q=pos[b];let dx=p.x-q.x,dy=p.y-q.y,d2=dx*dx+dy*dy+.1,f=9000/d2;const d=Math.sqrt(d2);p.vx+=dx/d*f;p.vy+=dy/d*f;q.vx-=dx/d*f;q.vy-=dy/d*f}
+  for(const e of es){const p=pos[e.a],q=pos[e.b];if(!p||!q)continue;const dx=q.x-p.x,dy=q.y-p.y,d=Math.sqrt(dx*dx+dy*dy)+.1,f=(d-170)*.004*Math.min(3,Math.log2(e.k+1));p.vx+=dx/d*f;p.vy+=dy/d*f;q.vx-=dx/d*f;q.vy-=dy/d*f}
+  for(const id of ids){const p=pos[id];p.vx+=(W/2-p.x)*.0006;p.vy+=(H/2-p.y)*.0012;p.x+=Math.max(-12,Math.min(12,p.vx));p.y+=Math.max(-12,Math.min(12,p.vy));p.vx*=.6;p.vy*=.6}}
+}
+function short(id){return id.replace('kg_frontend/src/','fe:').replace('KG_backend/api','be:api').replace('KG_backend/','be:')}
+function render(){
+ const {nodes,edges}=compute(),ids=Object.keys(nodes);layout(nodes,edges);
+ const svg=$('#svg');let xs=ids.map(i=>pos[i].x),ys=ids.map(i=>pos[i].y);const pad=70;
+ const x0=Math.min(...xs)-pad,x1=Math.max(...xs)+pad,y0=Math.min(...ys)-pad,y1=Math.max(...ys)+pad;svg.setAttribute('viewBox',`${x0} ${y0} ${x1-x0} ${y1-y0}`);
+ const bb=svg.getBoundingClientRect(),K=Math.max(1,Math.max((x1-x0)/(bb.width||800),(y1-y0)/(bb.height||600)));
+ let h='<defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="4" markerHeight="4" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z" fill="#888"/></marker></defs>';
+ edges.forEach(e=>{const p=pos[e.a],q=pos[e.b];if(!p||!q)return;const w=Math.min(9,1+Math.log2(e.k+1))*K;
+  h+=`<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="${e.c==='EXTRACTED'?'#64748b':'#f59e0b'}" stroke-opacity=".55" stroke-width="${w}" ${e.c==='EXTRACTED'?'':'stroke-dasharray="5 4"'} marker-end="url(#ar)"><title>${esc(e.a+' → '+e.b+'  ('+e.k+' edges, '+e.c+')\n'+Object.entries(e.rel).map(([r,n])=>r+' '+n).join(', ')+'\n'+e.ex.join('\n'))}</title></line>`});
+ ids.forEach(id=>{const n=nodes[id],p=pos[id],r=(n.file?7:Math.min(24,8+Math.sqrt(n.files)*3))*K;
+  h+=`<g class="node" data-id="${esc(id)}"><circle cx="${p.x}" cy="${p.y}" r="${r}" style="fill:${LC[n.layer]};fill-opacity:${sel===id?1:.8};stroke:${sel===id?'var(--fg)':'none'};stroke-width:3"></circle><text x="${p.x}" y="${p.y+r+12*K}" text-anchor="middle" style="font-size:${11*K}px">${esc(short(id))}${n.file?'':' ('+n.files+')'}</text></g>`});
+ svg.innerHTML=h;svg.querySelectorAll('.node').forEach(g=>g.onclick=()=>{sel=g.dataset.id;panel(sel,nodes,edges);render()});
+ $('#unfocus').style.display=focus?'':'none';$('#focusinfo').textContent=focus?'Focused on '+focus+' (files shown; only edges touching it).':'Click a module, then “Focus” to expand its files and show only direct neighbours.';
+}
+function panel(id,nodes,edges){
+ const n=nodes[id];if(!n)return;const mod=n.m;const S=state();const fs=D.files.filter(f=>(n.file?f.p===id:f.m===mod)&&((f.t&&S.test)||(!f.t&&S.prod)));
+ const nb={};edges.forEach(e=>{if(e.a===id)(nb[e.b]=nb[e.b]||{o:0,i:0}).o+=e.k;if(e.b===id)(nb[e.a]=nb[e.a]||{o:0,i:0}).i+=e.k});
+ let h=`<h3 style="margin:0">${esc(id)}</h3><div class="mut">${n.layer} · ${fs.length} file(s)</div>`;
+ if(!n.file)h+=`<p><button onclick="focus='${mod}';render()">Focus (expand files)</button></p>`;
+ h+='<h4>Connected</h4><table>'+Object.entries(nb).sort((a,b)=>b[1].o+b[1].i-a[1].o-a[1].i).slice(0,12).map(([k,v])=>`<tr><td>${esc(short(k))}</td><td>→ ${v.o}</td><td>← ${v.i}</td></tr>`).join('')+'</table>';
+ h+='<h4>Files <span class="mut">(click path to copy)</span></h4><table>'+fs.sort((a,b)=>b.n-a.n).slice(0,25).map(f=>`<tr><td><span class="path" onclick="navigator.clipboard&&navigator.clipboard.writeText('${f.p}')">${esc(f.p.split('/').slice(-2).join('/'))}</span>${f.t?' <span class="pill">test</span>':''}<br><span class="mut">${esc(f.top.slice(0,3).map(t=>t[0]).join(', '))}</span></td><td>${f.n}</td></tr>`).join('')+'</table>';
+ $('#panel').innerHTML=h}
+$('#unfocus').onclick=()=>{focus=null;render()};
+// tabs
+const tabs={tg:'mg',te:'ve',tu:'vu'};
+Object.keys(tabs).forEach(t=>$('#'+t).onclick=()=>{Object.keys(tabs).forEach(x=>{$('#'+x).classList.toggle('on',x===t);const el=$('#'+tabs[x]);if(tabs[x]==='mg')el.style.display=x===t?'flex':'none';else el.classList.toggle('on',x===t)})});
+// endpoints
+function er(){const q=$('#q').value.toLowerCase();let n=0;
+ $('#et').innerHTML='<tr><th>Endpoint</th><th>Frontend callers (evidence)</th><th>Django view</th><th>Models / services referenced</th></tr>'+D.chains.filter(c=>JSON.stringify(c).toLowerCase().includes(q)).map(c=>{n++;
+ return `<tr><td><code>${esc(c.ep)}</code></td><td>${c.clients.map(k=>`<div><span class="${k.conf==='EXTRACTED'?'ok':'inf'}">${k.conf==='EXTRACTED'?'●':'◐'}</span> <code>${esc(k.fn)}</code> <span class="mut">${esc(k.at)}</span>${k.users.map(u=>`<div class="mut">&nbsp;&nbsp;↳ used by ${esc(u[0])} ${esc(u[1].split('/').pop())}:${esc(u[2])}</div>`).join('')}${k.conf!=='EXTRACTED'?`<div class="mut">${esc(k.ev)}</div>`:''}</div>`).join('')}</td><td>${c.view?`<code>${esc(c.view.view)}</code><br><span class="mut">${esc(c.view.at)}${c.view.methods.length?' · '+c.view.methods.join('/'):''}</span>`:'—'}</td><td>${c.view?c.view.models.map(m=>`<span class=pill>${esc(m)}</span>`).join('')+'<br>'+c.view.services.map(m=>`<span class="mut">${esc(m)}</span>`).join(' · '):''}</td></tr>`}).join('');
+ $('#ecount').textContent=n+' endpoint(s). ● unique match · ◐ ambiguous match (alternatives in evidence).'}
+$('#q').oninput=er;er();
+// unresolved
+$('#vu').innerHTML='<h3>Unresolved dynamic / unmatched items from the cross-layer index</h3><p class="mut">Not in the graph — listed so nothing is silently guessed.</p><table>'+(D.meta.xl_unresolved.map(u=>`<tr><td>${esc(u.kind)}</td><td><code>${esc(u.source_file)}:${u.line}</code></td><td>${esc(u.detail)}</td></tr>`).join('')||'<tr><td>none</td></tr>')+'</table><h3>Documentation references that no longer resolve</h3><table>'+(D.meta.stale_docs.map(u=>`<tr><td><code>${esc(u.doc)}:${u.line}</code></td><td><code>${esc(u.ref)}</code></td></tr>`).join('')||'<tr><td>none</td></tr>')+'</table>';
+render();
+</script></body></html>
