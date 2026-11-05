@@ -41,5 +41,9 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "superpowers@superpowers-dev": true
   }
 }
