@@ -363,14 +363,21 @@ function scopeBanner(rag) {
 // When Metis is unconfigured/down/over budget we still have the full grounded
 // retrieval. Rather than 502, emit a deterministic Persian digest of the sources
 // we already retrieved (as BUTTON links, which survive the faithfulness gate).
-function fallbackReply({ mode, sources, grounded }) {
+// `llmOff`: an admin switched the language model off on purpose (KGTEC-25), so
+// the reply says it was built without one instead of reporting an outage.
+const NO_LLM = 'این پاسخ بدون مدل زبانی و فقط از پایگاه دانش خودمان تهیه شده است';
+
+function fallbackReply({ mode, sources, grounded, llmOff = false }) {
   if (!grounded || !sources || !sources.length) {
-    return 'دستیار زبانی موقتاً در دسترس نیست و موردی هم در دفترچه‌های ما برای این پرسش پیدا نشد. ' +
-      'کمی بعد دوباره تلاش کن.';
+    return llmOff
+      ? `${NO_LLM}؛ برای این پرسش موردی در دفترچه‌های ما پیدا نشد. پرسش را با نام قطعه یا سامانه دقیق‌تر بنویس.`
+      : 'دستیار زبانی موقتاً در دسترس نیست و موردی هم در دفترچه‌های ما برای این پرسش پیدا نشد. ' +
+        'کمی بعد دوباره تلاش کن.';
   }
+  const lead = llmOff ? NO_LLM : 'دستیار زبانی موقتاً در دسترس نیست';
   const head = mode === 'diagnose'
-    ? 'دستیار زبانی موقتاً در دسترس نیست؛ این خلاصهٔ خودکار از دادهٔ تشخیصی دفترچه است:'
-    : 'دستیار زبانی موقتاً در دسترس نیست؛ این منابع مرتبط از دفترچهٔ سرویس است:';
+    ? `${lead}؛ این خلاصهٔ خودکار از دادهٔ تشخیصی دفترچه است:`
+    : `${lead}؛ این منابع مرتبط از دفترچهٔ سرویس است:`;
   const seen = new Set();
   const lines = [];
   for (const s of sources) {
@@ -771,7 +778,7 @@ export async function POST(request) {
         deg = true;
         text = mode === 'clarify'
           ? fallbackClarify(clarifyRoots.map((r) => faTitle(r)))
-          : fallbackReply({ mode, sources, grounded });
+          : fallbackReply({ mode, sources, grounded, llmOff });
       }
       // Faithfulness gate: drop any link the model invented that we didn't
       // actually retrieve, so the UI can never show a fabricated source button.
