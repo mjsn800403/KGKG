@@ -44,6 +44,8 @@ Goal: max quality / min total cost. Quality, security, verification never traded
 - Follow plan; change it only on new evidence, and say so. Stay in scope; no drive-by refactors.
 - Don't re-read/re-derive what's already established this session. Batch independent tool calls.
 - Stuck signal: 2 failed attempts at same approach, or 3+ exploration calls with no new fact → stop, state what is known/unknown, switch approach or ask.
+- Prefer bounded tool output (limits, file ranges, focused searches, `graphify --budget`), but never truncate what correctness, debugging, security analysis or verification needs; fetch more selectively when required.
+- At a milestone with substantial context, assess whether compaction or a fresh session would help; first confirm objective, verified findings, decisions, open issues and exact next steps survive. Recommend only; never compact/reset without my approval. No token thresholds.
 - Prefer real deliverables over documents. No new docs/plan files unless asked.
 
 **Persistence (what actually survives sessions).** CLAUDE.md files, auto-memory (`~/.claude/projects/.../memory/`), `.claude/settings.json` hooks, git. Save to memory only durable, verified facts (decisions, constraints, gotchas, next steps) — not session chatter or things derivable from code/git. Update, don't duplicate. Do not claim persistence beyond these.
