@@ -362,6 +362,79 @@ class PartsouqStartTests(AdminCase):
         self.assertIn('جزئیات در لاگ سرور', r.json()['error'])
 
 
+class PartsouqBuildErrorTests(AdminCase):
+    """CodeQL alert #38 (ps_build): a BuildError reaches the operator as fixed text chosen
+    by its code, never as the exception's own message."""
+    PREFIX = 'ساخت پایگاه داده ناموفق بود: '
+    FOLDER = 'LandCruiser_2019_GRJ200L-GNTAKV_JTMHU01J6L5165492'
+
+    def _patched(self, exc):
+        """build_and_register past its input checks, with build_db raising ``exc``."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        (Path(tmp.name) / 'pages').mkdir()
+        (Path(tmp.name) / 'pages' / 'groups.html').write_text('x')
+        stack = mock.patch.multiple(
+            'api.partsouq_build', parse_folder=mock.Mock(return_value={'year': '2020'}),
+            safe_join=mock.Mock(return_value=Path(tmp.name)), build_db=mock.Mock(side_effect=exc))
+        status = mock.patch('api.partsouq_build.partsouq_crawler.status', return_value={'running': False})
+        return stack, status
+
+    def _build(self, exc):
+        from . import partsouq_build
+        stack, status = self._patched(exc)
+        with stack, status:
+            return partsouq_build.build_and_register('f', 'Corolla 2020', '')
+
+    def test_each_code_keeps_the_text_the_operator_saw_before(self):
+        from .partsouq_build import BUILD_ERRORS, BuildError
+        expected = {
+            'folder': 'folder name is not <Model>_<year>_<frame>_<VIN>',
+            'car_name': 'car name is not a plain file name',
+            'no_diagrams': 'no usable diagrams in this crawl',
+        }
+        self.assertEqual(BUILD_ERRORS, expected)           # the wording is part of the API contract
+        for code, text in expected.items():
+            res, err = self._build(BuildError(code))
+            self.assertIsNone(res)
+            self.assertEqual(err, self.PREFIX + text, code)
+
+    def test_an_exception_message_is_never_echoed(self):
+        from .partsouq_build import BUILD_ERROR_FALLBACK, BuildError
+        for bad in ('/srv/secret/x.db', 'unable to open /srv/secret/x.db password=hunter2', ''):
+            res, err = self._build(BuildError(bad))
+            self.assertIsNone(res)
+            self.assertEqual(err, self.PREFIX + BUILD_ERROR_FALLBACK)
+            self.assertNotIn('secret', err)
+            self.assertNotIn('hunter2', err)
+
+    def test_the_admin_endpoint_returns_the_fixed_text_with_409(self):
+        from .partsouq_build import BuildError
+        stack, status = self._patched(BuildError('/srv/secret/x.db'))
+        with stack, status:
+            r = self.post(PIPELINE, {'action': 'ps_build', 'folder': 'f', 'car_name': 'Corolla 2020'})
+        self.assertEqual(r.status_code, 409)
+        self.assertNotIn('/srv/secret', r.content.decode())
+        self.assertIn(self.PREFIX, r.json()['error'])
+
+    def test_every_raise_site_uses_a_known_code_and_every_code_is_used(self):
+        import inspect
+        import re
+        from . import partsouq_build
+        used = set(re.findall(r"raise BuildError\('(\w+)'", inspect.getsource(partsouq_build)))
+        self.assertEqual(used, set(partsouq_build.BUILD_ERRORS))
+
+    def test_build_db_raises_the_codes_for_a_bad_folder_and_a_bad_car_name(self):
+        from . import partsouq_build
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(partsouq_build.BuildError) as cm:
+                partsouq_build.build_db(Path(tmp) / 'not-a-crawl', 'Corolla 2020', '', backend=tmp)
+            self.assertEqual(cm.exception.code, 'folder')
+            with self.assertRaises(partsouq_build.BuildError) as cm:
+                partsouq_build.build_db(Path(tmp) / self.FOLDER, '../x', '', backend=tmp)
+            self.assertEqual(cm.exception.code, 'car_name')
+
+
 class AdminUserAccessInputTests(AdminCase):
     """portal.admin_user_access_view: a ValueError from the ORM used to be echoed back (#44)."""
 
