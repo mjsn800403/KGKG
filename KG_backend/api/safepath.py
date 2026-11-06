@@ -124,9 +124,13 @@ def scrub_errors(obj):
 # traceback frames disappear and credential-looking values are masked.
 _LOG_STAMP = re.compile(r'^(\[\d\d:\d\d:\d\d\]\s*)?(.*)$', re.DOTALL)
 _TRACE_LINE = re.compile(r'^\s*(Traceback \(most recent call last\)|File ")')
+# A key that CONTAINS one of the words is a credential too (DB_PASSWORD, client_secret,
+# AWS_SECRET_ACCESS_KEY); the value may be quoted. The lookbehind starts a match only at
+# the beginning of a token, which keeps the scan linear on long lines.
 _SECRET_KV = re.compile(
-    r'(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|authorization|dsn)\b(\s*[=:]\s*)(?:Bearer\s+)?\S+')
-_URL_CREDS = re.compile(r'(\w+://)[^/\s:@]+:[^/\s@]+@')
+    r'''(?i)(?<![\w.\-])([\w.\-]*(?:password|passwd|pwd|secret|token|api[_-]?key|authorization|dsn)[\w.\-]*)'''
+    r'''(\s*[=:]\s*)(?:Bearer\s+)?(?:'[^']*'|"[^"]*"|\S+)''')
+_URL_CREDS = re.compile(r'(?<!\w)(\w+://)[^/\s:@]+:[^/\s@]+@')    # lookbehind: no quadratic scan of a long word
 
 
 def _public_log_line(line):

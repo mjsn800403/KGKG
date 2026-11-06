@@ -13,6 +13,7 @@ import types
 from pathlib import Path
 from unittest import mock
 
+from django.test import SimpleTestCase
 from django.utils import timezone
 
 from .models import (
@@ -470,3 +471,132 @@ class AdminUserAccessInputTests(AdminCase):
         r = self.c.post(self.url, '{"accesses": []}', content_type='application/json',
                         HTTP_AUTHORIZATION='Bearer nope')
         self.assertEqual(r.status_code, 401)
+
+
+# --- sensitive data in server logs, GlitchTip and the worker log tail (KGTEC-14) ------------
+# Synthetic values only: nothing below is a real credential or a real person's number.
+FAKE_PW = 'SyntheticPw9'
+FAKE_SECRET = 'SyntheticSecret1'
+FAKE_PHONE = '09120000000'
+
+
+class LogScrubberTests(SimpleTestCase):
+    """KG_backend.jsonlog._scrub_text: what reaches app.jsonl, Loki and GlitchTip messages."""
+
+    def scrub(self, text):
+        from KG_backend.jsonlog import _scrub_text
+        return _scrub_text(text)
+
+    def test_a_password_in_a_connection_string_is_masked_but_user_and_host_stay(self):
+        out = self.scrub(f'could not connect: postgresql://kguser:{FAKE_PW}@db.internal:5432/kgkg')
+        self.assertNotIn(FAKE_PW, out)
+        self.assertIn('kguser', out)
+        self.assertIn('db.internal:5432', out)
+
+    def test_a_quoted_libpq_password_is_masked_as_a_whole(self):
+        out = self.scrub("host=db user=kgkg password='Synthetic Pass 9' dbname=kgkg_vec")
+        self.assertNotIn('Synthetic', out)
+        self.assertNotIn('Pass 9', out)
+        self.assertIn('dbname=kgkg_vec', out)
+
+    def test_row_data_in_postgres_error_detail_is_masked_but_the_column_stays(self):
+        out = self.scrub(f'DETAIL:  Key (phone)=({FAKE_PHONE}) already exists.')
+        self.assertNotIn(FAKE_PHONE, out)
+        self.assertIn('Key (phone)=', out)
+        out = self.scrub(f'DETAIL:  Failing row contains (5, {FAKE_PHONE}, ali).')
+        self.assertNotIn(FAKE_PHONE, out)
+        self.assertNotIn('ali', out.split('contains', 1)[1])
+
+    def test_ordinary_messages_and_a_public_key_dsn_are_left_alone(self):
+        for text in ('FATAL: password authentication failed for user "kgkg"',
+                     'unable to open /srv/x/y.db', 'parse stage: 4 parsed, 0 failed',
+                     'dsn=https://abc123@glitch.local/1'):
+            self.assertEqual(self.scrub(text), text)
+
+    def test_adversarial_long_input_is_processed_in_linear_time(self):
+        import time
+        for text in ('a' * 200000, 'a.b-' * 50000, 'a://' * 50000, 'Key (' * 40000,
+                     "password='" * 20000, 'Failing row contains (' * 9000):
+            t0 = time.monotonic()
+            self.scrub(text)
+            self.assertLess(time.monotonic() - t0, 2.0, text[:14])
+
+    def test_the_json_formatter_masks_a_secret_in_the_message_and_in_the_traceback(self):
+        import json
+        import logging
+        import sys
+        from KG_backend.jsonlog import JsonFormatter
+        try:
+            raise RuntimeError(f'connect failed: postgresql://u:{FAKE_PW}@h/db')
+        except RuntimeError:
+            record = logging.LogRecord('kgkg.x', logging.WARNING, __file__, 1,
+                                       f'start failed password={FAKE_SECRET}', None, sys.exc_info())
+        line = JsonFormatter().format(record)
+        self.assertNotIn(FAKE_PW, line)
+        self.assertNotIn(FAKE_SECRET, line)
+        self.assertIn('RuntimeError', json.loads(line)['error']['type'])
+
+
+class LogTailCredentialTests(SimpleTestCase):
+    """safepath.public_log_tail: credential-looking values, including keys that only CONTAIN
+    the word (DB_PASSWORD, client_secret) and quoted values."""
+
+    def tail(self, text):
+        from .safepath import public_log_tail
+        return public_log_tail(text)
+
+    def test_keys_that_contain_a_credential_word_are_masked(self):
+        for line in (f'DB_PASSWORD={FAKE_PW}', f'client_secret={FAKE_SECRET}',
+                     f'AWS_SECRET_ACCESS_KEY={FAKE_SECRET}', f'KG_PG_PASSWORD: {FAKE_PW}',
+                     f'api_key={FAKE_SECRET}', f'Authorization: Bearer {FAKE_SECRET}'):
+            out = self.tail(f'[12:00:01] starting {line} now')
+            self.assertNotIn(FAKE_PW, out, line)
+            self.assertNotIn(FAKE_SECRET, out, line)
+            self.assertIn('[redacted]', out, line)
+
+    def test_a_quoted_value_with_spaces_is_masked_as_a_whole(self):
+        out = self.tail("connecting with password='Synthetic Pass 9' to db")
+        self.assertNotIn('Synthetic', out)
+        self.assertNotIn('Pass 9', out)
+        self.assertTrue(out.endswith('to db'))
+
+    def test_a_connection_string_password_is_masked(self):
+        out = self.tail(f'using postgresql://u:{FAKE_PW}@h:5432/db')
+        self.assertNotIn(FAKE_PW, out)
+
+    def test_ordinary_progress_lines_are_unchanged(self):
+        for line in ('[12:00:02] parse stage: 4 parsed in 12s: ok', 'scanned x_2021', 'max_tokens limit not used'):
+            self.assertEqual(self.tail(line), line)
+
+    def test_a_very_long_line_is_processed_in_linear_time(self):
+        import time
+        for text in ('a' * 200000, 'a.b-' * 50000, ('password ' * 20000)):
+            t0 = time.monotonic()
+            self.tail(text)
+            self.assertLess(time.monotonic() - t0, 2.0, text[:12])
+
+
+class SentryLocalVariablesTests(SimpleTestCase):
+    """GlitchTip must not receive stack-frame local variables: the SDK scrubs them by variable
+    NAME only, so a `dsn`/`conninfo` holding a password would pass."""
+
+    def test_sentry_init_turns_frame_variables_off(self):
+        import importlib
+        import os
+        import sys
+        try:
+            import sentry_sdk  # noqa: F401
+        except ImportError:
+            self.skipTest('sentry-sdk is not installed here (CI installs it)')
+        import KG_backend.settings as settings_module
+        seen = {}
+        with mock.patch.dict(os.environ, {'SENTRY_DSN': 'http://public@localhost:9/1'}), \
+             mock.patch('sentry_sdk.init', side_effect=lambda **kw: seen.update(kw)):
+            try:
+                importlib.reload(settings_module)
+            finally:
+                os.environ.pop('SENTRY_DSN', None)
+                importlib.reload(sys.modules['KG_backend.settings'])
+        self.assertIs(seen.get('include_local_variables'), False)
+        self.assertIs(seen.get('send_default_pii'), False)
+
