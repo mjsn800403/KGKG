@@ -213,6 +213,7 @@ short and point at the doc section that was updated.
   plain session id to Metis (2 request-forgery), assistant links reject control characters, the
   browser id uses `crypto.randomUUID`, `PartsViewer` no longer builds a selector from a code.
   Part of #45.
+- **2026-11-06: staging no longer uses the production database login or read-write warehouses (R5, refs #97).** `ops/deploy/staging_isolation.sh` + `staging_role.sql` create a `kgkg_stg` role that can only SELECT in `kgkg_vec` and owns only the `kgkg_staging` copy; `deploy.sh --staging` loads and checks it before anything is cloned or started and stops if it is missing or too wide; `containers.sh` mounts `Database_warehouse` / `static_warehouse` `:ro` and leaves `.env.prod` unmounted when `KG_STAGING_ISOLATED=1`, and `deploy.sh` asks Docker to confirm the read-only mounts after the staging backend starts. Needs a one-time `staging_isolation.sh setup` on the server and goes live when a release containing it is promoted (ops/deploy/README.md, "Staging isolation"); proven by `ops/deploy/test_staging_isolation.sh`.
 
 ## 1.1.0 — 2026-10-30 (`deploy-20261030-053247`, `8f6df94`)
 

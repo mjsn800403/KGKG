@@ -329,10 +329,10 @@ Names only; values live in `.env.prod` on the server and are never recorded here
 | `KG_PG_CONN_MAX_AGE` | `KG_backend/KG_backend/settings.py` | yes |
 | `KG_PG_HOST` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
 | `KG_PG_NAME` | `KG_backend/KG_backend/settings.py` | yes |
-| `KG_PG_PASSWORD` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
+| `KG_PG_PASSWORD` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` +1 | yes |
 | `KG_PG_PORT` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
 | `KG_PG_TEST_NAME` | `KG_backend/KG_backend/settings.py` | yes |
-| `KG_PG_USER` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` | yes |
+| `KG_PG_USER` | `KG_backend/KG_backend/settings.py`, `KG_backend/api/rag/config.py` +1 | yes |
 | `KG_PIPELINE_BATCH` | `KG_backend/api/management/commands/run_pipeline.py` | yes |
 | `KG_PIPELINE_DISK_RECOVERY_MARGIN` | `KG_backend/api/ingest.py` | yes |
 | `KG_PIPELINE_MIN_FREE_GB` | `KG_backend/api/ingest.py` | yes |
@@ -364,7 +364,15 @@ Names only; values live in `.env.prod` on the server and are never recorded here
 | `KG_SNAPSHOT_STAMP` | `ops/observability/watchdog.py` | yes |
 | `KG_SPOOL` | `ops/docker/containers.sh` | yes |
 | `KG_SSH_DIR` | `ops/deploy/setup_ci_access.sh` | yes |
+| `KG_STAGING_ISOLATED` | `ops/docker/containers.sh` | yes |
 | `KG_STAGING_QA_USER` | `ops/deploy/deploy.sh` | yes |
+| `KG_STG_ISOLATION_ENV` | `ops/deploy/staging_isolation.sh` | yes |
+| `KG_STG_LOADER_ROLE` | `ops/deploy/staging_isolation.sh` | yes |
+| `KG_STG_PG_ROLE` | `ops/deploy/staging_isolation.sh` | yes |
+| `KG_STG_PROD_ROLE` | `ops/deploy/staging_isolation.sh` | yes |
+| `KG_STG_PSQL` | `ops/deploy/staging_isolation.sh` | yes |
+| `KG_STG_PSQL_ADMIN` | `ops/deploy/staging_isolation.sh` | yes |
+| `KG_STG_VEC_DB` | `ops/deploy/staging_isolation.sh` | yes |
 | `KG_SUPPORT_ALERTS` | `KG_backend/api/alert_rules.py` | yes |
 | `KG_SUPPORT_CHAT_ENABLED` | `KG_backend/api/support_chat/config.py`, `kg_frontend/src/app/layout.tsx` | yes |
 | `KG_SUPPORT_OWNERS` | `KG_backend/api/support_chat/rbac.py` | yes |
@@ -482,6 +490,7 @@ Timers and services installed on the host from `ops/`. The host also runs units 
 | `ops/deploy/setup_ci_access.sh` | yes |
 | `ops/deploy/smoke.sh` | yes |
 | `ops/deploy/smoke_fleet.py` | yes |
+| `ops/deploy/staging_isolation.sh` | yes |
 | `ops/docker/backend-requirements.lock` | yes |
 | `ops/docker/backend.Dockerfile` | yes |
 | `ops/docker/containers.sh` | yes |

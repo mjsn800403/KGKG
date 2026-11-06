@@ -13,21 +13,25 @@ KG_SPOOL=${KG_SPOOL:-/run/kgkg-hostjobs}
 
 # docker args shared by the backend server and one-off backend commands.
 #   <db-dir> holds db.sqlite3 (+ -wal/-shm; SQLite needs the whole directory).
+#   KG_STAGING_ISOLATED=1 (set by deploy.sh --staging only): Database_warehouse and static_warehouse are
+#   mounted read-only (staging serves from the production warehouse and must never write to it) and the
+#   production .env.prod file is NOT mounted (its database password would otherwise be readable in staging).
 be_args() {  # <db-dir> <log-dir>
   mkdir -p "$2" "$KG_SPOOL/req" "$KG_SPOOL/resp" /root/partsouq_crawl
+  local wh_opt=${KG_STAGING_ISOLATED:+:ro}
   BE_ARGS=(--network host --env-file "$KG_BE_DIR/.env.prod"
     -e KG_DB_PATH=/data/db/db.sqlite3 -e KG_LOG_DIR=/var/log/kgkg
     -e KG_HOSTJOBS_DIR=/run/kgkg-hostjobs -e RAG_EMBED_MODEL=bge-m3
     -v "$1":/data/db
-    -v "$KG_BE_DIR/Database_warehouse":"$KG_BE_DIR/Database_warehouse"
-    -v "$KG_BE_DIR/static_warehouse":"$KG_BE_DIR/static_warehouse"
-    -v "$KG_BE_DIR/.env.prod":"$KG_BE_DIR/.env.prod":ro
+    -v "$KG_BE_DIR/Database_warehouse:$KG_BE_DIR/Database_warehouse$wh_opt"
+    -v "$KG_BE_DIR/static_warehouse:$KG_BE_DIR/static_warehouse$wh_opt"
     -v /root/.cache/huggingface:/root/.cache/huggingface:ro
     -v "$2":/var/log/kgkg
     -v "$KG_SPOOL":/run/kgkg-hostjobs
     -v /root/downloads:/root/downloads:ro
     -v /root/Desktop/tis_crawler:/root/Desktop/tis_crawler:ro
     -v /root/partsouq_crawl:/root/partsouq_crawl:ro)
+  [[ -n ${KG_STAGING_ISOLATED:-} ]] || BE_ARGS+=(-v "$KG_BE_DIR/.env.prod":"$KG_BE_DIR/.env.prod":ro)
 }
 
 # run_backend <name> <image> <port> <db-dir> <log-dir> [extra docker args...]

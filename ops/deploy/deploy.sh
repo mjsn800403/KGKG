@@ -69,10 +69,11 @@ is_pg() { [[ $DB_ENGINE == postgres ]]; }
 pg_backup() {  # dst   (pg_dump runs in one snapshot: consistent while prod writes)
   pg_dump -Fc -f "$1.tmp" "$PG_NAME" && mv "$1.tmp" "$1"
 }
-pg_clone_staging() {  # fresh copy of the prod DB as $PG_STAGING, owned by the app role
+pg_clone_staging() {  # fresh copy of the prod DB as $PG_STAGING, owned by $STG_PG_USER (the staging role; the app role if unset)
+  local owner=${STG_PG_USER:-$PG_USER}
   dropdb --if-exists --force "$PG_STAGING"
-  createdb -O "$PG_USER" "$PG_STAGING"
-  pg_dump -Fc "$PG_NAME" | pg_restore --no-owner --role="$PG_USER" --exit-on-error -d "$PG_STAGING"
+  createdb -O "$owner" "$PG_STAGING"
+  pg_dump -Fc "$PG_NAME" | pg_restore --no-owner --role="$owner" --exit-on-error -d "$PG_STAGING"
 }
 # Release state, written by save_state below.
 # shellcheck source=/dev/null
@@ -132,6 +133,12 @@ trap 'say "DEPLOY FAILED at line $LINENO: $BASH_COMMAND"' ERR
 SELF_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 source_containers() { . "${1:-$SELF_ROOT}/ops/docker/containers.sh"; }
 source_containers
+# Staging isolation (R5). From the tree this script runs in, like prune_images.sh: a commit under
+# test must not be able to weaken the checks that decide whether it may be staged. The library
+# takes test hooks from KG_STG_* variables; a deploy never honours them.
+unset KG_STG_ISOLATION_ENV KG_STG_PG_ROLE KG_STG_VEC_DB KG_STG_LOADER_ROLE KG_STG_PSQL KG_STG_PSQL_ADMIN KG_STG_PROD_ROLE
+# shellcheck source=ops/deploy/staging_isolation.sh
+. "$SELF_ROOT/ops/deploy/staging_isolation.sh"
 
 PROD_LABELS=(--label kgkg.env=prod)
 # Sets LOG_OPTS as an array; callers splice "${LOG_OPTS[@]}" rather than
@@ -382,8 +389,18 @@ say "3/5 STAGING (backend :$STG_BE, frontend :$STG_FE, DB = fresh copy of prod)"
 docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
 STG_DB_ENV=()
 if is_pg; then
-  pg_clone_staging || die "could not copy the prod database into $PG_STAGING"
-  STG_DB_ENV=(-e KG_PG_NAME="$PG_STAGING")
+  # R5: staging used the production login (--env-file .env.prod), i.e. the owner of the portal
+  # database. It now uses its own role: SELECT-only on kgkg_vec, nothing on the portal database,
+  # owner of the staging copy only. Missing or too wide => stop here, production untouched.
+  stg_iso_load "$PG_USER" \
+    || die "staging isolation is not set up (see 'Staging isolation' in ops/deploy/README.md); production untouched"
+  stg_iso_check \
+    || die "the staging database role is wider than allowed; refusing to run staging against production data"
+  say "staging isolation: role $STG_ISO_USER is read-only on the vector database; warehouses mount read-only"
+  STG_PG_USER=$STG_ISO_USER pg_clone_staging || die "could not copy the prod database into $PG_STAGING"
+  # `-e NAME` (no value) takes the value from this shell's environment, set just below, so the
+  # password is on no command line.
+  STG_DB_ENV=(-e KG_PG_NAME="$PG_STAGING" -e KG_PG_USER -e KG_PG_PASSWORD)
 else
   sqlite_copy "$KG_BE_DIR/db.sqlite3" "$STG/db/db.sqlite3"
 fi
@@ -409,7 +426,13 @@ SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 SECURE_HSTS_SECONDS = 0
 PY
-NOSEC=(-e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET= -e KG_ALERT_PHONES=
+export KG_STAGING_ISOLATED=1      # containers.sh: warehouses mounted :ro, no .env.prod mount
+if is_pg; then
+  export KG_PG_USER=$STG_ISO_USER KG_PG_PASSWORD=$STG_ISO_PASSWORD
+  [[ -n $KG_PG_USER && -n $KG_PG_PASSWORD ]] || die "staging database login is empty; refusing to start staging"
+fi
+# The three DSN overrides below take precedence over KG_PG_* in the app; blank, they fall back to KG_PG_* (the staging login).
+NOSEC=(-e RAG_PGVEC_DSN= -e KG_CARDB_PG_DSN= -e KG_CARDB_ADMIN_DSN= -e SENTRY_DSN= -e SMS_API_KEY= -e SMS_USERNAME= -e SMS_FROM= -e TURNSTILE_SECRET= -e KG_ALERT_PHONES=
        -e RAG_FEEDBACK_DB=/data/db/feedback.db
        -e DJANGO_SETTINGS_MODULE=staging_settings -e PYTHONPATH=/stagecfg -v "$STG/stagecfg":/stagecfg:ro
        "${STG_DB_ENV[@]}")
@@ -423,11 +446,14 @@ TOKEN=$(KG_SPOOL=$STG_SPOOL be_run "$(img_be "$SHA")" "$STG/db" "$STG/logs" "${N
 KG_SPOOL=$STG_SPOOL KG_WARMUP=0 run_backend kgkg-stg-backend "$(img_be "$SHA")" $STG_BE "$STG/db" "$STG/logs" \
   "${NOSEC[@]}" -e KG_WORKERS=2 -e KG_THREADS=4
 run_frontend kgkg-stg-frontend "$(img_fe "$SHA")" $STG_FE http://127.0.0.1:$STG_BE -e METIS_API_KEY= -e SENTRY_DSN=
+stg_iso_check_mounts kgkg-stg-backend "$KG_BE_DIR" \
+  || { docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true; die "staging backend does not have read-only warehouse mounts; production untouched"; }
 wait_healthy kgkg-stg-backend 240 || { docker logs --tail 40 kgkg-stg-backend; die "staging backend did not become healthy"; }
 wait_healthy kgkg-stg-frontend 120 || { docker logs --tail 40 kgkg-stg-frontend; die "staging frontend did not become healthy"; }
 STG_OK=0
 bash "$W/ops/deploy/smoke.sh" http://127.0.0.1:$STG_BE http://127.0.0.1:$STG_FE "$TOKEN" && STG_OK=1
 [[ ${KG_KEEP_STAGING:-0} == 1 ]] || docker rm -f kgkg-stg-backend kgkg-stg-frontend >/dev/null 2>&1 || true
+unset KG_STAGING_ISOLATED KG_PG_USER KG_PG_PASSWORD STG_ISO_PASSWORD   # nothing below is staging
 (( STG_OK )) || die "staging smoke tests failed; production untouched"
 save_staging_state "$SHA" pass
 write_release_metrics
