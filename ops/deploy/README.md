@@ -129,28 +129,44 @@ SQLite files) and `/tmp` (the rate-limit store). It never needs to write the vec
 warehouses: the code that does (`cardb_pg.adopt`, the `pgcar` pipeline stage) is started through the
 host-job spool, and staging's spool is one nobody serves.
 
-**One-time setup** (as root on the server; changes the database, so it is an operator action):
+**One-time setup** (as root on the server; it changes the database, so it is an operator action). The
+script is **not** in the live tree (`/opt/KGKG`) until a release containing it is promoted, and setup has to
+run *before* that promote, so take both files from the git object store at the exact commit you are about
+to promote. That needs the commit on the server, which the `stage` job's `git fetch origin work` provides
+once the change is merged to `work` and CI has staged it:
 
-    cd /opt/KGKG && bash ops/deploy/staging_isolation.sh setup      # --rotate for a new password
-    bash ops/deploy/staging_isolation.sh check                      # read-only, any time
+    SHA=<the commit you will promote>
+    D=$(mktemp -d /root/stg-setup.XXXXXX)
+    git -C /opt/KGKG archive "$SHA" ops/deploy/staging_isolation.sh ops/deploy/staging_role.sql | tar -x -C "$D"
+    bash "$D/ops/deploy/staging_isolation.sh" check || true     # read-only: shows what is missing
+    bash "$D/ops/deploy/staging_isolation.sh" setup             # --rotate for a new password
+    rm -r "$D"
 
 `setup` runs `staging_role.sql` (idempotent), writes `/opt/KGKG_staging/isolation.env` (root, mode 600)
-and runs the same check `deploy.sh --staging` runs. A new car needs no re-run: default privileges give
-the role SELECT on whatever the loader (`root`) creates. PostgreSQL 14 and older let PUBLIC create in
-schema `public`; run `REVOKE CREATE ON SCHEMA public FROM PUBLIC` in each database there (the check
-reports it). Production runs 16, where that is already the default. The clone runs `CREATE EXTENSION`
-as the staging role, so every extension in the portal database must be a *trusted* one (today it has
-only `plpgsql`).
+and runs the same check `deploy.sh --staging` runs. It does not touch the live tree. Re-run it from the
+commit you promote whenever the check changes (it is idempotent), and again if the check ever reports a
+widened role: it also revokes extra privileges. After the promote, `bash ops/deploy/staging_isolation.sh check`
+works from `/opt/KGKG`. A new car needs no re-run: default privileges give the role SELECT on whatever the
+loader (`root`) creates. PostgreSQL 14 and older let PUBLIC create in schema `public`; run
+`REVOKE CREATE ON SCHEMA public FROM PUBLIC` in each database there (the check reports it). Production runs
+16, where that is already the default. The clone runs `CREATE EXTENSION` as the staging role, so every
+extension in the portal database must be a *trusted* one (today it has only `plpgsql`).
 
 **Activation order.** The live tree's `deploy.sh` runs staging *and* the staging step of every full
 promote, so the new logic goes live when a release containing it is promoted, and from then on **both
-refuse to run until the setup below has been done**:
+refuse to run until the setup above has been done**. There is no bypass flag, on purpose:
 
-1. `staging_isolation.sh setup` on the server, **before** promoting the release that contains this.
-2. Merge the change to `work`. CI stages it with the *old* `deploy.sh`; nothing changes yet.
+1. Merge the change to `work`. CI stages it with the *old* `deploy.sh`; nothing changes yet, and the
+   commit is now on the server.
+2. `setup` from that commit (above), then confirm it ends with "staging isolation check: OK". Until the
+   next step nothing uses the role, so this step can be repeated or undone freely.
 3. `kgkg-promote <sha>`. The next staging run uses the isolated path.
 4. Watch the first staging run (`kg-deploy-gate status`, the `stage` job). If the check, the clone or the
    read-only mounts fail it, staging stops and production is untouched.
+
+If step 2 succeeds and step 3 fails, nothing is lost: the role and file are unused by the old `deploy.sh`.
+If step 3 succeeds without step 2, staging and the next promote stop with "staging isolation is not set up"
+before touching production; run step 2 (or `deploy.sh --rollback`).
 
 **Rollback.** `kgkg-promote <older sha>` does not work: the promote only fast-forwards. Use
 `bash /opt/KGKG/ops/deploy/deploy.sh --rollback` (resets the live tree to the previous release and swaps

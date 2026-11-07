@@ -3,7 +3,8 @@
 # which can read the vector database and can write only the staging copy.
 #
 #   source ops/deploy/staging_isolation.sh        # deploy.sh does this, from the live tree
-#   ops/deploy/staging_isolation.sh setup         # once, as root on the server (creates the role)
+#   ops/deploy/staging_isolation.sh setup         # once, as root on the server (creates the role); run it from the
+#                                                 # commit you will promote, extracted with `git archive` (README)
 #   ops/deploy/staging_isolation.sh check         # read-only: is the role as narrow as it must be?
 #
 # deploy.sh --staging calls stg_iso_load + stg_iso_check and REFUSES to start staging when
@@ -38,7 +39,7 @@ stg_iso_load() {
   STG_ISO_USER=; STG_ISO_PASSWORD=
   if [[ ! -f $STG_ISO_ENV ]]; then
     echo "staging isolation is not set up: $STG_ISO_ENV is missing." >&2
-    echo "  Create the read-only staging role once:  bash ops/deploy/staging_isolation.sh setup   (see ops/deploy/README.md)" >&2
+    echo "  Create the read-only staging role once with the script from the commit being promoted (it is not in /opt/KGKG until that promote): see 'Staging isolation' in ops/deploy/README.md" >&2
     return 1
   fi
   mode=$(stat -c %a "$STG_ISO_ENV" 2>/dev/null || stat -f %Lp "$STG_ISO_ENV")
@@ -166,7 +167,7 @@ stg_iso_check_mounts() {
 # stg_iso_setup [--rotate]  -> creates/updates the role (ops/deploy/staging_role.sql) and the credentials file.
 # The password goes to psql on stdin and into the 0600 file, never onto a command line.
 stg_iso_setup() {
-  local rotate=0 here role pw tmp admin
+  local rotate=0 here role pw="" tmp admin   # pw="": `local pw` leaves it UNSET in bash >= 4.4, and ${#pw} below fails under set -u
   [[ ${1:-} == --rotate ]] && rotate=1
   here=$(_stg_iso_here); role=$STG_ISO_ROLE_DEFAULT
   # shellcheck disable=SC2206
