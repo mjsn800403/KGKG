@@ -10,6 +10,7 @@ images/, parts.json and parts.csv.
 Like tis_crawler, this module is Django-free so the host-job daemon can import it.
 """
 import json
+import logging
 import os
 import re
 import subprocess
@@ -19,6 +20,8 @@ from pathlib import Path
 
 from . import hostjobs, tis_crawler
 from .safepath import safe_join
+
+log = logging.getLogger('kgkg.partsouq_crawler')
 
 OUT_ROOT = Path(os.environ.get('KG_PS_DIR', '/root/partsouq_crawl'))
 # On the host (the backend container has no ops/ tree; it asks the host to run it).
@@ -113,8 +116,9 @@ def start(url):
             hostjobs.call('ps_crawl_start', unit=unit, url=url, name=name)
         else:
             spawn_crawl(unit, url, name)
-    except (OSError, ValueError, subprocess.SubprocessError) as e:
-        return None, 'اجرای خزشگر ناموفق بود: %s' % e
+    except (OSError, ValueError, subprocess.SubprocessError):
+        log.warning('partsouq crawler start failed', exc_info=True)
+        return None, 'اجرای خزشگر ناموفق بود؛ جزئیات در لاگ سرور.'
     for _ in range(20):
         pids = _pids()
         if pids:

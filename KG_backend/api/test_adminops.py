@@ -170,8 +170,9 @@ class PipelineTests(AdminCase):
              mock.patch('api.adminops.partsouq_crawler.status', side_effect=OSError('gone')):
             self.zip('pending')
             d = self.get(self.URL).json()
-        self.assertEqual(d['tis'], {'error': 'RuntimeError: no chrome'})
-        self.assertEqual(d['partsouq'], {'error': 'OSError: gone'})
+        # Only the exception class reaches the client; the message goes to the log.
+        self.assertEqual(d['tis'], {'error': 'RuntimeError'})
+        self.assertEqual(d['partsouq'], {'error': 'OSError'})
         self.assertEqual(d['zip_queue']['counts'], {'pending': 1})
 
     def test_a_failed_zip_scan_does_not_return_the_exception_text(self):

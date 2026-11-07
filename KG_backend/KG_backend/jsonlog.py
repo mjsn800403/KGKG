@@ -41,6 +41,17 @@ _INLINE_SECRET_RE = re.compile(
     r'["\']?\s*[=:]\s*["\']?)([^\s"\'&,;}\]]{6,})', re.I)
 _BEARER_RE = re.compile(r'\b(Bearer|Token)\s+([A-Za-z0-9._\-]{12,})', re.I)
 
+# Credentials that sit in connection strings and database error text, which the
+# keyword pattern above does not reach (KGTEC-14): the password in
+# `scheme://user:password@host` (user and host stay, they are diagnostics), a
+# quoted `password='two words'` (libpq conninfo), and the row data PostgreSQL puts
+# in `DETAIL: Key (col)=(value)` / `Failing row contains (...)`. The lookbehind and the
+# length caps keep every pattern linear on adversarial input.
+_URL_PASSWORD_RE = re.compile(r'(?<![\w+.\-])([a-z][a-z0-9+.\-]*://[^/\s:@]+:)([^/\s@]+)(@)', re.I)
+_QUOTED_SECRET_RE = re.compile(r"((?:password|passwd|pwd|secret)\s*=\s*)'[^']*'", re.I)
+_PG_KEY_DETAIL_RE = re.compile(r'(Key \([^)]{0,200}\)=\()([^)]{0,500})(\))')
+_PG_ROW_DETAIL_RE = re.compile(r'(Failing row contains )\([^)]{0,1000}\)')
+
 REDACTED = '***redacted***'
 
 
@@ -48,6 +59,10 @@ def _scrub_text(value):
     """Blank out credential-shaped substrings inside a free-text string."""
     if not isinstance(value, str) or len(value) < 6:
         return value
+    value = _QUOTED_SECRET_RE.sub(lambda m: f"{m.group(1)}'{REDACTED}'", value)
+    value = _URL_PASSWORD_RE.sub(lambda m: m.group(1) + REDACTED + m.group(3), value)
+    value = _PG_KEY_DETAIL_RE.sub(lambda m: m.group(1) + REDACTED + m.group(3), value)
+    value = _PG_ROW_DETAIL_RE.sub(lambda m: f'{m.group(1)}({REDACTED})', value)
     value = _INLINE_SECRET_RE.sub(lambda m: m.group(1) + REDACTED, value)
     value = _BEARER_RE.sub(lambda m: f'{m.group(1)} {REDACTED}', value)
     return value

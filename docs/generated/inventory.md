@@ -64,7 +64,7 @@
 | `recommend.py` | Behavioural recommendation engine | yes |
 | `reporting.py` | Designed PDF reports (fa/RTL) for company managers | yes |
 | `requests_api.py` | The support desk: a seat files a ticket, the platform side works it in a | yes |
-| `safepath.py` | Two small helpers that close whole classes of CodeQL findings at one place | yes |
+| `safepath.py` | Small helpers that close whole classes of CodeQL findings at one place | yes |
 | `shield.py` | Content shield: encrypted document payloads + signed, single-use requests | yes |
 | `signals.py` | Keep «all cars» companies whole: a car added to the platform later is | yes |
 | `sla.py` | Service-level targets for the support desk | yes |

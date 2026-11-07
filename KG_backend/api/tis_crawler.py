@@ -11,6 +11,7 @@ code change.
 """
 import ast
 import json
+import logging
 import os
 import signal
 import subprocess
@@ -21,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import hostjobs
+
+log = logging.getLogger('kgkg.tis_crawler')
 
 TIS_DIR = Path(os.environ.get('KG_TIS_DIR', '/root/Desktop/tis_crawler'))
 SCRIPT = TIS_DIR / 'toyota_tis.py'
@@ -174,8 +177,10 @@ def start_chrome():
     if hostjobs.enabled():
         try:
             ok, err = hostjobs.call('tis_start_chrome', timeout=40)
-        except OSError as e:
-            return False, 'اجرای Chrome روی سرور ناموفق بود: %s' % e
+        except OSError:
+            # The message names spool paths / host errors: log it, don't return it.
+            log.warning('tis chrome start failed', exc_info=True)
+            return False, 'اجرای Chrome روی سرور ناموفق بود؛ جزئیات در لاگ سرور.'
         return ok, err
     if _chrome()['reachable']:
         return False, 'Chrome از قبل در حال اجراست.'
@@ -297,8 +302,9 @@ def start():
             hostjobs.call('tis_crawl_start', unit=unit)
         else:
             spawn_crawl(unit)
-    except (OSError, subprocess.SubprocessError) as e:
-        return None, 'اجرای خزشگر ناموفق بود: %s' % e
+    except (OSError, subprocess.SubprocessError):
+        log.warning('tis crawler start failed', exc_info=True)
+        return None, 'اجرای خزشگر ناموفق بود؛ جزئیات در لاگ سرور.'
     _progress_cache['data'] = None
     for _ in range(20):
         pids = _pids()
