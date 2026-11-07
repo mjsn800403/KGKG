@@ -110,7 +110,7 @@ union all select 'no global default USAGE on schemas created by ' || :'loader' |
                      where a.defaclrole = (select oid from pg_roles where rolname = :'loader') and a.defaclnamespace = 0
                        and a.defaclobjtype = 'n' and x.grantee = (select oid from pg_roles where rolname = :'r')
                        and x.privilege_type = 'USAGE')
-union all select 'default privileges would give the role ' || x.privilege_type || ' on future ' || a.defaclobjtype || ' objects'
+union all select 'default privileges would give the role ' || x.privilege_type || ' on future ' || a.defaclobjtype::text || ' objects'
   from pg_default_acl a, lateral aclexplode(a.defaclacl) x
   where x.grantee = (select oid from pg_roles where rolname = :'r')
     and ((a.defaclobjtype = 'r' and x.privilege_type <> 'SELECT') or (a.defaclobjtype = 'n' and x.privilege_type <> 'USAGE')
