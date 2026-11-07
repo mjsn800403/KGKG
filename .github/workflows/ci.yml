@@ -251,6 +251,19 @@ jobs:
           python3 ops/observability/watchdog.py --selftest
           bash ops/deploy/test_ci_ssh.sh
 
+      - name: Staging isolation test (PostgreSQL 16, throwaway cluster)
+        # The login staging runs with (ops/deploy/staging_role.sql) may read the vector
+        # database and nothing else. The test builds a throwaway cluster from the runner's
+        # own PostgreSQL 16 server binaries (the runner image installs postgresql-16 with its
+        # service disabled, so the binaries are in /usr/lib/postgresql/16/bin and not on
+        # PATH) and connects AS the role. It has to RUN here: KG_REQUIRE_PG turns a missing
+        # binary into a failure instead of a skip, KG_PG_MAJOR pins the version.
+        env:
+          KG_PG_BIN: /usr/lib/postgresql/16/bin
+          KG_PG_MAJOR: "16"
+          KG_REQUIRE_PG: "1"
+        run: bash ops/deploy/test_staging_isolation.sh
+
       - name: Dockerfile lint
         run: |
           for f in ops/docker/*.Dockerfile; do
