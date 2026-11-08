@@ -17,7 +17,7 @@ Rules:
 frontend component → API client fn → HTTP method+endpoint → Django route → view → models/services, Django FK/O2O/M2M relations, and a docs index.
 
 - Prefer: `graphify query "<symbol or topic>" --graph graphify-out/merged-graph.json`, `graphify path "A" "B" --graph graphify-out/merged-graph.json`.
-- Full chain for one endpoint: `python3 tools/graphify_xlayer/xlayer.py trace "/api/team/members/"`.
+- Full chain for one endpoint: `python3 tools/graphify_xlayer/xlayer.py trace "/api/auth/logout/"`.
 - Edge confidence: EXTRACTED = read from source; INFERRED = ambiguous (e.g. client path also matches catch-all routes) or docs mentions. Treat INFERRED as a lead, then read the source.
 - Not in the graph (verify in source): dynamic URLs (see `graphify-out/xlayer-report.json`), HTTP calls not via `fetch`, Django signals, string-built names.
 - After edits: `./scripts/graphify-refresh-layers.sh`. Visual: open `graphify-out/architecture.html` (serve the folder: `python3 -m http.server -d graphify-out`).
