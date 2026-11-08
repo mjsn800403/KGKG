@@ -81,7 +81,8 @@ missing). The suite record is uploaded as `support-chat-e2e-<sha>`. See [22-supp
 ## 32.5 Full browser E2E, DAST and performance baseline (QA stack, nightly)
 
 - **QA stack** (`qa/stack.sh up|down|reseed|status`): own labelled containers on loopback ports 8120 (backend), 3117 (frontend), 8130 (single-origin proxy
-  `qa/nginx-qa.conf`), never production (8000/3000) or staging (8110/3107). Data is a **fresh sanitized copy** of the production DB (PostgreSQL `pg_dump` clone named
+  `qa/nginx-qa.conf`; its `/kg-api/` location must send `Host $http_host`, with the port, because `OriginGuardMiddleware` compares the browser's
+  `Origin` (`http://127.0.0.1:8130`) with the request's own scheme+host and answers 403 to a cookie-authenticated write when they differ), never production (8000/3000) or staging (8110/3107). Data is a **fresh sanitized copy** of the production DB (PostgreSQL `pg_dump` clone named
   `<db>_qa`, or SQLite online backup) run through `ops/deploy/sanitize_staging_db.py`, so no real account can log in and no real phone/e-mail exists; SMS, Sentry,
   Turnstile, Metis and host jobs are disabled; the RAG feedback store is redirected (`RAG_FEEDBACK_DB`); CPU/memory are capped. Test accounts come from
   `manage.py seed_qa_fixtures` (guarded by `KG_QA_STACK=1` and a per-run `KG_QA_PASSWORD` minted into a mode-600 file). The comment in `stack.sh` states what makes it
