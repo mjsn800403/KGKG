@@ -24,7 +24,7 @@ GRAPHIFY=${GRAPHIFY_BIN:-$(command -v graphify)}
 [ -x "$GRAPHIFY" ] || fail "graphify CLI not found on PATH (package: graphifyy)."
 G=graphify-out/graph.json
 LAYERS="graphify-out/merged-graph.json"
-layers() { [ -x scripts/graphify-refresh-layers.sh ] && ./scripts/graphify-refresh-layers.sh >/tmp/graphify-layers.log 2>&1 && LAYER_STATE="cross-layer index + docs index + merged graph ready" || LAYER_STATE="cross-layer layers UNAVAILABLE (see /tmp/graphify-layers.log) - base AST graph only"; }
+layers() { [ -x scripts/graphify-refresh-layers.sh ] && ./scripts/graphify-refresh-layers.sh >/tmp/graphify-layers.log 2>&1 && { LAYER_STATE="cross-layer index + docs index + merged graph ready"; rm -f graphify-out/.layers_failed; } || { LAYER_STATE="cross-layer layers UNAVAILABLE (see /tmp/graphify-layers.log) - base AST graph only"; mkdir -p graphify-out; touch graphify-out/.layers_failed; }; }
 LAYER_STATE=""
 STAMP=graphify-out/.last_refresh   # graph.json is not rewritten when nothing changed, so track our own refresh time
 [ -f "$STAMP" ] || STAMP=$G
@@ -41,12 +41,12 @@ elif [ -n "$(find . \( -name node_modules -o -name .venv -o -name .next -o -name
   ACTION="refreshed stale graph (AST-only, no LLM)"
 fi
 [ -s "$G" ] || fail "graph.json empty after build."
-if [ "$ACTION" != "reused existing graph" ] || [ ! -s "$LAYERS" ]; then layers; else LAYER_STATE="cross-layer index + docs index + merged graph ready (reused)"; fi
+if [ "$ACTION" != "reused existing graph" ] || [ ! -s "$LAYERS" ] || [ -f graphify-out/.layers_failed ]; then layers; else LAYER_STATE="cross-layer index + docs index + merged graph ready (reused)"; fi
 touch graphify-out/.last_refresh
 
 R=graphify-out/GRAPH_REPORT.md
 DIGEST=$(sed -n '1,16p;/^## God Nodes/,/^## Import Cycles/p' "$R" 2>/dev/null | cut -c1-220 | head -70)
-MERGED_HINT=""; [ -s "$LAYERS" ] && MERGED_HINT=" --graph graphify-out/merged-graph.json"
+MERGED_HINT=""; [ -s "$LAYERS" ] && [ ! -f graphify-out/.layers_failed ] && MERGED_HINT=" --graph graphify-out/merged-graph.json"
 STATS=$(python3 -c "import json;d=json.load(open('$G'));print(len(d.get('nodes',[])),'nodes,',len(d.get('links',d.get('edges',[]))),'edges')" 2>/dev/null || echo "unknown size")
 
 emit "GRAPHIFY SESSION INIT OK ($ACTION; $STATS). Layers: $LAYER_STATE.
