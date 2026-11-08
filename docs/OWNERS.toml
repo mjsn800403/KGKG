@@ -557,3 +557,18 @@ review_days = 45
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-04
 review_days = 45
+
+["48-graphify.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-08
+review_days = 45
+
+["developer-onboarding/kgtechvault-claude/README.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-08
+review_days = 45
+
+["developer-onboarding/kgtechvault-claude/MANIFEST.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-08
+review_days = 45

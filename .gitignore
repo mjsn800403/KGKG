@@ -13,7 +13,11 @@
 /KG_backend/static_warehouse/
 
 # Ignore Claude metadata and VS Code workspace settings
-/.claude
+/.claude/*
+!/.claude/settings.json
+!/.claude/hooks/
+# Graphify graph is machine-local & rebuilt (AST, ~5s): scripts/setup-graphify.sh
+/graphify-out/
 /.vscode
 
 # Ignore compiled Python files
