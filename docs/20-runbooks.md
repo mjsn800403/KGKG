@@ -144,3 +144,34 @@ The chat is human-only (no AI). Everything here is a person's decision; none of 
 * **Never** run `purge_support_chat --apply`, enable notifications, or promote from this runbook.
 * **Fixed when:** `support_health` reports `ok`, the status endpoint reports the intended state, and the
   incident is noted in the CHANGELOG or issue with ids only (never message text or contact details).
+
+## R11 — Rebuild the project from nothing (host lost, or a new owner starting cold)
+
+**Never executed end to end** ([47](47-engineering-followups.md) E3). It is the order of work and where each
+piece comes from, not a tested script; the first person to run it should correct it here. What must be
+obtained from the owner beforehand is listed in [48 §48.5](48-handoff.md).
+
+* **Notice:** the host is unrecoverable, or the project is being moved to a new host or team.
+* **Confirm what you actually hold** before touching anything: a clone of `work`; `.env.prod` and
+  `.env.production` from escrow (R3); a `portal.dump` and its age; whether any copy of `kgkg_vec`, the parts
+  catalogs and the media exists (R1) or only the source ZIPs; the nginx origin certificate.
+* **Do, in this order:**
+  1. **Code:** `git clone -b work`; CI rebuilds both images from any commit (job `images`).
+  2. **Host:** Ubuntu 24 with Docker, nginx and PostgreSQL 16; layout, units and env files per
+     [11.1](11-operations-deployment.md); nginx from `ops/nginx/`; the forced-command keys per 11.3 "Keys and
+     privilege". Timer units that exist only on the old host are **not** in the repository (doc 27 F4):
+     recreate them from docs 11 and 25.
+  3. **Secrets:** place the env files; record names only ([29](29-environment-reference.md)). If any secret
+     may have been exposed with the old host, rotate it (`manage.py rotate_secrets`, [18](18-security-hardening.md)).
+  4. **Portal database:** restore `portal.dump` as in R7, run `ops/observability/verify_restore.py`.
+  5. **Vehicle content:** restore `kgkg_vec` and the parts catalogs from a backup if one exists. If none
+     does, re-ingest from the source ZIPs through the pipeline (R8, [15](15-vehicle-schema.md),
+     [16](16-parts-catalog.md)); the time this takes for the whole catalogue is unknown **[U]**.
+  6. **Derived data:** rebuild the RAG index (`run_rag_build.sh`) and diagnostics (`run_diag_build.sh`).
+  7. **Observability and error tracking:** `ops/observability/`, [31](31-ops-files-reference.md).
+  8. **Release:** stage the commit, run the full E2E, then a person runs `kgkg-promote <sha>`.
+  9. **Outside the host:** DNS and proxy at Cloudflare, the GitHub Actions secrets for the `stage` job, and
+     the provider allow-lists if the address changed ([24](24-integrations.md)).
+* **Fixed when:** the smoke suite passes through the public address, a seat can sign in by OTP, a granted
+  vehicle opens with content, the assistant cites that vehicle, and the watchdog dry run is clean (R9).
+* **Afterwards:** write down what differed from this runbook, and close or update R1, R3 and E3.

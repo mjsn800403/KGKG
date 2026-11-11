@@ -160,12 +160,12 @@ review_days = 180
 
 ["19-onboarding.md"]
 owner = ["mjsalimin", "Ali Sartipi"]
-reviewed = 2026-11-02
+reviewed = 2026-11-11
 review_days = 90
 
 ["20-runbooks.md"]
 owner = ["mjsalimin", "Ali Sartipi"]
-reviewed = 2026-11-03
+reviewed = 2026-11-11
 review_days = 90
 
 ["21-csrf-exempt-views.md"]
@@ -546,6 +546,11 @@ review_days = 45
 ["47-engineering-followups.md"]
 owner = ["mjsalimin", "Ali Sartipi"]
 reviewed = 2026-11-04
+review_days = 45
+
+["48-handoff.md"]
+owner = ["mjsalimin", "Ali Sartipi"]
+reviewed = 2026-11-11
 review_days = 45
 
 ["manuals/fa/01-user-guide.md"]

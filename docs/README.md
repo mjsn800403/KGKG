@@ -36,7 +36,7 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [17 — AI evaluation suite](17-evaluation.md) · [fa](fa/17-evaluation.md) | Gold sets, baselines, retrieval/diagnosis/answer metrics, expert-review tooling |
 | [18 — Security hardening](18-security-hardening.md) · [fa](fa/18-security-hardening.md) | Secret/token rotation, nginx rate limiting, ModSecurity+CRS WAF, GlitchTip error monitoring |
 | [19 — Engineer onboarding](19-onboarding.md) · [fa](fa/19-onboarding.md) | Day 1 / week 1 / month 1 path for a new engineer, with a check per step; how knowledge is handed over |
-| [20 — Runbooks](20-runbooks.md) · [fa](fa/20-runbooks.md) | Site down, false alerts, slowness, failed deploy, AI provider outage, disk, restore, adding a vehicle, SMS paging |
+| [20 — Runbooks](20-runbooks.md) · [fa](fa/20-runbooks.md) | Site down, false alerts, slowness, failed deploy, AI provider outage, disk, restore, adding a vehicle, SMS paging, rebuild from nothing |
 | [21 — CSRF-exempt views](21-csrf-exempt-views.md) · [fa](fa/21-csrf-exempt-views.md) | Every @csrf_exempt view, how it authenticates, why it is safe; registry + Origin guard |
 | [AGENTS — start here (agents and new engineers)](AGENTS.md) | Evidence rules, task-to-doc map, rules that are easy to break, how docs are kept true |
 | [22 — Support chat](22-support-chat.md) · [fa](fa/22-support-chat.md) | Visitor widget, staff inbox, tokens, throttling, RBAC rollout, kill switch |
@@ -63,6 +63,7 @@ commit (see [Maintenance protocol](#maintenance-protocol) below).
 | [43 — Architecture and data-flow diagrams](43-architecture-diagrams.md) · [fa](fa/43-architecture-diagrams.md) | 10 Mermaid diagrams from the implementation (context, components, login, assistant, retrieval, ingestion, access, chat, observability, ERD) |
 | [44 — Data lifecycle](44-data-lifecycle.md) · [fa](fa/44-data-lifecycle.md) | Per data class: collection, storage, access, retention, deletion, backup; evidence-based backup status; undefined policies |
 | [47 — Engineering follow-up register](47-engineering-followups.md) | Internal register of engineering/operations items (not documentation tasks), with status and evidence |
+| [48 — Handoff](48-handoff.md) | Taking the project over cold: what a clone does not contain, what must be obtained from the owner, continuity gaps in order |
 | [Persian user guide](manuals/fa/01-user-guide.md) · [Persian staff/admin guide](manuals/fa/02-staff-admin-guide.md) | Task-oriented manuals for company users and platform staff (Persian only) |
 | [Persian index](fa/README.md) | Persian twins of the documents above and how they are kept in sync |
 | [Generated inventory](generated/inventory.md) | Machine-generated list of modules, models, commands, env var names, routes, units; CI-checked |

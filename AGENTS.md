@@ -10,4 +10,6 @@ Three rules that apply before you open anything else:
 3. Docs ship with the change. If you add a model, command, module, env var or `ops/` file, run
    `python3 ops/governance/gen_inventory.py` and describe it in the matching doc; CI compares against the target branch.
 
+Taking the project over cold (what is not in this repository, what to ask the owner for): [`docs/48-handoff.md`](docs/48-handoff.md).
+
 Docs index: [`docs/README.md`](docs/README.md). Generated code inventory: [`docs/generated/inventory.md`](docs/generated/inventory.md).
