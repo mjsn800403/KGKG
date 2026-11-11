@@ -1,0 +1,21 @@
+# SHA-256 of the repository artifacts that the findings depend on.
+# Computed 2026-11-02 on origin/work c78c67d (git show <path> | sha256sum).
+# Checksums of production backups and of any dump are NOT here yet: they are
+# added by a reviewed PR after the evidence-preservation procedure is authorized
+# and executed (EVIDENCE_PRESERVATION.md, step 9). No data is stored in this file.
+
+474d47bc85e833adaf62e867a709bf36d84ce919dd2fb7a0cb8941e582b04bf1  KG_backend/gen_manual_activity.py
+c478eaef9a65d8c1c9288f092071b0790bada9ffa86d6f5f55e9a2a4437c183a  KG_backend/audit_after.py
+a9b6a5c6373dc0ed2a08bab38c388c99931cb3a3e7fc0e2fb4e7d3723f8e1ba0  KG_backend/panel_check.py
+b85a7a2ea682b92ea063fb4e3ce08a915b4c5ff29c8c280e7a8fbd57ccaab19f  KG_backend/reconstructed_activity_manifest.json
+
+# Pending (to be filled after authorization):
+#   activitylog-<date>.dump            plaintext sha256 / ciphertext sha256 / rows / restore check
+#   db.sqlite3.pre-recover             sha256
+#   db.sqlite3.pre-dropdl              sha256
+#   db.sqlite3.pre-codelete-20260926   sha256
+#   db.sqlite3.pre-qa10open            sha256
+#   db.sqlite3.pre-qa10slim            sha256
+#   db.sqlite3.pre-qa10cleanup         sha256
+#   db.sqlite3.pre-qa11                sha256
+#   sec_hardening_bak_1785964985_premigrate.sqlite3   sha256
