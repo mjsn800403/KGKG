@@ -144,3 +144,47 @@ The chat is human-only (no AI). Everything here is a person's decision; none of 
 * **Never** run `purge_support_chat --apply`, enable notifications, or promote from this runbook.
 * **Fixed when:** `support_health` reports `ok`, the status endpoint reports the intended state, and the
   incident is noted in the CHANGELOG or issue with ids only (never message text or contact details).
+
+## R11 — Rebuild the project from nothing (host lost, or a new owner starting cold)
+
+**Never executed end to end** ([47](47-engineering-followups.md) E3). It is the order of work and where each
+piece comes from, not a tested script; the first person to run it should correct it here. What must be
+obtained from the owner beforehand is listed in [48 §48.5](48-handoff.md).
+
+* **Notice:** the host is unrecoverable, or the project is being moved to a new host or team.
+* **Confirm what you actually hold** before touching anything: a clone of `work`; `.env.prod` and
+  `.env.production` from escrow (R3); a `portal.dump` and its age; whether any copy of `kgkg_vec`, the parts
+  catalogs and the media exists (R1) or only the source ZIPs; the nginx origin certificate.
+* **Do, in this order:**
+  1. **Code:** `git clone -b work`; CI rebuilds both images from any commit (job `images`).
+  2. **Host:** Ubuntu 24 with Docker, nginx and PostgreSQL 16; layout, units and env files per
+     [11.1](11-operations-deployment.md); nginx from `ops/nginx/`; the forced-command keys per 11.3 "Keys and
+     privilege". Timer units that exist only on the old host are **not** in the repository (doc 27 F4):
+     recreate them from docs 11 and 25.
+  3. **Secrets:** place the env files; record names only ([29](29-environment-reference.md)). If any secret
+     may have been exposed with the old host, rotate it (`manage.py rotate_secrets`, [18](18-security-hardening.md)).
+  4. **Portal database:** restore `portal.dump` as in R7, run `ops/observability/verify_restore.py`.
+  5. **Manual content:** restore `kgkg_vec` from a backup if one exists; that also brings back the
+     production retrieval indexes, which live in the same database. If none exists, re-ingest every car
+     from the source ZIPs through the pipeline (R8, [15](15-vehicle-schema.md)); the time this takes for
+     the whole catalogue is unknown **[U]**.
+  6. **Parts catalogs: a separate source.** The manual ZIPs do not contain them. `manage.py import_parts`
+     reads the raw parts crawl tree ([16](16-parts-catalog.md)), and that tree is not among the paths the
+     hourly off-host snapshot is documented to pull ([11.6](11-operations-deployment.md)). Without a backup
+     of the catalogs or of that crawl tree, the parts-only vehicles are **not recoverable by this runbook**
+     (R1): say so, do not report vehicle content as restored.
+  7. **Derived data, only where step 5 was a re-ingest.** `build_rag` and `build_diag`
+     (`run_rag_build.sh`, `run_diag_build.sh`) write the local SQLite index and read the per-car `.db`
+     files, which the `pgcar` stage deletes once a car is in PostgreSQL ([23](23-data-layer.md)); they run
+     inside the pipeline before that stage and cannot be re-run from `kgkg_vec` alone. Production retrieval
+     reads pgvector and PostgreSQL FTS in `kgkg_vec` (`RAG_VEC_BACKEND=pgvector`, `RAG_FTS_BACKEND=pg`),
+     filled by `ops/rag/pgvec_load.py` and `ops/rag/pgfts_load.py` ([30](30-ai-assistant-deep-dive.md),
+     [31](31-ops-files-reference.md)). The order of those loaders within a full rebuild has not been
+     rehearsed **[U]**.
+  8. **Observability and error tracking:** `ops/observability/`, [31](31-ops-files-reference.md).
+  9. **Release:** stage the commit, run the full E2E, then a person runs `kgkg-promote <sha>`.
+  10. **Outside the host:** DNS and proxy at Cloudflare, the GitHub Actions secrets for the `stage` job, and
+     the provider allow-lists if the address changed ([24](24-integrations.md)).
+* **Fixed when:** the smoke suite passes through the public address, a seat can sign in by OTP, a granted
+  vehicle opens with content, the assistant cites that vehicle, and the watchdog dry run is clean (R9).
+* **Afterwards:** write down what differed from this runbook, and close or update R1, R3 and E3.

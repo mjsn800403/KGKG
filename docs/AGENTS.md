@@ -64,6 +64,7 @@ says someone looked at it, not that it is right; the drift check (section 5) is 
 | See the system as diagrams | `43-architecture-diagrams.md`, `generated/schema.md` | Mermaid in each doc |
 | Know how data is kept, retained, deleted, backed up | `44-data-lifecycle.md` | `[POLICY?]` marks undefined rules |
 | Operations/engineering items that are not documentation work | `47-engineering-followups.md` | one place, with status |
+| Take the project over with nobody to ask; rebuild it from nothing | `48-handoff.md`, `20-runbooks.md` R11 | what a clone does not contain is listed there |
 | Add an env var, command, model, module, ops file | `docs/generated/inventory.md` rules in section 5 | run `python3 ops/governance/gen_inventory.py` |
 
 ## 4. Rules that are easy to break

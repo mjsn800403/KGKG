@@ -27,10 +27,11 @@ asking. Runbooks for when things go wrong are in [20 — Runbooks](20-runbooks.m
    `ops/governance/check_traceability.py` fails CI otherwise.
 4. **Make the change test-first** on a branch off `work`, open a pull request
    into `work`, get one review.
-5. **Ship it with a maintainer watching:** commit lands on `work` in
-   `/opt/KGKG_work`, then `bash ops/deploy/deploy.sh work`
-   (gate → staging → promote → smoke, automatic rollback). Never edit
-   `/opt/KGKG` by hand.
+5. **Ship it with a maintainer watching:** the merge to `work` makes CI stage
+   that exact commit on the server (gate → staging → smoke). Production changes
+   only when a maintainer runs `kgkg-promote <sha>` on the host
+   ([11.3](11-operations-deployment.md), ADR-0004); it rolls back automatically
+   on failure. You do not promote in your first week. Never edit `/opt/KGKG` by hand.
 6. **Update the docs in the same commit** and move the document's `reviewed`
    date in `docs/OWNERS.toml` — CI enforces both.
 
@@ -53,4 +54,5 @@ asking. Runbooks for when things go wrong are in [20 — Runbooks](20-runbooks.m
 * **Customer knowledge**: a resolved ticket that others will hit becomes a
   knowledge-base article with its own owner and review interval.
 * **Hand-over**: before someone leaves an area, they walk the next owner
-  through its runbook on staging and move ownership in `OWNERS.toml`.
+  through its runbook on staging and move ownership in `OWNERS.toml`. Taking over
+  the whole project with nobody to ask: [48 — Handoff](48-handoff.md).
