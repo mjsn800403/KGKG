@@ -1,4 +1,4 @@
-<!-- i18n-source: 19-onboarding.md sha256:e917ea704b0f -->
+<!-- i18n-source: 19-onboarding.md sha256:b912bcf1a312 -->
 <div dir="rtl" lang="fa">
 
 # ۱۹ — آشناسازی مهندس جدید
@@ -21,7 +21,7 @@
 ۲. **پشتهٔ QA را بالا بیاور** و سفرهای مرورگر را اجرا کن: `qa/stack.sh up <ref>` سپس `qa/run_e2e.sh`.
 ۳. **یک issue با برچسب `good first issue` یا `priority:normal`** از milestone فعلی در GitHub برگزین. هر pull request باید به یک issue ارجاع دهد — `ops/governance/check_traceability.py` وگرنه CI را شکست می‌دهد.
 ۴. **تغییر را تست‌محور** روی شاخه‌ای از `work` بساز، pull request به `work` باز کن، یک بازبینی بگیر.
-۵. **با نظارت یک maintainer منتشرش کن:** کامیت در `/opt/KGKG_work` روی `work` می‌نشیند، سپس `bash ops/deploy/deploy.sh work` (گیت ← staging ← promote ← smoke، rollback خودکار). هرگز `/opt/KGKG` را دستی ویرایش نکن.
+۵. **با نظارت یک maintainer منتشرش کن:** با merge شدن در `work`، CI همان کامیت را روی سرور stage می‌کند (گیت ← staging ← smoke). تولید فقط وقتی تغییر می‌کند که یک maintainer روی میزبان `kgkg-promote <sha>` را اجرا کند ([11.3](../11-operations-deployment.md)، ADR-0004)؛ در صورت شکست، rollback خودکار است. در هفتهٔ اول خودت promote نمی‌کنی. هرگز `/opt/KGKG` را دستی ویرایش نکن.
 ۶. **مستندات را در همان کامیت به‌روز کن** و تاریخ `reviewed` سند را در `docs/OWNERS.toml` جابه‌جا کن — CI هر دو را اجباری می‌کند.
 
 ## ماه ۱ — مالک یک حوزه شو
@@ -39,6 +39,6 @@
 * **مالکان مشخص و تاریخ‌های بازبینی** برای هر سند (`docs/OWNERS.toml`، با `ops/governance/check_docs_freshness.py` اجباری می‌شود).
 * **تصمیم‌ها** در ADR می‌روند؛ **رخدادها** postmortem بدون سرزنش زیر `audit-evidence/11-operations-and-support/` و یک تست رگرسیون می‌گیرند.
 * **دانش مشتری**: تیکت حل‌شده‌ای که دیگران هم با آن روبه‌رو می‌شوند به مقالهٔ پایگاه دانش با مالک و فاصلهٔ بازبینی خودش تبدیل می‌شود.
-* **تحویل**: پیش از ترک یک حوزه، فرد رانبوک آن را روی staging با مالک بعدی مرور می‌کند و مالکیت را در `OWNERS.toml` جابه‌جا می‌کند.
+* **تحویل**: پیش از ترک یک حوزه، فرد رانبوک آن را روی staging با مالک بعدی مرور می‌کند و مالکیت را در `OWNERS.toml` جابه‌جا می‌کند. تحویل‌گرفتن کل پروژه وقتی کسی برای پرسیدن نیست: [48 — تحویل پروژه](../48-handoff.md).
 
 </div>
