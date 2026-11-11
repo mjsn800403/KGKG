@@ -12,6 +12,7 @@ static_warehouse/_parts_assets with a per-VIN prefix, watermark removed
 (remove_watermark).
 """
 import html as H
+import logging
 import os
 import re
 import shutil
@@ -25,6 +26,8 @@ from . import partsouq_crawler
 from .safepath import safe_join
 from .partsingest import (CATEGORY_FA, CATEGORY_ORDER, SCHEMA_VERSION, VEHICLE_DB_SCHEMA,
                           load_fa_terms, nfkc, sha1)
+
+log = logging.getLogger('kgkg.partsouq_build')
 
 MEDIA = '/media/_parts_assets'
 CAR_NAME = re.compile(r'[\w ()\-.]{3,80}')
@@ -56,8 +59,23 @@ def parse_folder(name):
     return None
 
 
+# What the operator is told for each way a build can be refused. The wording is ours and
+# the exception's own message is never put in a response (CodeQL py/stack-trace-exposure,
+# KGTEC-14): ``build_and_register`` looks the text up by ``BuildError.code``.
+BUILD_ERRORS = {
+    'folder': 'folder name is not <Model>_<year>_<frame>_<VIN>',
+    'car_name': 'car name is not a plain file name',
+    'no_diagrams': 'no usable diagrams in this crawl',
+}
+BUILD_ERROR_FALLBACK = 'build refused'
+
+
 class BuildError(Exception):
-    pass
+    """A build refused for a reason of ours; ``code`` is a key of ``BUILD_ERRORS``."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
 
 def remove_watermark(src, dst):
@@ -141,13 +159,13 @@ def build_db(crawl, car, grade, backend=None):
     backend = Path(backend or settings.BASE_DIR)
     m = parse_folder(crawl.name)
     if not m:
-        raise BuildError('folder name is not <Model>_<year>_<frame>_<VIN>')
+        raise BuildError('folder')
     frame, vin = m['frame'], m['vin']
     prefix = f'ps_{vin.lower()}_c_'        # shared asset dir: unique per VIN; _c_ = cleaned
     try:
         out = safe_join(backend / 'Database_warehouse' / '_parts', f'{car}.db')
     except ValueError as e:
-        raise BuildError('car name is not a plain file name') from e
+        raise BuildError('car_name') from e
     assets = backend / 'static_warehouse' / '_parts_assets'
     fi = frame_info(crawl)
     fa = load_fa_terms(backend)
@@ -215,7 +233,7 @@ def build_db(crawl, car, grade, backend=None):
     if not counts['groups']:
         db.close()
         tmp.unlink(missing_ok=True)
-        raise BuildError('no usable diagrams in this crawl')
+        raise BuildError('no_diagrams')
     db.execute('INSERT INTO frames(code,engine,transmission,steering,destination,grade,region,date_from,date_to,'
                'sort_order,is_default,n_groups,n_parts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                (frame, fi['engine'], fi['transmission'], fi['steering'], fi['destination'], grade, 'General',
@@ -255,8 +273,13 @@ def build_and_register(folder, car_name, grade=''):
         return None, 'تا پایان خزش صبر کنید یا آن را متوقف کنید.'
     try:
         counts = build_db(crawl, car_name, grade)
-    except (BuildError, OSError, sqlite3.Error) as e:
-        return None, f'ساخت پایگاه داده ناموفق بود: {e}'
+    except BuildError as e:
+        # The text comes from BUILD_ERRORS by code, never from the exception itself.
+        return None, f'ساخت پایگاه داده ناموفق بود: {BUILD_ERRORS.get(e.code, BUILD_ERROR_FALLBACK)}'
+    except (OSError, sqlite3.Error):
+        # OS / driver messages name files and SQL: log them, don't return them.
+        log.warning('partsouq build failed for %s', crawl.name, exc_info=True)
+        return None, 'ساخت پایگاه داده ناموفق بود؛ جزئیات در لاگ سرور.'
     car, created = Car.objects.get_or_create(brand_name='Toyota', car_name=car_name, year=int(m['year']),
                                              defaults={'db_address': ''})
     cardb.invalidate_ready_cache()

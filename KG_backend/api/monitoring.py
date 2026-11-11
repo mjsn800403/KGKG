@@ -19,6 +19,7 @@ Three pieces, all dependency-free (matching the project's philosophy):
   admin panel; thresholds tunable via env.
 """
 import hashlib
+import logging
 import os
 import shutil
 import sqlite3
@@ -29,6 +30,8 @@ import time
 from django.conf import settings
 from django.db import close_old_connections
 from django.utils import timezone
+
+log = logging.getLogger('kgkg.monitoring')
 
 _START_TIME = time.time()
 
@@ -239,7 +242,9 @@ def system_snapshot(deep=False):
         snap['db_ok'] = True
     except Exception as e:
         snap['db_ok'] = False
-        snap['db_error'] = str(e)
+        # A driver message can name the host, port and database; log it, keep the class.
+        log.warning('system snapshot: database check failed', exc_info=True)
+        snap['db_error'] = e.__class__.__name__
 
     snap['rag_index'] = {
         'present': config.INDEX_DB.exists(),

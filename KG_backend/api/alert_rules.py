@@ -398,8 +398,9 @@ def _infra():
     try:
         _prom('up')
     except Exception as e:
+        log.warning('prometheus query failed', exc_info=True)     # the message names the URL
         return {'infra:prometheus': ('warning', 'پایش سرور (Prometheus) در دسترس نیست؛ هشدارهای دیسک/حافظه/دسترس‌پذیری کار نمی‌کنند.',
-                                     {'error': str(e)[:200]})}
+                                     {'error': e.__class__.__name__})}
     # Every scrape target, not just node: when kgkg_app stopped answering for
     # about 50 minutes in the week to 2026-10-29 nothing said so, and a dead
     # blackbox or cadvisor silently disarms the probe and restart rules below.

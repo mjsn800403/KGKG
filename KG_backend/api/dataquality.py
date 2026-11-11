@@ -31,13 +31,15 @@ import os
 import re
 import shutil
 import sqlite3
+import logging
 import threading
-import traceback
 
 from django.db import close_old_connections
 from django.utils import timezone
 
 from .rag import config
+
+_log = logging.getLogger('kgkg.dataquality')   # not `log`: run_audit/remediate take a `log` callback
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +150,8 @@ def audit_vehicle_db(path):
         con = _ro(path)
         cur = con.cursor()
     except Exception as e:
-        info['error'] = f'cannot open: {e}'
+        _log.warning('data-quality: cannot open %s', stem, exc_info=True)
+        info['error'] = e.__class__.__name__      # the message names the file
         info['integrity'] = 'unreadable'
         return info
     try:
@@ -201,7 +204,8 @@ def audit_vehicle_db(path):
             h.update(f'{rel}|{clen}\n'.encode('utf-8', 'replace'))
         info['fingerprint'] = h.hexdigest()
     except sqlite3.DatabaseError as e:
-        info['error'] = str(e)
+        _log.warning('data-quality: integrity check failed for %s', stem, exc_info=True)
+        info['error'] = e.__class__.__name__
         if info['integrity'] == 'ok':
             info['integrity'] = 'error'
     finally:
@@ -526,8 +530,9 @@ def remediate(vehicles, duplicates, log=None):
             con.close()
             actions.append({'action': 'wal_checkpoint', 'stem': v['stem']})
         except sqlite3.Error as e:
+            _log.warning('data-quality: wal checkpoint failed for %s', v['stem'], exc_info=True)
             actions.append({'action': 'wal_checkpoint_failed', 'stem': v['stem'],
-                            'detail': str(e)})
+                            'detail': e.__class__.__name__})
 
     return actions
 
@@ -547,9 +552,12 @@ def run_audit_to_db(fix=False):
         summary, vehicles, actions = run_audit(fix=fix)
         run.summary, run.vehicles, run.actions = summary, vehicles, actions
         run.status = 'done'
-    except Exception:
+    except Exception as e:
+        # The trace goes to the server log; the row (and the API) keep only the
+        # exception class (CodeQL py/stack-trace-exposure, KGTEC-14).
+        _log.exception('data-quality audit failed')
         run.status = 'failed'
-        run.error = traceback.format_exc()[-4000:]
+        run.error = e.__class__.__name__
     run.finished_at = timezone.now()
     run.save()
     return run

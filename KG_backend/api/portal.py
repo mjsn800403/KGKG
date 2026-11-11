@@ -1689,8 +1689,10 @@ def admin_user_access_view(request, user_id):
     # The platform admin may bypass the company's purchase scope (admin_granted).
     try:
         apply_user_access(u, accesses, override_purchase=override, allow_admin_grants=True)
-    except ValueError as e:
-        return JsonResponse({'error': str(e)}, status=400)
+    except ValueError:
+        # apply_user_access validates its input and raises with its own wording, but a
+        # ValueError from deeper (the ORM) can echo request data: return a fixed text.
+        return JsonResponse({'error': 'invalid accesses payload'}, status=400)
     # Keep the org-graph seat in step so /admin and /team never disagree.
     from .orggraph import sync_user_to_node  # lazy: avoids import cycle
     sync_user_to_node(u)

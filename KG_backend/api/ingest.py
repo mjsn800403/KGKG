@@ -27,6 +27,7 @@ The parser stays a standalone-usable script; it is loaded here via importlib
 from its canonical location in the project root.
 """
 import importlib.util
+import logging
 import os
 import re
 import shutil
@@ -40,6 +41,8 @@ from django.conf import settings
 from django.utils import timezone
 
 from .rag import config
+
+_log = logging.getLogger('kgkg.ingest')
 
 PROJECT_ROOT = Path(settings.BASE_DIR).parent          # /opt/KGKG
 
@@ -516,7 +519,10 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
             backend_dir / 'static_warehouse', zip_path.parent,
             ledger, cancel_event, False)
     except Exception as e:
-        pkg.status, pkg.error = 'failed', f'{e.__class__.__name__}: {e}'[:500]
+        # The message can name extracted paths and ZIP member names: keep it in
+        # the log, store only the class (CodeQL py/stack-trace-exposure, KGTEC-14).
+        _log.warning('parse of %s failed', pkg.stem, exc_info=True)
+        pkg.status, pkg.error = 'failed', e.__class__.__name__
         pkg.save(update_fields=['status', 'error', 'updated_at'])
         return 'failed'
 
@@ -535,7 +541,9 @@ def parse_zip_package(pkg, cancel_event=None, log=None):
             pkg.save(update_fields=['status', 'pages_processed', 'updated_at'])
             return 'done'
         pkg.status = 'failed'
-        pkg.error = (row[2] if row and row[2] else 'parse produced no result')[:500]
+        if row and row[2]:
+            _log.warning('parse of %s recorded an error: %s', pkg.stem, str(row[2])[:500])
+        pkg.error = 'parse failed' if row and row[2] else 'parse produced no result'
         pkg.save(update_fields=['status', 'error', 'updated_at'])
         return 'failed'
 
@@ -576,7 +584,8 @@ def _parse_tis_package(pkg, log=None):
             Path(settings.BASE_DIR) / 'static_warehouse', stem=pkg.stem,
             publish_images=parser_module()._publish_images, log=say)
     except Exception as e:
-        pkg.status, pkg.error = 'failed', f'{e.__class__.__name__}: {e}'[:500]
+        _log.warning('parse of %s failed', pkg.stem, exc_info=True)
+        pkg.status, pkg.error = 'failed', e.__class__.__name__
         pkg.save(update_fields=['status', 'error', 'updated_at'])
         return 'failed'
     _car, _created = Car.objects.update_or_create(

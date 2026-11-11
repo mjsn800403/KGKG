@@ -19,6 +19,7 @@ from .models import (
     ZipPackage,
 )
 from . import dataquality, monitoring, partsouq_crawler, pipeline, tis_crawler
+from .safepath import public_error, scrub_errors
 
 log = logging.getLogger('kgkg.adminops')
 
@@ -99,9 +100,11 @@ def admin_data_quality_view(request):
             'started_at': latest.started_at.isoformat(),
             'finished_at': latest.finished_at.isoformat() if latest.finished_at else None,
             'summary': latest.summary,
-            'vehicles': latest.vehicles,
-            'actions': latest.actions,
-            'error': latest.error,
+            # Rows written by older versions hold raw exception text and even a
+            # full traceback; reduce them on the way out (KGTEC-14).
+            'vehicles': scrub_errors(latest.vehicles),
+            'actions': [_public_action(a) for a in (latest.actions or [])],
+            'error': public_error(latest.error),
         },
     })
 
@@ -124,14 +127,14 @@ def admin_system_view(request):
 
     def _alert(a):
         return {'id': a.id, 'key': a.key, 'severity': a.severity,
-                'message': a.message, 'context': a.context,
+                'message': a.message, 'context': scrub_errors(a.context),
                 'is_open': a.is_open,
                 'first_seen': a.first_seen.isoformat(),
                 'last_seen': a.last_seen.isoformat(),
                 'resolved_at': a.resolved_at.isoformat() if a.resolved_at else None}
 
     return JsonResponse({
-        'snapshot': monitoring.system_snapshot(),
+        'snapshot': scrub_errors(monitoring.system_snapshot()),
         'alerts_open': [_alert(a) for a in
                         SystemAlert.objects.filter(is_open=True)[:50]],
         'alerts_recent': [_alert(a) for a in
@@ -221,23 +224,32 @@ def admin_traffic_view(request):
 def _tis_status():
     # Observability must never break the pipeline page.
     try:
-        return tis_crawler.status()
+        return scrub_errors(tis_crawler.status())
     except Exception as e:  # noqa: BLE001
-        return {'error': f'{e.__class__.__name__}: {e}'}
+        log.warning('tis status failed', exc_info=True)
+        return {'error': e.__class__.__name__}
 
 
 def _ps_status():
     try:
-        return partsouq_crawler.status()
+        return scrub_errors(partsouq_crawler.status())
     except Exception as e:  # noqa: BLE001
-        return {'error': f'{e.__class__.__name__}: {e}'}
+        log.warning('partsouq status failed', exc_info=True)
+        return {'error': e.__class__.__name__}
+
+
+def _public_action(a):
+    """A stored data-quality action; the detail of a failed one is a driver message."""
+    if isinstance(a, dict) and str(a.get('action', '')).endswith('_failed') and 'detail' in a:
+        return {**a, 'detail': public_error(a['detail'])}
+    return a
 
 
 def _zip_dict(p):
     return {'id': p.id, 'zip_name': p.zip_name, 'brand': p.brand,
             'year': p.year, 'car_name': p.car_name, 'stem': p.stem,
             'status': p.status, 'size_mb': round((p.size or 0) / 1048576, 1),
-            'pages_processed': p.pages_processed, 'error': p.error,
+            'pages_processed': p.pages_processed, 'error': public_error(p.error),
             'updated_at': p.updated_at.isoformat()}
 
 
@@ -431,7 +443,7 @@ def admin_pipeline_view(request):
              'created_at': j.created_at.isoformat(),
              'finished_at': j.finished_at.isoformat() if j.finished_at else None,
              'overall_pct': (j.progress or {}).get('overall_pct'),
-             'error': j.error}
+             'error': public_error(j.error)}
             for j in ProcessingJob.objects.all()[:12]
         ],
         'tis': _tis_status(),

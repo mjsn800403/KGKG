@@ -371,6 +371,11 @@ if SENTRY_DSN:
             # Customer manual content and Persian PII must not leave the box in
             # error payloads: no request bodies, no user emails/IPs attached.
             send_default_pii=False,
+            # Frame locals are captured by value and the SDK scrubs them by variable
+            # NAME only: a `dsn` or `conninfo` holding a password would reach GlitchTip.
+            # The traceback (file, line, source) is kept; the full traceback with the
+            # redacted exception text is in error.jsonl / Loki (KGTEC-14).
+            include_local_variables=False,
             max_request_body_size='never',
             traces_sample_rate=float(os.environ.get('SENTRY_TRACES_RATE', '0') or 0),
             before_send=lambda event, hint: scrub_event(event),
